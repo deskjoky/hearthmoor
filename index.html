@@ -105,9 +105,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .sheet { position: fixed; inset: 0; z-index: 20; background: rgba(12, 9, 7, .72); display: flex; align-items: stretch; justify-content: center;
   padding: calc(env(safe-area-inset-top, 0px) + 10px) max(8px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(8px, env(safe-area-inset-left, 0px)); }
 .cover { width: 100%; max-width: 720px; background: var(--leather); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.6), inset 0 0 0 2px var(--leather-2); min-height: 0; }
+.bookhead { display: flex; align-items: flex-end; min-width: 0; }
+.bookhead .tabs { flex: 1; min-width: 0; }
 .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 2px; align-items: flex-end; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab { flex: none; border: 0; background: #5a4130; color: #e8d6b0; padding: 8px 10px 10px; border-radius: 6px 6px 0 0; font-family: var(--f-display); font-size: 15px; min-height: 40px; }
+.tab { flex: none; border: 0; background: #5a4130; color: #e8d6b0; padding: 8px 9px 10px; border-radius: 6px 6px 0 0; font-family: var(--f-display); font-size: 15px; min-height: 40px; }
 .tab[aria-selected="true"] { background: var(--parch); color: var(--ink); }
 .close { margin-left: auto; flex: none; border: 0; background: transparent; color: #e8d6b0; font-size: 26px; line-height: 1; padding: 4px 10px; min-height: 40px; min-width: 40px; }
 .page { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; background: radial-gradient(ellipse at 50% 0%, #f2e4c6, var(--parch) 60%, var(--parch-2)); border-radius: 0 6px 6px 6px; padding: 16px 18px 24px; user-select: text; -webkit-user-select: text; }
@@ -237,7 +239,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 <section class="panel" id="panel" hidden><div class="card" id="card"><div id="cardInfo"></div><div id="cardActs"></div></div></section>
 <div class="sheet" id="book" hidden>
   <div class="cover">
-    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="bookhead"><div class="tabs" role="tablist" id="tabs"></div><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button></div>
     <div class="page" id="page"></div>
   </div>
 </div>
@@ -256,7 +258,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 (function (root) {
   'use strict';
 
-  const VERSION = 2;
+  const VERSION = 3;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -295,7 +297,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     },
     joinery: {
       name: 'Joinery', craft: 'Build', crafting: 'Building', station: 'bench', product: 'furniture', one: 'stool', many: 'stools',
-      recipe: { wood: 4 }, wtp: 14, sd: 3, price: 11, villagerRate: 0.3, qty2: 0, qty3: 0, hours: [8, 18],
+      recipe: { wood: 3 }, wtp: 15, sd: 3, price: 12, villagerRate: 0.3, qty2: 0, qty3: 0, hours: [8, 18],
       tiers: [
         { name: "Carpenter's Bench", out: 1, min: 45, cap: 8, travelers: 2, upkeep: 1, cost: { coin: 25 } },
         { name: 'Timber Workshop', out: 2, min: 45, cap: 16, travelers: 3, upkeep: 3, cost: { coin: 90, wood: 15 } },
@@ -306,7 +308,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const TRADE_KEYS = Object.keys(TRADES);
 
   /* ---------- the map ---------- */
-  const PLOTS = [{ x: -12, z: -2, name: 'West lot' }, { x: 0, z: -2, name: 'Middle lot' }, { x: 12, z: -2, name: 'East lot' }];
+  const PLOTS = [{ x: -12, z: -2, name: 'West lot' }, { x: 0, z: -2, name: 'Middle lot' }, { x: 12, z: -2, name: 'East lot' }, { x: 13, z: -15, name: 'Hall lot', grant: true }];
   const REL = { serve: { x: 0, z: 0.4 }, queue0: { x: 0, z: 2.6 }, station: { x: -2.3, z: -0.8 }, store: { x: 2.4, z: -0.6 }, bench: { x: 3.9, z: 2.4 } };
   const EMPLOYERS = [
     { id: 'gerd', trade: 'bakery', name: "Gerd's Bakehouse", boss: 'Gerd', x: -15, z: 16, shift: [6, 12], wage: 6 },
@@ -321,14 +323,72 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     pit: { x: -24, z: 20, r: 5, name: 'Iron Pit' },
     market: { x: 25, z: 13, r: 3.8, name: 'Trading Post' },
     home: { x: -19, z: 6, r: 3, name: 'Your Hut' },
-    well: { x: 6, z: 8, r: 2, name: 'Village Well' }
+    well: { x: 6, z: 8, r: 2, name: 'Village Well' },
+    hall: { x: 0, z: -14, r: 4.6, name: 'Moot Hall' },
+    granary: { x: -9, z: -15, r: 3.2, name: 'Granary' },
+    tower: { x: 33, z: 11, r: 4, name: 'Old Watchtower' },
+    manor: { x: -6, z: -38, r: 4.5, name: 'Varrow Manor' },
+    cottage: { x: 22, z: -22, r: 3.5, name: "Old Ama's Cottage" }
   };
   PLOTS.forEach((p, i) => { LOCS['plot' + i] = { x: p.x, z: p.z, r: 4.6, name: p.name, plot: i }; });
   EMPLOYERS.forEach(e => { LOCS['emp:' + e.id] = { x: e.x, z: e.z - 1.5, r: 3.8, name: e.name, emp: e.id }; });
   const P = {
     market: { x: 23.4, z: 11.6 }, well: { x: 6, z: 9.4 }, plaza: { x: 0, z: 8 },
-    road: { x: 34, z: 5 }, home: { x: -17.1, z: 5.4 }
+    road: { x: 34, z: 5 }, home: { x: -17.1, z: 5.4 },
+    hall: { x: 0, z: -10.6 }, granary: { x: -9, z: -12.6 }, tower: { x: 31.2, z: 9.6 }, gate: { x: -6, z: -35.5 }, cottage: { x: 21, z: -19.6 },
+    manorRoad: { x: -6, z: -36 }, square: { x: 2.5, z: 9.5 }
   };
+
+  /* ---------- the realm around the village ---------- */
+  const REALM = {
+    lord: 'Lord Edric Varrow', lordShort: 'Lord Varrow', elder: 'Elder Brannoch', steward: 'Steward Merrin', king: 'King Aldwin', capital: 'Highcrown',
+    towns: ['Ashford', 'Kellmere', 'Highcrown']
+  };
+  const RUMORS = [
+    'Ashford’s river barges are carrying twice the grain this year. Their mayor is getting rich.',
+    'Kellmere’s mines found a new seam of iron. Smiths there pay well for good charcoal.',
+    'They say ' + 'King Aldwin' + ' is calling his lords to Highcrown before winter.',
+    'Bandits were seen on the Ashford road last week. Travel in daylight.',
+    'Lord Varrow keeps to his manor. His steward does the real work.',
+    'In Highcrown a shopkeeper bought a seat on the city council. Coin opens doors there.',
+    'Kellmere and Ashford are quarrelling over the toll bridge again.',
+    'A village that feeds its own in a lean year is remembered by its lord.'
+  ];
+  const PROJECTS = {
+    pave: { name: 'Pave the square', cost: 60, text: 'Stone on the square. Every shop draws one more traveler a day.' },
+    lanterns: { name: 'Lanterns on the square', cost: 40, text: 'Lamps for the evenings. Villagers shop a little more often.' },
+    granary: { name: 'Enlarge the granary', cost: 50, text: 'A bigger store. No more grain shortages.' }
+  };
+  const TOLLS = { none: { name: 'No toll', coin: 0, travelers: 1 }, low: { name: 'Low toll (2c)', coin: 2, travelers: 0.85 }, high: { name: 'High toll (5c)', coin: 5, travelers: 0.6 } };
+  const DISPUTES = [
+    { a: 'Aldric', b: 'Maren', text: 'Aldric says Maren’s goats ate his barley. Maren says the fence was his to mend.', opts: [
+      { label: 'Maren pays Aldric 5c', favor: { Aldric: 1, Maren: -1 }, standing: 3 },
+      { label: 'Aldric mends his own fence', favor: { Aldric: -1, Maren: 1 }, standing: 3 },
+      { label: 'The chest pays 5c and both mend the fence', favor: { Aldric: 1, Maren: 1 }, standing: 6, chest: -5 } ] },
+    { a: 'Tobin', b: 'Edda', text: 'Tobin felled a pine that crushed the cart Edda uses to haul ore. Edda wants a new cart; Tobin says she parked it in the woods.', opts: [
+      { label: 'Tobin builds Edda a cart', favor: { Tobin: -1, Edda: 1 }, standing: 3 },
+      { label: 'Edda should have known better', favor: { Tobin: 1, Edda: -1 }, standing: 2 },
+      { label: 'The chest pays 8c toward a new cart', favor: { Tobin: 1, Edda: 1 }, standing: 6, chest: -8 } ] },
+    { a: 'Wynn', b: 'Old Sela', text: 'Wynn wants to sell water at the Trading Post. Old Sela says the well belongs to everyone.', opts: [
+      { label: 'The well stays free', favor: { Wynn: -1, 'Old Sela': 1 }, standing: 5 },
+      { label: 'Let Wynn sell it, and pay the chest 1c a day', favor: { Wynn: 1, 'Old Sela': -1 }, standing: 1, chestDaily: 1 },
+      { label: 'Wynn may sell to travelers only', favor: { Wynn: 1, 'Old Sela': 0 }, standing: 4 } ] },
+    { a: 'Maren', b: 'Tobin', text: 'Maren and Tobin both want the last plot by the stream for their sons’ cottages.', opts: [
+      { label: 'Maren’s family has waited longer', favor: { Maren: 1, Tobin: -1 }, standing: 3 },
+      { label: 'Tobin cleared the land himself', favor: { Maren: -1, Tobin: 1 }, standing: 3 },
+      { label: 'Draw lots at the moot', favor: {}, standing: 4 } ] }
+  ];
+  const JOBLESS = ['Hilda', 'Bram'];
+  const STEPS = [
+    'Meet Elder Brannoch at the Moot Hall',
+    'Own a business so the village takes you seriously',
+    'End the grain shortage: bring 20 grain to the granary',
+    'Give work to Hilda and Bram, who sit idle in the square',
+    'Rebuild the old watchtower on the east road (80c and 20 wood)',
+    'Answer the elder’s summons to the Moot Hall',
+    'Serve on the council: fund a village project and settle a dispute',
+    'Answer Lord Varrow’s letter at the manor gate'
+  ];
   const HOMES = [{ x: -27, z: 4 }, { x: -12, z: -24 }, { x: 3, z: -25 }, { x: 15, z: -25 }, { x: 30, z: -4 }, { x: -10, z: 27 }];
   const WORKER_HOMES = [{ x: 6, z: 27 }, { x: 18, z: 24 }, { x: -30, z: -6 }];
   const VILLAGERS = [
@@ -342,15 +402,18 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const SELL = { grain: 1, wood: 1, ore: 1 };
   const GATHER = { grain: { min: 30, n: 2, loc: 'field' }, wood: { min: 40, n: 2, loc: 'forest' }, ore: { min: 50, n: 2, loc: 'pit' } };
 
-  const GOALS = [
-    { id: 'job', text: 'Ask for work at one of the four shops across the square', done: s => s.rec.jobsHeld > 0 },
-    { id: 'learn', text: 'Work ' + LEARN_SHIFTS + ' full shifts to learn that trade', done: s => TRADE_KEYS.some(t => learned(s, t)) },
-    { id: 'open', text: 'Save up and open your own shop on an empty lot', done: s => s.rec.shopsOpened > 0 },
-    { id: 'sell', text: 'Sell 10 goods from your own shop', done: s => s.rec.goodsSold >= 10 },
-    { id: 'hire', text: 'Hire a worker for your shop', done: s => s.rec.workersHired > 0 },
-    { id: 'two', text: 'Own two businesses', done: s => s.shops.length >= 2 },
-    { id: 'top', text: 'Upgrade a shop to its finest building', done: s => s.shops.some(x => x.tier >= 2) }
+  const CHAPTERS = [
+    { n: 1, name: 'The Hired Hand', lead: 'From nothing to a business of your own.' },
+    { n: 2, name: 'A Place in the Village', lead: 'From shopkeeper to someone the village relies on.' }
   ];
+  const GOALS = [
+    { id: 'job', ch: 1, text: 'Ask for work at one of the four shops across the square', done: s => s.rec.jobsHeld > 0 },
+    { id: 'learn', ch: 1, text: 'Work ' + LEARN_SHIFTS + ' full shifts to learn the basics of that trade', done: s => TRADE_KEYS.some(t => learned(s, t)) },
+    { id: 'open', ch: 1, text: 'Save up and open your own shop on an empty lot', done: s => s.rec.shopsOpened > 0 },
+    { id: 'sell', ch: 1, text: 'Sell 10 goods from your own shop', done: s => s.rec.goodsSold >= 10 },
+    { id: 'hire', ch: 1, text: 'Hire a worker for your shop', done: s => s.rec.workersHired > 0 },
+    { id: 'two', ch: 1, text: 'Own two businesses', done: s => s.rec.shopsOpened >= 2 }
+  ].concat(STEPS.map((text, i) => ({ id: 'v' + i, ch: 2, text, done: s => s.village.step > i })));
 
   /* ---------- helpers ---------- */
   function rand(s) {
@@ -394,6 +457,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const empById = id => EMPLOYERS.find(e => e.id === id);
   function learned(s, trade) { return s.trades[trade] >= LEARN_SHIFTS; }
   function tradeSpeed(s, trade) { return 1 + Math.min(0.3, s.trades[trade] * 0.03); }
+  function skillPct(s, trade) { return Math.round(Math.min(0.3, s.trades[trade] * 0.03) * 100); }
+  function addStanding(s, n, why) {
+    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) s.rec.standingEarned += n;
+    if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
+  }
   function shopLabel(shop) { return tierOf(shop).name + ', ' + PLOTS[shop.plot].name; }
   function wtpMean(shop, traveler) { const T = TRADES[shop.trade]; return T.wtp * (1 + 0.08 * shop.tier + (traveler ? 0.08 : 0)); }
   function earn(s, n) { s.coins += n; s.rec.coinsEarned += n; }
@@ -410,7 +478,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     };
   }
   function freshStats(s) {
-    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, notes: [] };
+    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, notes: [] };
     s.shops.forEach(x => { st.shops[x.id] = freshShopStats(x); });
     return st;
   }
@@ -423,7 +491,16 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       served: 0, lost: 0, lostPrice: 0, gathered: { grain: 0, wood: 0, ore: 0 }, walked: 0,
       workersHired: 0, workersLetGo: 0, workersQuit: 0, wagesPaid: 0,
       shopsOpened: 0, upgrades: 0, invested: 0, jobsHeld: 0, shiftsWorked: 0, shiftsMissed: 0, timesFired: 0, jobsQuit: 0,
-      peakCoins: 0, days: 0
+      peakCoins: 0, days: 0,
+      standingEarned: 0, elderTasks: 0, councilSince: null, projectsFunded: 0, disputesSettled: 0, grainDonated: 0, chestGiven: 0,
+      taxesPaid: 0, contractsDone: 0, contractsMissed: 0, housesOwned: 0, rentCollected: 0, shopsSold: 0
+    };
+  }
+  function freshVillage() {
+    return {
+      step: 0, standing: 0, shortage: false, granary: 0, granaryNeed: 20, jobless: [], towerCoin: 0, towerWood: 0, towerBuilt: false,
+      council: false, chest: 0, chestDaily: 0, projects: {}, toll: 'none', dispute: null, disputeDay: 0, usedDisputes: [], favor: {},
+      landGranted: false, letter: false, metSteward: false, cottage: 'forsale', contract: null, taxDue: null
     };
   }
 
@@ -433,7 +510,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       v: VERSION, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
       player: { x: P.home.x, z: P.home.z, face: 0, dest: null, action: null, inv: { grain: 0, wood: 0, ore: 0 } },
       shops: [], nextShop: 1, job: null, trades: { bakery: 0, smithy: 0, tavern: 0, joinery: 0 },
-      agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null
+      agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null, village: freshVillage()
     };
     VILLAGERS.forEach((v, i) => {
       const home = HOMES[i];
@@ -443,7 +520,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       });
     });
     openDay(s);
-    event(s, 'Day 1. You arrive in Hearthmoor with 5 coins. The four shops across the square are hiring.', 'story');
+    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + REALM.lord + ', with 5 coins. The four shops across the square are hiring.', 'story');
     return s;
   }
 
@@ -462,28 +539,54 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     s.stats = freshStats(s);
     const base = s.t - minuteOfDay(s.t);
     const sched = [];
+    const v = s.village;
+    if (v.council && v.step >= 6 && !v.projects.granary && !v.shortage && rand(s) < 0.12) {
+      v.shortage = true; v.granary = 0; v.granaryNeed = 12;
+      event(s, 'A lean week: the granary is running low again. Villagers will buy less until it is refilled (12 grain), or enlarged by the council.', 'bad');
+    }
     for (const shop of s.shops) {
       const T = TRADES[shop.trade], Ti = tierOf(shop);
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
-      s.agents.filter(a => a.kind === 'villager').forEach(a => { if (rand(s) < T.villagerRate) sched.push({ at: when(), id: a.id, shop: shop.id }); });
-      const n = Math.max(0, Ti.travelers + Math.floor(rand(s) * 3) - 1);
+      const vr = T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0);
+      s.agents.filter(a => a.kind === 'villager').forEach(a => { if (rand(s) < vr) sched.push({ at: when(), id: a.id, shop: shop.id }); });
+      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers));
       for (let i = 0; i < n; i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
+    if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
     sched.sort((a, b) => a.at - b.at);
     s.schedule = sched;
     makeApplicants(s);
+    // merchant orders
+    if (v.contract && s.day > v.contract.until) { event(s, 'The order for ' + v.contract.who + ' lapsed unfilled.', 'bad'); v.contract = null; s.rec.contractsMissed++; }
+    if (!v.contract && s.shops.length && rand(s) < 0.5) {
+      const shop = s.shops[Math.floor(rand(s) * s.shops.length)], T = TRADES[shop.trade], Ti = tierOf(shop);
+      const qty = Math.max(2, Ti.out * 2 + Math.floor(rand(s) * 3));
+      v.contract = { trade: shop.trade, qty, reward: Math.round(qty * T.price * 1.6), until: s.day + 3, who: ['A drover bound for Ashford', 'A Kellmere mining crew', 'A wagon train to Highcrown', 'The innkeeper at Ashford'][Math.floor(rand(s) * 4)] };
+      event(s, v.contract.who + ' wants ' + goodsName(shop.trade, qty) + ' delivered to the Trading Post by day ' + v.contract.until + ' for ' + v.contract.reward + 'c.', 'story');
+    }
+    // the council hears a dispute every few days
+    if (v.council && !v.dispute && s.day >= v.disputeDay) {
+      const pool = DISPUTES.map((d, i) => i).filter(i => !v.usedDisputes.includes(i));
+      const pick = (pool.length ? pool : DISPUTES.map((d, i) => i))[Math.floor(rand(s) * (pool.length || DISPUTES.length))];
+      v.dispute = pick; v.usedDisputes.push(pick);
+      if (v.usedDisputes.length >= DISPUTES.length) v.usedDisputes = [];
+      event(s, DISPUTES[pick].a + ' and ' + DISPUTES[pick].b + ' bring a quarrel to the council. Settle it at the Moot Hall.', 'story');
+    }
+    if (v.council) { v.chest += v.chestDaily; }
+    if (v.cottage === 'repaired') { v.cottage = 'let'; event(s, 'A family from Ashford rents your cottage for 5c a day, paid at closing.', 'good'); }
     if (s.day > 1) event(s, 'Day ' + s.day + ' begins.', 'story');
   }
 
   function makeApplicants(s) {
     s.applicants = [];
     const taken = s.shops.filter(x => x.worker).map(x => x.worker.name);
+    for (const name of s.village.jobless) s.applicants.push({ name, skill: name === 'Hilda' ? 1.05 : 0.9, ask: name === 'Hilda' ? 9 : 7, local: true });
     for (let i = 0; i < 2; i++) {
       const skill = Math.round((0.7 + rand(s) * 0.6) * 100) / 100;
       const ask = Math.round(3 + skill * 6);
       let name, guard = 0;
-      do { name = APPLICANTS[Math.floor(rand(s) * APPLICANTS.length)]; guard++; } while ((s.applicants.some(a => a.name === name) || taken.includes(name)) && guard < 50);
+      do { name = APPLICANTS[Math.floor(rand(s) * APPLICANTS.length)]; guard++; } while ((s.applicants.some(a => a.name === name) || taken.includes(name) || JOBLESS.includes(name)) && guard < 50);
       s.applicants.push({ name, skill, ask });
     }
   }
@@ -491,7 +594,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   function closeDay(s) {
     const st = s.stats;
-    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, notes: st.notes.slice() };
+    if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
+    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, notes: st.notes.slice() };
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
       if (w) {
@@ -510,8 +614,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       e.notes = explainShop(s, shop, e);
       entry.shops.push(e);
     }
-    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys;
+    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract;
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given;
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
@@ -590,6 +694,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function spawnScheduled(s) {
     while (s.schedule.length && s.schedule[0].at <= s.t) {
       const e = s.schedule.shift();
+      if (e.taxman) {
+        s.agents.push({ id: s.nextId++, kind: 'taxman', name: 'The lord\u2019s tax collector', x: P.manorRoad.x, z: P.manorRoad.z, face: 0, mode: 'tax', phase: 'in', doing: 'Coming down from the manor', icon: null, iconUntil: 0, palette: 0, wait: 0 });
+        continue;
+      }
       const shop = shopById(s, e.shop);
       if (!shop) continue;
       const T = TRADES[shop.trade];
@@ -598,7 +706,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         a = {
           id: s.nextId++, kind: 'traveler', name: TRAVELERS[Math.floor(rand(s) * TRAVELERS.length)],
           x: P.road.x, z: P.road.z + (rand(s) - 0.5) * 3, face: -Math.PI / 2, mode: 'shop', phase: 'toShop',
-          doing: 'Looking for ' + T.product, icon: null, iconUntil: 0, palette: 6 + Math.floor(rand(s) * 4)
+          doing: 'Looking for ' + T.product, icon: null, iconUntil: 0, palette: 6 + Math.floor(rand(s) * 4), rumor: Math.floor(rand(s) * RUMORS.length)
         };
         a.wtp = clamp(normal(s, wtpMean(shop, true), T.sd), 1, T.wtp * 3);
         s.agents.push(a);
@@ -607,7 +715,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (!a) continue;
         if (a.mode === 'shop') { e.at = s.t + 60; insertSched(s, e); continue; }
         a.mode = 'shop'; a.phase = 'toShop';
-        a.wtp = clamp(normal(s, wtpMean(shop, false), T.sd), 1, T.wtp * 3);
+        a.wtp = clamp(normal(s, wtpMean(shop, false), T.sd) * (1 + 0.06 * (s.village.favor[a.name] || 0)), 1, T.wtp * 3);
       }
       a.shop = shop.id;
       const r = rand(s);
@@ -685,13 +793,35 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     }
   }
 
+  function taxTake(s) {
+    const due = s.shops.reduce((a, x) => a + 2 * (x.tier + 1), 0) + (s.village.cottage === 'let' ? 2 : 0);
+    const paid = Math.min(s.coins, due);
+    spend(s, paid); s.stats.tax += paid; s.rec.taxesPaid += paid;
+    let msg = 'The tax collector takes ' + paid + 'c for ' + REALM.lordShort + (due ? ' (2c for each level of every shop you own' + (s.village.cottage === 'let' ? ', 2c for the cottage' : '') + ').' : '. You own nothing taxable yet.');
+    if (s.village.council) { s.village.chest += 20; msg += ' He leaves 20c in the council chest from the lord\u2019s purse.'; }
+    event(s, msg, due ? 'bad' : 'info');
+  }
+  function taxmanRoutine(s, a, dt) {
+    if (a.phase === 'in') { a.doing = 'Collecting ' + REALM.lordShort + '\u2019s taxes'; if (moveTo(a, P.hall.x + 1.5, P.hall.z + 1, 1.0 * dt)) { a.phase = 'wait'; a.wait = 40; taxTake(s); } }
+    else if (a.phase === 'wait') { a.doing = 'Writing in his tax roll'; a.working = true; a.wait -= dt; if (a.wait <= 0) { a.phase = 'out'; a.working = false; } }
+    else { a.doing = 'Returning to the manor'; if (moveTo(a, P.manorRoad.x, P.manorRoad.z - 4, 1.0 * dt)) a.gone = true; }
+  }
+  function joblessRoutine(s, a, dt) {
+    const h = hourOf(s);
+    const sit = { x: P.square.x + (a.name === 'Hilda' ? -1 : 1), z: P.square.z };
+    const night = h < 6 || h >= 21;
+    const arrived = moveTo(a, night ? a.home.x : sit.x, night ? a.home.z : sit.z, 0.8 * dt);
+    a.indoors = night && arrived; a.working = false;
+    a.doing = night ? 'Asleep' : 'Sitting in the square, hoping for work';
+    if (!night && arrived) a.face = 0;
+  }
   function villagerRoutine(s, a, dt) {
     const h = hourOf(s);
     let tgt, doing, working = false;
     if (h < 6 || h >= 21) { tgt = a.home; doing = 'Asleep'; }
     else if (h < 7) { tgt = a.spot; doing = 'Walking to work'; }
     else if (h < 12 || (h >= 13 && h < 17)) { tgt = a.spot; doing = jobDoing(a.job); working = true; }
-    else if (h < 13) { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = 'Lunch by the well'; }
+    else if (h < 13) { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = s.village.shortage ? 'Hungry: the granary is nearly empty' : 'Lunch by the well'; }
     else { tgt = { x: P.plaza.x + ((a.id % 4) - 1.5) * 1.4, z: P.plaza.z + ((a.id % 2) ? 1.2 : -1) }; doing = 'Chatting in the square'; }
     const arrived = moveTo(a, tgt.x, tgt.z, 0.9 * dt);
     a.doing = arrived ? doing : (doing === 'Asleep' ? 'Heading home' : doing.startsWith('Walking') ? doing : 'On the way: ' + doing.toLowerCase());
@@ -707,6 +837,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (a.icon && s.t > a.iconUntil && a.icon !== 'wait') a.icon = null;
       a.indoors = false;
       if (a.mode === 'shop') updateShopper(s, a, dt);
+      else if (a.kind === 'taxman') taxmanRoutine(s, a, dt);
+      else if (a.kind === 'jobless') joblessRoutine(s, a, dt);
       else villagerRoutine(s, a, dt);
     }
     if (s.agents.some(a => a.gone)) s.agents = s.agents.filter(a => !a.gone);
@@ -727,6 +859,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       shop.goods += Ti.out;
       st.batches++; st.batchesBy[who]++;
       s.rec.made[T.product] += Ti.out;
+      if (who === 'player') s.trades[shop.trade] = Math.round((s.trades[shop.trade] + 0.25) * 100) / 100;
       event(s, (who === 'player' ? 'You' : shop.worker.name) + ' made ' + goodsName(shop.trade, Ti.out) + '.', 'good');
       return 'done';
     }
@@ -823,6 +956,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       p.action = { type: 'gather', good: then.good, left: GATHER[then.good].min };
     } else if (then.type === 'craft') { p.action = { type: 'craft', shop: then.shop }; p.face = Math.PI; }
     else if (then.type === 'store') storeGoods(s, shopById(s, then.shop));
+    else if (then.type === 'talk') doTalk(s);
+    else if (then.type === 'donate') donateGrain(s);
+    else if (then.type === 'fundTower') fundTower(s);
+    else if (then.type === 'gate') gateTalk(s);
     else if (then.type === 'storeThenCraft') { const shop = shopById(s, then.shop); storeGoods(s, shop); if (shop) walkTo(s, plotPt(shop, 'station'), { type: 'craft', shop: shop.id }); }
   }
 
@@ -960,6 +1097,90 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     }
   }
 
+  /* ---------- the village and its elder ---------- */
+  function startShortage(s) {
+    const v = s.village; v.step = 2; v.shortage = true; v.granary = 0; v.granaryNeed = 20;
+    event(s, REALM.elder + ': "The harvest was thin and the granary is near empty. Folk are skipping meals and spending less. Bring 20 grain to the granary and they will remember it."', 'story');
+  }
+  function startJobs(s) {
+    const v = s.village; v.step = 3; v.jobless = JOBLESS.slice();
+    JOBLESS.forEach((name, i) => s.agents.push({ id: s.nextId++, kind: 'jobless', name, home: HOMES[1 + i], x: HOMES[1 + i].x, z: HOMES[1 + i].z + 1.5, face: 0, mode: 'routine', doing: 'Looking for work', icon: null, iconUntil: 0, palette: 7 + i }));
+    event(s, REALM.elder + ': "Hilda and Bram lost their places when the mill closed. They sit in the square every day. Give them work, and two families eat."', 'story');
+    makeApplicants(s);
+  }
+  function checkVillage(s) {
+    const v = s.village;
+    if (v.step === 1 && s.shops.length) startShortage(s);
+    if (v.step === 3 && !v.jobless.length) {
+      v.step = 4; s.rec.elderTasks++; addStanding(s, 20, 'Hilda and Bram have work, and the square knows who gave it.');
+      event(s, REALM.elder + ': "One more thing. The old watchtower on the east road fell in last winter. Bandits are on the Ashford road. Rebuild it: 80c and 20 wood."', 'story');
+    }
+    if (v.step === 6 && s.rec.projectsFunded >= 1 && s.rec.disputesSettled >= 1) {
+      v.step = 7; v.letter = true;
+      event(s, 'A rider brings a letter sealed in blue wax: "' + REALM.steward + ' would speak with the new councillor of Hearthmoor. Present yourself at the manor gate." — ' + REALM.lord, 'story');
+    }
+  }
+  function doTalk(s) {
+    const v = s.village;
+    if (v.step === 0) {
+      v.step = 1;
+      event(s, REALM.elder + ': "Hearthmoor belongs to ' + REALM.lord + ', who holds it for ' + REALM.king + ' in ' + REALM.capital + '. His steward taxes us; the council of elders runs the rest. A hired hand has no say here. A shopkeeper might."', 'story');
+      if (s.shops.length) startShortage(s);
+      return;
+    }
+    if (v.step === 5) {
+      v.step = 6; v.council = true; v.chest += 30; v.landGranted = true; v.disputeDay = s.day + 1; s.rec.elderTasks++; s.rec.councilSince = s.day;
+      addStanding(s, 10, 'the moot votes you onto the village council.');
+      event(s, 'The moot votes you onto the council. You now hold a key to the village chest (30c), a say over the travelers\u2019 toll, and the right to grant land: the Hall lot is yours to build on.', 'story');
+      return;
+    }
+    const lines = {
+      1: 'Open a business of your own and come back. Then we can talk about what the village needs.',
+      2: 'The granary still needs ' + Math.max(0, v.granaryNeed - v.granary) + ' grain.',
+      3: (v.jobless.length === 2 ? 'Hilda and Bram' : v.jobless[0]) + ' still need' + (v.jobless.length === 1 ? 's' : '') + ' work.',
+      4: 'The watchtower needs ' + Math.max(0, 80 - v.towerCoin) + 'c and ' + Math.max(0, 20 - v.towerWood) + ' wood more.',
+      6: 'Councillor. The chest holds ' + v.chest + 'c. Spend it where the village can see it.',
+      7: 'The steward is waiting. Do not keep a lord\u2019s man waiting.',
+      8: 'You have done well by us. The lord knows your name now.'
+    };
+    event(s, REALM.elder + ': "' + (lines[v.step] || 'Good day to you.') + '"', 'info');
+  }
+  function donateGrain(s) {
+    const v = s.village, p = s.player;
+    if (!v.shortage) { event(s, 'The granary is full enough for now.', 'info'); return; }
+    const n = Math.min(p.inv.grain, v.granaryNeed - v.granary);
+    if (n <= 0) { event(s, 'You have no grain to give. The Wheat Field is free to gather from.', 'bad'); return; }
+    p.inv.grain -= n; v.granary += n; s.rec.grainDonated += n;
+    event(s, 'You give ' + n + ' grain to the granary (' + v.granary + '/' + v.granaryNeed + ').', 'good');
+    if (v.granary >= v.granaryNeed) {
+      v.shortage = false;
+      if (v.step === 2) { s.rec.elderTasks++; addStanding(s, 20, 'the granary is full and the village eats again.'); startJobs(s); }
+      else addStanding(s, 8, 'you refilled the granary in a lean week.');
+    }
+  }
+  function fundTower(s) {
+    const v = s.village, p = s.player;
+    if (v.towerBuilt) return;
+    const coin = Math.min(s.coins, 80 - v.towerCoin), wood = Math.min(p.inv.wood, 20 - v.towerWood);
+    if (coin <= 0 && wood <= 0) { event(s, 'The masons need coin and wood. You have neither on you.', 'bad'); return; }
+    spend(s, coin); s.stats.given += coin; s.rec.chestGiven += coin; p.inv.wood -= wood;
+    v.towerCoin += coin; v.towerWood += wood;
+    event(s, 'You give ' + [coin ? coin + 'c' : null, wood ? wood + ' wood' : null].filter(Boolean).join(' and ') + ' to the watchtower (' + v.towerCoin + '/80c, ' + v.towerWood + '/20 wood).', 'good');
+    if (v.towerCoin >= 80 && v.towerWood >= 20) {
+      v.towerBuilt = true;
+      if (v.step === 4) { v.step = 5; s.rec.elderTasks++; addStanding(s, 20, 'the watchtower stands again over the Ashford road.'); event(s, REALM.elder + ' sends word: the village will hold a moot. Come to the Moot Hall.', 'story'); }
+    }
+  }
+  function gateTalk(s) {
+    const v = s.village;
+    if (v.step === 7) {
+      v.step = 8; v.metSteward = true;
+      event(s, REALM.steward + ' meets you at the gate: "His lordship hears Hearthmoor has a councillor worth knowing. Lords have need of such people. We will send for you." (Chapter Three, The Lord\u2019s Favor, comes in a later update.)', 'story');
+    } else if (v.step >= 8) event(s, 'The guard nods you through to the gatehouse, but the steward is away on the lord\u2019s business.', 'info');
+    else event(s, 'The gate is barred. A guard in blue and gold: "His lordship receives no one without the steward\u2019s leave."', 'info');
+  }
+  function atLoc(s, key) { return dist(s.player, LOCS[key]) < LOCS[key].r; }
+
   /* ---------- commands ---------- */
   const ok = msg => ({ ok: true, msg });
   const fail = msg => ({ ok: false, msg });
@@ -1032,6 +1253,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const plot = a, trade = b;
         if (!PLOTS[plot]) return fail('No such lot.');
         if (shopOnPlot(s, plot)) return fail('That lot is taken.');
+        if (PLOTS[plot].grant && !s.village.landGranted) return fail('This is council land. Only the council can grant it.');
         if (!TRADES[trade]) return fail('Unknown trade.');
         if (!learned(s, trade)) return fail('Learn the trade first: work ' + LEARN_SHIFTS + ' shifts at ' + EMPLOYERS.find(e => e.trade === trade).name + '.');
         const cost = TRADES[trade].tiers[0].cost;
@@ -1087,6 +1309,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const home = WORKER_HOMES.find(h => !used.includes(h)) || WORKER_HOMES[0];
         shop.worker = { name: ap.name, skill: ap.skill, ask: ap.ask, wage, mood: 60, x: P.road.x - 6, z: P.plaza.z, face: 0, home, task: null, why: 'Just hired', warned: false, carry: null, sup: null, hiredDay: s.day };
         s.applicants.splice(b, 1); s.rec.workersHired++;
+        if (ap.local) {
+          s.village.jobless = s.village.jobless.filter(n => n !== ap.name);
+          const ag = s.agents.find(x => x.kind === 'jobless' && x.name === ap.name);
+          if (ag) { shop.worker.x = ag.x; shop.worker.z = ag.z; s.agents = s.agents.filter(x => x !== ag); }
+          shop.worker.local = true;
+        }
         event(s, ap.name + ' will work at your ' + TRADES[shop.trade].name.toLowerCase() + ' for ' + wage + 'c a day, paid at closing (21:00).', 'good');
         return ok();
       }
@@ -1105,6 +1333,90 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         payCost(s, next.cost, shop);
         shop.tier++; s.rec.upgrades++;
         event(s, 'Your shop on the ' + PLOTS[shop.plot].name + ' is now a ' + next.name + '!', 'story');
+        return ok();
+      }
+      case 'talk': if (atLoc(s, 'hall')) { doTalk(s); return ok(); } walkTo(s, P.hall, { type: 'talk' }); return ok();
+      case 'donate': if (atLoc(s, 'granary')) { donateGrain(s); return ok(); } walkTo(s, P.granary, { type: 'donate' }); return ok();
+      case 'fundTower': if (atLoc(s, 'tower')) { fundTower(s); return ok(); } walkTo(s, P.tower, { type: 'fundTower' }); return ok();
+      case 'gate': if (atLoc(s, 'manor')) { gateTalk(s); return ok(); } walkTo(s, P.gate, { type: 'gate' }); return ok();
+      case 'project': {
+        const v = s.village, pr = PROJECTS[a];
+        if (!v.council) return fail('Only the council can spend the village chest.');
+        if (!atLoc(s, 'hall')) return fail('Council business is done at the Moot Hall.');
+        if (!pr || v.projects[a]) return fail('That project is already done.');
+        if (v.chest < pr.cost) return fail('The chest holds ' + v.chest + 'c; this needs ' + pr.cost + 'c. You can add your own coin.');
+        v.chest -= pr.cost; v.projects[a] = s.day; s.rec.projectsFunded++;
+        if (a === 'granary' && v.shortage) { v.shortage = false; }
+        addStanding(s, 10, pr.name.toLowerCase() + ' is done.');
+        return ok();
+      }
+      case 'giveChest': {
+        const v = s.village, n = Math.min(s.coins, a | 0);
+        if (!v.council) return fail('You do not hold a key to the chest.');
+        if (n <= 0) return fail('You have no coin to give.');
+        spend(s, n); v.chest += n; s.stats.given += n; s.rec.chestGiven += n;
+        if (n >= 10) addStanding(s, Math.floor(n / 10), 'you put your own coin into the village chest.');
+        return ok('You add ' + n + 'c to the chest.');
+      }
+      case 'toll': {
+        if (!s.village.council) return fail('Only the council sets the toll.');
+        if (!TOLLS[a]) return fail('Unknown toll');
+        s.village.toll = a;
+        event(s, 'The council sets the travelers\u2019 toll: ' + TOLLS[a].name + '. It takes effect tomorrow.', 'info');
+        return ok();
+      }
+      case 'settle': {
+        const v = s.village;
+        if (v.dispute == null) return fail('There is no quarrel before the council.');
+        if (!atLoc(s, 'hall')) return fail('Disputes are heard at the Moot Hall.');
+        const d = DISPUTES[v.dispute], o = d.opts[a];
+        if (!o) return fail('Pick a ruling.');
+        if (o.chest && v.chest + o.chest < 0) return fail('The chest cannot cover that.');
+        v.chest += o.chest || 0; v.chestDaily += o.chestDaily || 0;
+        for (const n in o.favor) v.favor[n] = clamp((v.favor[n] || 0) + o.favor[n], -2, 2);
+        v.dispute = null; v.disputeDay = s.day + 3; s.rec.disputesSettled++;
+        addStanding(s, o.standing, 'the council rules: ' + o.label.toLowerCase() + '.');
+        return ok();
+      }
+      case 'deliver': {
+        const v = s.village, c0 = v.contract;
+        if (!c0) return fail('There is no order to fill.');
+        if (!atLoc(s, 'market')) return fail('Orders are handed over at the Trading Post.');
+        const shops = s.shops.filter(x => x.trade === c0.trade), have = shops.reduce((t, x) => t + x.goods, 0);
+        if (have < c0.qty) return fail('Your shops hold ' + have + ' of the ' + goodsName(c0.trade, c0.qty) + ' needed.');
+        let need = c0.qty;
+        for (const x of shops) { const n = Math.min(x.goods, need); x.goods -= n; need -= n; }
+        earn(s, c0.reward); s.stats.contract += c0.reward; s.rec.contractsDone++;
+        v.contract = null; addStanding(s, 2, 'Hearthmoor goods are known on the road.');
+        event(s, 'Order delivered: ' + c0.reward + 'c from ' + c0.who.toLowerCase() + '.', 'coin');
+        return ok();
+      }
+      case 'buyCottage': {
+        const v = s.village;
+        if (v.cottage !== 'forsale') return fail('The cottage is already yours.');
+        if (s.coins < 90) return fail('The cottage costs 90c.');
+        spend(s, 90); s.stats.property += 90; s.rec.invested += 90; v.cottage = 'owned'; s.rec.housesOwned++;
+        event(s, 'You buy Old Ama\u2019s cottage. The roof leaks and the door hangs loose: repair it (30c and 12 wood) to find a tenant.', 'story');
+        return ok();
+      }
+      case 'repairCottage': {
+        const v = s.village;
+        if (v.cottage !== 'owned') return fail('Nothing to repair.');
+        if (!canPay(s, { coin: 30, wood: 12 })) return fail('Repairs need 30c and 12 wood.');
+        payCost(s, { coin: 30, wood: 12 }); v.cottage = 'repaired';
+        event(s, 'The cottage is mended. A tenant will move in tomorrow.', 'good');
+        return ok();
+      }
+      case 'sellShop': {
+        if (!shop) return fail('No such shop.');
+        const refund = Math.floor(TRADES[shop.trade].tiers.slice(0, shop.tier + 1).reduce((t, x) => t + (x.cost.coin || 0), 0) / 2);
+        if (shop.worker) s.rec.workersLetGo++;
+        shop.queue.slice().forEach(id => { const ag = agentById(s, id); if (ag) leaveShop(s, ag, null, null); });
+        s.shops = s.shops.filter(x => x !== shop);
+        s.schedule = s.schedule.filter(e => e.shop !== shop.id);
+        earn(s, refund); s.rec.shopsSold++;
+        if (p.action && p.action.shop === shop.id) p.action = null;
+        event(s, 'You sold your ' + TRADES[shop.trade].name.toLowerCase() + ' for ' + refund + 'c. The ' + PLOTS[shop.plot].name + ' is free again.', 'info');
         return ok();
       }
       case 'stop': p.action = null; p.dest = null; return ok();
@@ -1127,6 +1439,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     for (const shop of s.shops) updateWorker(s, shop, dt);
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
+    checkVillage(s);
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
   }
   function advance(s, minutes) { let left = minutes; while (left > 1e-9) { const d = Math.min(1, left); step(s, d); left -= d; } }
@@ -1137,7 +1450,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function netWorth(s) { return s.coins + propertyValue(s); }
   function summary(s) {
-    return { name: s.name, day: s.day, clock: clock(s.t), coins: s.coins, shops: s.shops.length, job: s.job ? empById(s.job.emp).name : null, netWorth: netWorth(s) };
+    return { standing: s.village.standing, council: s.village.council, name: s.name, day: s.day, clock: clock(s.t), coins: s.coins, shops: s.shops.length, job: s.job ? empById(s.job.emp).name : null, netWorth: netWorth(s) };
   }
 
   /* ---------- saving ---------- */
@@ -1166,11 +1479,18 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (!s || typeof s !== 'object' || typeof s.v !== 'number') throw new Error('Not a Hearthmoor save');
     if (s.v > VERSION) throw new Error('This save is from a newer version');
     if (s.v === 1) s = migrateV1(s);
+    if (s.v === 2) {
+      s.v = 3; s.village = freshVillage();
+      const fr = freshRecords(); for (const k in fr) if (s.rec[k] === undefined) s.rec[k] = fr[k];
+      for (const k of ['rent', 'tax', 'contract', 'given', 'property']) if (s.stats[k] === undefined) s.stats[k] = 0;
+      event(s, 'Hearthmoor has a Moot Hall now, and ' + REALM.elder + ' would like a word with you.', 'story');
+    }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
 
   const api = {
+    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
@@ -1294,10 +1614,12 @@ Sim.EMPLOYERS.forEach(e => path({ x: e.x, z: e.z - 3 }, SQ, 1.8));
 path(SQ, { x: 38, z: 5 }, 2); path({ x: 18, z: 7 }, { x: 23.5, z: 11.5 }, 1.5);
 path({ x: 14, z: -3 }, { x: 22, z: -9 }, 1.4); path({ x: -14, z: -3 }, { x: -20, z: -10 }, 1.4);
 path({ x: -12, z: 12 }, { x: -22, z: 18 }, 1.4); path(SQ, { x: -17, z: 5.4 }, 1.4);
+path({ x: -6, z: 5 }, { x: -6, z: -11 }, 1.6); path({ x: -6, z: -11 }, { x: 0, z: -11 }, 1.8); path({ x: -6, z: -11 }, { x: -9, z: -12.5 }, 1.2);
+path({ x: 0, z: -18 }, { x: -6, z: -36 }, 1.6); path({ x: 33, z: 5 }, { x: 33, z: 10 }, 1.3); path({ x: 14, z: -6 }, { x: 21, z: -19.5 }, 1.2); path({ x: 6, z: -11 }, { x: 13, z: -11.5 }, 1.4);
 Sim.HOMES.concat(Sim.WORKER_HOMES).forEach(h => { const d = Math.hypot(h.x, h.z); path({ x: h.x * (1 - 2 / d), z: h.z * (1 - 2 / d) }, { x: h.x * 0.55, z: h.z * 0.55 }, 1.1); });
 
 // trees, kept clear of every place people go
-const keepClear = [{ x: 0, z: 6, r: 22 }, { x: L.field.x, z: L.field.z, r: 9 }, { x: L.pit.x, z: L.pit.z, r: 7 }, { x: L.market.x, z: L.market.z, r: 6 }, { x: L.forest.x + 5, z: L.forest.z + 4, r: 3.4 }]
+const keepClear = [{ x: 0, z: 6, r: 22 }, { x: 0, z: -14, r: 7 }, { x: -9, z: -15, r: 4 }, { x: 13, z: -15, r: 6 }, { x: 33, z: 11, r: 4.5 }, { x: 22, z: -22, r: 4 }, { x: -7, z: -46, r: 13 }, { x: -3, z: -27, r: 5 }, { x: -6, z: -36, r: 7 }, { x: L.field.x, z: L.field.z, r: 9 }, { x: L.pit.x, z: L.pit.z, r: 7 }, { x: L.market.x, z: L.market.z, r: 6 }, { x: L.forest.x + 5, z: L.forest.z + 4, r: 3.4 }]
   .concat(Sim.HOMES.concat(Sim.WORKER_HOMES, [L.home]).map(h => ({ x: h.x, z: h.z, r: 4.5 })));
 const clear = (x, z) => keepClear.every(k => Math.hypot(x - k.x, z - k.z) > k.r) && !(x > 18 && Math.abs(z - 5) < 4);
 const pineGeo = mergeColored([
@@ -1396,6 +1718,91 @@ hut(L.home.x, L.home.z, { door: '#2f4f6a', wall: '#73563a' });
   mesh(new THREE.BoxGeometry(1.4, 0.4, 2.2), '#5f4430', -3.2, 0.7, 0.2, g);
   [[-0.8, 0.7], [-0.8, -0.5]].forEach(([x, z]) => { const w = mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 10), '#3e2c1d', -3.2 + x * 1.05, 0.42, z, g); w.rotation.z = Math.PI / 2; });
 })();
+
+/* ----- the realm: Moot Hall, granary, watchtower, manor, cottage, square projects ----- */
+const LORD_BLUE = '#2b4a7a', LORD_GOLD = '#d9b04a';
+function banner(parent, x, y, z, h) {
+  mesh(new THREE.BoxGeometry(0.1, h, 0.1), '#3e2c1d', x, y + h / 2, z, parent);
+  mesh(new THREE.BoxGeometry(0.7, 1.1, 0.04), LORD_BLUE, x + 0.38, y + h - 0.6, z, parent);
+  mesh(new THREE.BoxGeometry(0.22, 0.22, 0.05), LORD_GOLD, x + 0.38, y + h - 0.55, z, parent);
+}
+const V = {};
+(function hall() {
+  const g = new THREE.Group(); g.position.set(0, 0, -15); scene.add(g);
+  mesh(new THREE.BoxGeometry(8, 0.3, 5.4), '#7c776d', 0, 0.15, 0, g);
+  mesh(new THREE.BoxGeometry(7.6, 2.8, 4.8), '#6e5236', 0, 1.7, -0.1, g);
+  for (let i = -3; i <= 3; i += 2) mesh(new THREE.BoxGeometry(0.22, 2.9, 0.22), '#3e2c1d', i * 1.2, 1.6, 2.3, g);
+  mesh(new THREE.BoxGeometry(1.2, 1.8, 0.1), '#3b2a1c', 0, 1.2, 2.32, g);
+  [-2.2, 2.2].forEach(x => mesh(new THREE.BoxGeometry(0.6, 0.6, 0.06), windowMat, x, 1.9, 2.32, g));
+  const r = new THREE.Mesh(flat(gableRoofGeo(5.6, 8.6, 2.4)), mat('#5e4a2c')); r.position.y = 3.1; g.add(r);
+  banner(g, -3.4, 0, 3.2, 3.4); banner(g, 3.0, 0, 3.2, 3.4);
+  mesh(new THREE.BoxGeometry(2.2, 0.4, 0.5), '#6b4a2e', 3.4, 0.4, 3.6, g);
+})();
+(function granary() {
+  const g = new THREE.Group(); g.position.set(-9, 0, -15.6); scene.add(g); V.granary = g;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), '#3e2c1d', a * 1.1, 0.35, b * 1.1, g));
+  mesh(new THREE.BoxGeometry(2.6, 1.8, 2.6), '#7a5a38', 0, 1.6, 0, g);
+  const r = new THREE.Mesh(flat(new THREE.ConeGeometry(2.3, 1.6, 4)), mat('#8a7445')); r.position.y = 3.3; r.rotation.y = Math.PI / 4; g.add(r);
+  V.grainSacks = [];
+  for (let i = 0; i < 10; i++) { const m = mesh(GEO_SACK(), '#c7b07c', -1.6 + (i % 5) * 0.8, 0.28 + Math.floor(i / 5) * 0.42, 2.0, g); m.scale.set(1, 0.95, 0.9); V.grainSacks.push(m); }
+  V.granaryWing = new THREE.Group(); g.add(V.granaryWing);
+  mesh(new THREE.BoxGeometry(2.2, 1.6, 2.4), '#7a5a38', 2.6, 1.5, 0, V.granaryWing);
+  const r2 = new THREE.Mesh(flat(new THREE.ConeGeometry(2, 1.3, 4)), mat('#8a7445')); r2.position.set(2.6, 2.95, 0); r2.rotation.y = Math.PI / 4; V.granaryWing.add(r2);
+})();
+function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGeometry(0.3, 6, 4))); }
+(function tower() {
+  const p = L.tower;
+  V.towerRuin = new THREE.Group(); V.towerRuin.position.set(p.x, 0, p.z); scene.add(V.towerRuin);
+  mesh(new THREE.BoxGeometry(3, 0.9, 3), '#7d7a70', 0, 0.45, 0, V.towerRuin);
+  [[-1.2, 0.6], [0.9, -0.8], [1.4, 1.3], [-0.4, -1.6]].forEach(([x, z], i) => { const m = mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6), '#6f6c63', x, 0.25, z, V.towerRuin); m.rotation.set(0.3 * i, i, 0.2); });
+  [[-1.4, -1.4], [1.4, 1.4]].forEach(([x, z]) => { const m = mesh(new THREE.BoxGeometry(0.2, 1.6, 0.2), '#3e2c1d', x, 0.6, z, V.towerRuin); m.rotation.z = 0.5; });
+  V.towerBuilt = new THREE.Group(); V.towerBuilt.position.set(p.x, 0, p.z); scene.add(V.towerBuilt);
+  mesh(new THREE.BoxGeometry(3, 5.5, 3), '#8b877c', 0, 2.75, 0, V.towerBuilt);
+  mesh(new THREE.BoxGeometry(3.6, 0.5, 3.6), '#5e5850', 0, 5.7, 0, V.towerBuilt);
+  for (let i = 0; i < 4; i++) { mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), '#8b877c', -1.5 + (i % 2) * 3, 6.25, -1.5 + Math.floor(i / 2) * 3, V.towerBuilt); }
+  mesh(new THREE.BoxGeometry(0.4, 0.6, 0.06), windowMat, 0, 3.6, 1.52, V.towerBuilt);
+  mesh(new THREE.BoxGeometry(1, 1.6, 0.08), '#3b2a1c', 0, 0.8, 1.52, V.towerBuilt);
+  banner(V.towerBuilt, 1.2, 5.9, 0, 2.6);
+})();
+(function manor() {
+  const gx = -6, gz = -38;
+  const ground = (x, z) => groundH(x, z);
+  const g = new THREE.Group(); g.position.set(-7, ground(-7, -47), -47); scene.add(g);
+  mesh(new THREE.BoxGeometry(12, 4.5, 6), '#8b877c', 0, 2.25, 0, g);
+  mesh(new THREE.BoxGeometry(4, 7, 4), '#8b877c', -6.5, 3.5, 1, g);
+  mesh(new THREE.BoxGeometry(4.6, 0.5, 4.6), '#5e5850', -6.5, 7.2, 1, g);
+  const r = new THREE.Mesh(flat(gableRoofGeo(6.6, 12.6, 2.8)), mat('#3f4a5a')); r.position.y = 4.5; g.add(r);
+  for (let i = -2; i <= 2; i++) mesh(new THREE.BoxGeometry(0.6, 0.8, 0.06), windowMat, i * 2.2, 2.6, 3.02, g);
+  banner(g, -6.5, 7.4, 1, 3.2); banner(g, 4.5, 4.5, 2.4, 3.6);
+  // curtain wall with the shut gate
+  const w = new THREE.Group(); w.position.set(gx, ground(gx, gz), gz); scene.add(w);
+  mesh(new THREE.BoxGeometry(9, 2.6, 0.8), '#7d7a70', -6.2, 1.3, 0, w); mesh(new THREE.BoxGeometry(9, 2.6, 0.8), '#7d7a70', 6.2, 1.3, 0, w);
+  [-1.9, 1.9].forEach(x => mesh(new THREE.BoxGeometry(1.4, 3.6, 1.4), '#6f6c63', x, 1.8, 0, w));
+  V.gate = mesh(new THREE.BoxGeometry(2.4, 2.4, 0.25), '#4a3424', 0, 1.2, 0, w);
+  mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 1.8, 0.05, w); mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 0.6, 0.05, w);
+  banner(w, -1.9, 3.6, 0, 1.8); banner(w, 1.9, 3.6, 0, 1.8);
+})();
+(function cottage() {
+  const p = L.cottage;
+  V.cottageOld = hut(p.x, p.z, { wall: '#5e4a36', roof: '#6b5a3a', door: '#2a2018' }); V.cottageOld.rotation.z = 0.04;
+  V.cottageNew = hut(p.x, p.z, { wall: '#7a5c3c', roof: '#9a8050', door: '#7a3a28' });
+  V.forSaleSign = new THREE.Group(); V.forSaleSign.position.set(p.x - 2, 0, p.z + 2.6); scene.add(V.forSaleSign);
+  mesh(new THREE.BoxGeometry(0.12, 1.4, 0.12), '#5b4029', 0, 0.7, 0, V.forSaleSign); mesh(new THREE.BoxGeometry(1, 0.6, 0.06), '#d8c69a', 0, 1.2, 0.05, V.forSaleSign);
+})();
+// square projects: stone paving and lanterns
+V.paving = mesh(new THREE.CylinderGeometry(7.3, 7.3, 0.07, 20), '#8d887c', SQ.x, 0.04, SQ.z); V.paving.visible = false;
+V.lanterns = new THREE.Group(); scene.add(V.lanterns);
+for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + 0.3; const x = SQ.x + Math.cos(a) * 7.8, z = SQ.z + Math.sin(a) * 7.8; mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), '#2a2420', x, 1.1, z, V.lanterns); mesh(new THREE.BoxGeometry(0.34, 0.4, 0.34), windowMat, x, 2.3, z, V.lanterns); }
+V.lanterns.visible = false;
+function syncVillage(s) {
+  const v = s.village;
+  V.grainSacks.forEach((m, i) => m.visible = v.shortage ? i < Math.floor(v.granary / v.granaryNeed * 10) : i < 8);
+  V.granaryWing.visible = !!v.projects.granary;
+  V.towerRuin.visible = !v.towerBuilt; V.towerBuilt.visible = v.towerBuilt;
+  V.cottageOld.visible = v.cottage === 'forsale' || v.cottage === 'owned'; V.cottageNew.visible = !V.cottageOld.visible; V.forSaleSign.visible = v.cottage === 'forsale';
+  V.paving.visible = !!v.projects.pave; V.lanterns.visible = !!v.projects.lanterns;
+  V.gate.position.x = v.step >= 8 ? 1.6 : 0;
+}
 
 /* ----- shops: four trades, three building tiers each ----- */
 const LOOK = {
@@ -1511,8 +1918,15 @@ function buildShop(trade, tier) {
   fx.light = new THREE.PointLight(trade === 'smithy' ? 0xff6a2a : 0xff8a3a, 0, 7, 2); fx.light.position.set(-2.3, 1.1, -1.4); g.add(fx.light);
   return { group: g, fx };
 }
-function forSale(i) {
+function forSale(i, locked) {
   const g = new THREE.Group(), p = Sim.PLOTS[i]; g.position.set(p.x, 0, p.z);
+  if (locked) {
+    mesh(new THREE.BoxGeometry(7.6, 0.04, 5.2), '#4f5a34', 0, 0.02, -0.6, g);
+    for (let k = 0; k < 9; k++) { mesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), '#5b4029', -3.8 + k * 0.95, 0.4, 2, g); }
+    mesh(new THREE.BoxGeometry(7.7, 0.08, 0.08), '#5b4029', 0, 0.6, 2, g);
+    banner(g, 3.2, 0, 2.4, 2.2);
+    scene.add(g); return g;
+  }
   mesh(new THREE.BoxGeometry(7.6, 0.04, 5.2), '#5a4a32', 0, 0.02, -0.6, g);
   [[-3.8, 2], [3.8, 2], [-3.8, -3.2], [3.8, -3.2]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), '#5b4029', x, 0.3, z, g));
   mesh(new THREE.BoxGeometry(0.12, 1.6, 0.12), '#5b4029', 2.6, 0.8, 2.2, g);
@@ -1521,7 +1935,7 @@ function forSale(i) {
   mesh(new THREE.BoxGeometry(0.6, 0.08, 0.02), '#3a2a1c', 2.6, 1.35, 2.29, g);
   scene.add(g); return g;
 }
-const plotView = Sim.PLOTS.map((p, i) => ({ key: null, group: forSale(i), fx: null }));
+const plotView = Sim.PLOTS.map((p, i) => ({ key: p.grant ? 'locked' : null, group: forSale(i, p.grant), fx: null }));
 // the four shops that hire, facing the square
 const empView = Sim.EMPLOYERS.map(e => {
   const b = buildShop(e.trade, 1); b.group.position.set(e.x, 0, e.z); b.group.rotation.y = Math.PI; scene.add(b.group);
@@ -1578,6 +1992,8 @@ function dropChar(g) { scene.remove(g); const h = g.children.find(c => c.materia
 const ROLE = { field: { hat: 'straw' }, forest: { hat: 'cap', capColor: '#8e3b2a' }, pit: { hat: 'cap', capColor: '#4a4744' }, market: { hat: 'cap', capColor: '#2f5d55' }, well: { hat: 'bun' } };
 const playerMesh = makeChar({ tunic: '#2f5a7a', skin: '#e3b78f', player: true, pick: 'player' });
 const bossMeshes = Sim.EMPLOYERS.map((e, i) => { const g = makeChar({ tunic: TUNIC[(i + 3) % TUNIC.length], skin: SKIN[(i + 2) % SKIN.length], apron: APRON[e.trade], chef: e.trade === 'bakery', hat: e.trade === 'smithy' ? null : null, pick: 'emp:' + e.id }); g.position.set(e.x, 0, e.z - 0.4); g.rotation.y = Math.PI; return g; });
+const elderMesh = makeChar({ tunic: '#5a4a6a', skin: '#e0b896', hat: 'bun', pick: 'elder' }); elderMesh.position.set(-1.8, 0, -11.2);
+const guardMesh = makeChar({ tunic: LORD_BLUE, skin: '#c99470', hat: 'cap', capColor: '#8d949a', pick: 'guard' }); guardMesh.position.set(-3.6, groundH(-3.6, -36.4), -36.4);
 const workerMeshes = new Map(), agentMeshes = new Map();
 function placeChar(g, a, t, opts) {
   const u = g.userData;
@@ -1612,10 +2028,15 @@ function syncChars(s, t) {
   for (const a of s.agents) {
     seen.add(a.id);
     let g = agentMeshes.get(a.id);
-    if (!g) { const role = a.kind === 'traveler' ? { hat: 'hood', capColor: '#5b4936' } : (ROLE[a.job] || {}); g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[a.id % SKIN.length], pick: a.id }, role)); agentMeshes.set(a.id, g); }
+    if (!g) { const role = a.kind === 'traveler' ? { hat: 'hood', capColor: '#5b4936' } : a.kind === 'taxman' ? { hat: 'cap', capColor: LORD_GOLD, tunic: LORD_BLUE } : (ROLE[a.job] || {}); g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[a.id % SKIN.length], pick: a.id }, role)); agentMeshes.set(a.id, g); }
     placeChar(g, a, t, { moving: a.moving, working: a.working, icon: a.icon, hidden: a.indoors, selected: UI.sel === a.id });
   }
   for (const [id, g] of agentMeshes) if (!seen.has(id)) { dropChar(g); agentMeshes.delete(id); if (UI.sel === id) UI.sel = null; }
+  const hh = Sim.hourOf(s), awake = hh >= 7 && hh < 20;
+  elderMesh.visible = awake; animChar(elderMesh, t, {}); elderMesh.userData.sel.visible = UI.sel === 'elder';
+  elderMesh.userData.icon.visible = awake && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null));
+  elderMesh.userData.icon.material = ICON.wait; elderMesh.userData.icon.position.y = 1.6 + (calm() ? 0 : Math.sin(t * 4) * 0.06);
+  animChar(guardMesh, t, {}); guardMesh.userData.sel.visible = UI.sel === 'guard';
   const h = Sim.hourOf(s);
   Sim.EMPLOYERS.forEach((e, i) => { const open = h >= 6 && h < 21; bossMeshes[i].visible = open; animChar(bossMeshes[i], t, { working: open && h >= e.shift[0] && h < e.shift[1] }); bossMeshes[i].userData.sel.visible = UI.sel === 'emp:' + e.id; });
 }
@@ -1632,11 +2053,12 @@ const glowing = [];
 function syncShops(s, t, dt) {
   glowing.length = 0;
   Sim.PLOTS.forEach((p, i) => {
-    const shop = Sim.shopOnPlot(s, i), v = plotView[i], key = shop ? shop.trade + shop.tier : null;
+    const locked = p.grant && !s.village.landGranted;
+    const shop = Sim.shopOnPlot(s, i), v = plotView[i], key = shop ? shop.trade + shop.tier : locked ? 'locked' : null;
     if (v.key !== key) {
       scene.remove(v.group);
       if (shop) { const b = buildShop(shop.trade, shop.tier); b.group.position.set(p.x, 0, p.z); scene.add(b.group); v.group = b.group; v.fx = b.fx; }
-      else { v.group = forSale(i); v.fx = null; }
+      else { v.group = forSale(i, locked); v.fx = null; }
       v.key = key;
     }
     if (!shop) return;
@@ -1784,12 +2206,15 @@ function carryText(s) {
   const inv = s.player.inv, parts = Sim.GOODS.filter(g => inv[g]).map(g => inv[g] + ' ' + g);
   return parts.length ? 'You carry ' + parts.join(', ') + ' (' + Sim.carried(s) + '/' + Sim.CARRY + ').' : 'Your hands are empty.';
 }
-const PLACES = [['field', 'Wheat Field'], ['forest', 'Pine Woods'], ['pit', 'Iron Pit'], ['market', 'Trading Post'], ['home', 'Your Hut']];
+const PLACES = [['hall', 'Moot Hall'], ['field', 'Wheat Field'], ['forest', 'Pine Woods'], ['pit', 'Iron Pit'], ['market', 'Trading Post'], ['home', 'Your Hut']];
 function placesRow(s) {
   const list = [];
   if (s.job) list.push(['emp:' + s.job.emp, 'Your job']);
   s.shops.forEach(x => list.push(['plot' + x.plot, TR[x.trade].name + ' (' + Sim.PLOTS[x.plot].name.split(' ')[0] + ')']));
   if (!s.job && !s.shops.length) list.push(['well', 'The square']);
+  const v = s.village, task = { 2: ['granary', 'Granary'], 4: ['tower', 'Watchtower'], 7: ['manor', 'Manor gate'] }[v.step];
+  if (task) list.push(task);
+  if (v.cottage !== 'forsale') list.push(['cottage', 'Your cottage']);
   return `<div class="places">${list.concat(PLACES).map(([k, n]) => `<button type="button" class="place" data-c='${esc(JSON.stringify(['goto', k]))}'>${esc(n)}</button>`).join('')}</div>`;
 }
 function progressBar(frac) { return `<div class="bar"><i style="width:${Math.round(clamp(frac, 0, 1) * 100)}%"></i></div>`; }
@@ -1806,13 +2231,17 @@ function cardHTML(s) {
         <div class="bar mood ${w.mood < 30 ? 'low' : ''}"><i style="width:${Math.round(w.mood)}%"></i></div><div class="why"><b>Doing:</b> ${esc(w.why || '')}</div>
         <div class="acts">${B_('Staff page', ['page', 'staff'])}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
     }
-    if (typeof sel === 'string' && sel.startsWith('emp:')) { UI.sel = null; UI.loc = sel; }
+    if (sel === 'elder') { UI.sel = null; UI.loc = 'hall'; }
+    else if (sel === 'guard') { UI.sel = null; UI.loc = 'manor'; }
+    else if (typeof sel === 'string' && sel.startsWith('emp:')) { UI.sel = null; UI.loc = sel; }
     else {
       const a = s.agents.find(x => x.id === sel);
       if (a) {
-        const role = a.kind === 'traveler' ? 'Passing through' : { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader', well: 'Water-carrier' }[a.job];
+        const role = a.kind === 'traveler' ? 'Passing through' : a.kind === 'taxman' ? 'Collects taxes for ' + Sim.REALM.lord : a.kind === 'jobless' ? 'Out of work since the mill closed' : { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader', well: 'Water-carrier' }[a.job];
+        const fav = G.village.favor[a.name] || 0;
+        const extra = (a.kind === 'traveler' && a.rumor != null ? `<br><i>&ldquo;${esc(Sim.RUMORS[a.rumor])}&rdquo;</i>` : '') + (fav ? `<br>${fav > 0 ? 'Thinks well of you after the council\u2019s ruling, and pays a little more.' : 'Holds a grudge over the council\u2019s ruling, and pays a little less.'}` : '') + (a.kind === 'jobless' ? '<br>Hire them from the Staff page of the ledger.' : '');
         const sh = a.shop && Sim.shopById(s, a.shop);
-        return `<h2>${esc(a.name)}</h2><div class="sub">${role}</div><div class="why"><b>Doing:</b> ${esc(a.doing || '')}${sh && a.phase !== 'leave' ? `<br>Wants ${esc(Sim.goodsName(sh.trade, a.qty))}.` : ''}${a.lastReason === 'tooExpensive' ? '<br>Last visit: walked off over the price.' : a.lastReason === 'served' ? '<br>Last visit: left happy.' : ''}</div><div class="acts">${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+        return `<h2>${esc(a.name)}</h2><div class="sub">${role}</div><div class="why"><b>Doing:</b> ${esc(a.doing || '')}${sh && a.phase !== 'leave' ? `<br>Wants ${esc(Sim.goodsName(sh.trade, a.qty))}.` : ''}${a.lastReason === 'tooExpensive' ? '<br>Last visit: walked off over the price.' : a.lastReason === 'served' ? '<br>Last visit: left happy.' : ''}${extra}</div><div class="acts">${a.kind === 'jobless' ? B_('Staff page', ['page', 'staff']) : ''}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
       }
       UI.sel = null;
     }
@@ -1843,6 +2272,9 @@ function cardHTML(s) {
   // a lot: empty or your shop
   if (Lh && Lh.plot != null) {
     const shop = Sim.shopOnPlot(s, Lh.plot);
+    if (!shop && Sim.PLOTS[Lh.plot].grant && !s.village.landGranted) {
+      return `<h2>${esc(Lh.name)}</h2><div class="sub">Council land beside the Moot Hall, fenced and flying ${esc(Sim.REALM.lordShort)}'s banner. Only the village council can grant it.</div>${walking}<div class="acts">${B_('Ask at the Moot Hall', ['goto', 'hall'], 'alt')}</div>${placesRow(s)}`;
+    }
     if (!shop) {
       const acts = Sim.TRADE_KEYS.map(k => {
         const T = TR[k], cost = T.tiers[0].cost, known = Sim.learned(s, k), can = known && Sim.canPay(s, cost);
@@ -1875,11 +2307,62 @@ function cardHTML(s) {
     const inv = p.inv, acts = [];
     Sim.GOODS.forEach(g => acts.push(B_(`Buy ${g} · ${Sim.BUY[g]}c`, ['buy', g, 1], '', s.coins < Sim.BUY[g])));
     Sim.GOODS.forEach(g => { if (inv[g]) acts.push(B_(`Sell ${inv[g]} ${g} · ${inv[g] * Sim.SELL[g]}c`, ['sell', g, inv[g]], 'alt')); });
-    return `<h2>Trading Post</h2><div class="sub">Grain and wood cost 2c, ore 3c. Everything sells back for 1c, so gathering always earns something. ${esc(carryText(s))}</div>${walking}<div class="acts">${acts.join('')}</div>${placesRow(s)}`;
+    const c = s.village.contract;
+    let order = '';
+    if (c) {
+      const have = s.shops.filter(x => x.trade === c.trade).reduce((t, x) => t + x.goods, 0);
+      order = `<div class="why"><b>Order:</b> ${esc(c.who)} wants ${esc(Sim.goodsName(c.trade, c.qty))} by day ${c.until} for <b>${c.reward}c</b>. Your shops hold ${have}.</div>`;
+      acts.unshift(B_(`Deliver the order · ${c.reward}c`, ['deliver'], '', have < c.qty));
+    }
+    return `<h2>Trading Post</h2><div class="sub">Grain and wood cost 2c, ore 3c. Everything sells back for 1c, so gathering always earns something. ${esc(carryText(s))}</div>${order}${walking}<div class="acts">${acts.join('')}</div>${placesRow(s)}`;
+  }
+  if (here === 'hall') return hallCard(s, walking);
+  if (here === 'granary') {
+    const v = s.village;
+    const info = v.shortage ? `The granary holds ${v.granary} of the ${v.granaryNeed} grain the village needs. Until it is full, villagers go hungry and buy less at every shop.` : `The granary is stocked${v.projects.granary ? ', and the council\u2019s new wing keeps lean weeks away' : ''}.`;
+    return `<h2>Granary</h2><div class="sub">${info} ${esc(carryText(s))}</div>${v.shortage ? progressBar(v.granary / v.granaryNeed) : ''}${walking}<div class="acts">${v.shortage ? B_(`Give ${Math.min(s.player.inv.grain, v.granaryNeed - v.granary)} grain`, ['donate'], '', !s.player.inv.grain) + B_('Gather grain', ['gather', 'grain'], 'alt') : ''}</div>${placesRow(s)}`;
+  }
+  if (here === 'tower') {
+    const v = s.village;
+    if (v.towerBuilt) return `<h2>The Watchtower</h2><div class="sub">Rebuilt and flying the lord\u2019s banner over the Ashford road. A lookout here will spot trouble long before it reaches the square.</div>${walking}${placesRow(s)}`;
+    return `<h2>The Old Watchtower</h2><div class="sub">Fallen in last winter. Masons will rebuild it for 80c and 20 wood. Given so far: ${v.towerCoin}c and ${v.towerWood} wood. ${esc(carryText(s))}</div>${progressBar((v.towerCoin / 80 + v.towerWood / 20) / 2)}${walking}<div class="acts">${v.step >= 4 ? B_(`Give ${Math.min(s.coins, 80 - v.towerCoin)}c and ${Math.min(s.player.inv.wood, 20 - v.towerWood)} wood`, ['fundTower'], '', !(s.coins > 0 && v.towerCoin < 80) && !(s.player.inv.wood > 0 && v.towerWood < 20)) : ''}</div>${placesRow(s)}`;
+  }
+  if (here === 'manor') {
+    const v = s.village;
+    const info = v.step >= 8 ? 'The gate stands open to you now. The steward will send for you.' : v.step === 7 ? 'You carry the steward\u2019s letter. The guard is expecting you.' : `The seat of ${esc(Sim.REALM.lord)}, who holds Hearthmoor for ${esc(Sim.REALM.king)}. The gate is barred to shopkeepers and hired hands.`;
+    return `<h2>Varrow Manor</h2><div class="sub">${info}</div>${walking}<div class="acts">${B_(v.step === 7 ? 'Present the letter' : 'Speak to the guard', ['gate'], v.step === 7 ? '' : 'alt')}</div>${placesRow(s)}`;
+  }
+  if (here === 'cottage') {
+    const v = s.village;
+    const st = { forsale: 'Empty since Old Ama moved to her daughter\u2019s in Ashford. The roof leaks. For sale: 90c.', owned: 'Yours. It needs 30c and 12 wood of repairs before anyone will rent it.', repaired: 'Mended and aired. A tenant arrives tomorrow.', let: 'Rented to a family from Ashford for 5c a day, paid at closing.' }[v.cottage];
+    const act2 = v.cottage === 'forsale' ? B_('Buy it · 90c', ['buyCottage'], '', s.coins < 90) : v.cottage === 'owned' ? B_('Repair it · 30c and 12 wood', ['repairCottage'], '', !Sim.canPay(s, { coin: 30, wood: 12 })) : '';
+    return `<h2>Old Ama\u2019s Cottage</h2><div class="sub">${st} Owning property is optional: another way to grow your wealth.</div>${walking}<div class="acts">${act2}</div>${placesRow(s)}`;
   }
   if (here === 'home') return `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the menu', ['ui', 'pause'], 'alt')}</div>${placesRow(s)}`;
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops along one side of the square hire hands. The three lots across from them wait for owners. Villagers lunch at the well at noon.</div>${walking}${placesRow(s)}`;
   return `<h2>Hearthmoor</h2><div class="sub">${p.dest ? 'Walking&hellip;' : 'Tap a place to walk there, or tap a person to see what they are doing.'}</div>${placesRow(s)}`;
+}
+function hallCard(s, walking) {
+  const v = s.village, R = Sim.REALM;
+  const acts = [];
+  let info = `<h2>The Moot Hall</h2><div class="sub">Where Hearthmoor’s elders meet, under ${esc(R.lordShort)}’s banner. ${v.council ? 'You sit on the council.' : ''}</div>${walking}`;
+  const step = Sim.STEPS[v.step];
+  if (step && v.step < 6) info += `<div class="why"><b>${esc(R.elder)}:</b> ${esc(step)}.</div>`;
+  if (v.step === 0 || v.step === 5) acts.push(B_(v.step === 0 ? 'Speak with the elder' : 'Take your seat at the moot', ['talk']));
+  else if (!v.council) acts.push(B_('Ask the elder', ['talk'], 'alt'));
+  if (v.council) {
+    const atHall = Sim.dist(s.player, L.hall) < L.hall.r;
+    info += `<div class="why"><b>Village chest:</b> ${v.chest}c${v.chestDaily ? ' (+' + v.chestDaily + 'c a day)' : ''}. The tax collector leaves 20c from the lord’s purse each week. Toll: ${esc(Sim.TOLLS[v.toll].name)}.</div>`;
+    if (v.dispute != null) {
+      const d = Sim.DISPUTES[v.dispute];
+      info += `<div class="why"><b>Before the council:</b> ${esc(d.text)}</div>`;
+      d.opts.forEach((o, i) => acts.push(B_(esc(o.label) + (o.chest ? `<small>chest ${o.chest}c</small>` : ''), ['settle', i], 'alt', !atHall || (o.chest && v.chest + o.chest < 0))));
+    }
+    Object.keys(Sim.PROJECTS).forEach(k => { const pr = Sim.PROJECTS[k]; if (!v.projects[k]) acts.push(B_(`${esc(pr.name)} · ${pr.cost}c<small>${esc(pr.text)}</small>`, ['project', k], 'alt', !atHall || v.chest < pr.cost)); });
+    acts.push(B_('Give 10c to the chest', ['giveChest', 10], 'alt', s.coins < 10));
+    acts.push(B_('Village page', ['page', 'village'], 'alt'));
+  }
+  return info + `<div class="acts">${acts.join('')}</div>` + placesRow(s);
 }
 function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
@@ -1906,11 +2389,12 @@ function hud(s) {
   const carry = Sim.GOODS.filter(g => inv[g]).map(g => `<b>${inv[g]}</b> ${g}`);
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
   if (s.job) { const e = Sim.empById(s.job.emp), on = Sim.inShift(s); chips.push(`<span class="chip num ${on ? 'on' : ''}">${on ? 'On shift' : 'Job'}: ${esc(e.name)} ${shiftText(e)}</span>`); }
+  if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
   s.shops.forEach(x => chips.push(`${TR[x.trade].name}: <b>${x.goods}</b> ${TR[x.trade].product}${x.worker ? ' · ' + esc(x.worker.name) : ''}`));
   const html = chips.map(c => c.startsWith('<span') ? c : `<span class="chip num">${c}</span>`).join('');
   if ($('subhud').innerHTML !== html) $('subhud').innerHTML = html;
-  const g = Sim.GOALS.find(x => !x.done(s));
-  const gt = g ? `<em>Next:</em> ${esc(g.text)}` : '<em>Chapter complete.</em> You own a fine business. Keep growing.';
+  const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
+  const gt = g ? `<em>Next:</em> ${esc(g.text)}` : '<em>Chapter Two complete.</em> The lord knows your name. More in the next chapter.';
   if ($('goal').innerHTML !== gt) $('goal').innerHTML = gt;
   const h = Sim.hourOf(s);
   $('night').hidden = !(h >= 21 || h < 5.5) || !!UI.overlay;
@@ -1918,17 +2402,20 @@ function hud(s) {
   const side = $('side'), cr = $('card').getBoundingClientRect();
   UI.sideCard = cr.right <= window.innerWidth - 64 ? cr.right / window.innerWidth : 0;
   side.style.bottom = UI.sideCard ? 'calc(env(safe-area-inset-bottom, 0px) + 12px)' : Math.round(window.innerHeight - cr.top + 10) + 'px';
+  const room = UI.sideCard ? window.innerHeight : cr.top - $('hud').getBoundingClientRect().bottom - 20;
+  $('zin').hidden = $('zout').hidden = room < 4 * 52;
+  $('center').hidden = room < 2 * 52;
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['jobs', 'Jobs'], ['goals', 'Goals']];
+const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['jobs', 'Jobs'], ['village', 'Village'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() { UI.overlay = null; UI.confirm = null; $('book').hidden = true; $('pause').hidden = true; saveNow(); renderCard(true); }
 function turnPage(el, turn) { if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
 function renderBook(turn) {
-  $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('') + `<button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
+  $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, jobs: pageJobs, goals: pageGoals }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, jobs: pageJobs, village: pageVillage, goals: pageGoals }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -1952,7 +2439,7 @@ function pageLedger(s) {
   const so = shopRows.reduce((a, r) => a + r[1], 0) + st.jobPay + st.rawSales - st.marketBuys;
   let html = `<h3>The Ledger</h3><p class="lead">Every coin in and out, and why.</p>
     <div class="day"><div class="dayhead"><strong>Day ${s.day}, so far</strong><span class="num">${Sim.clock(s.t)}</span></div>
-    ${dayTable(shopRows.concat([st.jobPay ? ['Wages from your job', st.jobPay] : null, st.rawSales ? ['Raw goods sold', st.rawSales] : null, st.marketBuys ? ['Bought at the Trading Post', -st.marketBuys] : null]), so, 'So far today')}
+    ${dayTable(shopRows.concat([st.jobPay ? ['Wages from your job', st.jobPay] : null, st.rawSales ? ['Raw goods sold', st.rawSales] : null, st.marketBuys ? ['Bought at the Trading Post', -st.marketBuys] : null, st.contract ? ['Merchant order', st.contract] : null, st.tax ? ['Tax to ' + Sim.REALM.lordShort, -st.tax] : null, st.given ? ['Given to the village', -st.given] : null]), so + (st.contract || 0) - (st.tax || 0) - (st.given || 0), 'So far today')}
     <p>${s.shops.length ? 'Wages and upkeep are paid at 21:00.' : 'You own no shops yet.'}</p></div>`;
   const days = s.ledger.slice().reverse().slice(0, 7);
   if (!days.length) html += `<p>The books close at 21:00 each day, with an explanation of what went right and wrong.</p>`;
@@ -1961,6 +2448,10 @@ function pageLedger(s) {
     if (e.jobPay) rows.push(['Wages from your job', e.jobPay]);
     if (e.rawSales) rows.push(['Raw goods sold', e.rawSales]);
     if (e.marketBuys) rows.push(['Bought at the Trading Post', -e.marketBuys]);
+    if (e.rent) rows.push(['Rent from the cottage', e.rent]);
+    if (e.contract) rows.push(['Merchant order', e.contract]);
+    if (e.tax) rows.push(['Tax to ' + Sim.REALM.lordShort, -e.tax]);
+    if (e.given) rows.push(['Given to the village', -e.given]);
     html += `<div class="day"><div class="dayhead"><strong>Day ${e.day}</strong><span class="seal ${e.profit < 0 ? 'neg' : ''} num">${e.profit < 0 ? 'Down ' : 'Up '}${Math.abs(e.profit)}c</span></div>${dayTable(rows, e.profit, 'The day')}`;
     if (e.notes.length) html += notesHTML(e.notes);
     for (const x of e.shops) {
@@ -2001,8 +2492,10 @@ function pageShops(s) {
         <dt>Batch</dt><dd>${Ti.out} → ${next.out}</dd><dt>Time</dt><dd>${Ti.min} → ${next.min} min</dd><dt>Storage</dt><dd>${Ti.cap} → ${next.cap}</dd><dt>Travelers</dt><dd>${Ti.travelers} → ${next.travelers} a day</dd><dt>Upkeep</dt><dd>${Ti.upkeep} → ${next.upkeep}c</dd></dl>
         <div class="acts">${B_('Build the ' + esc(next.name), ['upgrade', shop.id], '', !can)}</div>${can ? '' : '<p>Goods you carry and goods in this shop\'s storage both count.</p>'}</div>`;
     } else html += `<p>This is the finest ${T.name.toLowerCase()} in Hearthmoor.</p>`;
+    const refund = Math.floor(T.tiers.slice(0, shop.tier + 1).reduce((t, x) => t + (x.cost.coin || 0), 0) / 2);
+    html += `<div class="acts">${UI.confirm === 'sell' + shop.id ? `<div class="confirm">Sell this ${T.name.toLowerCase()} for ${refund}c? Its building, stock${shop.worker ? ' and ' + esc(shop.worker.name) + '\u2019s job' : ''} go with it, and the lot is free for another trade. ${B_('Yes, sell it', ['sellShop', shop.id], 'warn')} ${B_('Keep it', ['ui', 'confirm', null], 'alt')}</div>` : B_(`Sell this shop&hellip;<small>half its building cost back: ${refund}c</small>`, ['ui', 'confirm', 'sell' + shop.id], 'alt')}</div>`;
   }
-  const free = Sim.PLOTS.map((p, i) => i).filter(i => !Sim.shopOnPlot(s, i));
+  const free = Sim.PLOTS.map((p, i) => i).filter(i => !Sim.shopOnPlot(s, i) && (!Sim.PLOTS[i].grant || s.village.landGranted));
   if (free.length) html += `<p>${free.length === 1 ? 'One lot is' : free.length + ' lots are'} still empty on the square. Visit one to open another trade you have learned.</p>`;
   return html;
 }
@@ -2023,7 +2516,7 @@ function pageStaff(s) {
     html += `<h4>Looking for work today</h4><p>Pick someone and set a daily wage. Paying below what they ask saves coin but makes them unhappy. New faces come each morning.</p><div class="grid2">`;
     s.applicants.forEach((a, i) => {
       const wage = UI.hireWage[a.name] || a.ask;
-      html += `<div class="box"><h5>${esc(a.name)}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(a.skill)} (${Math.round(a.skill * 100)}%)</dd><dt>Asks for</dt><dd>${a.ask}c a day</dd></dl>
+      html += `<div class="box"><h5>${esc(a.name)}${a.local ? ' <span class="pill yes">from Hearthmoor</span>' : ''}</h5>${a.local ? '<p>Out of work since the mill closed. Hiring them counts for the elder\u2019s task.</p>' : ''}<dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(a.skill)} (${Math.round(a.skill * 100)}%)</dd><dt>Asks for</dt><dd>${a.ask}c a day</dd></dl>
         <div class="stepper" style="margin-top:8px"><button type="button" data-c='${esc(JSON.stringify(['ui', 'wage', [a.name, wage - 1]]))}' aria-label="Lower offer">&minus;</button><output class="num">${wage}c</output><button type="button" data-c='${esc(JSON.stringify(['ui', 'wage', [a.name, wage + 1]]))}' aria-label="Raise offer">+</button></div>
         <div class="acts">${open.map(x => B_(`Hire for the ${TR[x.trade].name.toLowerCase()}`, ['hire', x.id, i, wage])).join('')}</div></div>`;
     });
@@ -2042,13 +2535,30 @@ function pageJobs(s) {
   } else html += `<p>You have no job right now. You can hold one job at a time.</p>`;
   html += `<h4>Shops that hire</h4><table class="trades"><thead><tr><th>Shop</th><th>Shift</th><th>Pay</th><th>Your trade</th></tr></thead><tbody>
     ${Sim.EMPLOYERS.map(e => `<tr><td>${esc(e.name)}<br><button type="button" class="place" data-c='${esc(JSON.stringify(['goto', 'emp:' + e.id]))}'>Go there</button></td><td class="num">${shiftText(e)}</td><td>${e.wage}c</td><td>${TR[e.trade].name}<br>${Sim.learned(s, e.trade) ? '<span class="pill yes">learned</span>' : `<span class="pill">${s.trades[e.trade]}/${Sim.LEARN_SHIFTS} shifts</span>`}</td></tr>`).join('')}</tbody></table>
-    <p>Each shift worked in a trade also makes you a little faster at it in your own shop, up to 30%.</p>`;
+    <p>Two shifts teach you the basics. Every further shift, and every batch you make yourself, makes you faster at that trade in your own shop, up to 30%: ${Sim.TRADE_KEYS.map(k => TR[k].name.toLowerCase() + ' +' + Sim.skillPct(s, k) + '%').join(', ')}.</p>`;
   return html;
 }
+function pageVillage(s) {
+  const v = s.village, R = Sim.REALM;
+  let html = `<h3>Hearthmoor and the Realm</h3><p class="lead">Who rules here, and where you stand.</p>
+    <p>Hearthmoor is a village of ${esc(R.lord)}, who holds it for ${esc(R.king)} in ${esc(R.capital)}. ${esc(R.steward)} collects the lord’s taxes each week. Day to day, the village council under ${esc(R.elder)} decides what gets built and settles quarrels. Travelers bring news from Ashford, Kellmere and the capital.</p>
+    <div class="box"><dl class="kv"><dt>Your standing</dt><dd>${v.standing}/100</dd><dt>Position</dt><dd>${v.council ? 'Councillor since day ' + s.rec.councilSince : v.step > 0 ? 'Known to the elder' : 'A newcomer'}</dd><dt>Granary</dt><dd>${v.shortage ? 'short: ' + v.granary + '/' + v.granaryNeed + ' grain' : 'stocked'}</dd><dt>Watchtower</dt><dd>${v.towerBuilt ? 'rebuilt' : 'in ruins'}</dd><dt>Out of work</dt><dd>${v.jobless.length ? v.jobless.join(' and ') : 'nobody'}</dd><dt>Taxes paid</dt><dd>${s.rec.taxesPaid}c</dd></dl></div>
+    <h4>The elder’s tasks</h4><ul class="goals">${Sim.STEPS.map((t, i) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : i + 1}</span><span>${esc(t)}</span></li>`).join('')}</ul>`;
+  if (v.council) {
+    html += `<h4>The council</h4><p>Chest: <b>${v.chest}c</b>. Projects and rulings are made in person at the Moot Hall.</p>
+      <div class="setting"><span>Toll on travelers</span>${seg2('toll', v.toll, Object.keys(Sim.TOLLS).map(k => [k, Sim.TOLLS[k].name]))}<p>A toll fills the chest from every traveler who stops, but fewer travelers come. None: all of them; low: about 85%; high: about 60%.</p></div>
+      <div class="grid2">${Object.keys(Sim.PROJECTS).map(k => { const pr = Sim.PROJECTS[k]; return `<div class="box"><h5>${esc(pr.name)}</h5><p>${esc(pr.text)}</p><p>${v.projects[k] ? '<span class="pill yes">done on day ' + v.projects[k] + '</span>' : pr.cost + 'c from the chest'}</p></div>`; }).join('')}</div>
+      ${v.dispute != null ? `<p><b>Waiting at the Moot Hall:</b> ${esc(Sim.DISPUTES[v.dispute].text)}</p>` : '<p>No quarrels before the council today.</p>'}`;
+  }
+  html += `<h4>Property and orders</h4><p>Old Ama’s cottage: ${({ forsale: 'for sale at 90c', owned: 'yours, needs repairs', repaired: 'repaired, tenant arriving', let: 'rented out at 5c a day' })[v.cottage]}. Rent collected: ${s.rec.rentCollected}c.</p>
+    <p>${v.contract ? `Open order at the Trading Post: ${esc(v.contract.who)} wants ${esc(Sim.goodsName(v.contract.trade, v.contract.qty))} by day ${v.contract.until} for ${v.contract.reward}c.` : 'No merchant orders right now. They appear at the Trading Post for goods your shops make.'}</p>`;
+  return html;
+}
+function seg2(id, value, opts) { return `<div class="seg" role="group">${opts.map(([val, n]) => `<button type="button" aria-pressed="${value === val}" data-c='${esc(JSON.stringify([id, val]))}'>${esc(n)}</button>`).join('')}</div>`; }
 function pageGoals(s) {
-  const firstOpen = Sim.GOALS.findIndex(g => !g.done(s));
-  return `<h3>Chapter One: The Hired Hand</h3><p class="lead">From nothing to a business of your own.</p><ul class="goals">${Sim.GOALS.map((g, i) => `<li class="${g.done(s) ? 'done' : i === firstOpen ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(g.text)}</span></li>`).join('')}</ul>
-  <h4>How Hearthmoor works</h4><p>Days run from 06:00 to 21:00, about four minutes of real time. Nights pass quickly. Villagers keep their own routines: work in the fields, woods and iron pit, lunch at the well at noon, an evening in the square, and bed. Each shop draws its own customers, and a better building draws more travelers from the east road.</p>
+  const chapter = c => { const gs = Sim.GOALS.filter(g => g.ch === c.n), first = gs.findIndex(g => !g.done(s)); return `<h3>Chapter ${c.n === 1 ? 'One' : 'Two'}: ${esc(c.name)}</h3><p class="lead">${esc(c.lead)}</p><ul class="goals">${gs.map((g, i) => `<li class="${g.done(s) ? 'done' : i === first ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(g.text)}</span></li>`).join('')}</ul>`; };
+  return Sim.CHAPTERS.map(chapter).join('') + `
+<h4>How Hearthmoor works</h4><p>Days run from 06:00 to 21:00, about four minutes of real time. Nights pass quickly. Villagers keep their own routines: work in the fields, woods and iron pit, lunch at the well at noon, an evening in the square, and bed. Each shop draws its own customers, and a better building draws more travelers from the east road.</p>
   <p>The books close at 21:00, when wages and upkeep are paid. You never go into debt: what can't be paid is skipped and explained in the ledger.</p>`;
 }
 
@@ -2085,12 +2595,13 @@ function statsHTML(s) {
   const group = (title, rows) => `<div class="box statgroup"><h4>${title}</h4>${kv(rows)}</div>`;
   return `<h3>Records of ${esc(s.name)}</h3><p class="lead">This playthrough, day ${s.day}.</p><div class="stats">
     ${group('Wealth', [['Coins on hand', s.coins + 'c'], ['Net worth', Sim.netWorth(s) + 'c'], ['Property value', Sim.propertyValue(s) + 'c'], ['Coins earned', r.coinsEarned + 'c'], ['Coins spent', r.coinsSpent + 'c'], ['Most coins at once', r.peakCoins + 'c'], ['Best day', best], ['Worst day', worst]])}
-    ${group('Property', [['Businesses owned', s.shops.length]].concat(byTrade.map(([n, c]) => ['&nbsp;&nbsp;' + n, c]), [['Shops opened', r.shopsOpened], ['Upgrades built', r.upgrades], ['Spent on buildings', r.invested + 'c'], ['Houses owned', 'later chapter', 'later'], ['Houses rented out', 'later chapter', 'later'], ['Rent collected', 'later chapter', 'later']]))}
+    ${group('Property', [['Businesses owned', s.shops.length]].concat(byTrade.map(([n, c]) => ['&nbsp;&nbsp;' + n, c]), [['Shops opened', r.shopsOpened], ['Upgrades built', r.upgrades], ['Spent on buildings', r.invested + 'c'], ['Houses owned', r.housesOwned], ['Houses rented out', s.village.cottage === 'let' ? 1 : 0], ['Rent collected', r.rentCollected + 'c'], ['Shops sold', r.shopsSold]]))}
     ${group('Trade', [['Goods made', sum(r.made)]].concat(P.filter(k => r.made[k]).map(k => ['&nbsp;&nbsp;' + nice[k], r.made[k]]), [['Goods sold', r.goodsSold], ['Sales revenue', r.salesRevenue + 'c'], ['Customers served', r.served], ['Customers lost', r.lost], ['&nbsp;&nbsp;over the price', r.lostPrice], ['Raw goods sold', r.rawSales + 'c']]))}
     ${group('People', [['Workers on staff', staff], ['Workers hired', r.workersHired], ['Workers let go', r.workersLetGo], ['Workers who quit', r.workersQuit], ['Wages paid', r.wagesPaid + 'c']])}
     ${group('Work', [['Jobs held', r.jobsHeld], ['Shifts worked', r.shiftsWorked], ['Shifts missed', r.shiftsMissed], ['Times let go', r.timesFired], ['Jobs quit', r.jobsQuit], ['Wages earned', r.wagesEarned + 'c']].concat(Sim.TRADE_KEYS.map(k => [TR[k].name, Sim.learned(s, k) ? 'learned (' + s.trades[k] + ' shifts)' : s.trades[k] + '/' + Sim.LEARN_SHIFTS + ' shifts'])))}
+    ${group('Village', [['Standing', s.village.standing + '/100'], ['Position', s.village.council ? 'Councillor since day ' + r.councilSince : s.village.step > 0 ? 'Known to the elder' : 'Newcomer'], ['Elder\u2019s tasks done', r.elderTasks], ['Grain given', r.grainDonated], ['Coin given to the village', r.chestGiven + 'c'], ['Projects funded', r.projectsFunded], ['Disputes settled', r.disputesSettled], ['Merchant orders filled', r.contractsDone], ['Taxes paid to the lord', r.taxesPaid + 'c']])}
     ${group('Life', [['Days in Hearthmoor', r.days], ['Distance walked', (r.walked / 1000).toFixed(2) + ' km'], ['Grain gathered', r.gathered.grain], ['Wood chopped', r.gathered.wood], ['Ore dug', r.gathered.ore]])}
-  </div><p class="lead">Politics, battles and your dynasty will add their own records in later chapters.</p>`;
+  </div><p class="lead">Lordship, battles and your dynasty will add their own records in later chapters.</p>`;
 }
 function saveHTML() {
   const ago = lastSave ? Math.round((Date.now() - lastSave) / 1000) : null;
@@ -2125,7 +2636,7 @@ function renderTitle() {
       <button type="button" class="tbtn ${last ? '' : 'primary'}" data-c='["ui","tview","new"]'>New game<small>Arrive with 5 coins and nothing else</small></button>
       <button type="button" class="tbtn" data-c='["ui","tview","load"]'>Load game<small>Three save slots, or paste a save code</small></button>
       <button type="button" class="tbtn" data-c='["ui","tview","settings"]'>Settings</button>
-    </div><div class="tfoot">Chapter One · The Hired Hand</div>`;
+    </div><div class="tfoot">Chapters One and Two · A Place in the Village</div>`;
   } else if (UI.titleView === 'new') {
     const infos = [1, 2, 3].map(n => slotInfo(n));
     if (UI.newSlot == null) UI.newSlot = (infos.findIndex(x => !x) + 1) || 1;
@@ -2233,7 +2744,7 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && !UI.overlay && !document.hidden) { Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); drainEvents(); }
-  syncChars(G, t); syncShops(G, t, dt);
+  syncChars(G, t); syncShops(G, t, dt); syncVillage(G);
   syncLight(UI.mode === 'title' ? 18.4 : Sim.hourOf(G));
   syncCamera(G, dt, t);
   uiTimer -= dt;

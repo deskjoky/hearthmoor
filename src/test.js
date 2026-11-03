@@ -134,7 +134,7 @@ console.log('8. Old saves from the first version still load');
   else {
     const o = Old.newGame(5); o.coins = 77; o.tier = 1; Old.cmd(o, 'hire', 0, 9); Old.advance(o, 2000);
     const s = Sim.deserialize(Old.serialize(o));
-    check(s.v === 2 && s.shops.length === 1 && s.shops[0].trade === 'bakery' && s.shops[0].tier === 1, 'v1 bakery becomes a Timber Bakery on the Middle lot');
+    check(s.v === Sim.VERSION && s.shops.length === 1 && s.shops[0].trade === 'bakery' && s.shops[0].tier === 1, 'v1 bakery becomes a Timber Bakery on the Middle lot');
     check(s.coins === o.coins && s.shops[0].worker && s.shops[0].worker.name === o.worker.name, 'coins and worker carried over');
     Sim.advance(s, 1440 * 2);
     check(!invariants(s), 'migrated game keeps running');
@@ -186,6 +186,88 @@ console.log('9. Forty-day soak: from hired hand to two businesses');
   check(s.shops.some(x => x.tier >= 1), 'bot upgraded a shop');
   check(last.every(d => d.shops.every(x => x.notes.length > 0)), 'every shop gets a ledger explanation every day');
   check(s.rec.coinsEarned > 0 && s.rec.walked > 1000 && s.rec.made.bread > 0, 'records are being kept');
+}
+
+
+console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the council');
+{
+  const s = Sim.newGame(31); s.coins = 400; s.trades.bakery = 2; s.trades.tavern = 2;
+  const v = s.village;
+  Sim.cmd(s, 'talk'); runIdle(s);
+  check(v.step === 1, 'meeting the elder starts the chapter');
+  Sim.cmd(s, 'open', 1, 'bakery');
+  Sim.step(s, 1);
+  check(v.step === 2 && v.shortage, 'owning a business brings the grain shortage');
+  const shop = s.shops[0]; Sim.cmd(s, 'hire', shop.id, s.applicants.length - 1); Sim.cmd(s, 'policy', shop.id, 'supplyRuns', true);
+  Sim.advance(s, 1440 * 4);
+  const lean = s.ledger.slice(-3).reduce((a, d) => a + d.shops[0].served, 0) / 3;
+  check(!Sim.cmd(s, 'open', 3, 'tavern').ok, 'the Hall lot is council land for now');
+  // fill the granary
+  Sim.cmd(s, 'gather', 'grain'); runIdle(s);
+  check(s.player.inv.grain >= 20, 'gathered grain for the village');
+  Sim.cmd(s, 'donate'); runIdle(s);
+  check(!v.shortage && v.step === 3 && v.standing >= 20, 'the shortage ends and standing rises (' + v.standing + ')');
+  check(s.agents.filter(a => a.kind === 'jobless').length === 2 && s.applicants.filter(a => a.local).length === 2, 'Hilda and Bram wait in the square and appear as applicants');
+  Sim.advance(s, 1440 * 4);
+  const fed = s.ledger.slice(-3).reduce((a, d) => a + d.shops[0].served, 0) / 3;
+  check(fed > lean, 'customers come back once people are fed (' + lean.toFixed(1) + ' -> ' + fed.toFixed(1) + ' a day)');
+  // two jobs: fire the current worker for one, open a tavern for the other
+  Sim.cmd(s, 'fire', shop.id);
+  Sim.cmd(s, 'open', 2, 'tavern');
+  const loc = () => s.applicants.findIndex(a => a.local);
+  Sim.cmd(s, 'hire', s.shops[0].id, loc()); Sim.cmd(s, 'hire', s.shops[1].id, loc());
+  Sim.step(s, 1);
+  check(v.step === 4 && !s.agents.some(a => a.kind === 'jobless') && s.shops.every(x => x.worker && x.worker.local), 'both villagers now work in your shops');
+  // the tower
+  s.player.inv = { grain: 0, wood: 20, ore: 0 };
+  Sim.cmd(s, 'fundTower'); runIdle(s);
+  check(v.towerBuilt && v.step === 5, 'the watchtower is rebuilt');
+  Sim.cmd(s, 'talk'); runIdle(s);
+  check(v.council && v.landGranted && v.chest >= 30 && v.step === 6, 'seated on the council with a chest and a land grant');
+  check(Sim.cmd(s, 'open', 3, 'joinery').ok === false && (s.trades.joinery = 2) && Sim.cmd(s, 'open', 3, 'joinery').ok, 'the Hall lot can now be built on');
+  // council powers change the game
+  check(!Sim.cmd(s, 'project', 'pave').ok, 'the chest alone cannot pave the square yet');
+  Sim.cmd(s, 'giveChest', 40);
+  const r1 = Sim.cmd(s, 'project', 'pave');
+  check(r1.ok && v.projects.pave, 'paved the square from the chest');
+  Sim.advance(s, 1440 * 2);
+  check(v.dispute != null, 'a dispute arrives for the council');
+  Sim.cmd(s, 'talk'); runIdle(s);
+  const who = Sim.DISPUTES[v.dispute].a;
+  Sim.cmd(s, 'settle', 2);
+  check(v.dispute == null && s.rec.disputesSettled === 1, 'settled the dispute');
+  Sim.step(s, 1);
+  check(v.step === 7 && v.letter, 'the lord’s steward sends a letter');
+  Sim.cmd(s, 'gate'); runIdle(s, 6000);
+  check(v.step === 8, 'met the steward at the manor gate: chapter complete');
+  Sim.cmd(s, 'toll', 'high');
+  const before = s.agents.length; Sim.advance(s, 1440 * 7);
+  check(s.rec.taxesPaid > 0, 'the tax collector came (' + s.rec.taxesPaid + 'c paid)');
+  check(!invariants(s), 'still healthy after a week of council life');
+  const back = Sim.deserialize(Sim.serialize(s));
+  Sim.advance(s, 2000); Sim.advance(back, 2000);
+  check(Sim.serialize(s) === Sim.serialize(back), 'village state saves and restores exactly');
+}
+
+console.log('11. Property, orders and selling a shop');
+{
+  const s = Sim.newGame(41); s.coins = 300; s.trades.smithy = 2; s.player.inv.ore = 4;
+  Sim.cmd(s, 'open', 0, 'smithy');
+  check(Sim.cmd(s, 'buyCottage').ok && s.village.cottage === 'owned', 'bought the run-down cottage');
+  s.player.inv.wood = 12;
+  check(Sim.cmd(s, 'repairCottage').ok, 'repaired it');
+  const c0 = s.coins; Sim.advance(s, 1440 * 2);
+  check(s.village.cottage === 'let' && s.rec.rentCollected >= 5, 'a tenant pays rent (' + s.rec.rentCollected + 'c)');
+  let tries = 0; while (!s.village.contract && tries < 20) { Sim.advance(s, 1440); tries++; }
+  check(!!s.village.contract, 'a merchant posts an order');
+  const c = s.village.contract; s.shops[0].goods = c.qty;
+  Sim.cmd(s, 'goto', 'market'); runIdle(s);
+  const coin = s.coins; const r = Sim.cmd(s, 'deliver');
+  check(r.ok && s.coins === coin + c.reward, 'delivered the order for ' + c.reward + 'c');
+  const before = s.coins; Sim.cmd(s, 'sellShop', s.shops[0].id);
+  check(s.shops.length === 0 && s.coins === before + 30, 'sold the smithy for half its building cost');
+  s.trades.tavern = 2;
+  check(Sim.cmd(s, 'open', 0, 'tavern').ok, 'and opened a different trade on the same lot');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');

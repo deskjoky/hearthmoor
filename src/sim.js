@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 2;
+  const VERSION = 3;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -43,7 +43,7 @@
     },
     joinery: {
       name: 'Joinery', craft: 'Build', crafting: 'Building', station: 'bench', product: 'furniture', one: 'stool', many: 'stools',
-      recipe: { wood: 4 }, wtp: 14, sd: 3, price: 11, villagerRate: 0.3, qty2: 0, qty3: 0, hours: [8, 18],
+      recipe: { wood: 3 }, wtp: 15, sd: 3, price: 12, villagerRate: 0.3, qty2: 0, qty3: 0, hours: [8, 18],
       tiers: [
         { name: "Carpenter's Bench", out: 1, min: 45, cap: 8, travelers: 2, upkeep: 1, cost: { coin: 25 } },
         { name: 'Timber Workshop', out: 2, min: 45, cap: 16, travelers: 3, upkeep: 3, cost: { coin: 90, wood: 15 } },
@@ -54,7 +54,7 @@
   const TRADE_KEYS = Object.keys(TRADES);
 
   /* ---------- the map ---------- */
-  const PLOTS = [{ x: -12, z: -2, name: 'West lot' }, { x: 0, z: -2, name: 'Middle lot' }, { x: 12, z: -2, name: 'East lot' }];
+  const PLOTS = [{ x: -12, z: -2, name: 'West lot' }, { x: 0, z: -2, name: 'Middle lot' }, { x: 12, z: -2, name: 'East lot' }, { x: 13, z: -15, name: 'Hall lot', grant: true }];
   const REL = { serve: { x: 0, z: 0.4 }, queue0: { x: 0, z: 2.6 }, station: { x: -2.3, z: -0.8 }, store: { x: 2.4, z: -0.6 }, bench: { x: 3.9, z: 2.4 } };
   const EMPLOYERS = [
     { id: 'gerd', trade: 'bakery', name: "Gerd's Bakehouse", boss: 'Gerd', x: -15, z: 16, shift: [6, 12], wage: 6 },
@@ -69,14 +69,72 @@
     pit: { x: -24, z: 20, r: 5, name: 'Iron Pit' },
     market: { x: 25, z: 13, r: 3.8, name: 'Trading Post' },
     home: { x: -19, z: 6, r: 3, name: 'Your Hut' },
-    well: { x: 6, z: 8, r: 2, name: 'Village Well' }
+    well: { x: 6, z: 8, r: 2, name: 'Village Well' },
+    hall: { x: 0, z: -14, r: 4.6, name: 'Moot Hall' },
+    granary: { x: -9, z: -15, r: 3.2, name: 'Granary' },
+    tower: { x: 33, z: 11, r: 4, name: 'Old Watchtower' },
+    manor: { x: -6, z: -38, r: 4.5, name: 'Varrow Manor' },
+    cottage: { x: 22, z: -22, r: 3.5, name: "Old Ama's Cottage" }
   };
   PLOTS.forEach((p, i) => { LOCS['plot' + i] = { x: p.x, z: p.z, r: 4.6, name: p.name, plot: i }; });
   EMPLOYERS.forEach(e => { LOCS['emp:' + e.id] = { x: e.x, z: e.z - 1.5, r: 3.8, name: e.name, emp: e.id }; });
   const P = {
     market: { x: 23.4, z: 11.6 }, well: { x: 6, z: 9.4 }, plaza: { x: 0, z: 8 },
-    road: { x: 34, z: 5 }, home: { x: -17.1, z: 5.4 }
+    road: { x: 34, z: 5 }, home: { x: -17.1, z: 5.4 },
+    hall: { x: 0, z: -10.6 }, granary: { x: -9, z: -12.6 }, tower: { x: 31.2, z: 9.6 }, gate: { x: -6, z: -35.5 }, cottage: { x: 21, z: -19.6 },
+    manorRoad: { x: -6, z: -36 }, square: { x: 2.5, z: 9.5 }
   };
+
+  /* ---------- the realm around the village ---------- */
+  const REALM = {
+    lord: 'Lord Edric Varrow', lordShort: 'Lord Varrow', elder: 'Elder Brannoch', steward: 'Steward Merrin', king: 'King Aldwin', capital: 'Highcrown',
+    towns: ['Ashford', 'Kellmere', 'Highcrown']
+  };
+  const RUMORS = [
+    'Ashford’s river barges are carrying twice the grain this year. Their mayor is getting rich.',
+    'Kellmere’s mines found a new seam of iron. Smiths there pay well for good charcoal.',
+    'They say ' + 'King Aldwin' + ' is calling his lords to Highcrown before winter.',
+    'Bandits were seen on the Ashford road last week. Travel in daylight.',
+    'Lord Varrow keeps to his manor. His steward does the real work.',
+    'In Highcrown a shopkeeper bought a seat on the city council. Coin opens doors there.',
+    'Kellmere and Ashford are quarrelling over the toll bridge again.',
+    'A village that feeds its own in a lean year is remembered by its lord.'
+  ];
+  const PROJECTS = {
+    pave: { name: 'Pave the square', cost: 60, text: 'Stone on the square. Every shop draws one more traveler a day.' },
+    lanterns: { name: 'Lanterns on the square', cost: 40, text: 'Lamps for the evenings. Villagers shop a little more often.' },
+    granary: { name: 'Enlarge the granary', cost: 50, text: 'A bigger store. No more grain shortages.' }
+  };
+  const TOLLS = { none: { name: 'No toll', coin: 0, travelers: 1 }, low: { name: 'Low toll (2c)', coin: 2, travelers: 0.85 }, high: { name: 'High toll (5c)', coin: 5, travelers: 0.6 } };
+  const DISPUTES = [
+    { a: 'Aldric', b: 'Maren', text: 'Aldric says Maren’s goats ate his barley. Maren says the fence was his to mend.', opts: [
+      { label: 'Maren pays Aldric 5c', favor: { Aldric: 1, Maren: -1 }, standing: 3 },
+      { label: 'Aldric mends his own fence', favor: { Aldric: -1, Maren: 1 }, standing: 3 },
+      { label: 'The chest pays 5c and both mend the fence', favor: { Aldric: 1, Maren: 1 }, standing: 6, chest: -5 } ] },
+    { a: 'Tobin', b: 'Edda', text: 'Tobin felled a pine that crushed the cart Edda uses to haul ore. Edda wants a new cart; Tobin says she parked it in the woods.', opts: [
+      { label: 'Tobin builds Edda a cart', favor: { Tobin: -1, Edda: 1 }, standing: 3 },
+      { label: 'Edda should have known better', favor: { Tobin: 1, Edda: -1 }, standing: 2 },
+      { label: 'The chest pays 8c toward a new cart', favor: { Tobin: 1, Edda: 1 }, standing: 6, chest: -8 } ] },
+    { a: 'Wynn', b: 'Old Sela', text: 'Wynn wants to sell water at the Trading Post. Old Sela says the well belongs to everyone.', opts: [
+      { label: 'The well stays free', favor: { Wynn: -1, 'Old Sela': 1 }, standing: 5 },
+      { label: 'Let Wynn sell it, and pay the chest 1c a day', favor: { Wynn: 1, 'Old Sela': -1 }, standing: 1, chestDaily: 1 },
+      { label: 'Wynn may sell to travelers only', favor: { Wynn: 1, 'Old Sela': 0 }, standing: 4 } ] },
+    { a: 'Maren', b: 'Tobin', text: 'Maren and Tobin both want the last plot by the stream for their sons’ cottages.', opts: [
+      { label: 'Maren’s family has waited longer', favor: { Maren: 1, Tobin: -1 }, standing: 3 },
+      { label: 'Tobin cleared the land himself', favor: { Maren: -1, Tobin: 1 }, standing: 3 },
+      { label: 'Draw lots at the moot', favor: {}, standing: 4 } ] }
+  ];
+  const JOBLESS = ['Hilda', 'Bram'];
+  const STEPS = [
+    'Meet Elder Brannoch at the Moot Hall',
+    'Own a business so the village takes you seriously',
+    'End the grain shortage: bring 20 grain to the granary',
+    'Give work to Hilda and Bram, who sit idle in the square',
+    'Rebuild the old watchtower on the east road (80c and 20 wood)',
+    'Answer the elder’s summons to the Moot Hall',
+    'Serve on the council: fund a village project and settle a dispute',
+    'Answer Lord Varrow’s letter at the manor gate'
+  ];
   const HOMES = [{ x: -27, z: 4 }, { x: -12, z: -24 }, { x: 3, z: -25 }, { x: 15, z: -25 }, { x: 30, z: -4 }, { x: -10, z: 27 }];
   const WORKER_HOMES = [{ x: 6, z: 27 }, { x: 18, z: 24 }, { x: -30, z: -6 }];
   const VILLAGERS = [
@@ -90,15 +148,18 @@
   const SELL = { grain: 1, wood: 1, ore: 1 };
   const GATHER = { grain: { min: 30, n: 2, loc: 'field' }, wood: { min: 40, n: 2, loc: 'forest' }, ore: { min: 50, n: 2, loc: 'pit' } };
 
-  const GOALS = [
-    { id: 'job', text: 'Ask for work at one of the four shops across the square', done: s => s.rec.jobsHeld > 0 },
-    { id: 'learn', text: 'Work ' + LEARN_SHIFTS + ' full shifts to learn that trade', done: s => TRADE_KEYS.some(t => learned(s, t)) },
-    { id: 'open', text: 'Save up and open your own shop on an empty lot', done: s => s.rec.shopsOpened > 0 },
-    { id: 'sell', text: 'Sell 10 goods from your own shop', done: s => s.rec.goodsSold >= 10 },
-    { id: 'hire', text: 'Hire a worker for your shop', done: s => s.rec.workersHired > 0 },
-    { id: 'two', text: 'Own two businesses', done: s => s.shops.length >= 2 },
-    { id: 'top', text: 'Upgrade a shop to its finest building', done: s => s.shops.some(x => x.tier >= 2) }
+  const CHAPTERS = [
+    { n: 1, name: 'The Hired Hand', lead: 'From nothing to a business of your own.' },
+    { n: 2, name: 'A Place in the Village', lead: 'From shopkeeper to someone the village relies on.' }
   ];
+  const GOALS = [
+    { id: 'job', ch: 1, text: 'Ask for work at one of the four shops across the square', done: s => s.rec.jobsHeld > 0 },
+    { id: 'learn', ch: 1, text: 'Work ' + LEARN_SHIFTS + ' full shifts to learn the basics of that trade', done: s => TRADE_KEYS.some(t => learned(s, t)) },
+    { id: 'open', ch: 1, text: 'Save up and open your own shop on an empty lot', done: s => s.rec.shopsOpened > 0 },
+    { id: 'sell', ch: 1, text: 'Sell 10 goods from your own shop', done: s => s.rec.goodsSold >= 10 },
+    { id: 'hire', ch: 1, text: 'Hire a worker for your shop', done: s => s.rec.workersHired > 0 },
+    { id: 'two', ch: 1, text: 'Own two businesses', done: s => s.rec.shopsOpened >= 2 }
+  ].concat(STEPS.map((text, i) => ({ id: 'v' + i, ch: 2, text, done: s => s.village.step > i })));
 
   /* ---------- helpers ---------- */
   function rand(s) {
@@ -142,6 +203,11 @@
   const empById = id => EMPLOYERS.find(e => e.id === id);
   function learned(s, trade) { return s.trades[trade] >= LEARN_SHIFTS; }
   function tradeSpeed(s, trade) { return 1 + Math.min(0.3, s.trades[trade] * 0.03); }
+  function skillPct(s, trade) { return Math.round(Math.min(0.3, s.trades[trade] * 0.03) * 100); }
+  function addStanding(s, n, why) {
+    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) s.rec.standingEarned += n;
+    if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
+  }
   function shopLabel(shop) { return tierOf(shop).name + ', ' + PLOTS[shop.plot].name; }
   function wtpMean(shop, traveler) { const T = TRADES[shop.trade]; return T.wtp * (1 + 0.08 * shop.tier + (traveler ? 0.08 : 0)); }
   function earn(s, n) { s.coins += n; s.rec.coinsEarned += n; }
@@ -158,7 +224,7 @@
     };
   }
   function freshStats(s) {
-    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, notes: [] };
+    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, notes: [] };
     s.shops.forEach(x => { st.shops[x.id] = freshShopStats(x); });
     return st;
   }
@@ -171,7 +237,16 @@
       served: 0, lost: 0, lostPrice: 0, gathered: { grain: 0, wood: 0, ore: 0 }, walked: 0,
       workersHired: 0, workersLetGo: 0, workersQuit: 0, wagesPaid: 0,
       shopsOpened: 0, upgrades: 0, invested: 0, jobsHeld: 0, shiftsWorked: 0, shiftsMissed: 0, timesFired: 0, jobsQuit: 0,
-      peakCoins: 0, days: 0
+      peakCoins: 0, days: 0,
+      standingEarned: 0, elderTasks: 0, councilSince: null, projectsFunded: 0, disputesSettled: 0, grainDonated: 0, chestGiven: 0,
+      taxesPaid: 0, contractsDone: 0, contractsMissed: 0, housesOwned: 0, rentCollected: 0, shopsSold: 0
+    };
+  }
+  function freshVillage() {
+    return {
+      step: 0, standing: 0, shortage: false, granary: 0, granaryNeed: 20, jobless: [], towerCoin: 0, towerWood: 0, towerBuilt: false,
+      council: false, chest: 0, chestDaily: 0, projects: {}, toll: 'none', dispute: null, disputeDay: 0, usedDisputes: [], favor: {},
+      landGranted: false, letter: false, metSteward: false, cottage: 'forsale', contract: null, taxDue: null
     };
   }
 
@@ -181,7 +256,7 @@
       v: VERSION, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
       player: { x: P.home.x, z: P.home.z, face: 0, dest: null, action: null, inv: { grain: 0, wood: 0, ore: 0 } },
       shops: [], nextShop: 1, job: null, trades: { bakery: 0, smithy: 0, tavern: 0, joinery: 0 },
-      agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null
+      agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null, village: freshVillage()
     };
     VILLAGERS.forEach((v, i) => {
       const home = HOMES[i];
@@ -191,7 +266,7 @@
       });
     });
     openDay(s);
-    event(s, 'Day 1. You arrive in Hearthmoor with 5 coins. The four shops across the square are hiring.', 'story');
+    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + REALM.lord + ', with 5 coins. The four shops across the square are hiring.', 'story');
     return s;
   }
 
@@ -210,28 +285,54 @@
     s.stats = freshStats(s);
     const base = s.t - minuteOfDay(s.t);
     const sched = [];
+    const v = s.village;
+    if (v.council && v.step >= 6 && !v.projects.granary && !v.shortage && rand(s) < 0.12) {
+      v.shortage = true; v.granary = 0; v.granaryNeed = 12;
+      event(s, 'A lean week: the granary is running low again. Villagers will buy less until it is refilled (12 grain), or enlarged by the council.', 'bad');
+    }
     for (const shop of s.shops) {
       const T = TRADES[shop.trade], Ti = tierOf(shop);
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
-      s.agents.filter(a => a.kind === 'villager').forEach(a => { if (rand(s) < T.villagerRate) sched.push({ at: when(), id: a.id, shop: shop.id }); });
-      const n = Math.max(0, Ti.travelers + Math.floor(rand(s) * 3) - 1);
+      const vr = T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0);
+      s.agents.filter(a => a.kind === 'villager').forEach(a => { if (rand(s) < vr) sched.push({ at: when(), id: a.id, shop: shop.id }); });
+      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers));
       for (let i = 0; i < n; i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
+    if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
     sched.sort((a, b) => a.at - b.at);
     s.schedule = sched;
     makeApplicants(s);
+    // merchant orders
+    if (v.contract && s.day > v.contract.until) { event(s, 'The order for ' + v.contract.who + ' lapsed unfilled.', 'bad'); v.contract = null; s.rec.contractsMissed++; }
+    if (!v.contract && s.shops.length && rand(s) < 0.5) {
+      const shop = s.shops[Math.floor(rand(s) * s.shops.length)], T = TRADES[shop.trade], Ti = tierOf(shop);
+      const qty = Math.max(2, Ti.out * 2 + Math.floor(rand(s) * 3));
+      v.contract = { trade: shop.trade, qty, reward: Math.round(qty * T.price * 1.6), until: s.day + 3, who: ['A drover bound for Ashford', 'A Kellmere mining crew', 'A wagon train to Highcrown', 'The innkeeper at Ashford'][Math.floor(rand(s) * 4)] };
+      event(s, v.contract.who + ' wants ' + goodsName(shop.trade, qty) + ' delivered to the Trading Post by day ' + v.contract.until + ' for ' + v.contract.reward + 'c.', 'story');
+    }
+    // the council hears a dispute every few days
+    if (v.council && !v.dispute && s.day >= v.disputeDay) {
+      const pool = DISPUTES.map((d, i) => i).filter(i => !v.usedDisputes.includes(i));
+      const pick = (pool.length ? pool : DISPUTES.map((d, i) => i))[Math.floor(rand(s) * (pool.length || DISPUTES.length))];
+      v.dispute = pick; v.usedDisputes.push(pick);
+      if (v.usedDisputes.length >= DISPUTES.length) v.usedDisputes = [];
+      event(s, DISPUTES[pick].a + ' and ' + DISPUTES[pick].b + ' bring a quarrel to the council. Settle it at the Moot Hall.', 'story');
+    }
+    if (v.council) { v.chest += v.chestDaily; }
+    if (v.cottage === 'repaired') { v.cottage = 'let'; event(s, 'A family from Ashford rents your cottage for 5c a day, paid at closing.', 'good'); }
     if (s.day > 1) event(s, 'Day ' + s.day + ' begins.', 'story');
   }
 
   function makeApplicants(s) {
     s.applicants = [];
     const taken = s.shops.filter(x => x.worker).map(x => x.worker.name);
+    for (const name of s.village.jobless) s.applicants.push({ name, skill: name === 'Hilda' ? 1.05 : 0.9, ask: name === 'Hilda' ? 9 : 7, local: true });
     for (let i = 0; i < 2; i++) {
       const skill = Math.round((0.7 + rand(s) * 0.6) * 100) / 100;
       const ask = Math.round(3 + skill * 6);
       let name, guard = 0;
-      do { name = APPLICANTS[Math.floor(rand(s) * APPLICANTS.length)]; guard++; } while ((s.applicants.some(a => a.name === name) || taken.includes(name)) && guard < 50);
+      do { name = APPLICANTS[Math.floor(rand(s) * APPLICANTS.length)]; guard++; } while ((s.applicants.some(a => a.name === name) || taken.includes(name) || JOBLESS.includes(name)) && guard < 50);
       s.applicants.push({ name, skill, ask });
     }
   }
@@ -239,7 +340,8 @@
 
   function closeDay(s) {
     const st = s.stats;
-    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, notes: st.notes.slice() };
+    if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
+    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, notes: st.notes.slice() };
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
       if (w) {
@@ -258,8 +360,8 @@
       e.notes = explainShop(s, shop, e);
       entry.shops.push(e);
     }
-    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys;
+    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract;
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given;
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
@@ -338,6 +440,10 @@
   function spawnScheduled(s) {
     while (s.schedule.length && s.schedule[0].at <= s.t) {
       const e = s.schedule.shift();
+      if (e.taxman) {
+        s.agents.push({ id: s.nextId++, kind: 'taxman', name: 'The lord\u2019s tax collector', x: P.manorRoad.x, z: P.manorRoad.z, face: 0, mode: 'tax', phase: 'in', doing: 'Coming down from the manor', icon: null, iconUntil: 0, palette: 0, wait: 0 });
+        continue;
+      }
       const shop = shopById(s, e.shop);
       if (!shop) continue;
       const T = TRADES[shop.trade];
@@ -346,7 +452,7 @@
         a = {
           id: s.nextId++, kind: 'traveler', name: TRAVELERS[Math.floor(rand(s) * TRAVELERS.length)],
           x: P.road.x, z: P.road.z + (rand(s) - 0.5) * 3, face: -Math.PI / 2, mode: 'shop', phase: 'toShop',
-          doing: 'Looking for ' + T.product, icon: null, iconUntil: 0, palette: 6 + Math.floor(rand(s) * 4)
+          doing: 'Looking for ' + T.product, icon: null, iconUntil: 0, palette: 6 + Math.floor(rand(s) * 4), rumor: Math.floor(rand(s) * RUMORS.length)
         };
         a.wtp = clamp(normal(s, wtpMean(shop, true), T.sd), 1, T.wtp * 3);
         s.agents.push(a);
@@ -355,7 +461,7 @@
         if (!a) continue;
         if (a.mode === 'shop') { e.at = s.t + 60; insertSched(s, e); continue; }
         a.mode = 'shop'; a.phase = 'toShop';
-        a.wtp = clamp(normal(s, wtpMean(shop, false), T.sd), 1, T.wtp * 3);
+        a.wtp = clamp(normal(s, wtpMean(shop, false), T.sd) * (1 + 0.06 * (s.village.favor[a.name] || 0)), 1, T.wtp * 3);
       }
       a.shop = shop.id;
       const r = rand(s);
@@ -433,13 +539,35 @@
     }
   }
 
+  function taxTake(s) {
+    const due = s.shops.reduce((a, x) => a + 2 * (x.tier + 1), 0) + (s.village.cottage === 'let' ? 2 : 0);
+    const paid = Math.min(s.coins, due);
+    spend(s, paid); s.stats.tax += paid; s.rec.taxesPaid += paid;
+    let msg = 'The tax collector takes ' + paid + 'c for ' + REALM.lordShort + (due ? ' (2c for each level of every shop you own' + (s.village.cottage === 'let' ? ', 2c for the cottage' : '') + ').' : '. You own nothing taxable yet.');
+    if (s.village.council) { s.village.chest += 20; msg += ' He leaves 20c in the council chest from the lord\u2019s purse.'; }
+    event(s, msg, due ? 'bad' : 'info');
+  }
+  function taxmanRoutine(s, a, dt) {
+    if (a.phase === 'in') { a.doing = 'Collecting ' + REALM.lordShort + '\u2019s taxes'; if (moveTo(a, P.hall.x + 1.5, P.hall.z + 1, 1.0 * dt)) { a.phase = 'wait'; a.wait = 40; taxTake(s); } }
+    else if (a.phase === 'wait') { a.doing = 'Writing in his tax roll'; a.working = true; a.wait -= dt; if (a.wait <= 0) { a.phase = 'out'; a.working = false; } }
+    else { a.doing = 'Returning to the manor'; if (moveTo(a, P.manorRoad.x, P.manorRoad.z - 4, 1.0 * dt)) a.gone = true; }
+  }
+  function joblessRoutine(s, a, dt) {
+    const h = hourOf(s);
+    const sit = { x: P.square.x + (a.name === 'Hilda' ? -1 : 1), z: P.square.z };
+    const night = h < 6 || h >= 21;
+    const arrived = moveTo(a, night ? a.home.x : sit.x, night ? a.home.z : sit.z, 0.8 * dt);
+    a.indoors = night && arrived; a.working = false;
+    a.doing = night ? 'Asleep' : 'Sitting in the square, hoping for work';
+    if (!night && arrived) a.face = 0;
+  }
   function villagerRoutine(s, a, dt) {
     const h = hourOf(s);
     let tgt, doing, working = false;
     if (h < 6 || h >= 21) { tgt = a.home; doing = 'Asleep'; }
     else if (h < 7) { tgt = a.spot; doing = 'Walking to work'; }
     else if (h < 12 || (h >= 13 && h < 17)) { tgt = a.spot; doing = jobDoing(a.job); working = true; }
-    else if (h < 13) { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = 'Lunch by the well'; }
+    else if (h < 13) { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = s.village.shortage ? 'Hungry: the granary is nearly empty' : 'Lunch by the well'; }
     else { tgt = { x: P.plaza.x + ((a.id % 4) - 1.5) * 1.4, z: P.plaza.z + ((a.id % 2) ? 1.2 : -1) }; doing = 'Chatting in the square'; }
     const arrived = moveTo(a, tgt.x, tgt.z, 0.9 * dt);
     a.doing = arrived ? doing : (doing === 'Asleep' ? 'Heading home' : doing.startsWith('Walking') ? doing : 'On the way: ' + doing.toLowerCase());
@@ -455,6 +583,8 @@
       if (a.icon && s.t > a.iconUntil && a.icon !== 'wait') a.icon = null;
       a.indoors = false;
       if (a.mode === 'shop') updateShopper(s, a, dt);
+      else if (a.kind === 'taxman') taxmanRoutine(s, a, dt);
+      else if (a.kind === 'jobless') joblessRoutine(s, a, dt);
       else villagerRoutine(s, a, dt);
     }
     if (s.agents.some(a => a.gone)) s.agents = s.agents.filter(a => !a.gone);
@@ -475,6 +605,7 @@
       shop.goods += Ti.out;
       st.batches++; st.batchesBy[who]++;
       s.rec.made[T.product] += Ti.out;
+      if (who === 'player') s.trades[shop.trade] = Math.round((s.trades[shop.trade] + 0.25) * 100) / 100;
       event(s, (who === 'player' ? 'You' : shop.worker.name) + ' made ' + goodsName(shop.trade, Ti.out) + '.', 'good');
       return 'done';
     }
@@ -571,6 +702,10 @@
       p.action = { type: 'gather', good: then.good, left: GATHER[then.good].min };
     } else if (then.type === 'craft') { p.action = { type: 'craft', shop: then.shop }; p.face = Math.PI; }
     else if (then.type === 'store') storeGoods(s, shopById(s, then.shop));
+    else if (then.type === 'talk') doTalk(s);
+    else if (then.type === 'donate') donateGrain(s);
+    else if (then.type === 'fundTower') fundTower(s);
+    else if (then.type === 'gate') gateTalk(s);
     else if (then.type === 'storeThenCraft') { const shop = shopById(s, then.shop); storeGoods(s, shop); if (shop) walkTo(s, plotPt(shop, 'station'), { type: 'craft', shop: shop.id }); }
   }
 
@@ -708,6 +843,90 @@
     }
   }
 
+  /* ---------- the village and its elder ---------- */
+  function startShortage(s) {
+    const v = s.village; v.step = 2; v.shortage = true; v.granary = 0; v.granaryNeed = 20;
+    event(s, REALM.elder + ': "The harvest was thin and the granary is near empty. Folk are skipping meals and spending less. Bring 20 grain to the granary and they will remember it."', 'story');
+  }
+  function startJobs(s) {
+    const v = s.village; v.step = 3; v.jobless = JOBLESS.slice();
+    JOBLESS.forEach((name, i) => s.agents.push({ id: s.nextId++, kind: 'jobless', name, home: HOMES[1 + i], x: HOMES[1 + i].x, z: HOMES[1 + i].z + 1.5, face: 0, mode: 'routine', doing: 'Looking for work', icon: null, iconUntil: 0, palette: 7 + i }));
+    event(s, REALM.elder + ': "Hilda and Bram lost their places when the mill closed. They sit in the square every day. Give them work, and two families eat."', 'story');
+    makeApplicants(s);
+  }
+  function checkVillage(s) {
+    const v = s.village;
+    if (v.step === 1 && s.shops.length) startShortage(s);
+    if (v.step === 3 && !v.jobless.length) {
+      v.step = 4; s.rec.elderTasks++; addStanding(s, 20, 'Hilda and Bram have work, and the square knows who gave it.');
+      event(s, REALM.elder + ': "One more thing. The old watchtower on the east road fell in last winter. Bandits are on the Ashford road. Rebuild it: 80c and 20 wood."', 'story');
+    }
+    if (v.step === 6 && s.rec.projectsFunded >= 1 && s.rec.disputesSettled >= 1) {
+      v.step = 7; v.letter = true;
+      event(s, 'A rider brings a letter sealed in blue wax: "' + REALM.steward + ' would speak with the new councillor of Hearthmoor. Present yourself at the manor gate." — ' + REALM.lord, 'story');
+    }
+  }
+  function doTalk(s) {
+    const v = s.village;
+    if (v.step === 0) {
+      v.step = 1;
+      event(s, REALM.elder + ': "Hearthmoor belongs to ' + REALM.lord + ', who holds it for ' + REALM.king + ' in ' + REALM.capital + '. His steward taxes us; the council of elders runs the rest. A hired hand has no say here. A shopkeeper might."', 'story');
+      if (s.shops.length) startShortage(s);
+      return;
+    }
+    if (v.step === 5) {
+      v.step = 6; v.council = true; v.chest += 30; v.landGranted = true; v.disputeDay = s.day + 1; s.rec.elderTasks++; s.rec.councilSince = s.day;
+      addStanding(s, 10, 'the moot votes you onto the village council.');
+      event(s, 'The moot votes you onto the council. You now hold a key to the village chest (30c), a say over the travelers\u2019 toll, and the right to grant land: the Hall lot is yours to build on.', 'story');
+      return;
+    }
+    const lines = {
+      1: 'Open a business of your own and come back. Then we can talk about what the village needs.',
+      2: 'The granary still needs ' + Math.max(0, v.granaryNeed - v.granary) + ' grain.',
+      3: (v.jobless.length === 2 ? 'Hilda and Bram' : v.jobless[0]) + ' still need' + (v.jobless.length === 1 ? 's' : '') + ' work.',
+      4: 'The watchtower needs ' + Math.max(0, 80 - v.towerCoin) + 'c and ' + Math.max(0, 20 - v.towerWood) + ' wood more.',
+      6: 'Councillor. The chest holds ' + v.chest + 'c. Spend it where the village can see it.',
+      7: 'The steward is waiting. Do not keep a lord\u2019s man waiting.',
+      8: 'You have done well by us. The lord knows your name now.'
+    };
+    event(s, REALM.elder + ': "' + (lines[v.step] || 'Good day to you.') + '"', 'info');
+  }
+  function donateGrain(s) {
+    const v = s.village, p = s.player;
+    if (!v.shortage) { event(s, 'The granary is full enough for now.', 'info'); return; }
+    const n = Math.min(p.inv.grain, v.granaryNeed - v.granary);
+    if (n <= 0) { event(s, 'You have no grain to give. The Wheat Field is free to gather from.', 'bad'); return; }
+    p.inv.grain -= n; v.granary += n; s.rec.grainDonated += n;
+    event(s, 'You give ' + n + ' grain to the granary (' + v.granary + '/' + v.granaryNeed + ').', 'good');
+    if (v.granary >= v.granaryNeed) {
+      v.shortage = false;
+      if (v.step === 2) { s.rec.elderTasks++; addStanding(s, 20, 'the granary is full and the village eats again.'); startJobs(s); }
+      else addStanding(s, 8, 'you refilled the granary in a lean week.');
+    }
+  }
+  function fundTower(s) {
+    const v = s.village, p = s.player;
+    if (v.towerBuilt) return;
+    const coin = Math.min(s.coins, 80 - v.towerCoin), wood = Math.min(p.inv.wood, 20 - v.towerWood);
+    if (coin <= 0 && wood <= 0) { event(s, 'The masons need coin and wood. You have neither on you.', 'bad'); return; }
+    spend(s, coin); s.stats.given += coin; s.rec.chestGiven += coin; p.inv.wood -= wood;
+    v.towerCoin += coin; v.towerWood += wood;
+    event(s, 'You give ' + [coin ? coin + 'c' : null, wood ? wood + ' wood' : null].filter(Boolean).join(' and ') + ' to the watchtower (' + v.towerCoin + '/80c, ' + v.towerWood + '/20 wood).', 'good');
+    if (v.towerCoin >= 80 && v.towerWood >= 20) {
+      v.towerBuilt = true;
+      if (v.step === 4) { v.step = 5; s.rec.elderTasks++; addStanding(s, 20, 'the watchtower stands again over the Ashford road.'); event(s, REALM.elder + ' sends word: the village will hold a moot. Come to the Moot Hall.', 'story'); }
+    }
+  }
+  function gateTalk(s) {
+    const v = s.village;
+    if (v.step === 7) {
+      v.step = 8; v.metSteward = true;
+      event(s, REALM.steward + ' meets you at the gate: "His lordship hears Hearthmoor has a councillor worth knowing. Lords have need of such people. We will send for you." (Chapter Three, The Lord\u2019s Favor, comes in a later update.)', 'story');
+    } else if (v.step >= 8) event(s, 'The guard nods you through to the gatehouse, but the steward is away on the lord\u2019s business.', 'info');
+    else event(s, 'The gate is barred. A guard in blue and gold: "His lordship receives no one without the steward\u2019s leave."', 'info');
+  }
+  function atLoc(s, key) { return dist(s.player, LOCS[key]) < LOCS[key].r; }
+
   /* ---------- commands ---------- */
   const ok = msg => ({ ok: true, msg });
   const fail = msg => ({ ok: false, msg });
@@ -780,6 +999,7 @@
         const plot = a, trade = b;
         if (!PLOTS[plot]) return fail('No such lot.');
         if (shopOnPlot(s, plot)) return fail('That lot is taken.');
+        if (PLOTS[plot].grant && !s.village.landGranted) return fail('This is council land. Only the council can grant it.');
         if (!TRADES[trade]) return fail('Unknown trade.');
         if (!learned(s, trade)) return fail('Learn the trade first: work ' + LEARN_SHIFTS + ' shifts at ' + EMPLOYERS.find(e => e.trade === trade).name + '.');
         const cost = TRADES[trade].tiers[0].cost;
@@ -835,6 +1055,12 @@
         const home = WORKER_HOMES.find(h => !used.includes(h)) || WORKER_HOMES[0];
         shop.worker = { name: ap.name, skill: ap.skill, ask: ap.ask, wage, mood: 60, x: P.road.x - 6, z: P.plaza.z, face: 0, home, task: null, why: 'Just hired', warned: false, carry: null, sup: null, hiredDay: s.day };
         s.applicants.splice(b, 1); s.rec.workersHired++;
+        if (ap.local) {
+          s.village.jobless = s.village.jobless.filter(n => n !== ap.name);
+          const ag = s.agents.find(x => x.kind === 'jobless' && x.name === ap.name);
+          if (ag) { shop.worker.x = ag.x; shop.worker.z = ag.z; s.agents = s.agents.filter(x => x !== ag); }
+          shop.worker.local = true;
+        }
         event(s, ap.name + ' will work at your ' + TRADES[shop.trade].name.toLowerCase() + ' for ' + wage + 'c a day, paid at closing (21:00).', 'good');
         return ok();
       }
@@ -853,6 +1079,90 @@
         payCost(s, next.cost, shop);
         shop.tier++; s.rec.upgrades++;
         event(s, 'Your shop on the ' + PLOTS[shop.plot].name + ' is now a ' + next.name + '!', 'story');
+        return ok();
+      }
+      case 'talk': if (atLoc(s, 'hall')) { doTalk(s); return ok(); } walkTo(s, P.hall, { type: 'talk' }); return ok();
+      case 'donate': if (atLoc(s, 'granary')) { donateGrain(s); return ok(); } walkTo(s, P.granary, { type: 'donate' }); return ok();
+      case 'fundTower': if (atLoc(s, 'tower')) { fundTower(s); return ok(); } walkTo(s, P.tower, { type: 'fundTower' }); return ok();
+      case 'gate': if (atLoc(s, 'manor')) { gateTalk(s); return ok(); } walkTo(s, P.gate, { type: 'gate' }); return ok();
+      case 'project': {
+        const v = s.village, pr = PROJECTS[a];
+        if (!v.council) return fail('Only the council can spend the village chest.');
+        if (!atLoc(s, 'hall')) return fail('Council business is done at the Moot Hall.');
+        if (!pr || v.projects[a]) return fail('That project is already done.');
+        if (v.chest < pr.cost) return fail('The chest holds ' + v.chest + 'c; this needs ' + pr.cost + 'c. You can add your own coin.');
+        v.chest -= pr.cost; v.projects[a] = s.day; s.rec.projectsFunded++;
+        if (a === 'granary' && v.shortage) { v.shortage = false; }
+        addStanding(s, 10, pr.name.toLowerCase() + ' is done.');
+        return ok();
+      }
+      case 'giveChest': {
+        const v = s.village, n = Math.min(s.coins, a | 0);
+        if (!v.council) return fail('You do not hold a key to the chest.');
+        if (n <= 0) return fail('You have no coin to give.');
+        spend(s, n); v.chest += n; s.stats.given += n; s.rec.chestGiven += n;
+        if (n >= 10) addStanding(s, Math.floor(n / 10), 'you put your own coin into the village chest.');
+        return ok('You add ' + n + 'c to the chest.');
+      }
+      case 'toll': {
+        if (!s.village.council) return fail('Only the council sets the toll.');
+        if (!TOLLS[a]) return fail('Unknown toll');
+        s.village.toll = a;
+        event(s, 'The council sets the travelers\u2019 toll: ' + TOLLS[a].name + '. It takes effect tomorrow.', 'info');
+        return ok();
+      }
+      case 'settle': {
+        const v = s.village;
+        if (v.dispute == null) return fail('There is no quarrel before the council.');
+        if (!atLoc(s, 'hall')) return fail('Disputes are heard at the Moot Hall.');
+        const d = DISPUTES[v.dispute], o = d.opts[a];
+        if (!o) return fail('Pick a ruling.');
+        if (o.chest && v.chest + o.chest < 0) return fail('The chest cannot cover that.');
+        v.chest += o.chest || 0; v.chestDaily += o.chestDaily || 0;
+        for (const n in o.favor) v.favor[n] = clamp((v.favor[n] || 0) + o.favor[n], -2, 2);
+        v.dispute = null; v.disputeDay = s.day + 3; s.rec.disputesSettled++;
+        addStanding(s, o.standing, 'the council rules: ' + o.label.toLowerCase() + '.');
+        return ok();
+      }
+      case 'deliver': {
+        const v = s.village, c0 = v.contract;
+        if (!c0) return fail('There is no order to fill.');
+        if (!atLoc(s, 'market')) return fail('Orders are handed over at the Trading Post.');
+        const shops = s.shops.filter(x => x.trade === c0.trade), have = shops.reduce((t, x) => t + x.goods, 0);
+        if (have < c0.qty) return fail('Your shops hold ' + have + ' of the ' + goodsName(c0.trade, c0.qty) + ' needed.');
+        let need = c0.qty;
+        for (const x of shops) { const n = Math.min(x.goods, need); x.goods -= n; need -= n; }
+        earn(s, c0.reward); s.stats.contract += c0.reward; s.rec.contractsDone++;
+        v.contract = null; addStanding(s, 2, 'Hearthmoor goods are known on the road.');
+        event(s, 'Order delivered: ' + c0.reward + 'c from ' + c0.who.toLowerCase() + '.', 'coin');
+        return ok();
+      }
+      case 'buyCottage': {
+        const v = s.village;
+        if (v.cottage !== 'forsale') return fail('The cottage is already yours.');
+        if (s.coins < 90) return fail('The cottage costs 90c.');
+        spend(s, 90); s.stats.property += 90; s.rec.invested += 90; v.cottage = 'owned'; s.rec.housesOwned++;
+        event(s, 'You buy Old Ama\u2019s cottage. The roof leaks and the door hangs loose: repair it (30c and 12 wood) to find a tenant.', 'story');
+        return ok();
+      }
+      case 'repairCottage': {
+        const v = s.village;
+        if (v.cottage !== 'owned') return fail('Nothing to repair.');
+        if (!canPay(s, { coin: 30, wood: 12 })) return fail('Repairs need 30c and 12 wood.');
+        payCost(s, { coin: 30, wood: 12 }); v.cottage = 'repaired';
+        event(s, 'The cottage is mended. A tenant will move in tomorrow.', 'good');
+        return ok();
+      }
+      case 'sellShop': {
+        if (!shop) return fail('No such shop.');
+        const refund = Math.floor(TRADES[shop.trade].tiers.slice(0, shop.tier + 1).reduce((t, x) => t + (x.cost.coin || 0), 0) / 2);
+        if (shop.worker) s.rec.workersLetGo++;
+        shop.queue.slice().forEach(id => { const ag = agentById(s, id); if (ag) leaveShop(s, ag, null, null); });
+        s.shops = s.shops.filter(x => x !== shop);
+        s.schedule = s.schedule.filter(e => e.shop !== shop.id);
+        earn(s, refund); s.rec.shopsSold++;
+        if (p.action && p.action.shop === shop.id) p.action = null;
+        event(s, 'You sold your ' + TRADES[shop.trade].name.toLowerCase() + ' for ' + refund + 'c. The ' + PLOTS[shop.plot].name + ' is free again.', 'info');
         return ok();
       }
       case 'stop': p.action = null; p.dest = null; return ok();
@@ -875,6 +1185,7 @@
     for (const shop of s.shops) updateWorker(s, shop, dt);
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
+    checkVillage(s);
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
   }
   function advance(s, minutes) { let left = minutes; while (left > 1e-9) { const d = Math.min(1, left); step(s, d); left -= d; } }
@@ -885,7 +1196,7 @@
   }
   function netWorth(s) { return s.coins + propertyValue(s); }
   function summary(s) {
-    return { name: s.name, day: s.day, clock: clock(s.t), coins: s.coins, shops: s.shops.length, job: s.job ? empById(s.job.emp).name : null, netWorth: netWorth(s) };
+    return { standing: s.village.standing, council: s.village.council, name: s.name, day: s.day, clock: clock(s.t), coins: s.coins, shops: s.shops.length, job: s.job ? empById(s.job.emp).name : null, netWorth: netWorth(s) };
   }
 
   /* ---------- saving ---------- */
@@ -914,11 +1225,18 @@
     if (!s || typeof s !== 'object' || typeof s.v !== 'number') throw new Error('Not a Hearthmoor save');
     if (s.v > VERSION) throw new Error('This save is from a newer version');
     if (s.v === 1) s = migrateV1(s);
+    if (s.v === 2) {
+      s.v = 3; s.village = freshVillage();
+      const fr = freshRecords(); for (const k in fr) if (s.rec[k] === undefined) s.rec[k] = fr[k];
+      for (const k of ['rent', 'tax', 'contract', 'given', 'property']) if (s.stats[k] === undefined) s.stats[k] = 0;
+      event(s, 'Hearthmoor has a Moot Hall now, and ' + REALM.elder + ' would like a word with you.', 'story');
+    }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
 
   const api = {
+    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
