@@ -169,6 +169,27 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .menu-list .btn small { font-family: var(--f-body); }
 .back { border: 0; background: transparent; color: var(--ink-soft); padding: 6px 0; min-height: 36px; font-size: 14px; }
 .statgroup { margin-top: 14px; }
+/* the 3D map: the real village seen from above, with parchment pins */
+.mapui { position: fixed; inset: 0; z-index: 18; pointer-events: none; }
+.mapveil { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(30, 20, 12, .55)); box-shadow: inset 0 0 0 10px rgba(53, 37, 27, .85), inset 0 0 0 12px rgba(168, 125, 34, .6); }
+.maptop { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 18px); left: calc(max(16px, env(safe-area-inset-left, 0px)) + 8px); pointer-events: auto; display: flex; align-items: center; gap: 12px;
+  background: linear-gradient(#efdfbd, var(--parch)); border: 1px solid var(--line); border-radius: 6px; padding: 4px 4px 4px 14px; box-shadow: 0 3px 12px rgba(0,0,0,.4); max-width: calc(100vw - 32px); }
+.maptop h2 { margin: 0; font-family: var(--f-caps); font-weight: 400; font-size: 22px; white-space: nowrap; }
+.maptop span { color: var(--ink-soft); font-size: 13px; }
+.maptop .close { color: var(--ink); }
+.mapzoom { position: absolute; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 8px); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+.mapzoom button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--parch); font-size: 20px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.pins { position: absolute; inset: 0; overflow: hidden; }
+.pin { position: absolute; left: 0; top: 0; pointer-events: auto; border: 0; background: none; padding: 0 0 9px; will-change: transform; }
+.pin span { display: block; white-space: nowrap; font-family: var(--f-display); font-size: 14px; line-height: 1; color: var(--ink); background: linear-gradient(#f4e7cb, var(--parch)); border: 1px solid rgba(42,31,22,.35); border-left: 4px solid var(--ink-soft); border-radius: 3px; padding: 5px 8px 5px 6px; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+.pin::after { content: ""; position: absolute; left: 50%; bottom: 1px; width: 2px; height: 9px; margin-left: -1px; background: rgba(42,31,22,.7); }
+.pin.work span { border-left-color: var(--seal); } .pin.realm span { border-left-color: #2b4a7a; } .pin.mine span { border-left-color: var(--moss); } .pin.lot span { border-left-color: #8a7a5a; color: var(--ink-soft); }
+.pin.you { pointer-events: none; padding: 9px 0 0; } .pin.you::after { bottom: auto; top: 0; } .pin.you span { background: var(--ink); color: #f5cf73; border-color: #e2b552; }
+.pin.sel span { background: var(--ink); color: var(--parch); }
+.mapcard { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); pointer-events: auto; display: flex; align-items: center; gap: 14px;
+  width: min(560px, calc(100vw - 32px)); background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+.mapcard div { flex: 1; min-width: 0; } .mapcard b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 20px; } .mapcard span { font-size: 14px; color: var(--ink-soft); }
+@media (orientation: landscape) and (max-height: 520px) { .maptop span { display: none; } }
 .map { margin-top: 6px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #e9d6ad; }
 .map svg { display: block; width: 100%; height: auto; max-height: calc(100vh - 145px); font-family: var(--f-display); }
 .maphead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
@@ -278,6 +299,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     <div class="bookhead"><div class="tabs" role="tablist" id="tabs"></div><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button></div>
     <div class="page" id="page"></div>
   </div>
+</div>
+<div class="mapui" id="mapui" hidden>
+  <div class="mapveil"></div>
+  <div class="pins" id="pins"></div>
+  <div class="maptop"><h2>Hearthmoor</h2><span>Drag to look around &middot; pinch to zoom &middot; tap a place</span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the map">&times;</button></div>
+  <div class="mapzoom"><button type="button" id="mzin" aria-label="Zoom in">+</button><button type="button" id="mzout" aria-label="Zoom out">&minus;</button></div>
+  <div class="mapcard" id="mapcard" hidden></div>
 </div>
 <div class="sheet" id="pause" hidden>
   <div class="cover"><div class="page round" id="pausePage"></div></div>
@@ -854,14 +882,14 @@ function syncShops(s, t, dt) {
     const flick = calm() ? 0 : Math.sin(t * 13 + i) * 0.25;
     v.fx.light.intensity = on && shop.trade !== 'joinery' ? 1.6 + flick : 0;
     if (v.fx.mouth) v.fx.mouth.material.emissiveIntensity = on ? 0.9 + flick * 0.5 : 0;
-    const near = Math.hypot(focus.x - p.x, focus.z - p.z) < 8;
+    const near = UI.overlay !== 'map' && Math.hypot(focus.x - p.x, focus.z - p.z) < 8;
     v.fx.roofs.forEach(r => { r.material.opacity += ((near ? 0.12 : 1) - r.material.opacity) * Math.min(1, dt * 6); r.material.depthWrite = r.material.opacity > 0.9; });
     if (on && shop.trade !== 'joinery') glowing.push({ x: p.x + v.fx.chimney.x, y: v.fx.chimney.y, z: p.z + v.fx.chimney.z });
   });
   const h = Sim.hourOf(s);
   Sim.EMPLOYERS.forEach((e, i) => {
     const fx = empView[i].fx, open = h >= e.shift[0] && h < e.shift[1];
-    const near = Math.hypot(focus.x - e.x, focus.z - e.z) < 8;
+    const near = UI.overlay !== 'map' && Math.hypot(focus.x - e.x, focus.z - e.z) < 8;
     fx.roofs.forEach(r => { r.material.opacity += ((near ? 0.12 : 1) - r.material.opacity) * Math.min(1, dt * 6); r.material.depthWrite = r.material.opacity > 0.9; });
     const lit = open && e.trade !== 'joinery';
     fx.light.intensity = lit ? 1.4 : 0; if (fx.mouth) fx.mouth.material.emissiveIntensity = lit ? 0.9 : 0;
@@ -898,12 +926,19 @@ function syncLight(h) {
 /* ----- camera and input: twin thumbsticks ----- */
 const focus = new THREE.Vector3(0, 0, 6);
 const cam = { yaw: 0, dist: 20 };
+const mapCam = { x: 0, z: -4, dist: 64 };
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < h ? 52 : 40; camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
 function syncCamera(s, dt, t) {
+  if (UI.overlay === 'map') {
+    const pitch = 1.0, d = mapCam.dist;
+    camera.position.set(mapCam.x, Math.sin(pitch) * d, mapCam.z + Math.cos(pitch) * d);
+    camera.lookAt(mapCam.x, 0, mapCam.z);
+    return;
+  }
   if (UI.mode === 'title') {
     const a = calm() ? 0.6 : t * 0.05;
     camera.position.set(Math.sin(a) * 34, 24, 6 + Math.cos(a) * 34); camera.lookAt(0, 0, 6); return;
@@ -983,7 +1018,15 @@ function restStick(which) {
   el.querySelector('i').style.transform = '';
 }
 const touches = new Map();
+const mapPtr = new Map();
+let mapPinch = null;
 canvas.addEventListener('pointerdown', e => {
+  if (UI.overlay === 'map') {
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
+    mapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (mapPtr.size === 2) { const [a, b] = [...mapPtr.values()]; mapPinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: mapCam.dist }; }
+    return;
+  }
   if (UI.mode !== 'play' || UI.overlay) return;
   try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already released */ }
   const which = e.clientX < window.innerWidth * 0.5 ? 'move' : 'look';
@@ -992,6 +1035,14 @@ canvas.addEventListener('pointerdown', e => {
   if (t.which) { stick[t.which].id = e.pointerId; placeStick(t.which, e.clientX, e.clientY); }
 });
 canvas.addEventListener('pointermove', e => {
+  if (UI.overlay === 'map' && mapPtr.has(e.pointerId)) {
+    const prev = mapPtr.get(e.pointerId); mapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (mapPtr.size === 2 && mapPinch) { const [a, b] = [...mapPtr.values()]; mapCam.dist = clamp(mapPinch.dist * mapPinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 18, 110); return; }
+    const k = mapCam.dist / window.innerHeight;
+    mapCam.x = clamp(mapCam.x - (e.clientX - prev.x) * k * 0.78, -48, 48);
+    mapCam.z = clamp(mapCam.z - (e.clientY - prev.y) * k * 0.9, -55, 40);
+    return;
+  }
   const t = touches.get(e.pointerId); if (!t) return;
   const dx = e.clientX - t.sx, dy = e.clientY - t.sy, d = Math.hypot(dx, dy);
   if (d > 10) t.moved = true;
@@ -1001,6 +1052,7 @@ canvas.addEventListener('pointermove', e => {
   stickEl(t.which).querySelector('i').style.transform = `translate(${nx * STICK_R}px, ${ny * STICK_R}px)`;
 });
 function endTouch(e) {
+  if (mapPtr.has(e.pointerId)) { mapPtr.delete(e.pointerId); if (mapPtr.size < 2) mapPinch = null; return; }
   const t = touches.get(e.pointerId); if (!t) return;
   touches.delete(e.pointerId);
   if (t.which) { stick[t.which].x = stick[t.which].y = 0; stick[t.which].id = null; restStick(t.which); }
@@ -1008,7 +1060,7 @@ function endTouch(e) {
 }
 canvas.addEventListener('pointerup', endTouch);
 canvas.addEventListener('pointercancel', endTouch);
-canvas.addEventListener('wheel', e => { if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 9, 34); }, { passive: false });
+canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, 110); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 9, 34); }, { passive: false });
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function tap(x, y) {
   const r = canvas.getBoundingClientRect();
@@ -1275,7 +1327,13 @@ function hud(s) {
 /* ----- the ledger book ----- */
 const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['jobs', 'Jobs'], ['village', 'Village'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
-function closeOverlay() { UI.overlay = null; UI.confirm = null; $('book').hidden = true; $('pause').hidden = true; saveNow(); renderCard(true); }
+function closeOverlay() {
+  UI.overlay = null; UI.confirm = null; UI.mapSel = null;
+  ['book', 'pause', 'mapui'].forEach(id => $(id).hidden = true);
+  $('toasts').hidden = false;
+  if (UI.mode === 'play') ['hud', 'sticks'].forEach(id => $(id).hidden = false);
+  saveNow(); renderCard(true);
+}
 function turnPage(el, turn) { if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
@@ -1443,48 +1501,67 @@ function travel(key) {
   if (mins > 1) toast('You walk to ' + Lk.name + ' (' + mins + ' min).', 'info', true);
   drainEvents(); renderCard(true);
 }
-function mapHTML(s) {
-  const v = s.village, mk = [];
-  const SHORT = { gerd: 'Bakehouse', forge: 'Forge', tankard: 'Tankard', ash: 'Joinery' };
-  const label = (k, short) => {
-    const Lk = L[k];
-    if (Lk.plot != null) { const sh = Sim.shopOnPlot(s, Lk.plot); return sh ? 'Your ' + TR[sh.trade].name.toLowerCase() : Sim.PLOTS[Lk.plot].grant && !v.landGranted ? 'Council land' : short ? Lk.name : Lk.name + ' (empty)'; }
-    if (Lk.emp) { const e = Sim.empById(Lk.emp); return (short ? SHORT[e.id] : e.name) + (s.job && s.job.emp === e.id ? (short ? ' \u2605' : ' (your job)') : ''); }
-    if (k === 'well') return 'The square';
-    if (short) return { home: 'Your hut', cottage: 'Cottage', tower: 'Watchtower', manor: 'Manor', market: 'Trading Post', forest: 'Pine Woods', field: 'Wheat Field', pit: 'Iron Pit' }[k] || Lk.name;
-    return Lk.name;
-  };
-  const color = k => { const Lk = L[k]; if (Lk.plot != null) return Sim.shopOnPlot(s, Lk.plot) ? '#4a6634' : '#8a7a5a'; if (Lk.emp) return '#8c2e21'; if (['hall', 'manor', 'tower', 'granary'].includes(k)) return '#2b4a7a'; if (k === 'home' || k === 'cottage') return '#a87d22'; return '#5d4a36'; };
-  const keys = Object.keys(L).filter(k => !(k === 'cottage' && false));
-  for (const k of keys) {
-    const Lk = L[k], x = Lk.x, z = Lk.z, below = ['field', 'pit', 'tower', 'market', 'cottage', 'home'].includes(k) || !!Lk.emp || Lk.plot === 3;
-    mk.push(`<g class="mk" data-c='${esc(JSON.stringify(['ui', 'travel', k]))}' role="button" tabindex="0" aria-label="Travel to ${esc(label(k))}"><circle cx="${x}" cy="${z}" r="4.2" fill="transparent"/><circle cx="${x}" cy="${z}" r="1.6" fill="${color(k)}" stroke="#2a1f16" stroke-width=".4"/><text x="${x}" y="${z + (below ? 4.9 : -2.7)}" text-anchor="middle">${esc(label(k, true))}</text></g>`);
+/* ----- the 3D map ----- */
+const MAPNAME = { gerd: 'Bakehouse', forge: 'Forge', tankard: 'Tankard', ash: 'Joinery' };
+function pinLabel(k) {
+  const s = G, v = s.village, Lk = L[k];
+  if (k === 'you') return s.name;
+  if (Lk.plot != null) { const sh = Sim.shopOnPlot(s, Lk.plot); return sh ? 'Your ' + TR[sh.trade].name.toLowerCase() : Sim.PLOTS[Lk.plot].grant && !v.landGranted ? 'Council land' : Lk.name; }
+  if (Lk.emp) return MAPNAME[Lk.emp] + (s.job && s.job.emp === Lk.emp ? ' ★' : '');
+  return { well: 'The square', home: 'Your hut', cottage: v.cottage === 'forsale' ? 'Cottage for sale' : 'Your cottage', tower: 'Watchtower', manor: 'Varrow Manor', market: 'Trading Post', forest: 'Pine Woods', field: 'Wheat Field', pit: 'Iron Pit', hall: 'Moot Hall', granary: 'Granary' }[k] || Lk.name;
+}
+function pinKind(k) {
+  const Lk = L[k];
+  if (k === 'you') return 'you';
+  if (Lk.plot != null) return Sim.shopOnPlot(G, Lk.plot) ? 'mine' : 'lot';
+  if (Lk.emp) return G.job && G.job.emp === Lk.emp ? 'mine' : 'work';
+  if (['hall', 'manor', 'tower', 'granary'].includes(k)) return 'realm';
+  if (k === 'home' || (k === 'cottage' && G.village.cottage !== 'forsale')) return 'mine';
+  return 'place';
+}
+function pinPos(k) {
+  if (k === 'you') return new THREE.Vector3(G.player.x, 0, G.player.z);
+  const Lk = L[k], h = { manor: groundH(-7, -47) + 9, tower: 8, hall: 6.5, granary: 5 }[k] || (Lk.plot != null || Lk.emp ? 4.6 : 3);
+  const at = k === 'manor' ? { x: -7, z: -47 } : Lk.plot != null ? Sim.PLOTS[Lk.plot] : Lk.emp ? Sim.empById(Lk.emp) : k === 'granary' ? { x: -9, z: -15.6 } : k === 'hall' ? { x: 0, z: -15 } : Lk;
+  return new THREE.Vector3(at.x, h, at.z);
+}
+const pinV = new THREE.Vector3();
+function buildPins() {
+  const keys = Object.keys(L).concat(['you']);
+  $('pins').innerHTML = keys.map(k => `<button type="button" class="pin ${pinKind(k)} ${UI.mapSel === k ? 'sel' : ''}" data-k="${esc(k)}" ${k === 'you' ? 'tabindex="-1"' : `data-c='${esc(JSON.stringify(['ui', 'mapSel', k]))}'`}><span>${esc(pinLabel(k))}</span></button>`).join('');
+}
+function updatePins() {
+  const w = window.innerWidth, h = window.innerHeight;
+  for (const el of $('pins').children) {
+    pinV.copy(pinPos(el.dataset.k)).project(camera);
+    const off = pinV.z > 1 || Math.abs(pinV.x) > 1.1 || Math.abs(pinV.y) > 1.1;
+    el.style.visibility = off ? 'hidden' : 'visible';
+    if (!off) el.style.transform = `translate(${((pinV.x + 1) / 2 * w).toFixed(1)}px, ${((1 - pinV.y) / 2 * h).toFixed(1)}px) translate(-50%, ${el.dataset.k === 'you' ? '6px' : '-100%'})`;
   }
-  const P = s.player;
-  const pathD = [['well', 'plot0'], ['well', 'plot1'], ['well', 'plot2'], ['well', 'market'], ['well', 'home'], ['well', 'emp:gerd'], ['well', 'emp:forge'], ['well', 'emp:tankard'], ['well', 'emp:ash'], ['plot0', 'forest'], ['plot2', 'field'], ['emp:gerd', 'pit'], ['plot1', 'hall'], ['hall', 'granary'], ['hall', 'plot3'], ['hall', 'manor'], ['market', 'tower'], ['plot2', 'cottage']]
-    .map(([a, b]) => `M${L[a].x} ${L[a].z} L${L[b].x} ${L[b].z}`).join(' ');
-  const trees = pines.filter(([x, z]) => Math.abs(x) < 44 && z > -50 && z < 32).filter((_, i) => i % 3 === 0).map(([x, z]) => `<circle cx="${x.toFixed(1)}" cy="${z.toFixed(1)}" r="1.1"/>`).join('');
-  const groups = [
-    ['Your places', ['home'].concat(s.job ? ['emp:' + s.job.emp] : [], s.shops.map(x => 'plot' + x.plot), v.cottage !== 'forsale' ? ['cottage'] : [])],
-    ['The square', ['well', 'hall', 'granary'].concat(Sim.EMPLOYERS.map(e => 'emp:' + e.id).filter(k => !(s.job && k === 'emp:' + s.job.emp)), Sim.PLOTS.map((q, i) => 'plot' + i).filter(k => !Sim.shopOnPlot(s, L[k].plot)))],
-    ['Out and about', ['field', 'forest', 'pit', 'market', 'tower', 'manor'].concat(v.cottage === 'forsale' ? ['cottage'] : [])]
-  ];
-  const far = k => Math.round(Math.hypot(L[k].x - s.player.x, L[k].z - s.player.z) / 1.5);
-  const list = groups.map(([g, ks]) => `<h4>${g}</h4><div class="acts">${ks.map(k => `<button type="button" class="btn alt" data-c='${esc(JSON.stringify(['ui', 'travel', k]))}'>${esc(label(k))}<small>${far(k) ? far(k) + ' min' : 'here'}</small></button>`).join('')}</div>`).join('');
-  return `<div class="maphead"><h3>Map of Hearthmoor</h3><span class="lead">Tap a place to travel there. Time passes as if you walked.</span></div>
-  <div class="mapwrap"><div class="map"><svg viewBox="-46 -52 92 86" role="img" aria-label="Map of Hearthmoor">
-    <rect x="-46" y="-52" width="92" height="86" fill="#e9d6ad"/>
-    <g fill="#6f8a55" opacity=".55">${trees}</g>
-    <rect x="${L.field.x - 5.5}" y="${L.field.z - 4}" width="11" height="8" fill="#d9bd6a" opacity=".8"/>
-    <circle cx="${L.pit.x}" cy="${L.pit.z}" r="4.4" fill="#8a8178" opacity=".7"/>
-    <path d="M38 5 L0 8" stroke="#a88c62" stroke-width="1.6" fill="none"/>
-    <path d="${pathD}" stroke="#a88c62" stroke-width=".9" stroke-dasharray="1.6 1" fill="none"/>
-    <circle cx="0" cy="8" r="7.5" fill="#cdb27f" opacity=".7"/>
-    <text x="40" y="2" class="road">to Ashford &rarr;</text>
-    ${mk.join('')}
-    <g transform="translate(${P.x.toFixed(1)} ${P.z.toFixed(1)})"><circle r="2.4" fill="none" stroke="#e2b552" stroke-width=".9"/><circle r="1" fill="#2b4a63"/></g>
-    <text x="-44" y="31" class="road">You are the gold ring.</text>
-  </svg></div><div class="maplist">${list}</div></div>`;
+}
+const PLACE_NOTE = {
+  field: 'Free grain for anyone who gathers it.', forest: 'Free wood for anyone who cuts it.', pit: 'Free iron ore for anyone who digs it.',
+  market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side of the square.',
+  well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
+  granary: 'The village food store.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
+};
+function renderMapCard() {
+  buildPins();
+  const k = UI.mapSel, el = $('mapcard');
+  if (!k) { el.hidden = true; return; }
+  const Lk = L[k], d = Math.hypot(Lk.x - G.player.x, Lk.z - G.player.z), mins = Math.round(d / 1.5);
+  let note = PLACE_NOTE[k] || '';
+  if (Lk.emp) { const e = Sim.empById(Lk.emp); note = `${e.boss}'s ${TR[e.trade].name.toLowerCase()}. Shifts ${shiftText(e)}, ${e.wage}c a shift.`; }
+  if (Lk.plot != null) { const sh = Sim.shopOnPlot(G, Lk.plot); note = sh ? `${Sim.tierOf(sh).name}: ${Sim.goodsName(sh.trade, sh.goods)} on the shelf.` : Sim.PLOTS[Lk.plot].grant && !G.village.landGranted ? 'Council land. Only the council can grant it.' : 'An empty lot. Open any trade you have learned.'; }
+  el.innerHTML = `<div><b>${esc(Lk.emp ? Sim.empById(Lk.emp).name : pinLabel(k))}</b><span>${esc(note)}</span></div>
+    <button type="button" class="btn" data-c='${esc(JSON.stringify(['ui', 'travel', k]))}'>${mins > 1 ? 'Travel · ' + mins + ' min' : 'Go there'}</button><button type="button" class="btn alt" data-c='["ui","mapSel",null]' aria-label="Clear selection">&times;</button>`;
+  el.hidden = false;
+}
+function openMap() {
+  UI.overlay = 'map'; UI.mapSel = null;
+  ['book', 'pause', 'panel', 'hud', 'sticks'].forEach(id => $(id).hidden = true);
+  mapCam.x = clamp(G.player.x * 0.5, -20, 20); mapCam.z = clamp(G.player.z * 0.5 - 6, -22, 10); mapCam.dist = 64;
+  $('mapui').hidden = false; $('toasts').hidden = true; renderMapCard();
 }
 /* ----- pause menu ----- */
 function openPause(view) { UI.overlay = 'pause'; $('panel').hidden = true; UI.pauseView = view || 'main'; UI.confirm = null; $('pause').hidden = false; $('book').hidden = true; renderPause(true); }
@@ -1497,7 +1574,7 @@ function renderPause(turn) {
     html = `<div class="paused">Paused</div><h3>${esc(G.name)} of Hearthmoor</h3><p class="lead num">Day ${sm.day}, ${sm.clock} · ${sm.coins}c · ${sm.shops} ${sm.shops === 1 ? 'shop' : 'shops'}${sm.job ? ' · works at ' + esc(sm.job) : ''}</p>
     <div class="menu-list">
       ${B_('Resume', ['ui', 'close'])}
-      ${B_('Map and travel<small>See the village and go anywhere</small>', ['ui', 'pview', 'map'], 'alt')}
+      ${B_('Map and travel<small>See the village and go anywhere</small>', ['ui', 'map'], 'alt')}
       ${B_('Ledger and management<small>Accounts, shops, staff, jobs, goals</small>', ['ui', 'book'], 'alt')}
       ${B_('Records<small>Every number from this playthrough</small>', ['ui', 'pview', 'stats'], 'alt')}
       ${B_('Save and export<small>Slot ' + slot + (lastSave ? ', saved ' + Math.max(0, Math.round((Date.now() - lastSave) / 1000)) + ' s ago' : '') + '</small>', ['ui', 'pview', 'save'], 'alt')}
@@ -1506,7 +1583,6 @@ function renderPause(turn) {
     </div>`;
   } else if (UI.pauseView === 'stats') html = back + statsHTML(G);
   else if (UI.pauseView === 'save') html = back + saveHTML();
-  else if (UI.pauseView === 'map') html = back + mapHTML(G);
   else html = back + settingsHTML();
   pg.innerHTML = html; pg.scrollTop = y; turnPage(pg, turn);
 }
@@ -1609,7 +1685,8 @@ function uiCmd(k, v) {
   if (k === 'close') { closeOverlay(); return; }
   if (k === 'book') { openBook(); return; }
   if (k === 'pause') { openPause(); return; }
-  if (k === 'map') { openPause('map'); return; }
+  if (k === 'map') { openMap(); return; }
+  if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
   if (k === 'travel') { travel(v); return; }
   if (k === 'pview') { UI.pauseView = v; UI.exportText = ''; renderPause(true); return; }
   if (k === 'tview') { UI.titleView = v; UI.confirm = null; UI.importMsg = ''; renderTitle(); return; }
@@ -1650,11 +1727,13 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => { const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
+$('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, 110); };
+$('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, 110); };
 $('menuBtn').onclick = () => openPause();
 $('goal').onclick = () => openBook('goals');
 $('fast').onclick = () => { UI.speed = UI.speed === 1 ? 2 : 1; $('fast').setAttribute('aria-pressed', UI.speed === 2); };
 ['book', 'pause'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) closeOverlay(); }));
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && UI.mode === 'play') { if (UI.overlay) closeOverlay(); else openPause(); } });
+document.addEventListener('keydown', e => { if (e.code === 'KeyM' && UI.mode === 'play' && !(e.target.closest && e.target.closest('input, textarea'))) { if (UI.overlay === 'map') closeOverlay(); else if (!UI.overlay) openMap(); return; } if (e.key === 'Escape' && UI.mode === 'play') { if (UI.overlay) closeOverlay(); else openPause(); } });
 
 setInterval(() => { if (!document.hidden) saveNow(); }, 10000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
@@ -1675,7 +1754,8 @@ function frame(now) {
   const t = now / 1000;
   if (UI.mode === 'play' && !UI.overlay && !document.hidden) { walkPlayer(G, dt); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); drainEvents(); }
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G);
-  syncLight(UI.mode === 'title' ? 18.4 : Sim.hourOf(G));
+  syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
+  if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 30; scene.fog.far = mapCam.dist + 140; updatePins(); }
   syncCamera(G, dt, t);
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
