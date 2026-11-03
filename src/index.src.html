@@ -64,6 +64,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #f3e6c8, #cdb48a); box-shadow: 0 2px 8px rgba(0,0,0,.45); }
 .stick span { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: rgba(241,227,194,.75); text-shadow: 0 1px 3px #000; }
 .stick.live span { display: none; }
+.lookhint { position: fixed; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 30px); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: rgba(241,227,194,.7); text-shadow: 0 1px 3px #000; transition: opacity .4s; }
+.lookhint.used { opacity: 0; }
 
 .toasts { position: fixed; z-index: 6; left: 0; right: 0; top: 130px; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
@@ -301,7 +303,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 <div class="night" id="night" hidden>Night passes&hellip;</div>
 <div class="sticks" id="sticks" hidden aria-hidden="true">
   <div class="stick l" id="stickL"><i></i><span>Walk</span></div>
-  <div class="stick r" id="stickR"><i></i><span>Look</span></div>
+  <div class="lookhint" id="stickR"><span>Drag here to look</span><span>Pinch to zoom</span></div>
 </div>
 <section class="panel" id="panel" hidden><div class="card" id="card"><div id="cardInfo"></div><div id="cardActs"></div></div></section>
 <div class="sheet" id="book" hidden>
@@ -341,7 +343,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { } }
 };
-let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'all', motion: 'full' } };
+let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'all', motion: 'full', lookX: 'normal', lookY: 'normal', lookSpeed: 'normal' } };
 try { const m = JSON.parse(store.get(META) || 'null'); if (m) meta = Object.assign(meta, m, { settings: Object.assign(meta.settings, m.settings || {}) }); } catch (e) { }
 function saveMeta() { store.set(META, JSON.stringify(meta)); }
 // the first version kept one save under an older key: move it into slot 1
@@ -939,7 +941,7 @@ function syncLight(h) {
 
 /* ----- camera and input: twin thumbsticks ----- */
 const focus = new THREE.Vector3(0, 0, 6);
-const cam = { yaw: 0, dist: 20 };
+const cam = { yaw: 0, pitch: 0.78, dist: 20 };
 const mapCam = { x: 0, z: -4, dist: 64 };
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -957,11 +959,11 @@ function syncCamera(s, dt, t) {
     const a = calm() ? 0.6 : t * 0.05;
     camera.position.set(Math.sin(a) * 34, 24, 6 + Math.cos(a) * 34); camera.lookAt(0, 0, 6); return;
   }
-  cam.yaw += stick.look.x * 2.4 * dt + keyTurn() * 1.8 * dt;
-  cam.dist = clamp(cam.dist + stick.look.y * 18 * dt, 9, 34);
+  cam.yaw -= keyTurn() * 1.8 * dt * (meta.settings.lookX === 'inverted' ? -1 : 1);
+  cam.pitch = clamp(cam.pitch + keyTilt() * 0.9 * dt, 0.3, 1.3);
   focus.x += (s.player.x - focus.x) * Math.min(1, dt * 8); focus.z += (s.player.z - focus.z) * Math.min(1, dt * 8);
   // closer means a lower, more over-the-shoulder angle; further means a higher, map-like view
-  const pitch = 0.55 + (cam.dist - 9) / 25 * 0.5;
+  const pitch = cam.pitch;
   const d = cam.dist;
   camera.position.set(focus.x + Math.sin(cam.yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d + 1, focus.z + Math.cos(cam.yaw) * Math.cos(pitch) * d);
   camera.lookAt(focus.x, 1, focus.z);
@@ -1019,6 +1021,17 @@ const stick = { move: { x: 0, y: 0, id: null }, look: { x: 0, y: 0, id: null } }
 const STICK_R = 52;
 const keys = new Set();
 const keyTurn = () => (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') ? 1 : 0);
+const keyTilt = () => (keys.has('KeyR') ? 1 : 0) - (keys.has('KeyF') ? 1 : 0);
+const LOOK_SPEED = { slow: 0.0045, normal: 0.0075, fast: 0.012 };
+// the right side of the screen is a drag-to-look area: the view follows your finger
+const look = new Map();
+let lookPinch = null;
+function lookDrag(dx, dy) {
+  const k = LOOK_SPEED[meta.settings.lookSpeed] || LOOK_SPEED.normal;
+  cam.yaw -= dx * k * (meta.settings.lookX === 'inverted' ? -1 : 1);
+  cam.pitch = clamp(cam.pitch + dy * k * 0.8 * (meta.settings.lookY === 'inverted' ? -1 : 1), 0.3, 1.3);
+  $('stickR').classList.add('used');
+}
 window.addEventListener('keydown', e => { if (e.target.closest && e.target.closest('input, textarea')) return; keys.add(e.code); });
 window.addEventListener('keyup', e => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
@@ -1043,10 +1056,14 @@ canvas.addEventListener('pointerdown', e => {
   }
   if (UI.mode !== 'play' || UI.overlay) return;
   try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already released */ }
-  const which = e.clientX < window.innerWidth * 0.5 ? 'move' : 'look';
-  const t = { which: stick[which].id == null ? which : null, sx: e.clientX, sy: e.clientY, t0: performance.now(), moved: false };
+  const left = e.clientX < window.innerWidth * 0.45;
+  const t = { which: left && stick.move.id == null ? 'move' : null, look: !left, lx: e.clientX, ly: e.clientY, sx: e.clientX, sy: e.clientY, t0: performance.now(), moved: false };
   touches.set(e.pointerId, t);
-  if (t.which) { stick[t.which].id = e.pointerId; placeStick(t.which, e.clientX, e.clientY); }
+  if (t.which) { stick.move.id = e.pointerId; placeStick('move', e.clientX, e.clientY); }
+  if (t.look) {
+    look.set(e.pointerId, t);
+    if (look.size === 2) { const [a, b] = [...look.values()]; lookPinch = { d: Math.hypot(a.lx - b.lx, a.ly - b.ly), dist: cam.dist }; }
+  }
 });
 canvas.addEventListener('pointermove', e => {
   if (UI.overlay === 'map' && mapPtr.has(e.pointerId)) {
@@ -1060,6 +1077,12 @@ canvas.addEventListener('pointermove', e => {
   const t = touches.get(e.pointerId); if (!t) return;
   const dx = e.clientX - t.sx, dy = e.clientY - t.sy, d = Math.hypot(dx, dy);
   if (d > 10) t.moved = true;
+  if (t.look) {
+    const mx = e.clientX - t.lx, my = e.clientY - t.ly; t.lx = e.clientX; t.ly = e.clientY;
+    if (look.size === 2 && lookPinch) { const [a, b] = [...look.values()]; cam.dist = clamp(lookPinch.dist * lookPinch.d / Math.max(20, Math.hypot(a.lx - b.lx, a.ly - b.ly)), 8, 34); return; }
+    if (t.moved) lookDrag(mx, my);
+    return;
+  }
   if (!t.which) return;
   const k = Math.min(1, d / STICK_R), nx = d ? dx / d * k : 0, ny = d ? dy / d * k : 0;
   stick[t.which].x = nx; stick[t.which].y = ny;
@@ -1069,12 +1092,15 @@ function endTouch(e) {
   if (mapPtr.has(e.pointerId)) { mapPtr.delete(e.pointerId); if (mapPtr.size < 2) mapPinch = null; return; }
   const t = touches.get(e.pointerId); if (!t) return;
   touches.delete(e.pointerId);
+  if (t.look) { look.delete(e.pointerId); if (look.size < 2) lookPinch = null; }
   if (t.which) { stick[t.which].x = stick[t.which].y = 0; stick[t.which].id = null; restStick(t.which); }
   if (!t.moved && performance.now() - t.t0 < 300) tap(e.clientX, e.clientY);
 }
 canvas.addEventListener('pointerup', endTouch);
 canvas.addEventListener('pointercancel', endTouch);
-canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, 110); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 9, 34); }, { passive: false });
+canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, 110); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 8, 34); }, { passive: false });
+// on a computer, drag with the right mouse button to look
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function tap(x, y) {
   const r = canvas.getBoundingClientRect();
@@ -1709,7 +1735,11 @@ function settingsHTML() {
   return `<h3>Settings</h3>
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 3 minutes, normal about 4, relaxed about 6.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
-  <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>`;
+  <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>
+  <h4>Camera</h4>
+  <div class="setting"><span>Look speed</span>${seg('lookSpeed', st.lookSpeed, [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']])}</div>
+  <div class="setting"><span>Turning left and right</span>${seg('lookX', st.lookX, [['normal', 'Normal'], ['inverted', 'Inverted']])}<p>Normal: drag right and the view turns right.</p></div>
+  <div class="setting"><span>Tilting up and down</span>${seg('lookY', st.lookY, [['normal', 'Normal'], ['inverted', 'Inverted']])}<p>Normal: drag up to look out toward the horizon, drag down to look down from above.</p></div>`;
 }
 
 /* ----- title screen ----- */
