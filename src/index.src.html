@@ -56,7 +56,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .fast { border: 1px solid var(--line); background: transparent; border-radius: 4px; min-width: 40px; height: 36px; font-size: 18px; font-weight: 700; color: var(--ink-soft); }
 .fast[aria-pressed="true"] { background: var(--leather); color: var(--parch); }
 /* thumbsticks rest in the lower corners and jump to wherever your thumb lands */
-.sticks { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+.sticks { display: none; } /* the controls work without anything drawn on screen */
 .stick { position: fixed; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(241, 227, 194, .45); background: radial-gradient(circle, rgba(20,14,10,.18), rgba(20,14,10,.38)); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); opacity: .55; transition: opacity .15s; }
 .stick.l { left: calc(max(16px, env(safe-area-inset-left, 0px)) + 18px); }
 .stick.r { right: calc(max(16px, env(safe-area-inset-right, 0px)) + 18px); }
@@ -1787,6 +1787,7 @@ function enterGame(game, n) {
   ['title', 'book', 'pause'].forEach(id => $(id).hidden = true);
   ['hud', 'sticks'].forEach(id => $(id).hidden = false);
   if (!(G.rec.days === 0 && G.t < 6 * 60 + 5)) { G.events.length = 0; toast('Welcome back, ' + G.name + '. Day ' + G.day + ', ' + Sim.clock(G.t) + '.', 'story'); }
+  else setTimeout(() => toast('Drag on the left side of the screen to walk, and on the right side to look around.', 'info', true), 1200);
   saveNow(); hud(G); renderCard(true);
 }
 function toTitle() {
