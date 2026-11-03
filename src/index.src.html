@@ -2,10 +2,11 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Alegreya+Sans:wght@400;500;700&display=swap">
 <style>
 /* Layout: full-bleed 3D village; parchment HUD strip on top, parchment action card at the bottom,
-   and a leather-bound book that opens over everything for ledger and management. Single deliberate look. */
+   a leather-bound book for management, a pause menu, and a title screen that opens like a book cover.
+   One deliberate look in both light and dark hosts. */
 :root {
   color-scheme: light;
   --ink: #2a1f16;
@@ -13,11 +14,14 @@
   --parch: #ead8b2;
   --parch-2: #dcc493;
   --leather: #35251b;
+  --leather-2: #4c3626;
   --seal: #8c2e21;
   --moss: #4a6634;
   --gold: #a87d22;
+  --gilt: #e2b552;
   --line: rgba(42, 31, 22, .22);
   --f-display: "IM Fell English", "Iowan Old Style", Georgia, serif;
+  --f-caps: "IM Fell English SC", "IM Fell English", Georgia, serif;
   --f-body: "Alegreya Sans", "Gill Sans", "Trebuchet MS", system-ui, sans-serif;
 }
 [hidden] { display: none !important; }
@@ -25,33 +29,35 @@ html, body { height: 100%; background: #1d2420; color: var(--ink); overflow: hid
 body { font-family: var(--f-body); font-size: 15px; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 #world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 button { font: inherit; color: inherit; cursor: pointer; }
-button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--seal); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--seal); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* HUD */
 .hud { position: fixed; top: 0; left: 0; right: 0; z-index: 5; pointer-events: none;
   padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
-.strip { pointer-events: auto; display: flex; align-items: center; gap: 10px; background: linear-gradient(#efdfbd, var(--parch));
-  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px 6px 12px; box-shadow: 0 3px 12px rgba(0,0,0,.35); max-width: 720px; margin: 0 auto; }
+.strip { pointer-events: auto; display: flex; align-items: center; gap: 8px; background: linear-gradient(#efdfbd, var(--parch));
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; box-shadow: 0 3px 12px rgba(0,0,0,.35); max-width: 720px; margin: 0 auto; }
+.icon-btn { border: 0; background: transparent; width: 40px; height: 40px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.icon-btn span, .icon-btn span::before, .icon-btn span::after { display: block; width: 18px; height: 2px; background: var(--ink); border-radius: 1px; position: relative; }
+.icon-btn span::before, .icon-btn span::after { content: ""; position: absolute; left: 0; }
+.icon-btn span::before { top: -6px; } .icon-btn span::after { top: 6px; }
 .clock { font-family: var(--f-display); font-size: 18px; white-space: nowrap; }
-.clock small { font-family: var(--f-body); font-size: 12px; color: var(--ink-soft); margin-left: 4px; }
 .coins { margin-left: auto; font-weight: 700; font-size: 17px; color: var(--gold); white-space: nowrap; }
 .coins::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f0cf6a, #9c7414); margin-right: 5px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
 .book-btn { border: 0; background: var(--leather); color: var(--parch); border-radius: 4px; padding: 8px 12px; font-family: var(--f-display); font-size: 16px; min-height: 40px; }
 .subhud { pointer-events: none; display: flex; flex-wrap: wrap; gap: 6px; max-width: 720px; margin: 6px auto 0; }
-.chip { background: rgba(32, 26, 20, .72); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
+.chip { background: rgba(32, 26, 20, .74); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
 .chip b { color: #f5cf73; font-weight: 700; }
-.goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.72); border-radius: 6px; padding: 5px 10px; }
+.chip.on { background: rgba(74, 102, 52, .9); }
+.goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .goal em { font-family: var(--f-display); font-style: italic; color: #f5cf73; font-size: 14px; }
 
-/* side controls */
 .side { position: fixed; z-index: 5; right: max(12px, env(safe-area-inset-right, 0px)); bottom: 240px; display: flex; flex-direction: column; gap: 8px; }
 .side button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--parch); box-shadow: 0 2px 8px rgba(0,0,0,.35); font-size: 18px; font-weight: 700; }
 .side button[aria-pressed="true"] { background: var(--leather); color: var(--parch); }
 
-/* toasts */
-.toasts { position: fixed; z-index: 6; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 112px); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
+.toasts { position: fixed; z-index: 6; left: 0; right: 0; top: 130px; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .toast { max-width: 420px; background: var(--parch); border-left: 4px solid var(--ink-soft); border-radius: 4px; padding: 6px 10px; font-size: 14px; box-shadow: 0 3px 10px rgba(0,0,0,.35); animation: tin .25s ease-out; }
 .toast.coin { border-color: var(--gold); } .toast.bad { border-color: var(--seal); } .toast.good { border-color: var(--moss); } .toast.story { border-color: var(--leather); font-family: var(--f-display); font-size: 15px; }
@@ -63,7 +69,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .panel { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); pointer-events: none; }
-.card { pointer-events: auto; max-width: 720px; margin: 0 auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.4); padding: 10px 12px 12px; }
+.card { pointer-events: auto; max-width: 720px; margin: 0 auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.4); padding: 10px 12px 12px; max-height: 46vh; overflow-y: auto; }
 .card h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.1; text-wrap: balance; }
 .card .sub { color: var(--ink-soft); font-size: 14px; margin-top: 2px; }
 .card .why { font-size: 14px; margin-top: 6px; padding: 6px 8px; background: rgba(255,255,255,.35); border-radius: 4px; }
@@ -73,6 +79,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .btn.alt { background: transparent; color: var(--ink); }
 .btn.warn { background: var(--seal); border-color: var(--seal); }
 .btn:disabled { opacity: .45; cursor: default; }
+.btn small { display: block; font-size: 12px; opacity: .8; font-weight: 400; }
 .places { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
 .places::-webkit-scrollbar { display: none; }
 .place { flex: none; border: 1px dashed var(--ink-soft); background: transparent; border-radius: 999px; padding: 6px 11px; font-size: 13px; color: var(--ink-soft); min-height: 34px; }
@@ -80,15 +87,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .bar i { display: block; height: 100%; background: var(--gold); border-radius: 4px; }
 .mood i { background: var(--moss); } .mood.low i { background: var(--seal); }
 
-/* book */
-.book { position: fixed; inset: 0; z-index: 20; background: rgba(12, 9, 7, .72); display: flex; align-items: stretch; justify-content: center;
+/* book and pause sheets */
+.sheet { position: fixed; inset: 0; z-index: 20; background: rgba(12, 9, 7, .72); display: flex; align-items: stretch; justify-content: center;
   padding: calc(env(safe-area-inset-top, 0px) + 10px) max(8px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(8px, env(safe-area-inset-left, 0px)); }
-.cover { width: 100%; max-width: 720px; background: var(--leather); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.6), inset 0 0 0 2px #4c3626; min-height: 0; }
-.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 2px; }
+.cover { width: 100%; max-width: 720px; background: var(--leather); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.6), inset 0 0 0 2px var(--leather-2); min-height: 0; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 2px; align-items: flex-end; }
+.tabs::-webkit-scrollbar { display: none; }
 .tab { flex: none; border: 0; background: #5a4130; color: #e8d6b0; padding: 8px 10px 10px; border-radius: 6px 6px 0 0; font-family: var(--f-display); font-size: 15px; min-height: 40px; }
 .tab[aria-selected="true"] { background: var(--parch); color: var(--ink); }
 .close { margin-left: auto; flex: none; border: 0; background: transparent; color: #e8d6b0; font-size: 26px; line-height: 1; padding: 4px 10px; min-height: 40px; min-width: 40px; }
 .page { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; background: radial-gradient(ellipse at 50% 0%, #f2e4c6, var(--parch) 60%, var(--parch-2)); border-radius: 0 6px 6px 6px; padding: 16px 18px 24px; user-select: text; -webkit-user-select: text; }
+.page.round { border-radius: 6px; }
 .page.turn { animation: turn .35s ease-out; transform-origin: left center; }
 @keyframes turn { from { opacity: .2; transform: perspective(900px) rotateY(-14deg); } }
 .page h3 { font-family: var(--f-display); font-weight: 400; font-size: 26px; margin: 0 0 4px; text-wrap: balance; }
@@ -98,22 +107,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .paused { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
 table.acct { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 15px; }
 table.acct td { padding: 3px 0; border-bottom: 1px dotted var(--line); }
-table.acct td:last-child { text-align: right; }
+table.acct td:last-child { text-align: right; padding-left: 10px; white-space: nowrap; }
 table.acct tr.tot td { border-bottom: 0; border-top: 1.5px solid var(--ink); font-weight: 700; }
+table.acct tr.sh td { color: var(--ink-soft); font-size: 14px; }
 .day { margin-top: 14px; padding: 10px 12px; background: rgba(255,255,255,.28); border: 1px solid var(--line); border-radius: 6px; }
 .dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dayhead strong { font-family: var(--f-display); font-weight: 400; font-size: 20px; }
-.seal { display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 30px; padding: 0 9px; border-radius: 15px; color: #f6e8c8; font-weight: 700; font-size: 14px; background: var(--moss); box-shadow: inset 0 0 0 2px rgba(0,0,0,.15); }
+.seal { display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 30px; padding: 0 9px; border-radius: 15px; color: #f6e8c8; font-weight: 700; font-size: 14px; background: var(--moss); box-shadow: inset 0 0 0 2px rgba(0,0,0,.15); white-space: nowrap; }
 .seal.neg { background: var(--seal); }
 .notes { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .notes li { padding-left: 14px; position: relative; line-height: 1.45; }
 .notes li::before { content: "\2766"; position: absolute; left: -2px; top: 0; color: var(--seal); font-size: 11px; }
 .notes .btn { margin-top: 5px; min-height: 36px; padding: 5px 10px; font-size: 14px; }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-.box { background: rgba(255,255,255,.28); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.shopnote { font-family: var(--f-display); font-size: 16px; margin: 10px 0 2px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.box { background: rgba(255,255,255,.28); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; margin-top: 10px; }
+.grid2 .box { margin-top: 0; }
 .box h5 { margin: 0 0 4px; font-family: var(--f-display); font-weight: 400; font-size: 20px; }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; font-variant-numeric: tabular-nums; margin: 0; }
 .kv dt { color: var(--ink-soft); } .kv dd { margin: 0; text-align: right; }
+.kv .later { color: rgba(42,31,22,.42); }
 .stepper { display: inline-flex; align-items: center; gap: 6px; }
 .stepper button { width: 40px; height: 40px; border-radius: 5px; border: 1px solid var(--ink); background: transparent; font-size: 20px; }
 .stepper output { min-width: 56px; text-align: center; font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; }
@@ -124,12 +137,61 @@ input[type=range] { width: 100%; accent-color: var(--seal); height: 32px; }
 .goals .done .tick { background: var(--moss); border-color: var(--moss); color: #f3e6c8; }
 .goals .done span:last-child { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: rgba(42,31,22,.4); }
 .goals .now span:last-child { font-weight: 700; }
-textarea { width: 100%; min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; background: #f6ecd6; border: 1px solid var(--line); border-radius: 4px; padding: 8px; color: var(--ink); }
+textarea, input[type=text] { width: 100%; font: 14px/1.3 var(--f-body); background: #f6ecd6; border: 1px solid var(--line); border-radius: 4px; padding: 8px; color: var(--ink); }
+textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .confirm { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--seal); border-radius: 6px; background: rgba(140,46,33,.08); }
+.trades { width: 100%; border-collapse: collapse; font-size: 14px; }
+.trades td, .trades th { text-align: left; padding: 5px 4px; border-bottom: 1px dotted var(--line); vertical-align: top; }
+.trades th { font-weight: 500; color: var(--ink-soft); font-size: 13px; }
+.pill { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 12px; background: rgba(42,31,22,.1); white-space: nowrap; }
+.pill.yes { background: var(--moss); color: #f3e6c8; }
+.seg { display: inline-flex; border: 1px solid var(--ink); border-radius: 6px; overflow: hidden; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; padding: 8px 12px; min-height: 40px; font-size: 14px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--parch); }
+.setting { margin: 14px 0; }
+.setting > span { display: block; font-weight: 700; margin-bottom: 6px; }
+.setting p { margin: 4px 0 0; color: var(--ink-soft); font-size: 14px; }
+
+/* pause menu */
+.menu-list { display: grid; gap: 8px; margin-top: 12px; }
+.menu-list .btn { text-align: left; font-family: var(--f-display); font-size: 19px; font-weight: 400; padding: 10px 14px; min-height: 52px; }
+.menu-list .btn small { font-family: var(--f-body); }
+.back { border: 0; background: transparent; color: var(--ink-soft); padding: 6px 0; min-height: 36px; font-size: 14px; }
+.statgroup { margin-top: 14px; }
+.statgroup h4 { margin-top: 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+
+/* title screen */
+.title { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 40%, rgba(20,14,10,.15), rgba(10,7,5,.78) 75%);
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 16px) max(16px, env(safe-area-inset-left, 0px)); }
+.tome { width: 100%; max-width: 420px; background: var(--leather); border-radius: 6px 12px 12px 6px; padding: 12px 12px 12px 18px; position: relative;
+  box-shadow: 0 18px 50px rgba(0,0,0,.7), inset 0 0 0 2px var(--leather-2), inset 8px 0 0 #2a1d15; margin: auto; }
+.tome-page { background: radial-gradient(ellipse at 50% 0%, #f4e7cb, var(--parch) 55%, var(--parch-2)); border-radius: 3px 8px 8px 3px; padding: 22px 20px 18px; position: relative; }
+.tome-page::before { content: ""; position: absolute; inset: 8px; border: 1px solid rgba(140,46,33,.35); border-radius: 2px 6px 6px 2px; pointer-events: none; }
+.crest { display: block; width: 64px; height: 64px; margin: 0 auto 6px; }
+.tname { font-family: var(--f-caps); font-size: clamp(40px, 12vw, 54px); line-height: 1; text-align: center; margin: 0; color: var(--ink); letter-spacing: .01em; }
+.tsub { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 6px 0 16px; font-size: 16px; }
+.rule { height: 10px; margin: 0 auto 14px; width: 70%; background: radial-gradient(circle, var(--seal) 0 3px, transparent 3.5px) center/14px 10px no-repeat, linear-gradient(var(--line), var(--line)) center/100% 1px no-repeat; }
+.tmenu { display: grid; gap: 8px; position: relative; }
+.tbtn { border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 4px; padding: 10px 14px; min-height: 50px; text-align: left; font-family: var(--f-display); font-size: 20px; }
+.tbtn.primary { background: var(--ink); color: var(--parch); }
+.tbtn small { display: block; font-family: var(--f-body); font-size: 13px; opacity: .8; margin-top: 2px; }
+.tbtn:disabled { opacity: .4; }
+.tfoot { text-align: center; font-family: var(--f-caps); color: var(--ink-soft); font-size: 13px; margin-top: 16px; letter-spacing: .05em; }
+.slot { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: rgba(255,255,255,.3); }
+.slot div { flex: 1; min-width: 0; }
+.slot b { font-family: var(--f-display); font-weight: 400; font-size: 18px; display: block; }
+.slot span { font-size: 13px; color: var(--ink-soft); }
+.slot .btn { min-height: 40px; padding: 6px 10px; }
+.tome h3 { font-family: var(--f-display); font-weight: 400; font-size: 24px; margin: 0 0 8px; position: relative; }
+.tome label { display: block; font-weight: 700; margin: 10px 0 4px; position: relative; }
+.tome p { line-height: 1.45; margin: 6px 0; position: relative; }
+
 @media (prefers-reduced-motion: reduce) { .page.turn, .toast { animation: none; } }
 @media (min-width: 700px) { .card h2 { font-size: 24px; } }
 @media (orientation: landscape) and (max-height: 520px) {
-  .card { max-width: 440px; margin-left: 0; padding: 8px 10px 10px; }
+  .card { max-width: 440px; margin-left: 0; padding: 8px 10px 10px; max-height: 62vh; }
   .card h2 { font-size: 19px; } .card .sub { font-size: 13px; }
   .btn { min-height: 38px; padding: 6px 10px; font-size: 14px; }
   .goal { display: none; }
@@ -137,10 +199,11 @@ textarea { width: 100%; min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, mo
 </style>
 
 <canvas id="world" aria-label="The village of Hearthmoor"></canvas>
-<header class="hud" id="hud">
+<header class="hud" id="hud" hidden>
   <div class="strip">
+    <button class="icon-btn" id="menuBtn" type="button" aria-label="Pause and open the menu"><span></span></button>
     <div class="clock num" id="clock">Day 1 · 06:00</div>
-    <div class="coins num" id="coins">10c</div>
+    <div class="coins num" id="coins">5c</div>
     <button class="book-btn" id="bookBtn" type="button">Ledger</button>
   </div>
   <div class="subhud" id="subhud"></div>
@@ -148,18 +211,24 @@ textarea { width: 100%; min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, mo
 </header>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="night" id="night" hidden>Night passes&hellip;</div>
-<div class="side">
+<div class="side" id="side" hidden>
   <button type="button" id="zin" aria-label="Zoom in">+</button>
   <button type="button" id="zout" aria-label="Zoom out">&minus;</button>
   <button type="button" id="center" aria-label="Center on you">&#9678;</button>
   <button type="button" id="fast" aria-label="Double speed" aria-pressed="false">&#187;</button>
 </div>
-<section class="panel"><div class="card" id="card"><div id="cardInfo"></div><div id="cardActs"></div></div></section>
-<div class="book" id="book" hidden>
+<section class="panel" id="panel" hidden><div class="card" id="card"><div id="cardInfo"></div><div id="cardActs"></div></div></section>
+<div class="sheet" id="book" hidden>
   <div class="cover">
     <div class="tabs" role="tablist" id="tabs"></div>
     <div class="page" id="page"></div>
   </div>
+</div>
+<div class="sheet" id="pause" hidden>
+  <div class="cover"><div class="page round" id="pausePage"></div></div>
+</div>
+<div class="title" id="title">
+  <div class="tome"><div class="tome-page" id="titlePage"></div></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -168,41 +237,40 @@ textarea { width: 100%; min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, mo
 (function () {
 'use strict';
 const $ = id => document.getElementById(id);
-const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TR = Sim.TRADES;
 
-/* ================= saving ================= */
-const KEY = 'hearthmoor.save', BAK = 'hearthmoor.save.bak';
+/* ================= storage: three save slots, a backup each, and settings ================= */
+const SLOTS = 3, KEY = n => 'hearthmoor.slot.' + n, BAK = n => 'hearthmoor.slot.' + n + '.bak', META = 'hearthmoor.meta';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { } }
 };
-let lastSave = 0, saveOk = true;
-function saveNow() {
-  if (!G) return;
-  const str = Sim.serialize(G);
-  const prev = store.get(KEY);
-  if (prev && prev !== str) store.set(BAK, prev);
-  saveOk = store.set(KEY, str);
-  lastSave = Date.now();
-}
-function loadGame() {
-  for (const k of [KEY, BAK]) {
-    const str = store.get(k);
-    if (!str) continue;
-    try { return Sim.deserialize(str); } catch (e) { /* try backup */ }
-  }
+let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'all', motion: 'full' } };
+try { const m = JSON.parse(store.get(META) || 'null'); if (m) meta = Object.assign(meta, m, { settings: Object.assign(meta.settings, m.settings || {}) }); } catch (e) { }
+function saveMeta() { store.set(META, JSON.stringify(meta)); }
+// the first version kept one save under an older key: move it into slot 1
+(function legacy() { const old = store.get('hearthmoor.save'); if (old && !store.get(KEY(1))) { store.set(KEY(1), old); const b = store.get('hearthmoor.save.bak'); if (b) store.set(BAK(1), b); meta.lastSlot = 1; saveMeta(); } })();
+function readSlot(n) {
+  for (const k of [KEY(n), BAK(n)]) { const str = store.get(k); if (!str) continue; try { return Sim.deserialize(str); } catch (e) { } }
   return null;
+}
+function slotInfo(n) { const s = readSlot(n); if (!s) return null; let when = null; try { when = (JSON.parse(store.get(KEY(n) + '.when') || 'null')); } catch (e) { } return Object.assign(Sim.summary(s), { when }); }
+let G = null, slot = null, lastSave = 0, saveOk = true;
+function saveNow() {
+  if (!G || !slot || UI.mode !== 'play') return;
+  const str = Sim.serialize(G), prev = store.get(KEY(slot));
+  if (prev && prev !== str) store.set(BAK(slot), prev);
+  saveOk = store.set(KEY(slot), str);
+  store.set(KEY(slot) + '.when', JSON.stringify(Date.now()));
+  meta.lastSlot = slot; saveMeta();
+  lastSave = Date.now();
 }
 const encodeSave = s => btoa(unescape(encodeURIComponent(Sim.serialize(s))));
 const decodeSave = t => Sim.deserialize(decodeURIComponent(escape(atob(t.trim()))));
-
-let G = null;
-const hot = window.claude && window.claude.hot;
-function boot(data) {
-  G = (data && data.game) ? Sim.deserialize(data.game) : (loadGame() || Sim.newGame((Date.now() % 2147483647) | 0));
-  if (hot && hot.snapshot) hot.snapshot(() => ({ game: Sim.serialize(G) }));
-  start();
-}
+const PACE = { brisk: 1.33, normal: 1, relaxed: 0.66 };
 
 /* ================= three.js world ================= */
 const canvas = $('world');
@@ -210,7 +278,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixel
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x9fb1ad, 26, 70);
-const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 200);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 220);
 const hemi = new THREE.HemisphereLight(0xcfe0e6, 0x3d3424, 0.75);
 const sun = new THREE.DirectionalLight(0xffe2b0, 0.9);
 sun.position.set(-20, 30, 12);
@@ -237,49 +305,53 @@ function mergeColored(parts) {
   out.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return out;
 }
+const vc = new THREE.MeshLambertMaterial({ vertexColors: true });
 const M = (x, y, z, ry, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry || 0, 0)), new THREE.Vector3(sx || 1, sy || sx || 1, sz || sx || 1));
 let seed = 1337;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 const L = Sim.LOCS;
 
-// ground: faceted low-poly terrain, flat in the village, rising into hills under the fog
 function groundH(x, z) {
   const r = Math.hypot(x, z);
-  const k = Math.min(1, Math.max(0, (r - 34) / 14));
-  return k * (2.2 + Math.sin(x * 0.21) * 1.6 + Math.cos(z * 0.17 + x * 0.05) * 1.8) + (r > 30 ? Math.sin(x * 1.3 + z) * 0.08 : 0);
+  const k = Math.min(1, Math.max(0, (r - 36) / 14));
+  return k * (2.2 + Math.sin(x * 0.21) * 1.6 + Math.cos(z * 0.17 + x * 0.05) * 1.8);
 }
 (function buildGround() {
-  const g = new THREE.PlaneGeometry(120, 120, 48, 48).toNonIndexed();
+  const g = new THREE.PlaneGeometry(140, 140, 56, 56).toNonIndexed();
   g.rotateX(-Math.PI / 2);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) p.setY(i, groundH(p.getX(i), p.getZ(i)));
   g.computeVertexNormals();
   const col = new Float32Array(p.count * 3);
-  const greens = [new THREE.Color('#4f6236'), new THREE.Color('#566b39'), new THREE.Color('#47592f'), new THREE.Color('#5d6d3c'), new THREE.Color('#6a6a40')];
+  const greens = ['#4f6236', '#566b39', '#47592f', '#5d6d3c', '#6a6a40'].map(c => new THREE.Color(c));
   for (let i = 0; i < p.count; i += 3) {
     const c = greens[Math.floor(rnd() * greens.length)];
     for (let j = 0; j < 3; j++) { col[(i + j) * 3] = c.r; col[(i + j) * 3 + 1] = c.g; col[(i + j) * 3 + 2] = c.b; }
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
+  scene.add(new THREE.Mesh(g, vc));
 })();
 
-// dirt paths
+// paths and the village square
 const pathMat = mat('#6f5a3d');
 function path(a, b, w) {
   const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w || 1.6, 0.06, len + (w || 1.6)), pathMat);
-  m.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2);
-  m.rotation.y = Math.atan2(dx, dz);
-  scene.add(m);
+  m.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2); m.rotation.y = Math.atan2(dx, dz); scene.add(m);
 }
-const SQ = { x: 3, z: 5 };
-path({ x: 0, z: 3 }, SQ, 2.2); path(SQ, { x: 33, z: 3.5 }, 1.8); path(SQ, { x: 11, z: 11 }, 1.6);
-path(SQ, { x: -8, z: 6.5 }, 1.4); path({ x: 0, z: 0 }, { x: 12, z: -6 }, 1.4); path({ x: 0, z: 0 }, { x: -14, z: -8 }, 1.4);
-path({ x: 0, z: -1 }, { x: 6, z: -3 }, 1.2); path({ x: -2, z: -2 }, { x: -8.5, z: -15.5 }, 1.2);
-mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.05, 12), pathMat, SQ.x + 1.5, 0.03, SQ.z + 1);
+const SQ = Sim.P.plaza;
+mesh(new THREE.CylinderGeometry(7.5, 7.5, 0.05, 20), pathMat, SQ.x, 0.025, SQ.z);
+Sim.PLOTS.forEach(p => path({ x: p.x, z: p.z + 2 }, SQ, 2));
+Sim.EMPLOYERS.forEach(e => path({ x: e.x, z: e.z - 3 }, SQ, 1.8));
+path(SQ, { x: 38, z: 5 }, 2); path({ x: 18, z: 7 }, { x: 23.5, z: 11.5 }, 1.5);
+path({ x: 14, z: -3 }, { x: 22, z: -9 }, 1.4); path({ x: -14, z: -3 }, { x: -20, z: -10 }, 1.4);
+path({ x: -12, z: 12 }, { x: -22, z: 18 }, 1.4); path(SQ, { x: -17, z: 5.4 }, 1.4);
+Sim.HOMES.concat(Sim.WORKER_HOMES).forEach(h => { const d = Math.hypot(h.x, h.z); path({ x: h.x * (1 - 2 / d), z: h.z * (1 - 2 / d) }, { x: h.x * 0.55, z: h.z * 0.55 }, 1.1); });
 
-// pines (instanced) and rocks
+// trees, kept clear of every place people go
+const keepClear = [{ x: 0, z: 6, r: 22 }, { x: L.field.x, z: L.field.z, r: 9 }, { x: L.pit.x, z: L.pit.z, r: 7 }, { x: L.market.x, z: L.market.z, r: 6 }, { x: L.forest.x + 5, z: L.forest.z + 4, r: 3.4 }]
+  .concat(Sim.HOMES.concat(Sim.WORKER_HOMES, [L.home]).map(h => ({ x: h.x, z: h.z, r: 4.5 })));
+const clear = (x, z) => keepClear.every(k => Math.hypot(x - k.x, z - k.z) > k.r) && !(x > 18 && Math.abs(z - 5) < 4);
 const pineGeo = mergeColored([
   { geo: new THREE.CylinderGeometry(0.16, 0.22, 1.2, 5), color: '#4a3424', m: M(0, 0.6, 0) },
   { geo: new THREE.ConeGeometry(1.25, 1.9, 6), color: '#24402a', m: M(0, 1.9, 0) },
@@ -287,53 +359,57 @@ const pineGeo = mergeColored([
   { geo: new THREE.ConeGeometry(0.66, 1.3, 6), color: '#355636', m: M(0, 3.6, 0, 1) }
 ]);
 const pines = [];
-for (let i = 0; i < 70; i++) {
-  const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 8.5;
-  const x = L.forest.x + Math.cos(a) * r - 1.5, z = L.forest.z + Math.sin(a) * r - 1;
-  if (Math.hypot(x - (L.forest.x + 5), z - (L.forest.z + 4)) < 3.2) continue;
-  pines.push([x, z, 0.8 + rnd() * 0.6]);
-}
-for (let i = 0; i < 260; i++) {
-  const a = rnd() * Math.PI * 2, r = 31 + rnd() * 28;
-  const x = Math.cos(a) * r, z = Math.sin(a) * r;
-  if (x > 20 && Math.abs(z - 3.5) < 5) continue;
-  pines.push([x, z, 0.9 + rnd() * 0.9]);
-}
-[[-6, -8], [9, 2], [-14, 13], [16, 18], [-22, 8], [20, -20], [-3, 24], [25, 12]].forEach(([x, z]) => pines.push([x, z, 0.9 + rnd() * 0.4]));
-const pineInst = new THREE.InstancedMesh(pineGeo, new THREE.MeshLambertMaterial({ vertexColors: true }), pines.length);
+for (let i = 0; i < 80; i++) { const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 9; const x = L.forest.x + Math.cos(a) * r - 1.5, z = L.forest.z + Math.sin(a) * r - 1.5; if (Math.hypot(x - (L.forest.x + 5), z - (L.forest.z + 4)) > 3.2) pines.push([x, z, 0.8 + rnd() * 0.6]); }
+for (let i = 0; i < 420; i++) { const a = rnd() * Math.PI * 2, r = 32 + rnd() * 34; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (clear(x, z)) pines.push([x, z, 0.9 + rnd() * 0.9]); }
+for (let i = 0; i < 40; i++) { const x = (rnd() - 0.5) * 60, z = (rnd() - 0.5) * 60; if (clear(x, z) && Math.hypot(x, z) > 20) pines.push([x, z, 0.8 + rnd() * 0.4]); }
+const pineInst = new THREE.InstancedMesh(pineGeo, vc, pines.length);
 pines.forEach(([x, z, s], i) => pineInst.setMatrixAt(i, M(x, groundH(x, z), z, rnd() * 6, s, s * (0.9 + rnd() * 0.3), s)));
 scene.add(pineInst);
 const rockGeo = flat(new THREE.IcosahedronGeometry(0.6, 0));
-const rockInst = new THREE.InstancedMesh(rockGeo, mat('#7d7b70'), 40);
-for (let i = 0; i < 40; i++) {
-  const a = rnd() * Math.PI * 2, r = 14 + rnd() * 30, x = Math.cos(a) * r, z = Math.sin(a) * r;
-  rockInst.setMatrixAt(i, M(x, groundH(x, z) + 0.1, z, rnd() * 6, 0.5 + rnd() * 1.2, 0.4 + rnd() * 0.6, 0.5 + rnd()));
-}
+const rocks = [];
+for (let i = 0; i < 60; i++) { const a = rnd() * Math.PI * 2, r = 16 + rnd() * 36, x = Math.cos(a) * r, z = Math.sin(a) * r; if (clear(x, z)) rocks.push([x, z]); }
+const rockInst = new THREE.InstancedMesh(rockGeo, mat('#7d7b70'), rocks.length);
+rocks.forEach(([x, z], i) => rockInst.setMatrixAt(i, M(x, groundH(x, z) + 0.1, z, rnd() * 6, 0.5 + rnd() * 1.2, 0.4 + rnd() * 0.6, 0.5 + rnd())));
 scene.add(rockInst);
-// stumps where wood is cut
 for (let i = 0; i < 6; i++) mesh(flat(new THREE.CylinderGeometry(0.3, 0.36, 0.35, 6)), '#6b4a2e', L.forest.x + 3.5 + rnd() * 4, 0.17, L.forest.z + 2.5 + rnd() * 3.5);
 
 // wheat field
 mesh(new THREE.BoxGeometry(11, 0.08, 8), '#6b5530', L.field.x, 0.04, L.field.z);
 const stalkGeo = mergeColored([{ geo: new THREE.BoxGeometry(0.07, 0.8, 0.07), color: '#b89a45', m: M(0, 0.4, 0) }, { geo: new THREE.BoxGeometry(0.14, 0.22, 0.14), color: '#d9b75a', m: M(0, 0.85, 0) }]);
-const wheat = new THREE.InstancedMesh(stalkGeo, new THREE.MeshLambertMaterial({ vertexColors: true }), 520);
+const wheat = new THREE.InstancedMesh(stalkGeo, vc, 520);
 for (let i = 0; i < 520; i++) {
   const x = L.field.x - 5.2 + rnd() * 10.4, z = L.field.z - 3.7 + rnd() * 7.4;
-  const m = new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * 3, (rnd() - 0.5) * 0.3)), new THREE.Vector3(1, 0.8 + rnd() * 0.5, 1));
-  wheat.setMatrixAt(i, m);
+  wheat.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * 3, (rnd() - 0.5) * 0.3)), new THREE.Vector3(1, 0.8 + rnd() * 0.5, 1)));
 }
 scene.add(wheat);
 for (let i = 0; i <= 10; i++) { mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), '#5b4029', L.field.x - 5.6 + i * 1.12, 0.4, L.field.z - 4.1); mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), '#5b4029', L.field.x - 5.6 + i * 1.12, 0.4, L.field.z + 4.1); }
 mesh(new THREE.BoxGeometry(11.4, 0.1, 0.08), '#5b4029', L.field.x, 0.62, L.field.z - 4.1);
 mesh(new THREE.BoxGeometry(11.4, 0.1, 0.08), '#5b4029', L.field.x, 0.62, L.field.z + 4.1);
-[[0, 0], [1.2, 0.3]].forEach(([dx, dz]) => mesh(flat(new THREE.CylinderGeometry(0.5, 0.5, 0.9, 8)), '#c9a64e', L.field.x - 7.5 + dx, 0.45, L.field.z + 2 + dz).rotation.z = Math.PI / 2);
+[[0, 0], [1.2, 0.3]].forEach(([dx, dz]) => { mesh(flat(new THREE.CylinderGeometry(0.5, 0.5, 0.9, 8)), '#c9a64e', L.field.x - 7.5 + dx, 0.45, L.field.z + 2 + dz).rotation.z = Math.PI / 2; });
 
-// windows that glow at night
+// iron pit
+(function () {
+  const g = new THREE.Group(); g.position.set(L.pit.x, 0, L.pit.z); scene.add(g);
+  mesh(new THREE.CylinderGeometry(4.4, 4.8, 0.06, 14), '#4b4540', 0, 0.03, 0, g);
+  mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.08, 10), '#151210', -0.5, 0.06, -1.2, g);
+  const oreGeo = flat(new THREE.IcosahedronGeometry(0.35, 0));
+  for (let i = 0; i < 14; i++) { const a = rnd() * 6.3, r = 1.8 + rnd() * 2.2; const m = mesh(oreGeo, i % 3 ? '#6e4a3a' : '#8a5a3c', Math.cos(a) * r, 0.2, Math.sin(a) * r, g); m.scale.setScalar(0.6 + rnd() * 0.9); m.rotation.set(rnd(), rnd(), rnd()); }
+  for (let i = 0; i < 6; i++) { const m = mesh(rockGeo, '#6c6860', -3.5 + rnd() * 7, 0.35, -3.6 + rnd() * 1.2, g); m.scale.set(1 + rnd(), 0.8 + rnd(), 1 + rnd()); }
+  [-1.6, 0.6].forEach(x => mesh(new THREE.BoxGeometry(0.16, 1.6, 0.16), '#4a3424', x, 0.8, -1.2, g));
+  const roll = mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.4, 8), '#5b4029', -0.5, 1.45, -1.2, g); roll.rotation.z = Math.PI / 2;
+  mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6), '#5f4430', 2.2, 0.25, 1.4, g);
+})();
+
+// windows glow at night
 const windowMat = new THREE.MeshLambertMaterial({ color: '#3a2a1c', emissive: new THREE.Color('#ffb04a'), emissiveIntensity: 0 });
 function gableRoof(w, d, h, color, mt) {
   const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0);
   const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2);
   return new THREE.Mesh(flat(g), mt || mat(color));
+}
+function gableRoofGeo(w, d, h) {
+  const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); g.rotateY(Math.PI / 2); return g;
 }
 function hut(x, z, opts) {
   const o = Object.assign({ w: 3.4, d: 2.8, h: 1.7, wall: '#6e4f33', roof: '#8a7445', door: '#3b2a1c' }, opts);
@@ -346,14 +422,15 @@ function hut(x, z, opts) {
   [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => mesh(new THREE.BoxGeometry(0.18, o.h + 0.05, 0.18), '#3e2c1d', a * o.w / 2, (o.h + 0.05) / 2, b * o.d / 2, g));
   scene.add(g); return g;
 }
-Sim.HOMES.forEach((h, i) => { const dx = -h.x, dz = -h.z, d = Math.hypot(dx, dz); hut(h.x - dx / d * 1.4, h.z - dz / d * 1.4, { roof: ['#8a7445', '#7f6a3f', '#937b4a'][i % 3] }); });
-hut(-10, 8, { door: '#2f4f6a', wall: '#73563a' });
-hut(-9.6, -17.4, { w: 2.8, d: 2.4 });
+const behind = (h, k) => { const d = Math.hypot(h.x, h.z); return [h.x + h.x / d * k, h.z + h.z / d * k]; };
+Sim.HOMES.forEach((h, i) => { const [x, z] = behind(h, 1.4); hut(x, z, { roof: ['#8a7445', '#7f6a3f', '#937b4a'][i % 3] }); });
+Sim.WORKER_HOMES.forEach(h => { const [x, z] = behind(h, 1.3); hut(x, z, { w: 2.8, d: 2.4, roof: '#7a6440' }); });
+hut(L.home.x, L.home.z, { door: '#2f4f6a', wall: '#73563a' });
 
 // well
 (function () {
   const g = new THREE.Group(); g.position.set(L.well.x, 0, L.well.z); scene.add(g);
-  mesh(flat(new THREE.CylinderGeometry(0.9, 1, 0.75, 9, 1, true)), '#86847a', 0, 0.38, 0, g).material.side = THREE.DoubleSide;
+  const ring = mesh(flat(new THREE.CylinderGeometry(0.9, 1, 0.75, 9, 1, true)), new THREE.MeshLambertMaterial({ color: '#86847a', side: THREE.DoubleSide }), 0, 0.38, 0, g);
   mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 9), '#24343c', 0, 0.6, 0, g);
   mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12), '#4a3424', -0.9, 0.85, 0, g); mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12), '#4a3424', 0.9, 0.85, 0, g);
   const r = gableRoof(2.3, 1.4, 0.6, '#6b5636'); r.position.y = 1.7; g.add(r);
@@ -365,246 +442,315 @@ hut(-9.6, -17.4, { w: 2.8, d: 2.4 });
   mesh(new THREE.BoxGeometry(3.4, 0.9, 1), '#6a4b2f', 0, 0.45, 0.4, g);
   [[-1.6, 0.9], [1.6, 0.9], [-1.6, -0.9], [1.6, -0.9]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.14, 2.3, 0.14), '#3e2c1d', x, 1.15, z, g));
   for (let i = 0; i < 6; i++) { const m = mesh(new THREE.BoxGeometry(0.62, 0.06, 2.3), i % 2 ? '#d8c69a' : '#2f5d55', -1.55 + i * 0.62, 2.35, 0, g); m.rotation.x = -0.18; }
-  [[-1, 0.45], [0.2, 0.42], [1.1, 0.5]].forEach(([x, z], i) => mesh(new THREE.BoxGeometry(0.6, 0.5, 0.6), '#7c5a37', x, 1.15, z, g));
+  [[-1, 0.45], [0.2, 0.42], [1.1, 0.5]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.6, 0.5, 0.6), '#7c5a37', x, 1.15, z, g));
   [[-1.4, -0.5], [-0.8, -0.6], [1.3, -0.5]].forEach(([x, z]) => mesh(flat(new THREE.SphereGeometry(0.38, 6, 4)), '#c7b07c', x, 0.32, z, g).scale.set(1, 0.85, 1));
   mesh(new THREE.BoxGeometry(0.9, 0.8, 0.9), '#6b4a2e', 2.4, 0.4, 0.6, g);
-  // cart
   mesh(new THREE.BoxGeometry(1.4, 0.4, 2.2), '#5f4430', -3.2, 0.7, 0.2, g);
   [[-0.8, 0.7], [-0.8, -0.5]].forEach(([x, z]) => { const w = mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 10), '#3e2c1d', -3.2 + x * 1.05, 0.42, z, g); w.rotation.z = Math.PI / 2; });
 })();
 
-// ===== the bakery, three tiers =====
-const B = { root: new THREE.Group(), tiers: [], roofs: [], loaves: [], sacks: [], logs: [] };
-B.root.position.set(0, 0, 0); scene.add(B.root);
-const ovenGlow = new THREE.PointLight(0xff8a3a, 0, 7, 2); ovenGlow.position.set(-2.3, 1, -1.6); B.root.add(ovenGlow);
-const mouthMat = new THREE.MeshLambertMaterial({ color: '#1b120c', emissive: new THREE.Color('#ff7a2a'), emissiveIntensity: 0 });
-function oven(parent, stone) {
-  mesh(new THREE.BoxGeometry(1.6, 0.5, 1.3), stone ? '#7e7a70' : '#8a5b3a', -2.3, 0.25, -1.75, parent);
-  const d = mesh(flat(new THREE.SphereGeometry(0.85, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2)), stone ? '#8f8a7e' : '#a4643c', -2.3, 0.5, -1.75, parent);
-  d.scale.set(1, 0.95, 0.85);
-  mesh(new THREE.BoxGeometry(0.5, 0.36, 0.1), mouthMat, -2.3, 0.72, -1.05, parent);
-}
+/* ----- shops: four trades, three building tiers each ----- */
+const LOOK = {
+  bakery: { awning: '#8c3b29', banner: '#8c2e21', emblem: '#c48a3f' },
+  smithy: { awning: '#3d4148', banner: '#2f3a46', emblem: '#9aa3ab' },
+  tavern: { awning: '#3f6b3a', banner: '#2f5a2e', emblem: '#c9a050' },
+  joinery: { awning: '#2f5d7a', banner: '#2b4f6a', emblem: '#a77a4a' }
+};
+const GEO = {
+  loaf: flat(new THREE.SphereGeometry(0.2, 7, 5)),
+  sack: flat(new THREE.SphereGeometry(0.3, 6, 4)),
+  log: flat(new THREE.CylinderGeometry(0.13, 0.13, 1.1, 6)),
+  ore: flat(new THREE.IcosahedronGeometry(0.2, 0)),
+  tool: mergeColored([{ geo: new THREE.BoxGeometry(0.07, 0.05, 0.5), color: '#7a5232', m: M(0, 0, 0) }, { geo: new THREE.BoxGeometry(0.26, 0.1, 0.12), color: '#8d949a', m: M(0, 0.02, 0.25) }]),
+  mug: mergeColored([{ geo: new THREE.CylinderGeometry(0.1, 0.09, 0.22, 7), color: '#8a6438', m: M(0, 0.11, 0) }, { geo: new THREE.CylinderGeometry(0.085, 0.085, 0.02, 7), color: '#f1e6c2', m: M(0, 0.225, 0) }, { geo: new THREE.BoxGeometry(0.04, 0.12, 0.08), color: '#8a6438', m: M(0.12, 0.11, 0) }]),
+  stool: mergeColored([{ geo: new THREE.CylinderGeometry(0.26, 0.26, 0.07, 8), color: '#a77a4a', m: M(0, 0.48, 0) }].concat([0, 2.1, 4.2].map(a => ({ geo: new THREE.CylinderGeometry(0.035, 0.035, 0.48, 5), color: '#7a5232', m: M(Math.cos(a) * 0.17, 0.24, Math.sin(a) * 0.17) }))))
+};
+const PRODUCT_GEO = { bread: 'loaf', tools: 'tool', ale: 'mug', furniture: 'stool' };
 function roofMat(c) { return new THREE.MeshLambertMaterial({ color: c, transparent: true, opacity: 1 }); }
-// tier 0: bread stand
-(function () {
-  const g = new THREE.Group(); B.root.add(g); B.tiers.push(g);
-  mesh(new THREE.BoxGeometry(2.8, 0.9, 0.7), '#7a5634', 0, 0.45, 1.25, g);
-  mesh(new THREE.BoxGeometry(3, 0.08, 0.85), '#8e6a43', 0, 0.92, 1.25, g);
-  [[-1.4, 1.55], [1.4, 1.55], [-1.4, 0.2], [1.4, 0.2]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.12, 2.1, 0.12), '#3e2c1d', x, 1.05, z, g));
-  for (let i = 0; i < 5; i++) { const m = mesh(new THREE.BoxGeometry(0.62, 0.05, 1.8), roofMat(i % 2 ? '#d8c69a' : '#8c3b29'), -1.24 + i * 0.62, 2.12, 0.9, g); m.rotation.x = 0.22; B.roofs.push(m); }
-  oven(g, false);
-  mesh(new THREE.BoxGeometry(0.7, 0.45, 0.5), '#6a4a2c', 2.7, 0.22, 1.2, g);
-})();
-// tier 1: timber bakery
-(function () {
-  const g = new THREE.Group(); B.root.add(g); B.tiers.push(g);
-  const wall = '#6b4c30', post = '#3e2c1d';
-  mesh(new THREE.BoxGeometry(7.4, 2.4, 0.25), wall, 0, 1.2, -2.9, g);
-  mesh(new THREE.BoxGeometry(0.25, 2.4, 4.4), wall, -3.6, 1.2, -0.8, g);
-  mesh(new THREE.BoxGeometry(0.25, 2.4, 4.4), wall, 3.6, 1.2, -0.8, g);
-  mesh(new THREE.BoxGeometry(7.2, 0.05, 4.2), '#8a6d4a', 0, 0.03, -0.8, g);
-  mesh(new THREE.BoxGeometry(5, 0.95, 0.6), '#7a5634', 0, 0.48, 1.25, g);
-  mesh(new THREE.BoxGeometry(5.2, 0.08, 0.75), '#8e6a43', 0, 0.97, 1.25, g);
-  [[-3.6, 1.35], [3.6, 1.35], [-3.6, -2.9], [3.6, -2.9]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.22, 2.5, 0.22), post, x, 1.25, z, g));
-  mesh(new THREE.BoxGeometry(0.4, 0.4, 0.06), windowMat, -2, 1.6, -2.75, g); mesh(new THREE.BoxGeometry(0.4, 0.4, 0.06), windowMat, 1.5, 1.6, -2.75, g);
-  oven(g, false);
-  const ch = mesh(new THREE.BoxGeometry(0.6, 3.6, 0.6), '#77736a', -2.3, 2.6, -2.4, g);
-  const r = new THREE.Mesh(flat(gableRoofGeo(5.2, 8.2, 1.9)), roofMat('#8a7445')); r.position.set(0, 2.4, -0.8); g.add(r); B.roofs.push(r);
-  // sign
-  mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), post, 4.3, 1.1, 2, g);
-  mesh(new THREE.BoxGeometry(1.1, 0.6, 0.08), '#8e6a43', 4.3, 1.9, 2.05, g);
-  const loaf = mesh(flat(new THREE.SphereGeometry(0.28, 7, 5)), '#c48a3f', 4.3, 1.9, 2.12, g); loaf.scale.set(1.3, 0.7, 0.4);
-})();
-function gableRoofGeo(w, d, h) {
-  const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0);
-  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); g.rotateY(Math.PI / 2); return g;
+function station(trade, parent, stone, fx) {
+  const z = -1.75, x = -2.3;
+  if (trade === 'bakery') {
+    mesh(new THREE.BoxGeometry(1.6, 0.5, 1.3), stone ? '#7e7a70' : '#8a5b3a', x, 0.25, z, parent);
+    const d = mesh(flat(new THREE.SphereGeometry(0.85, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2)), stone ? '#8f8a7e' : '#a4643c', x, 0.5, z, parent); d.scale.set(1, 0.95, 0.85);
+    fx.mouth = mesh(new THREE.BoxGeometry(0.5, 0.36, 0.1), new THREE.MeshLambertMaterial({ color: '#1b120c', emissive: new THREE.Color('#ff7a2a'), emissiveIntensity: 0 }), x, 0.72, z + 0.7, parent);
+  } else if (trade === 'smithy') {
+    mesh(new THREE.BoxGeometry(1.5, 0.9, 1.1), stone ? '#77736a' : '#6d675e', x, 0.45, z, parent);
+    fx.mouth = mesh(new THREE.BoxGeometry(1.1, 0.08, 0.8), new THREE.MeshLambertMaterial({ color: '#2a1610', emissive: new THREE.Color('#ff5a1a'), emissiveIntensity: 0 }), x, 0.93, z, parent);
+    mesh(new THREE.BoxGeometry(0.3, 0.45, 0.3), '#3a3634', x + 1.25, 0.23, z + 0.75, parent);
+    mesh(new THREE.BoxGeometry(0.7, 0.2, 0.3), '#4a4744', x + 1.25, 0.55, z + 0.75, parent);
+    mesh(new THREE.ConeGeometry(0.12, 0.3, 4), '#4a4744', x + 1.7, 0.55, z + 0.75, parent).rotation.z = -Math.PI / 2;
+  } else if (trade === 'tavern') {
+    mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), '#7a4a32', x, 0.25, z, parent);
+    mesh(flat(new THREE.CylinderGeometry(0.6, 0.5, 0.7, 9)), '#b06a38', x, 0.85, z, parent);
+    fx.mouth = mesh(new THREE.BoxGeometry(0.5, 0.2, 0.1), new THREE.MeshLambertMaterial({ color: '#1b120c', emissive: new THREE.Color('#ff7a2a'), emissiveIntensity: 0 }), x, 0.2, z + 0.62, parent);
+    for (let i = 0; i < 3; i++) { const b = mesh(flat(new THREE.CylinderGeometry(0.34, 0.34, 0.8, 9)), '#7a5232', x - 1.4 + (i % 2) * 0.1, 0.34 + Math.floor(i / 2) * 0.7, z + 0.6 - (i % 2) * 0.75, parent); b.rotation.x = Math.PI / 2; }
+  } else {
+    mesh(new THREE.BoxGeometry(1.8, 0.1, 0.8), '#a77a4a', x, 0.85, z + 0.2, parent);
+    [[-0.8, -0.3], [0.8, -0.3], [-0.8, 0.3], [0.8, 0.3]].forEach(([a, b]) => mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), '#6b4a2e', x + a, 0.4, z + 0.2 + b, parent));
+    for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(1.6, 0.06, 0.25), '#c49a62', x - 0.1, 0.05 + i * 0.07, z - 0.6, parent);
+    mesh(new THREE.BoxGeometry(0.5, 0.03, 0.2), '#9aa3ab', x + 0.4, 0.92, z + 0.2, parent);
+  }
 }
-// tier 2: stone bakery
-(function () {
-  const g = new THREE.Group(); B.root.add(g); B.tiers.push(g);
-  const stone = '#8b877c', trim = '#5e5850';
-  mesh(new THREE.BoxGeometry(8.4, 2.9, 0.45), stone, 0, 1.45, -3.1, g);
-  mesh(new THREE.BoxGeometry(0.45, 2.9, 4.8), stone, -4.1, 1.45, -0.9, g);
-  mesh(new THREE.BoxGeometry(0.45, 2.9, 4.8), stone, 4.1, 1.45, -0.9, g);
-  mesh(new THREE.BoxGeometry(8.2, 0.06, 4.6), '#7c776d', 0, 0.03, -0.9, g);
-  mesh(new THREE.BoxGeometry(6, 1, 0.65), trim, 0, 0.5, 1.25, g);
-  mesh(new THREE.BoxGeometry(6.2, 0.1, 0.8), '#8e6a43', 0, 1.02, 1.25, g);
-  [[-4.1, 1.4], [4.1, 1.4]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.5, 3, 0.5), trim, x, 1.5, z, g));
-  for (let i = -1; i <= 1; i += 2) { mesh(new THREE.BoxGeometry(0.6, 0.6, 0.06), windowMat, i * 2.2, 1.9, -2.85, g); mesh(new THREE.BoxGeometry(1, 0.3, 0.35), '#5f4430', i * 2.2, 1.45, -2.7, g); mesh(new THREE.BoxGeometry(0.9, 0.25, 0.25), '#6f8f45', i * 2.2, 1.68, -2.7, g); }
-  oven(g, true);
-  mesh(new THREE.BoxGeometry(0.7, 4.4, 0.7), '#6c675e', -2.3, 2.7, -2.7, g);
-  mesh(new THREE.BoxGeometry(0.6, 4.2, 0.6), '#6c675e', 3.2, 2.6, -2.7, g);
-  const r = new THREE.Mesh(flat(gableRoofGeo(5.8, 9.2, 2.3)), roofMat('#7a3f2b')); r.position.set(0, 2.9, -0.9); g.add(r); B.roofs.push(r);
-  // banner and lanterns
-  mesh(new THREE.BoxGeometry(0.12, 3, 0.12), '#3e2c1d', 4.9, 1.5, 2.1, g);
-  mesh(new THREE.BoxGeometry(0.9, 1.4, 0.05), '#8c2e21', 5.4, 2.2, 2.1, g);
-  mesh(new THREE.BoxGeometry(0.4, 0.4, 0.06), '#e8c46a', 5.4, 2.3, 2.14, g);
-  [-3.1, 3.1].forEach(x => mesh(new THREE.BoxGeometry(0.26, 0.36, 0.26), windowMat, x, 2.1, 1.5, g));
-  [[-5.2, 2.6], [5.6, -0.5], [-5.4, -1.5]].forEach(([x, z]) => mesh(flat(new THREE.CylinderGeometry(0.45, 0.4, 0.55, 8)), '#6b4a2e', x, 0.27, z, g));
-})();
-// stock you can see: loaves on the counter, sacks and logs in storage
-const loafGeo = flat(new THREE.SphereGeometry(0.2, 7, 5));
-for (let i = 0; i < 12; i++) {
-  const m = mesh(loafGeo, '#b97a36', -1.25 + (i % 6) * 0.5, 1.07, 1.12 + Math.floor(i / 6) * 0.28, B.root);
-  m.scale.set(1.15, 0.6, 0.75); m.rotation.y = (i % 3) * 0.4; B.loaves.push(m);
+function emblem(trade, parent, x, y, z) {
+  const c = LOOK[trade].emblem;
+  if (trade === 'bakery') { const m = mesh(GEO.loaf, c, x, y, z + 0.08, parent); m.scale.set(1.6, 1, 0.5); }
+  else if (trade === 'smithy') { mesh(new THREE.BoxGeometry(0.1, 0.5, 0.06), '#6b4a2e', x, y - 0.05, z + 0.07, parent); mesh(new THREE.BoxGeometry(0.4, 0.16, 0.08), c, x, y + 0.2, z + 0.08, parent); }
+  else if (trade === 'tavern') { const m = mesh(GEO.mug, null, x, y - 0.15, z + 0.12, parent); m.material = vc; m.scale.setScalar(1.7); }
+  else { const m = mesh(GEO.stool, null, x, y - 0.3, z + 0.12, parent); m.material = vc; m.scale.setScalar(0.8); }
 }
-const sackGeo = flat(new THREE.SphereGeometry(0.3, 6, 4));
-for (let i = 0; i < 8; i++) { const m = mesh(sackGeo, '#c7b07c', 2.0 + (i % 4) * 0.5, 0.28 + Math.floor(i / 4) * 0.4, -1.75, B.root); m.scale.set(1, 0.95, 0.9); B.sacks.push(m); }
-const logGeo = flat(new THREE.CylinderGeometry(0.13, 0.13, 1.1, 6));
-for (let i = 0; i < 9; i++) { const m = mesh(logGeo, '#7a5232', 3.0 + (i % 3) * 0.28 - 0.3, 0.13 + Math.floor(i / 3) * 0.25, -0.45 + (i % 3) * 0.02, B.root); m.rotation.x = Math.PI / 2; B.logs.push(m); }
-// chimney smoke
-const smoke = [];
-const smokeMat = new THREE.MeshLambertMaterial({ color: '#c9c4ba', transparent: true, opacity: 0.5, depthWrite: false });
-for (let i = 0; i < 9; i++) { const m = mesh(flat(new THREE.IcosahedronGeometry(0.35, 0)), smokeMat.clone(), 0, -10, 0); m.userData.life = i / 9; smoke.push(m); }
+function buildShop(trade, tier) {
+  const g = new THREE.Group(), lk = LOOK[trade], fx = { roofs: [], display: [], sacks: [], logs: [], ore: [] };
+  if (tier === 0) {
+    mesh(new THREE.BoxGeometry(2.8, 0.9, 0.7), '#7a5634', 0, 0.45, 1.25, g);
+    mesh(new THREE.BoxGeometry(3, 0.08, 0.85), '#8e6a43', 0, 0.92, 1.25, g);
+    [[-1.4, 1.55], [1.4, 1.55], [-1.4, 0.2], [1.4, 0.2]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.12, 2.1, 0.12), '#3e2c1d', x, 1.05, z, g));
+    for (let i = 0; i < 5; i++) { const m = mesh(new THREE.BoxGeometry(0.62, 0.05, 1.8), roofMat(i % 2 ? '#d8c69a' : lk.awning), -1.24 + i * 0.62, 2.12, 0.9, g); m.rotation.x = 0.22; fx.roofs.push(m); }
+    station(trade, g, false, fx);
+    fx.topY = 0.96; fx.chimney = { x: -2.3, y: 1.4, z: -1.75 };
+  } else if (tier === 1) {
+    const wall = '#6b4c30', post = '#3e2c1d';
+    mesh(new THREE.BoxGeometry(7.4, 2.4, 0.25), wall, 0, 1.2, -2.9, g);
+    mesh(new THREE.BoxGeometry(0.25, 2.4, 4.4), wall, -3.6, 1.2, -0.8, g);
+    mesh(new THREE.BoxGeometry(0.25, 2.4, 4.4), wall, 3.6, 1.2, -0.8, g);
+    mesh(new THREE.BoxGeometry(7.2, 0.05, 4.2), '#8a6d4a', 0, 0.03, -0.8, g);
+    mesh(new THREE.BoxGeometry(5, 0.95, 0.6), '#7a5634', 0, 0.48, 1.25, g);
+    mesh(new THREE.BoxGeometry(5.2, 0.08, 0.75), '#8e6a43', 0, 0.97, 1.25, g);
+    [[-3.6, 1.35], [3.6, 1.35], [-3.6, -2.9], [3.6, -2.9]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.22, 2.5, 0.22), post, x, 1.25, z, g));
+    mesh(new THREE.BoxGeometry(0.4, 0.4, 0.06), windowMat, -0.6, 1.6, -2.75, g); mesh(new THREE.BoxGeometry(0.4, 0.4, 0.06), windowMat, 1.5, 1.6, -2.75, g);
+    station(trade, g, false, fx);
+    if (trade !== 'joinery') mesh(new THREE.BoxGeometry(0.6, 3.6, 0.6), '#77736a', -2.3, 2.6, -2.4, g);
+    const r = new THREE.Mesh(flat(gableRoofGeo(5.2, 8.2, 1.9)), roofMat('#8a7445')); r.position.set(0, 2.4, -0.8); g.add(r); fx.roofs.push(r);
+    mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), post, 4.3, 1.1, 2, g);
+    mesh(new THREE.BoxGeometry(1.1, 0.7, 0.08), lk.banner, 4.3, 1.9, 2.05, g);
+    emblem(trade, g, 4.3, 1.9, 2.05);
+    fx.topY = 1.01; fx.chimney = { x: -2.3, y: 4.4, z: -2.4 };
+  } else {
+    const stone = '#8b877c', trim = '#5e5850';
+    mesh(new THREE.BoxGeometry(8.4, 2.9, 0.45), stone, 0, 1.45, -3.1, g);
+    mesh(new THREE.BoxGeometry(0.45, 2.9, 4.8), stone, -4.1, 1.45, -0.9, g);
+    mesh(new THREE.BoxGeometry(0.45, 2.9, 4.8), stone, 4.1, 1.45, -0.9, g);
+    mesh(new THREE.BoxGeometry(8.2, 0.06, 4.6), '#7c776d', 0, 0.03, -0.9, g);
+    mesh(new THREE.BoxGeometry(6, 1, 0.65), trim, 0, 0.5, 1.25, g);
+    mesh(new THREE.BoxGeometry(6.2, 0.1, 0.8), '#8e6a43', 0, 1.02, 1.25, g);
+    [[-4.1, 1.4], [4.1, 1.4]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.5, 3, 0.5), trim, x, 1.5, z, g));
+    for (let i = -1; i <= 1; i += 2) { mesh(new THREE.BoxGeometry(0.6, 0.6, 0.06), windowMat, i * 2.2 + 0.6, 1.9, -2.85, g); mesh(new THREE.BoxGeometry(1, 0.3, 0.35), '#5f4430', i * 2.2 + 0.6, 1.45, -2.7, g); mesh(new THREE.BoxGeometry(0.9, 0.25, 0.25), '#6f8f45', i * 2.2 + 0.6, 1.68, -2.7, g); }
+    station(trade, g, true, fx);
+    if (trade !== 'joinery') mesh(new THREE.BoxGeometry(0.7, 4.4, 0.7), '#6c675e', -2.3, 2.7, -2.7, g);
+    mesh(new THREE.BoxGeometry(0.6, 4.2, 0.6), '#6c675e', 3.2, 2.6, -2.7, g);
+    const r = new THREE.Mesh(flat(gableRoofGeo(5.8, 9.2, 2.3)), roofMat('#7a3f2b')); r.position.set(0, 2.9, -0.9); g.add(r); fx.roofs.push(r);
+    mesh(new THREE.BoxGeometry(0.12, 3, 0.12), '#3e2c1d', 4.9, 1.5, 2.1, g);
+    mesh(new THREE.BoxGeometry(0.9, 1.4, 0.05), lk.banner, 5.4, 2.2, 2.1, g);
+    emblem(trade, g, 5.4, 2.3, 2.1);
+    [-3.1, 3.1].forEach(x => mesh(new THREE.BoxGeometry(0.26, 0.36, 0.26), windowMat, x, 2.1, 1.5, g));
+    [[-5.2, 2.6], [5.6, -0.5], [-5.4, -1.5]].forEach(([x, z]) => mesh(flat(new THREE.CylinderGeometry(0.45, 0.4, 0.55, 8)), '#6b4a2e', x, 0.27, z, g));
+    fx.topY = 1.07; fx.chimney = { x: -2.3, y: 4.9, z: -2.7 };
+  }
+  // goods on show
+  const prod = TR[trade].product, geo = GEO[PRODUCT_GEO[prod]];
+  for (let i = 0; i < 12; i++) {
+    let m;
+    if (prod === 'furniture') { if (i >= 6) break; m = mesh(geo, vc, 1.8 + (i % 3) * 0.62, 0, 2.2 + Math.floor(i / 3) * 0.62, g); m.rotation.y = i; }
+    else {
+      m = mesh(geo, prod === 'bread' ? '#b97a36' : vc, -1.25 + (i % 6) * 0.5, fx.topY + (prod === 'bread' ? 0.11 : 0.02), 1.12 + Math.floor(i / 6) * 0.28, g);
+      if (prod === 'bread') { m.scale.set(1.15, 0.6, 0.75); m.rotation.y = (i % 3) * 0.4; }
+      if (prod === 'tools') m.rotation.y = 0.6 + (i % 3) * 0.3;
+    }
+    fx.display.push(m);
+  }
+  for (let i = 0; i < 8; i++) { const m = mesh(GEO.sack, '#c7b07c', 1.6 + (i % 4) * 0.5, 0.28 + Math.floor(i / 4) * 0.4, -1.85, g); m.scale.set(1, 0.95, 0.9); fx.sacks.push(m); }
+  for (let i = 0; i < 9; i++) { const m = mesh(GEO.log, '#7a5232', 3.0 + (i % 3) * 0.28 - 0.3, 0.13 + Math.floor(i / 3) * 0.25, -0.45, g); m.rotation.x = Math.PI / 2; fx.logs.push(m); }
+  for (let i = 0; i < 8; i++) { const m = mesh(GEO.ore, i % 2 ? '#6e4a3a' : '#5b5550', 1.4 + (i % 4) * 0.32, 0.18 + Math.floor(i / 4) * 0.22, -1.1, g); m.rotation.set(i, i * 2, 0); fx.ore.push(m); }
+  fx.light = new THREE.PointLight(trade === 'smithy' ? 0xff6a2a : 0xff8a3a, 0, 7, 2); fx.light.position.set(-2.3, 1.1, -1.4); g.add(fx.light);
+  return { group: g, fx };
+}
+function forSale(i) {
+  const g = new THREE.Group(), p = Sim.PLOTS[i]; g.position.set(p.x, 0, p.z);
+  mesh(new THREE.BoxGeometry(7.6, 0.04, 5.2), '#5a4a32', 0, 0.02, -0.6, g);
+  [[-3.8, 2], [3.8, 2], [-3.8, -3.2], [3.8, -3.2]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), '#5b4029', x, 0.3, z, g));
+  mesh(new THREE.BoxGeometry(0.12, 1.6, 0.12), '#5b4029', 2.6, 0.8, 2.2, g);
+  mesh(new THREE.BoxGeometry(1.2, 0.7, 0.06), '#d8c69a', 2.6, 1.4, 2.25, g);
+  mesh(new THREE.BoxGeometry(0.9, 0.08, 0.02), '#3a2a1c', 2.6, 1.55, 2.29, g);
+  mesh(new THREE.BoxGeometry(0.6, 0.08, 0.02), '#3a2a1c', 2.6, 1.35, 2.29, g);
+  scene.add(g); return g;
+}
+const plotView = Sim.PLOTS.map((p, i) => ({ key: null, group: forSale(i), fx: null }));
+// the four shops that hire, facing the square
+const empView = Sim.EMPLOYERS.map(e => {
+  const b = buildShop(e.trade, 1); b.group.position.set(e.x, 0, e.z); b.group.rotation.y = Math.PI; scene.add(b.group);
+  b.fx.display.forEach((m, i) => m.visible = i < 6);
+  b.fx.sacks.forEach((m, i) => m.visible = e.trade !== 'smithy' && e.trade !== 'joinery' && i < 4);
+  b.fx.logs.forEach((m, i) => m.visible = i < 6); b.fx.ore.forEach((m, i) => m.visible = e.trade === 'smithy' && i < 5);
+  return b;
+});
 
-/* ----- characters, drawn small and readable from above ----- */
+// chimney smoke pool
+const smokeMat = new THREE.MeshLambertMaterial({ color: '#c9c4ba', transparent: true, opacity: 0.5, depthWrite: false });
+const smokeGeo = flat(new THREE.IcosahedronGeometry(0.35, 0));
+const smoke = [];
+for (let i = 0; i < 40; i++) { const m = mesh(smokeGeo, smokeMat.clone(), 0, -10, 0); m.userData = { life: (i % 8) / 8, src: null }; m.visible = false; smoke.push(m); }
+
+/* ----- characters ----- */
 const CG = {
-  body: flat(new THREE.CylinderGeometry(0.25, 0.33, 0.7, 7)),
-  head: flat(new THREE.SphereGeometry(0.23, 7, 5)),
-  hand: flat(new THREE.SphereGeometry(0.085, 5, 3)),
-  shadow: new THREE.CircleGeometry(0.42, 12),
-  hit: new THREE.CylinderGeometry(0.8, 0.8, 1.9, 6),
-  icon: new THREE.OctahedronGeometry(0.15),
-  ring: new THREE.TorusGeometry(0.52, 0.045, 4, 24),
-  cap: flat(new THREE.SphereGeometry(0.25, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2)),
-  brim: new THREE.CylinderGeometry(0.42, 0.42, 0.04, 10),
-  crown: flat(new THREE.ConeGeometry(0.22, 0.25, 7)),
-  chef: new THREE.CylinderGeometry(0.2, 0.17, 0.3, 8),
-  hood: flat(new THREE.ConeGeometry(0.3, 0.45, 6)),
-  apron: new THREE.BoxGeometry(0.36, 0.42, 0.06),
-  pack: flat(new THREE.SphereGeometry(0.22, 6, 4))
+  body: flat(new THREE.CylinderGeometry(0.25, 0.33, 0.7, 7)), head: flat(new THREE.SphereGeometry(0.23, 7, 5)), hand: flat(new THREE.SphereGeometry(0.085, 5, 3)),
+  shadow: new THREE.CircleGeometry(0.42, 12), hit: new THREE.CylinderGeometry(0.8, 0.8, 1.9, 6), icon: new THREE.OctahedronGeometry(0.15),
+  ring: new THREE.TorusGeometry(0.52, 0.045, 4, 24), cap: flat(new THREE.SphereGeometry(0.25, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2)),
+  brim: new THREE.CylinderGeometry(0.42, 0.42, 0.04, 10), crown: flat(new THREE.ConeGeometry(0.22, 0.25, 7)), chef: new THREE.CylinderGeometry(0.2, 0.17, 0.3, 8),
+  hood: flat(new THREE.ConeGeometry(0.3, 0.45, 6)), apron: new THREE.BoxGeometry(0.36, 0.42, 0.06), pack: flat(new THREE.SphereGeometry(0.22, 6, 4))
 };
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 const ICON = { wait: mat('#e6ab3a'), happy: mat('#6fa34a'), angry: mat('#c2412d') };
 const SKIN = ['#e3b78f', '#c99470', '#f0c9a2', '#a8714d', '#d9a77d'];
 const TUNIC = ['#7b5a3a', '#5f6f3e', '#8a4b32', '#4e5f6e', '#6d5a78', '#7d7458', '#5a4a3a', '#6b6b5a', '#4a4a5a', '#7a5a4a'];
+const APRON = { bakery: '#f3efe4', smithy: '#4a3a2c', tavern: '#d8c69a', joinery: '#8a6a44' };
 const pickables = [];
 function makeChar(opt) {
   const g = new THREE.Group();
-  const body = mesh(CG.body, opt.tunic, 0, 0.36, 0, g);
-  const head = mesh(CG.head, opt.skin, 0, 0.92, 0, g);
+  const body = mesh(CG.body, opt.tunic, 0, 0.36, 0, g), head = mesh(CG.head, opt.skin, 0, 0.92, 0, g);
   const hl = mesh(CG.hand, opt.skin, -0.33, 0.42, 0, g), hr = mesh(CG.hand, opt.skin, 0.33, 0.42, 0, g);
   const sh = new THREE.Mesh(CG.shadow, shadowMat); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; g.add(sh);
   const hit = new THREE.Mesh(CG.hit, hitMat); hit.position.y = 0.9; g.add(hit);
   const icon = new THREE.Mesh(CG.icon, ICON.wait); icon.position.y = 1.6; icon.visible = false; g.add(icon);
-  const hat = opt.hat;
-  if (hat === 'straw') { mesh(CG.brim, '#d8b85a', 0, 1.08, 0, g); mesh(CG.crown, '#d8b85a', 0, 1.2, 0, g); }
-  else if (hat === 'cap') mesh(CG.cap, opt.capColor, 0, 1.0, 0, g);
-  else if (hat === 'chef') { mesh(CG.chef, '#f3efe4', 0, 1.2, 0, g); mesh(CG.apron, '#f3efe4', 0, 0.42, 0.29, g); }
-  else if (hat === 'hood') mesh(CG.hood, opt.capColor, 0, 1.12, -0.02, g);
-  else if (hat === 'bun') mesh(CG.cap, '#b9b4ab', 0, 1.0, -0.05, g);
+  const h = opt.hat;
+  if (h === 'straw') { mesh(CG.brim, '#d8b85a', 0, 1.08, 0, g); mesh(CG.crown, '#d8b85a', 0, 1.2, 0, g); }
+  else if (h === 'cap') mesh(CG.cap, opt.capColor, 0, 1.0, 0, g);
+  else if (h === 'hood') mesh(CG.hood, opt.capColor, 0, 1.12, -0.02, g);
+  else if (h === 'bun') mesh(CG.cap, '#b9b4ab', 0, 1.0, -0.05, g);
+  if (opt.apron) mesh(CG.apron, opt.apron, 0, 0.42, 0.29, g);
+  if (opt.chef) mesh(CG.chef, '#f3efe4', 0, 1.2, 0, g);
   if (opt.player) { const r = new THREE.Mesh(CG.ring, mat('#e8b84a')); r.rotation.x = Math.PI / 2; r.position.y = 0.05; g.add(r); mesh(CG.cap, '#2b4a63', 0, 1.0, 0, g); }
   const pack = mesh(CG.pack, '#c7b07c', 0, 0.62, -0.32, g); pack.visible = false;
   const sel = new THREE.Mesh(CG.ring, mat('#f3efe4')); sel.rotation.x = Math.PI / 2; sel.position.y = 0.06; sel.scale.setScalar(1.25); sel.visible = false; g.add(sel);
   g.userData = { body, head, hl, hr, icon, pack, sel, pick: opt.pick, phase: Math.random() * 6 };
   g.scale.setScalar(1.08);
-  hit.userData.owner = g;
-  pickables.push(hit);
-  scene.add(g);
-  return g;
+  hit.userData.owner = g; pickables.push(hit);
+  scene.add(g); return g;
 }
-function dropChar(g) { scene.remove(g); const i = pickables.indexOf(g.children.find(c => c.material === hitMat)); if (i >= 0) pickables.splice(i, 1); }
-const ROLE = {
-  field: { hat: 'straw' }, forest: { hat: 'cap', capColor: '#8e3b2a' }, market: { hat: 'cap', capColor: '#2f5d55' }, well: { hat: 'bun' }
-};
+function dropChar(g) { scene.remove(g); const h = g.children.find(c => c.material === hitMat); const i = pickables.indexOf(h); if (i >= 0) pickables.splice(i, 1); }
+const ROLE = { field: { hat: 'straw' }, forest: { hat: 'cap', capColor: '#8e3b2a' }, pit: { hat: 'cap', capColor: '#4a4744' }, market: { hat: 'cap', capColor: '#2f5d55' }, well: { hat: 'bun' } };
 const playerMesh = makeChar({ tunic: '#2f5a7a', skin: '#e3b78f', player: true, pick: 'player' });
-let workerMesh = null, workerName = null;
-const agentMeshes = new Map();
+const bossMeshes = Sim.EMPLOYERS.map((e, i) => { const g = makeChar({ tunic: TUNIC[(i + 3) % TUNIC.length], skin: SKIN[(i + 2) % SKIN.length], apron: APRON[e.trade], chef: e.trade === 'bakery', hat: e.trade === 'smithy' ? null : null, pick: 'emp:' + e.id }); g.position.set(e.x, 0, e.z - 0.4); g.rotation.y = Math.PI; return g; });
+const workerMeshes = new Map(), agentMeshes = new Map();
 function placeChar(g, a, t, opts) {
   const u = g.userData;
   g.position.x = a.x; g.position.z = a.z;
-  const target = a.face || 0;
-  let d = target - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * 0.25;
-  const ph = t * 10 + u.phase;
-  if (opts.moving) { u.body.position.y = 0.36 + Math.abs(Math.sin(ph)) * 0.06; u.head.position.y = 0.92 + Math.abs(Math.sin(ph)) * 0.06; u.hl.position.z = Math.sin(ph) * 0.18; u.hr.position.z = -Math.sin(ph) * 0.18; u.hl.position.y = u.hr.position.y = 0.42; }
-  else if (opts.working) { const w = Math.sin(t * 7 + u.phase); u.body.position.y = 0.36; u.head.position.y = 0.92 + Math.max(0, w) * 0.04; u.hl.position.set(-0.28, 0.5 + Math.max(0, w) * 0.25, 0.22); u.hr.position.set(0.28, 0.5 + Math.max(0, -w) * 0.25, 0.22); }
-  else { u.body.position.y = 0.36; u.head.position.y = 0.92 + Math.sin(t * 2 + u.phase) * 0.01; u.hl.position.set(-0.33, 0.42, 0); u.hr.position.set(0.33, 0.42, 0); }
-  if (opts.icon) { u.icon.visible = true; u.icon.material = ICON[opts.icon]; u.icon.position.y = 1.6 + Math.sin(t * 4) * 0.06; u.icon.rotation.y = t * 2; }
-  else u.icon.visible = false;
+  let d = (a.face || 0) - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * 0.25;
+  animChar(g, t, opts);
+  u.icon.visible = !!opts.icon;
+  if (opts.icon) { u.icon.material = ICON[opts.icon]; u.icon.position.y = 1.6 + (calm() ? 0 : Math.sin(t * 4) * 0.06); u.icon.rotation.y = calm() ? 0 : t * 2; }
   u.pack.visible = !!opts.pack; if (opts.pack) u.pack.scale.setScalar(opts.pack);
   u.sel.visible = !!opts.selected;
   g.visible = !opts.hidden;
 }
+function animChar(g, t, opts) {
+  const u = g.userData, ph = t * 10 + u.phase;
+  if (opts.moving) { const b = Math.abs(Math.sin(ph)) * 0.06; u.body.position.y = 0.36 + b; u.head.position.y = 0.92 + b; u.hl.position.set(-0.33, 0.42, Math.sin(ph) * 0.18); u.hr.position.set(0.33, 0.42, -Math.sin(ph) * 0.18); }
+  else if (opts.working) { const w = Math.sin(t * 7 + u.phase); u.body.position.y = 0.36; u.head.position.y = 0.92 + Math.max(0, w) * 0.04; u.hl.position.set(-0.28, 0.5 + Math.max(0, w) * 0.25, 0.22); u.hr.position.set(0.28, 0.5 + Math.max(0, -w) * 0.25, 0.22); }
+  else { u.body.position.y = 0.36; u.head.position.y = 0.92; u.hl.position.set(-0.33, 0.42, 0); u.hr.position.set(0.33, 0.42, 0); }
+}
 function syncChars(s, t) {
-  const p = s.player;
-  const carry = Sim.carried(s);
-  placeChar(playerMesh, p, t, { moving: p.moving && !!p.dest, working: !!p.action, pack: carry ? 0.7 + carry / 30 : 0, selected: UI.sel === 'player' });
-  if (s.worker) {
-    if (!workerMesh || workerName !== s.worker.name) { if (workerMesh) dropChar(workerMesh); workerMesh = makeChar({ tunic: '#b8a079', skin: SKIN[s.worker.name.length % SKIN.length], hat: 'chef', pick: 'worker' }); workerName = s.worker.name; }
-    const w = s.worker;
-    placeChar(workerMesh, w, t, { moving: w.moving, working: w.task === 'bake' && !w.moving, pack: w.carry ? 1 : 0, hidden: w.indoors, selected: UI.sel === 'worker' });
-  } else if (workerMesh) { dropChar(workerMesh); workerMesh = null; workerName = null; if (UI.sel === 'worker') UI.sel = null; }
+  const p = s.player, carry = Sim.carried(s);
+  placeChar(playerMesh, p, t, { moving: p.moving && !!p.dest, working: !!p.action || p.working, pack: carry ? 0.7 + carry / 30 : 0, selected: UI.sel === 'player' });
+  const seenW = new Set();
+  for (const shop of s.shops) {
+    const w = shop.worker; if (!w) continue;
+    const key = shop.id + ':' + w.name; seenW.add(key);
+    let g = workerMeshes.get(key);
+    if (!g) { g = makeChar({ tunic: '#b8a079', skin: SKIN[w.name.length % SKIN.length], apron: APRON[shop.trade], chef: shop.trade === 'bakery', pick: 'w:' + shop.id }); workerMeshes.set(key, g); }
+    placeChar(g, w, t, { moving: w.moving, working: w.task === 'craft' && !w.moving, pack: w.carry ? 1 : 0, hidden: w.indoors, selected: UI.sel === 'w:' + shop.id });
+  }
+  for (const [k, g] of workerMeshes) if (!seenW.has(k)) { dropChar(g); workerMeshes.delete(k); }
   const seen = new Set();
   for (const a of s.agents) {
     seen.add(a.id);
     let g = agentMeshes.get(a.id);
-    if (!g) {
-      const role = a.kind === 'traveler' ? { hat: 'hood', capColor: '#5b4936' } : (ROLE[a.job] || {});
-      g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[a.id % SKIN.length], pick: a.id }, role));
-      agentMeshes.set(a.id, g);
-    }
+    if (!g) { const role = a.kind === 'traveler' ? { hat: 'hood', capColor: '#5b4936' } : (ROLE[a.job] || {}); g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[a.id % SKIN.length], pick: a.id }, role)); agentMeshes.set(a.id, g); }
     placeChar(g, a, t, { moving: a.moving, working: a.working, icon: a.icon, hidden: a.indoors, selected: UI.sel === a.id });
   }
   for (const [id, g] of agentMeshes) if (!seen.has(id)) { dropChar(g); agentMeshes.delete(id); if (UI.sel === id) UI.sel = null; }
+  const h = Sim.hourOf(s);
+  Sim.EMPLOYERS.forEach((e, i) => { const open = h >= 6 && h < 21; bossMeshes[i].visible = open; animChar(bossMeshes[i], t, { working: open && h >= e.shift[0] && h < e.shift[1] }); bossMeshes[i].userData.sel.visible = UI.sel === 'emp:' + e.id; });
 }
 
-function syncBakery(s, t, dt) {
-  const T = s.tier, b = s.bakery;
-  B.tiers.forEach((g, i) => g.visible = i === T);
-  const shown = Math.min(12, Math.ceil(b.bread * 12 / Math.max(12, Sim.TIERS[T].cap)));
-  B.loaves.forEach((m, i) => m.visible = i < (b.bread > 0 ? Math.max(1, shown) : 0));
-  const sacks = Math.ceil(b.grain / 2), logs = Math.ceil(b.wood * 9 / Sim.TIERS[T].cap);
-  B.sacks.forEach((m, i) => m.visible = i < Math.min(8, sacks));
-  B.logs.forEach((m, i) => m.visible = i < Math.min(9, b.wood > 0 ? Math.max(1, logs) : 0));
-  const baking = b.oven.loaded;
-  ovenGlow.intensity = baking ? 1.6 + Math.sin(t * 13) * 0.25 + Math.sin(t * 5.3) * 0.2 : 0;
-  mouthMat.emissiveIntensity = baking ? 0.9 + Math.sin(t * 9) * 0.15 : 0;
-  // roof fades when you look into the building
-  const near = Math.hypot(focus.x, focus.z) < 9;
-  B.roofs.forEach(r => { r.material.opacity += ((near ? 0.12 : 1) - r.material.opacity) * Math.min(1, dt * 6); r.material.depthWrite = r.material.opacity > 0.9; });
-  const chim = T === 0 ? { x: -2.3, y: 1.4, z: -1.75 } : T === 1 ? { x: -2.3, y: 4.4, z: -2.4 } : { x: -2.3, y: 4.9, z: -2.7 };
-  smoke.forEach(m => {
+function fillStock(fx, shop) {
+  const Ti = Sim.tierOf(shop), prod = TR[shop.trade].product;
+  const cap = prod === 'furniture' ? 6 : 12, shown = shop.goods > 0 ? Math.max(1, Math.min(cap, Math.ceil(shop.goods * cap / Math.max(cap, Ti.cap)))) : 0;
+  fx.display.forEach((m, i) => m.visible = i < shown);
+  fx.sacks.forEach((m, i) => m.visible = i < Math.min(8, Math.ceil(shop.stock.grain / 2)));
+  fx.logs.forEach((m, i) => m.visible = i < Math.min(9, shop.stock.wood > 0 ? Math.max(1, Math.ceil(shop.stock.wood * 9 / Ti.cap)) : 0));
+  fx.ore.forEach((m, i) => m.visible = i < Math.min(8, shop.stock.ore));
+}
+const glowing = [];
+function syncShops(s, t, dt) {
+  glowing.length = 0;
+  Sim.PLOTS.forEach((p, i) => {
+    const shop = Sim.shopOnPlot(s, i), v = plotView[i], key = shop ? shop.trade + shop.tier : null;
+    if (v.key !== key) {
+      scene.remove(v.group);
+      if (shop) { const b = buildShop(shop.trade, shop.tier); b.group.position.set(p.x, 0, p.z); scene.add(b.group); v.group = b.group; v.fx = b.fx; }
+      else { v.group = forSale(i); v.fx = null; }
+      v.key = key;
+    }
+    if (!shop) return;
+    fillStock(v.fx, shop);
+    const on = shop.work.loaded;
+    const flick = calm() ? 0 : Math.sin(t * 13 + i) * 0.25;
+    v.fx.light.intensity = on && shop.trade !== 'joinery' ? 1.6 + flick : 0;
+    if (v.fx.mouth) v.fx.mouth.material.emissiveIntensity = on ? 0.9 + flick * 0.5 : 0;
+    const near = Math.hypot(focus.x - p.x, focus.z - p.z) < 8;
+    v.fx.roofs.forEach(r => { r.material.opacity += ((near ? 0.12 : 1) - r.material.opacity) * Math.min(1, dt * 6); r.material.depthWrite = r.material.opacity > 0.9; });
+    if (on && shop.trade !== 'joinery') glowing.push({ x: p.x + v.fx.chimney.x, y: v.fx.chimney.y, z: p.z + v.fx.chimney.z });
+  });
+  const h = Sim.hourOf(s);
+  Sim.EMPLOYERS.forEach((e, i) => {
+    const fx = empView[i].fx, open = h >= e.shift[0] && h < e.shift[1];
+    const near = Math.hypot(focus.x - e.x, focus.z - e.z) < 8;
+    fx.roofs.forEach(r => { r.material.opacity += ((near ? 0.12 : 1) - r.material.opacity) * Math.min(1, dt * 6); r.material.depthWrite = r.material.opacity > 0.9; });
+    const lit = open && e.trade !== 'joinery';
+    fx.light.intensity = lit ? 1.4 : 0; if (fx.mouth) fx.mouth.material.emissiveIntensity = lit ? 0.9 : 0;
+    if (lit) glowing.push({ x: e.x + 2.3, y: 4.4, z: e.z + 2.4 });
+  });
+  smoke.forEach((m, k) => {
+    const src = glowing[k % 8];
     m.userData.life += dt * 0.35;
-    if (m.userData.life > 1) { m.userData.life -= 1; m.userData.on = baking; }
-    const l = m.userData.life;
-    if (!m.userData.on) { m.visible = false; return; }
+    if (m.userData.life > 1) m.userData.life -= 1;
+    if (!src || k >= glowing.length * 5) { m.visible = false; return; }
+    const l = (m.userData.life + Math.floor(k / 8) * 0.2) % 1;
     m.visible = true;
-    m.position.set(chim.x + Math.sin(l * 6 + t) * 0.3 + l * 1.2, chim.y + l * 3.2, chim.z + l * 0.6);
+    m.position.set(src.x + Math.sin(l * 6 + t) * 0.3 + l * 1.2, src.y + l * 3.2, src.z + l * 0.6);
     m.scale.setScalar(0.5 + l * 1.4); m.material.opacity = 0.5 * (1 - l);
   });
 }
 
 /* ----- day and night ----- */
-const C = k => new THREE.Color(k);
-const SKY = { day: C('#a3b5b1'), dusk: C('#c79062'), night: C('#121a28') };
+const SKY = { day: new THREE.Color('#a3b5b1'), dusk: new THREE.Color('#c79062'), night: new THREE.Color('#121a28') };
 const tmpC = new THREE.Color();
-function syncLight(s) {
-  const h = Sim.hourOf(s);
-  let k; // 1 = full day, 0 = night
-  if (h < 5) k = 0; else if (h < 7) k = (h - 5) / 2; else if (h < 18) k = 1; else if (h < 21) k = 1 - (h - 18) / 3; else k = 0;
+function syncLight(h) {
+  let k; if (h < 5) k = 0; else if (h < 7) k = (h - 5) / 2; else if (h < 18) k = 1; else if (h < 21) k = 1 - (h - 18) / 3; else k = 0;
   const dusk = Math.max(0, 1 - Math.abs(h - 19) / 1.6) + Math.max(0, 1 - Math.abs(h - 6) / 1.2) * 0.6;
   tmpC.copy(SKY.night).lerp(SKY.day, k).lerp(SKY.dusk, Math.min(0.55, dusk * 0.55));
   scene.fog.color.copy(tmpC); renderer.setClearColor(tmpC);
-  hemi.intensity = 0.25 + k * 0.6;
-  sun.intensity = 0.1 + k * 0.85;
+  hemi.intensity = 0.25 + k * 0.6; sun.intensity = 0.1 + k * 0.85;
   sun.color.set(dusk > 0.3 ? '#ffb36b' : '#ffe2b0');
   const ang = ((h - 6) / 15) * Math.PI;
   sun.position.set(Math.cos(ang) * -30, 10 + Math.sin(Math.max(0.1, ang)) * 25, 14);
   windowMat.emissiveIntensity = Math.max(0, 1 - k * 1.4) * 1.1;
-  scene.fog.near = 26 - (1 - k) * 8; scene.fog.far = 70 - (1 - k) * 22;
+  scene.fog.near = 28 - (1 - k) * 8; scene.fog.far = 76 - (1 - k) * 22;
 }
 
 /* ----- camera and input ----- */
-const focus = new THREE.Vector3(Sim.P.home.x, 0, Sim.P.home.z);
+const focus = new THREE.Vector3(0, 0, 6);
 let zoom = 1.2, panHold = 0;
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h, false); camera.aspect = w / h;
-  camera.fov = w < h ? 46 : 36; camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < h ? 46 : 36; camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
-function syncCamera(s, dt) {
+function syncCamera(s, dt, t) {
+  if (UI.mode === 'title') {
+    const a = calm() ? 0.6 : t * 0.05;
+    camera.position.set(Math.sin(a) * 34, 24, 6 + Math.cos(a) * 34); camera.lookAt(0, 0, 6); return;
+  }
   if (panHold > 0) panHold -= dt;
   else {
     const tx = s.player.x - (UI.sideCard ? UI.sideCard * 14 * zoom : 0);
@@ -618,6 +764,7 @@ const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.
 const pointers = new Map();
 let drag = null, pinch = null;
 canvas.addEventListener('pointerdown', e => {
+  if (UI.mode !== 'play') return;
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
@@ -626,11 +773,11 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
   if (!pointers.has(e.pointerId)) return;
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (pinch && pointers.size === 2) { const [a, b] = [...pointers.values()]; zoom = clamp(pinch.z * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 0.55, 1.7); return; }
+  if (pinch && pointers.size === 2) { const [a, b] = [...pointers.values()]; zoom = clamp(pinch.z * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 0.55, 1.8); return; }
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 8) drag.moved = true;
-  if (drag.moved) { const k = 0.045 * zoom * (900 / Math.max(500, window.innerHeight)); focus.x -= dx * k; focus.z -= dy * k * 1.3; focus.x = clamp(focus.x, -40, 40); focus.z = clamp(focus.z, -40, 40); panHold = 6; }
+  if (drag.moved) { const k = 0.045 * zoom * (900 / Math.max(500, window.innerHeight)); focus.x = clamp(focus.x - dx * k, -42, 42); focus.z = clamp(focus.z - dy * k * 1.3, -42, 42); panHold = 6; }
   drag.x = e.clientX; drag.y = e.clientY;
 });
 function endPointer(e) {
@@ -642,116 +789,152 @@ function endPointer(e) {
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', e => { pointers.delete(e.pointerId); drag = null; pinch = null; });
-canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = clamp(zoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.55, 1.7); }, { passive: false });
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+canvas.addEventListener('wheel', e => { if (UI.mode !== 'play') return; e.preventDefault(); zoom = clamp(zoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.55, 1.8); }, { passive: false });
 function tap(x, y) {
   const r = canvas.getBoundingClientRect();
   ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
   const hits = ray.intersectObjects(pickables.filter(h => h.userData.owner.visible), false);
-  if (hits.length) {
-    const who = hits[0].object.userData.owner.userData.pick;
-    UI.sel = who; UI.loc = null; panHold = 0; renderCard(true); return;
-  }
+  if (hits.length) { UI.sel = hits[0].object.userData.owner.userData.pick; panHold = 0; renderCard(true); return; }
   if (!ray.ray.intersectPlane(plane, hitPt)) return;
   UI.sel = null;
   const loc = Object.keys(L).find(k => Math.hypot(hitPt.x - L[k].x, hitPt.z - L[k].z) < L[k].r);
-  if (loc) { UI.loc = loc; act(['goto', loc]); }
-  else { UI.loc = null; act(['walk', { x: clamp(hitPt.x, -38, 38), z: clamp(hitPt.z, -38, 38) }]); }
+  if (loc) act(['goto', loc]);
+  else act(['walk', { x: clamp(hitPt.x, -40, 40), z: clamp(hitPt.z, -40, 40) }]);
   panHold = 0;
-  renderCard(true);
 }
 
 /* ================= interface ================= */
-const UI = { sel: null, loc: null, book: false, tab: 'ledger', speed: 1, cardKey: '', confirm: null, exportText: '', importMsg: '' };
-const CMD_LOC = { store: 'bakery', bake: 'bakery', serve: 'bakery' };
+const UI = { mode: 'title', overlay: null, sel: null, loc: null, tab: 'ledger', speed: 1, confirm: null, exportText: '', importMsg: '', titleView: 'main', pauseView: 'main', ci: '', cr: '', hireWage: {}, newName: 'Wren', newSlot: null, sideCard: 0 };
+const calm = () => meta.settings.motion === 'reduced' || matchMedia('(prefers-reduced-motion: reduce)').matches;
+const B_ = (label, c, cls, dis) => `<button type="button" class="btn ${cls || ''}" data-c='${esc(JSON.stringify(c))}' ${dis ? 'disabled' : ''}>${label}</button>`;
 function act(c) {
   if (c[0] === 'page') { openBook(c[1]); return; }
   if (c[0] === 'goto') UI.loc = c[1];
   else if (c[0] === 'walk') UI.loc = null;
-  else if (c[0] === 'gather') UI.loc = c[1] === 'grain' ? 'field' : 'forest';
-  else if (CMD_LOC[c[0]]) UI.loc = CMD_LOC[c[0]];
-  const r = Sim.cmd(G, c[0], c[1], c[2]);
-  if (r.msg) toast(r.msg, r.ok ? 'info' : 'bad');
+  else if (c[0] === 'gather') UI.loc = Sim.GATHER[c[1]].loc;
+  else if (c[0] === 'work' && G.job) UI.loc = 'emp:' + G.job.emp;
+  else if (['store', 'craft', 'serve'].includes(c[0])) { const sh = Sim.shopById(G, c[1]); if (sh) UI.loc = 'plot' + sh.plot; }
+  if (c[0] === 'open') UI.loc = 'plot' + c[1];
+  const r = Sim.cmd(G, c[0], c[1], c[2], c[3]);
+  if (r.msg) toast(r.msg, r.ok ? 'info' : 'bad', true);
+  drainEvents();
   renderCard(true);
-  if (UI.book) renderBook();
+  if (UI.overlay === 'book') renderBook();
   return r;
 }
-function toast(text, kind) {
-  const box = $('toasts');
-  const el = document.createElement('div');
+function toast(text, kind, force) {
+  if (!force && meta.settings.toasts === 'important' && (kind === 'coin' || kind === 'info')) return;
+  const box = $('toasts'), el = document.createElement('div');
   el.className = 'toast ' + (kind || 'info'); el.textContent = text;
   box.appendChild(el);
   while (box.children.length > 2) box.removeChild(box.firstChild);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, kind === 'story' ? 6500 : 3800);
 }
-const B_ = (label, c, cls, dis) => `<button type="button" class="btn ${cls || ''}" data-c='${esc(JSON.stringify(c))}' ${dis ? 'disabled' : ''}>${label}</button>`;
-function where(s) {
-  const p = s.player;
-  return Object.keys(L).find(k => Math.hypot(p.x - L[k].x, p.z - L[k].z) < L[k].r) || null;
+function where(s) { const p = s.player; return Object.keys(L).find(k => Math.hypot(p.x - L[k].x, p.z - L[k].z) < L[k].r) || null; }
+function carryText(s) {
+  const inv = s.player.inv, parts = Sim.GOODS.filter(g => inv[g]).map(g => inv[g] + ' ' + g);
+  return parts.length ? 'You carry ' + parts.join(', ') + ' (' + Sim.carried(s) + '/' + Sim.CARRY + ').' : 'Your hands are empty.';
 }
+const PLACES = [['field', 'Wheat Field'], ['forest', 'Pine Woods'], ['pit', 'Iron Pit'], ['market', 'Trading Post'], ['home', 'Your Hut']];
+function placesRow(s) {
+  const list = [];
+  if (s.job) list.push(['emp:' + s.job.emp, 'Your job']);
+  s.shops.forEach(x => list.push(['plot' + x.plot, TR[x.trade].name + ' (' + Sim.PLOTS[x.plot].name.split(' ')[0] + ')']));
+  if (!s.job && !s.shops.length) list.push(['well', 'The square']);
+  return `<div class="places">${list.concat(PLACES).map(([k, n]) => `<button type="button" class="place" data-c='${esc(JSON.stringify(['goto', k]))}'>${esc(n)}</button>`).join('')}</div>`;
+}
+function progressBar(frac) { return `<div class="bar"><i style="width:${Math.round(clamp(frac, 0, 1) * 100)}%"></i></div>`; }
+function shiftText(e) { return String(e.shift[0]).padStart(2, '0') + ':00–' + String(e.shift[1]).padStart(2, '0') + ':00'; }
+
 function cardHTML(s) {
-  const p = s.player, b = s.bakery, T = Sim.TIERS[s.tier], inv = p.inv;
-  const carry = `You carry ${inv.grain} grain and ${inv.wood} wood (${Sim.carried(s)}/${Sim.CARRY}).`;
-  const places = `<div class="places">${[['bakery', 'Bakery'], ['field', 'Wheat Field'], ['forest', 'Pine Woods'], ['market', 'Trading Post'], ['home', 'Your Hut']].map(([k, n]) => `<button type="button" class="place" data-c='${JSON.stringify(['goto', k])}' data-loc="${k}">${n}</button>`).join('')}</div>`;
-  // a character is selected
+  const p = s.player;
   if (UI.sel != null) {
-    if (UI.sel === 'player') return `<h2>You</h2><div class="sub">${esc(carry)}</div><div class="why">${p.action ? (p.action.type === 'bake' ? 'Baking at the oven' : p.action.type === 'gather' ? 'Gathering ' + p.action.good : '') : p.dest ? 'Walking' : 'Standing about'}</div><div class="acts">${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
-    if (UI.sel === 'worker' && s.worker) {
-      const w = s.worker;
-      return `<h2>${esc(w.name)}, your baker</h2><div class="sub num">${Sim.skillLabel(w.skill)} · paid ${w.wage}c a day (asked ${w.ask}c) · mood ${Math.round(w.mood)}/100</div>
-        <div class="bar mood ${w.mood < 30 ? 'low' : ''}"><i style="width:${Math.round(w.mood)}%"></i></div>
-        <div class="why"><b>Doing:</b> ${esc(w.why || '')}</div>
+    const sel = UI.sel;
+    if (sel === 'player') return `<h2>${esc(s.name)}</h2><div class="sub">${esc(carryText(s))}</div><div class="why">${p.action ? (p.action.type === 'craft' ? 'Working at your shop' : 'Gathering ' + p.action.good) : p.working ? 'Working your shift' : p.dest ? 'Walking' : 'Standing about'}</div><div class="acts">${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+    if (typeof sel === 'string' && sel.startsWith('w:')) {
+      const shop = Sim.shopById(s, +sel.slice(2)), w = shop && shop.worker;
+      if (w) return `<h2>${esc(w.name)}</h2><div class="sub num">Works your ${TR[shop.trade].name.toLowerCase()} · ${Sim.skillLabel(w.skill)} · ${w.wage}c a day (asked ${w.ask}c) · mood ${Math.round(w.mood)}/100</div>
+        <div class="bar mood ${w.mood < 30 ? 'low' : ''}"><i style="width:${Math.round(w.mood)}%"></i></div><div class="why"><b>Doing:</b> ${esc(w.why || '')}</div>
         <div class="acts">${B_('Staff page', ['page', 'staff'])}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
     }
-    const a = s.agents.find(x => x.id === UI.sel);
-    if (a) {
-      const role = a.kind === 'traveler' ? 'Passing through' : { field: 'Farmer', forest: 'Woodcutter', market: 'Trader', well: 'Water-carrier' }[a.job];
-      return `<h2>${esc(a.name)}</h2><div class="sub">${role}</div><div class="why"><b>Doing:</b> ${esc(a.doing || '')}${a.mode === 'shop' && a.phase !== 'leave' ? `<br>Wants ${a.qty} ${a.qty === 1 ? 'loaf' : 'loaves'}.` : ''}${a.lastReason === 'tooExpensive' ? '<br>Last visit: walked off over the price.' : a.lastReason === 'served' ? '<br>Last visit: left happy with bread.' : ''}</div><div class="acts">${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+    if (typeof sel === 'string' && sel.startsWith('emp:')) { UI.sel = null; UI.loc = sel; }
+    else {
+      const a = s.agents.find(x => x.id === sel);
+      if (a) {
+        const role = a.kind === 'traveler' ? 'Passing through' : { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader', well: 'Water-carrier' }[a.job];
+        const sh = a.shop && Sim.shopById(s, a.shop);
+        return `<h2>${esc(a.name)}</h2><div class="sub">${role}</div><div class="why"><b>Doing:</b> ${esc(a.doing || '')}${sh && a.phase !== 'leave' ? `<br>Wants ${esc(Sim.goodsName(sh.trade, a.qty))}.` : ''}${a.lastReason === 'tooExpensive' ? '<br>Last visit: walked off over the price.' : a.lastReason === 'served' ? '<br>Last visit: left happy.' : ''}</div><div class="acts">${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+      }
+      UI.sel = null;
     }
-    UI.sel = null;
   }
   const here = (p.dest && UI.loc) || where(s) || UI.loc;
-  const busy = p.action ? (p.action.type === 'bake'
-    ? `<div class="sub">Baking: ${Math.round(b.oven.progress / Math.max(1, b.oven.need) * 100)}%</div><div class="bar"><i style="width:${b.oven.progress / Math.max(1, b.oven.need) * 100}%"></i></div>`
-    : `<div class="sub">Gathering ${p.action.good}&hellip; (repeats until your arms are full)</div><div class="bar"><i style="width:${(1 - p.action.left / Sim.GATHER[p.action.good].min) * 100}%"></i></div>`) : '';
   const walking = p.dest ? `<div class="sub">Walking&hellip;</div>` : '';
-  if (here === 'bakery') {
-    const q = b.queue.length;
-    const bakingNow = p.action && p.action.type === 'bake';
+  const Lh = here && L[here];
+  // a shop you work at
+  if (Lh && Lh.emp) {
+    const e = Sim.empById(Lh.emp), mine = s.job && s.job.emp === e.id, T = TR[e.trade];
+    const learnt = Sim.learned(s, e.trade), shifts = s.trades[e.trade];
+    let info = `<h2>${esc(e.name)}</h2><div class="sub">${esc(e.boss)}'s ${T.name.toLowerCase()} · shifts ${shiftText(e)} · ${e.wage}c a shift · ${learnt ? 'you know this trade' : `work ${Sim.LEARN_SHIFTS} shifts to learn ${T.name.toLowerCase()}${shifts ? ` (${shifts}/${Sim.LEARN_SHIFTS})` : ''}`}</div>${walking}`;
     const acts = [];
-    if (bakingNow) { acts.push(B_('Stop baking', ['stop'], 'alt')); if (q) acts.push(B_(`Serve ${q} waiting`, ['serve'])); }
-    else {
-      acts.push(B_(b.oven.loaded ? 'Finish the batch' : `Bake ${T.batch} loaves`, ['bake']));
-      acts.push(B_('Mind the counter', ['serve'], 'alt'));
+    if (mine) {
+      const on = Sim.inShift(s), len = (e.shift[1] - e.shift[0]) * 60;
+      if (on) info += `<div class="why">${Sim.playerAtWork(s) ? '<b>Working your shift.</b> Stay here to get paid.' : '<b>Your shift is on.</b> Go to the workstation to be counted.'} Strikes: ${s.job.strikes}/3.</div>${progressBar(s.job.workedMin / (len * 0.6))}`;
+      else info += `<div class="why">Your next shift is ${shiftText(e)}. You have worked ${s.job.shifts} ${s.job.shifts === 1 ? 'shift' : 'shifts'} here. Strikes: ${s.job.strikes}/3.</div>`;
+      if (!Sim.playerAtWork(s)) acts.push(B_('Go to work', ['work']));
+      acts.push(UI.confirm === 'quit' ? B_('Yes, quit', ['quitJob'], 'warn') + B_('Stay', ['ui', 'confirm', null], 'alt') : B_('Quit this job', ['ui', 'confirm', 'quit'], 'alt'));
+    } else if (s.job) {
+      info += `<div class="why">You already work at ${esc(Sim.empById(s.job.emp).name)}. You can only hold one job at a time.</div>`;
+    } else {
+      info += `<div class="why">${esc(e.boss)} needs a hand. Show up for each shift to get paid. Miss three and you're let go.</div>`;
+      acts.push(B_(`Ask ${esc(e.boss)} for work`, ['apply', e.id]));
     }
-    if (Sim.carried(s)) acts.push(B_('Store what I carry', ['store'], 'alt'));
-    acts.push(B_('Prices &amp; upgrades', ['page', 'bakery'], 'alt'));
-    const status = `${T.name} · ${b.bread} ${b.bread === 1 ? 'loaf' : 'loaves'} on the shelf · storage ${b.grain} grain, ${b.wood} wood (max ${T.cap}) · ${s.price}c a loaf${q ? ` · <b>${q} waiting</b>` : ''}`;
-    const tip = !s.worker && !bakingNow && Sim.dist(p, Sim.P.serve) < 0.8 ? '<div class="why">You are minding the counter. Customers are served while you stand here.</div>' : '';
-    return `<h2>Your bakery</h2><div class="sub num">${status}</div>${busy}${walking}${tip}<div class="acts">${acts.join('')}</div>${places}`;
+    return info + `<div class="acts">${acts.join('')}</div>` + placesRow(s);
   }
-  if (here === 'field' || here === 'forest') {
-    const good = here === 'field' ? 'grain' : 'wood';
-    const gathering = p.action && p.action.type === 'gather';
-    const acts = gathering ? [B_('Stop', ['stop'], 'alt')] : [B_(here === 'field' ? 'Gather grain' : 'Chop wood', ['gather', good], '', Sim.carried(s) >= Sim.CARRY)];
-    if (Sim.carried(s)) acts.push(B_('Take it to the bakery', ['store'], 'alt'));
-    const blurb = here === 'field' ? 'Free to gather. 2 grain every half hour.' : 'Free to cut. 2 wood every 40 minutes. Wood fuels the oven and builds upgrades.';
-    return `<h2>${L[here].name}</h2><div class="sub">${blurb} ${esc(carry)}</div>${busy}${walking}<div class="acts">${acts.join('')}</div>${places}`;
+  // a lot: empty or your shop
+  if (Lh && Lh.plot != null) {
+    const shop = Sim.shopOnPlot(s, Lh.plot);
+    if (!shop) {
+      const acts = Sim.TRADE_KEYS.map(k => {
+        const T = TR[k], cost = T.tiers[0].cost, known = Sim.learned(s, k), can = known && Sim.canPay(s, cost);
+        return B_(`Open a ${T.name.toLowerCase()}<small>${known ? Sim.costText(cost) : 'learn it at ' + esc(Sim.EMPLOYERS.find(e => e.trade === k).name)}</small>`, ['open', Lh.plot, k], can ? '' : 'alt', !can);
+      });
+      return `<h2>${esc(Lh.name)}</h2><div class="sub">An empty lot facing the square. Open any trade you have learned.</div>${walking}<div class="acts">${acts.join('')}</div>${placesRow(s)}`;
+    }
+    const T = TR[shop.trade], Ti = Sim.tierOf(shop), q = shop.queue.length;
+    const crafting = p.action && p.action.type === 'craft' && p.action.shop === shop.id;
+    const acts = [];
+    if (crafting) { acts.push(B_('Stop', ['stop'], 'alt')); if (q) acts.push(B_(`Serve ${q} waiting`, ['serve', shop.id])); }
+    else { acts.push(B_(shop.work.loaded ? 'Finish the batch' : `${T.craft} ${Sim.goodsName(shop.trade, Ti.out)}`, ['craft', shop.id])); acts.push(B_('Mind the counter', ['serve', shop.id], 'alt')); }
+    if (Object.keys(T.recipe).some(g => p.inv[g])) acts.push(B_('Store what I carry', ['store', shop.id], 'alt'));
+    acts.push(B_('Manage', ['page', 'shops'], 'alt'));
+    const stock = Object.keys(T.recipe).map(g => shop.stock[g] + ' ' + g).join(', ');
+    const status = `${Ti.name} · ${Sim.goodsName(shop.trade, shop.goods)} on the shelf · storage ${stock} (max ${Ti.cap}) · ${shop.price}c each${q ? ` · <b>${q} waiting</b>` : ''}${shop.worker ? ' · ' + esc(shop.worker.name) + ' works here' : ''}`;
+    const busy = crafting || shop.work.loaded ? `<div class="sub">${T.crafting}: ${Math.round(shop.work.progress / Math.max(1, shop.work.need) * 100)}%</div>${progressBar(shop.work.progress / Math.max(1, shop.work.need))}` : '';
+    const tip = !shop.worker && !crafting && Sim.dist(p, Sim.plotPt(shop, 'serve')) < 0.8 ? '<div class="why">You are minding the counter. Customers are served while you stand here.</div>' : '';
+    return `<h2>Your ${T.name.toLowerCase()}</h2><div class="sub num">${status}</div>${busy}${walking}${tip}<div class="acts">${acts.join('')}</div>${placesRow(s)}`;
+  }
+  if (here === 'field' || here === 'forest' || here === 'pit') {
+    const good = { field: 'grain', forest: 'wood', pit: 'ore' }[here], gathering = p.action && p.action.type === 'gather';
+    const acts = gathering ? [B_('Stop', ['stop'], 'alt')] : [B_({ grain: 'Gather grain', wood: 'Chop wood', ore: 'Dig ore' }[good], ['gather', good], '', Sim.carried(s) >= Sim.CARRY)];
+    s.shops.filter(x => TR[x.trade].recipe[good] && p.inv[good]).forEach(x => acts.push(B_(`Take it to your ${TR[x.trade].name.toLowerCase()}`, ['store', x.id], 'alt')));
+    const blurb = { grain: 'Free to gather. 2 grain every half hour. Bakeries and taverns use it.', wood: 'Free to cut. 2 wood every 40 minutes. Every trade burns or builds with it.', ore: 'Free to dig. 2 ore every 50 minutes. Smiths need it.' }[good];
+    const busy = gathering ? `<div class="sub">Gathering ${p.action.good}&hellip; (repeats until your arms are full)</div>${progressBar(1 - p.action.left / Sim.GATHER[p.action.good].min)}` : '';
+    return `<h2>${L[here].name}</h2><div class="sub">${blurb} ${esc(carryText(s))}</div>${busy}${walking}<div class="acts">${acts.join('')}</div>${placesRow(s)}`;
   }
   if (here === 'market') {
-    const acts = [
-      B_('Buy 2 grain · 4c', ['buy', 'grain', 2], '', s.coins < 4), B_('Buy 1 wood · 2c', ['buy', 'wood', 1], '', s.coins < 2),
-      B_(`Sell grain · ${inv.grain}c`, ['sell', 'grain', inv.grain], 'alt', !inv.grain), B_(`Sell wood · ${inv.wood}c`, ['sell', 'wood', inv.wood], 'alt', !inv.wood)
-    ];
-    return `<h2>Trading Post</h2><div class="sub">Grain and wood cost 2c each here and sell back for 1c. Selling what you gather always earns something, even when you are broke. ${esc(carry)}</div>${walking}<div class="acts">${acts.join('')}</div>${places}`;
+    const inv = p.inv, acts = [];
+    Sim.GOODS.forEach(g => acts.push(B_(`Buy ${g} · ${Sim.BUY[g]}c`, ['buy', g, 1], '', s.coins < Sim.BUY[g])));
+    Sim.GOODS.forEach(g => { if (inv[g]) acts.push(B_(`Sell ${inv[g]} ${g} · ${inv[g] * Sim.SELL[g]}c`, ['sell', g, inv[g]], 'alt')); });
+    return `<h2>Trading Post</h2><div class="sub">Grain and wood cost 2c, ore 3c. Everything sells back for 1c, so gathering always earns something. ${esc(carryText(s))}</div>${walking}<div class="acts">${acts.join('')}</div>${placesRow(s)}`;
   }
-  if (here === 'home') return `<h2>Your hut</h2><div class="sub">Small, draughty, yours. Your game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the book', ['page', 'goals'], 'alt')}</div>${places}`;
-  if (here === 'well') return `<h2>Village Well</h2><div class="sub">Villagers eat lunch here at noon and gossip about prices.</div>${walking}${places}`;
-  return `<h2>Hearthmoor</h2><div class="sub">${p.dest ? 'Walking&hellip;' : 'Tap a place to walk there, or tap a person to see what they are doing.'}</div>${busy}${places}`;
+  if (here === 'home') return `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the menu', ['ui', 'pause'], 'alt')}</div>${placesRow(s)}`;
+  if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops along one side of the square hire hands. The three lots across from them wait for owners. Villagers lunch at the well at noon.</div>${walking}${placesRow(s)}`;
+  return `<h2>Hearthmoor</h2><div class="sub">${p.dest ? 'Walking&hellip;' : 'Tap a place to walk there, or tap a person to see what they are doing.'}</div>${placesRow(s)}`;
 }
 function renderCard(force) {
-  // info (text, progress bars) refreshes freely; buttons are only replaced when they change, so taps never land on a vanished button
+  if (!G || UI.mode !== 'play') return;
   const html = cardHTML(G);
   const i = html.search(/<div class="(acts|places)">/);
   const info = i < 0 ? html : html.slice(0, i), rest = i < 0 ? '' : html.slice(i);
@@ -762,58 +945,46 @@ document.addEventListener('click', e => {
   const btn = e.target.closest('[data-c]');
   if (!btn || btn.disabled) return;
   const c = JSON.parse(btn.dataset.c);
-  if (btn.dataset.loc) UI.loc = btn.dataset.loc;
-  if (c[0] === 'ui') return uiCmd(c[1], c[2]);
+  if (c[0] === 'ui') { uiCmd(c[1], c[2]); return; }
   if (c[0] === 'goto') UI.sel = null;
+  if (c[0] !== 'ui') UI.confirm = null;
   act(c);
 });
 
 function hud(s) {
-  const T = Sim.TIERS[s.tier];
-  $('clock').innerHTML = `Day ${s.day} · ${Sim.clock(s.t)}`;
+  $('clock').textContent = `Day ${s.day} · ${Sim.clock(s.t)}`;
   $('coins').textContent = s.coins + 'c';
-  const inv = s.player.inv;
-  const chips = [`Carrying <b>${inv.grain}</b> grain · <b>${inv.wood}</b> wood`, `Shelf <b>${s.bakery.bread}</b> bread`];
-  if (s.worker) chips.push(`${esc(s.worker.name)}: ${esc(shortTask(s.worker))}`);
-  const html = chips.map(c => `<span class="chip num">${c}</span>`).join('');
+  const inv = s.player.inv, chips = [];
+  const carry = Sim.GOODS.filter(g => inv[g]).map(g => `<b>${inv[g]}</b> ${g}`);
+  chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
+  if (s.job) { const e = Sim.empById(s.job.emp), on = Sim.inShift(s); chips.push(`<span class="chip num ${on ? 'on' : ''}">${on ? 'On shift' : 'Job'}: ${esc(e.name)} ${shiftText(e)}</span>`); }
+  s.shops.forEach(x => chips.push(`${TR[x.trade].name}: <b>${x.goods}</b> ${TR[x.trade].product}${x.worker ? ' · ' + esc(x.worker.name) : ''}`));
+  const html = chips.map(c => c.startsWith('<span') ? c : `<span class="chip num">${c}</span>`).join('');
   if ($('subhud').innerHTML !== html) $('subhud').innerHTML = html;
   const g = Sim.GOALS.find(x => !x.done(s));
-  const gt = g ? `<em>Next:</em> ${esc(g.text)}` : '<em>Stage complete.</em> You run a stone bakery. Keep tuning prices and pay.';
+  const gt = g ? `<em>Next:</em> ${esc(g.text)}` : '<em>Chapter complete.</em> You own a fine business. Keep growing.';
   if ($('goal').innerHTML !== gt) $('goal').innerHTML = gt;
   const h = Sim.hourOf(s);
-  $('night').hidden = !(h >= 21 || h < 5.5);
+  $('night').hidden = !(h >= 21 || h < 5.5) || !!UI.overlay;
   $('toasts').style.top = Math.round($('hud').getBoundingClientRect().bottom + 6) + 'px';
-  const side = document.querySelector('.side');
-  const cr = $('card').getBoundingClientRect();
-  side.style.top = 'auto';
-  side.style.bottom = cr.right > window.innerWidth - 64 ? Math.round(window.innerHeight - cr.top + 10) + 'px' : 'calc(env(safe-area-inset-bottom, 0px) + 12px)';
+  const side = $('side'), cr = $('card').getBoundingClientRect();
   UI.sideCard = cr.right <= window.innerWidth - 64 ? cr.right / window.innerWidth : 0;
+  side.style.bottom = UI.sideCard ? 'calc(env(safe-area-inset-bottom, 0px) + 12px)' : Math.round(window.innerHeight - cr.top + 10) + 'px';
 }
-function shortTask(w) { return { bake: 'baking', serve: 'serving', tend: 'at the counter', supply: 'fetching supplies', lunch: 'lunch', sleep: 'asleep', commute: 'walking to work', home: 'going home' }[w.task] || 'idle'; }
 
-/* ----- the book ----- */
-const TABS = [['ledger', 'Ledger'], ['bakery', 'Bakery'], ['staff', 'Staff'], ['goals', 'Goals'], ['save', 'Save']];
-function openBook(tab) { UI.book = true; if (tab) UI.tab = tab; $('book').hidden = false; renderBook(true); }
-function closeBook() { UI.book = false; UI.confirm = null; $('book').hidden = true; saveNow(); }
+/* ----- the ledger book ----- */
+const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['jobs', 'Jobs'], ['goals', 'Goals']];
+function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
+function closeOverlay() { UI.overlay = null; UI.confirm = null; $('book').hidden = true; $('pause').hidden = true; saveNow(); renderCard(true); }
+function turnPage(el, turn) { if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('') + `<button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
-  const pg = $('page');
-  const y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, bakery: pageBakery, staff: pageStaff, goals: pageGoals, save: pageSave }[UI.tab])(G);
-  pg.scrollTop = y;
-  if (turn && !matchMedia('(prefers-reduced-motion: reduce)').matches) { pg.classList.remove('turn'); void pg.offsetWidth; pg.classList.add('turn'); }
+  const pg = $('page'), y = turn ? 0 : pg.scrollTop;
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, jobs: pageJobs, goals: pageGoals }[UI.tab])(G);
+  pg.scrollTop = y; turnPage(pg, turn);
 }
-function money(n) { return (n < 0 ? '−' : '') + Math.abs(n) + 'c'; }
-function acctTable(e, live) {
-  const income = e.revenue + e.otherIncome, costs = e.supplies + e.wages + e.upkeep, profit = income - costs;
-  return `<table class="acct"><tbody>
-    <tr><td>Bread sales (${e.sold} ${e.sold === 1 ? 'loaf' : 'loaves'} to ${e.served} ${e.served === 1 ? 'customer' : 'customers'})</td><td>${money(e.revenue)}</td></tr>
-    ${e.otherIncome ? `<tr><td>Raw goods sold at the Trading Post</td><td>${money(e.otherIncome)}</td></tr>` : ''}
-    <tr><td>Supplies bought</td><td>${money(-e.supplies)}</td></tr>
-    <tr><td>Wages${live ? ' (paid at 21:00)' : ''}</td><td>${money(-e.wages)}</td></tr>
-    <tr><td>Upkeep${live ? ' (paid at 21:00)' : ''}</td><td>${money(-e.upkeep)}</td></tr>
-    <tr class="tot"><td>${live ? 'So far today' : 'Profit'}</td><td>${money(profit)}</td></tr></tbody></table>`;
-}
+const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
+function notesHTML(notes) { return `<ul class="notes">${notes.map(n => `<li>${esc(n.text)}${n.fix ? `<br>${B_(esc(n.fix.label), n.fix.cmd, 'alt')}` : ''}</li>`).join('')}</ul>`; }
 function lostLine(e) {
   const parts = [];
   if (e.tooExpensive) parts.push(`${e.tooExpensive} over the price`);
@@ -821,166 +992,320 @@ function lostLine(e) {
   if (e.noService) parts.push(`${e.noService} tired of waiting`);
   return parts.length ? `Customers lost: ${parts.join(', ')}.` : 'No customers lost.';
 }
-function notesHTML(notes) {
-  return `<ul class="notes">${notes.map(n => `<li>${esc(n.text)}${n.fix ? `<br>${B_(esc(n.fix.label), n.fix.cmd, 'alt')}` : ''}</li>`).join('')}</ul>`;
+function dayTable(rows, total, label) {
+  return `<table class="acct"><tbody>${rows.filter(r => r).map(r => `<tr class="${r[2] || ''}"><td>${r[0]}</td><td>${money(r[1])}</td></tr>`).join('')}<tr class="tot"><td>${label}</td><td>${money(total)}</td></tr></tbody></table>`;
 }
 function pageLedger(s) {
   const st = s.stats;
-  const hours = `Bakery hours: you ${Sim.hm(st.playerMin)}${s.worker ? `, ${esc(s.worker.name)} ${Sim.hm(st.workerMin)}` : ''}. Batches baked: ${st.batches}.`;
+  const shopRows = s.shops.map(x => {
+    const e = st.shops[x.id] || { revenue: 0, supplies: 0 }, T = TR[x.trade];
+    return [`${T.name}: ${e.sold || 0} ${e.sold === 1 ? T.one : T.many} sold, ${e.supplies ? e.supplies + 'c of supplies' : 'no supplies bought'}`, (e.revenue || 0) - (e.supplies || 0)];
+  });
+  const so = shopRows.reduce((a, r) => a + r[1], 0) + st.jobPay + st.rawSales - st.marketBuys;
   let html = `<h3>The Ledger</h3><p class="lead">Every coin in and out, and why.</p>
-    <div class="day"><div class="dayhead"><strong>Day ${s.day}, so far</strong><span class="num">${Sim.clock(s.t)}</span></div>${acctTable(st, true)}<p>${lostLine(st)}</p><p>${hours}</p></div>`;
+    <div class="day"><div class="dayhead"><strong>Day ${s.day}, so far</strong><span class="num">${Sim.clock(s.t)}</span></div>
+    ${dayTable(shopRows.concat([st.jobPay ? ['Wages from your job', st.jobPay] : null, st.rawSales ? ['Raw goods sold', st.rawSales] : null, st.marketBuys ? ['Bought at the Trading Post', -st.marketBuys] : null]), so, 'So far today')}
+    <p>${s.shops.length ? 'Wages and upkeep are paid at 21:00.' : 'You own no shops yet.'}</p></div>`;
   const days = s.ledger.slice().reverse().slice(0, 7);
-  if (!days.length) html += `<p>The books close at 21:00 each day. Your first full day will appear here with an explanation of what went right and wrong.</p>`;
+  if (!days.length) html += `<p>The books close at 21:00 each day, with an explanation of what went right and wrong.</p>`;
   for (const e of days) {
-    html += `<div class="day"><div class="dayhead"><strong>Day ${e.day}</strong><span class="seal ${e.profit < 0 ? 'neg' : ''} num">${e.profit < 0 ? 'Loss ' : 'Profit '}${Math.abs(e.profit)}c</span></div>
-      ${acctTable(e)}<p>${lostLine(e)} Price was ${e.price}c. Bakery hours: you ${Sim.hm(e.playerMin)}${e.workerName ? `, ${esc(e.workerName)} ${Sim.hm(e.workerMin)}` : ''}.</p>${notesHTML(e.notes)}</div>`;
+    const rows = e.shops.map(x => [`${esc(x.label)}`, x.profit]);
+    if (e.jobPay) rows.push(['Wages from your job', e.jobPay]);
+    if (e.rawSales) rows.push(['Raw goods sold', e.rawSales]);
+    if (e.marketBuys) rows.push(['Bought at the Trading Post', -e.marketBuys]);
+    html += `<div class="day"><div class="dayhead"><strong>Day ${e.day}</strong><span class="seal ${e.profit < 0 ? 'neg' : ''} num">${e.profit < 0 ? 'Down ' : 'Up '}${Math.abs(e.profit)}c</span></div>${dayTable(rows, e.profit, 'The day')}`;
+    if (e.notes.length) html += notesHTML(e.notes);
+    for (const x of e.shops) {
+      html += `<div class="shopnote">${esc(x.label)}</div><table class="acct"><tbody>
+        <tr><td>Sales (${x.sold} to ${x.served} ${x.served === 1 ? 'customer' : 'customers'} at ${x.price}c)</td><td>${money(x.revenue)}</td></tr>
+        <tr><td>Supplies</td><td>${money(-x.supplies)}</td></tr><tr><td>Wages${x.workerName ? ' (' + esc(x.workerName) + ')' : ''}</td><td>${money(-x.wages)}</td></tr><tr><td>Upkeep</td><td>${money(-x.upkeep)}</td></tr>
+        <tr class="tot"><td>Profit</td><td>${money(x.profit)}</td></tr></tbody></table>
+        <p>${lostLine(x)} Hours here: you ${Sim.hm(x.playerMin)}${x.workerName ? `, ${esc(x.workerName)} ${Sim.hm(x.workerMin)}` : ''}.</p>${notesHTML(x.notes)}`;
+    }
+    html += `</div>`;
   }
   return html;
 }
 function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
-function shareWilling(price, mean) { return Math.round(100 * (1 - 0.5 * (1 + erf((price - mean) / (1.4 * Math.SQRT2))))); }
-function pageBakery(s) {
-  const T = Sim.TIERS[s.tier], next = Sim.TIERS[s.tier + 1];
-  const vill = shareWilling(s.price, 6 + T.wtpBonus), trav = shareWilling(s.price, 6.5 + T.wtpBonus);
-  const perLoaf = (Sim.BUY.grain * Sim.RECIPE.grain + Sim.BUY.wood * Sim.RECIPE.wood) / T.batch;
-  let html = `<h3>${T.name}</h3><p class="lead">Bake from grain and wood, sell at the counter.</p>
-  <div class="grid2"><div class="box"><h5>This building</h5><dl class="kv">
-    <dt>Batch</dt><dd>${T.batch} loaves from ${Sim.RECIPE.grain} grain + ${Sim.RECIPE.wood} wood</dd>
-    <dt>Bake time</dt><dd>${T.bakeMin} min</dd><dt>Storage and shelf</dt><dd>${T.cap} each</dd>
-    <dt>Travelers a day</dt><dd>about ${T.travelers}</dd><dt>Upkeep</dt><dd>${T.upkeep}c a day</dd>
-    <dt>Supply cost if bought</dt><dd>${perLoaf.toFixed(2)}c a loaf</dd></dl></div>
-  <div class="box"><h5>Price: <span class="num" id="pv">${s.price}c</span> a loaf</h5>
-    <input type="range" id="price" min="1" max="12" step="1" value="${s.price}" aria-label="Price per loaf">
-    <p class="num" id="pw">About ${vill}% of villagers and ${trav}% of travelers will pay this.</p>
-    <p>Charge more and fewer people buy. Charge less and you sell more but keep less of each coin.</p></div></div>`;
-  if (s.worker) html += `<h4>Orders for ${esc(s.worker.name)}</h4><p><label><input type="checkbox" id="pol" ${s.policy.supplyRuns ? 'checked' : ''}> Buy grain and wood at the Trading Post when storage runs out (uses your coin, ${Sim.BUY.grain}c each)</label></p><p>When this is off, ${esc(s.worker.name)} only bakes with what you store.</p>`;
-  html += `<h4>Upgrade</h4>`;
-  if (next) {
-    const wood = s.player.inv.wood + s.bakery.wood, can = s.coins >= next.cost.coin && wood >= next.cost.wood;
-    html += `<div class="box"><h5>${next.name}</h5><dl class="kv"><dt>Cost</dt><dd>${next.cost.coin}c and ${next.cost.wood} wood</dd><dt>You have</dt><dd>${s.coins}c and ${wood} wood</dd>
-      <dt>Batch</dt><dd>${T.batch} → ${next.batch} loaves</dd><dt>Bake time</dt><dd>${T.bakeMin} → ${next.bakeMin} min</dd><dt>Storage</dt><dd>${T.cap} → ${next.cap}</dd><dt>Travelers</dt><dd>${T.travelers} → ${next.travelers} a day</dd><dt>Upkeep</dt><dd>${T.upkeep} → ${next.upkeep}c a day</dd></dl>
-      <div class="acts">${B_('Build the ' + next.name, ['upgrade'], '', !can)}</div>${can ? '' : '<p>Wood you carry and wood in bakery storage both count.</p>'}</div>`;
-  } else html += `<p>Your Stone Bakery is the finest in Hearthmoor. Bigger things come in the next chapter.</p>`;
+function willing(shop, price, trav) { const T = TR[shop.trade]; return Math.round(100 * (1 - 0.5 * (1 + erf((price - Sim.wtpMean(shop, trav)) / (T.sd * Math.SQRT2))))); }
+function willText(shop) { return `About ${willing(shop, shop.price, false)}% of villagers and ${willing(shop, shop.price, true)}% of travelers will pay this.`; }
+function pageShops(s) {
+  let html = `<h3>Your Shops</h3><p class="lead">Set prices, give orders, and build bigger.</p>`;
+  if (!s.shops.length) {
+    html += `<p>You own no shops yet. Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the four shops on the square, then open your own on an empty lot.</p><table class="trades"><thead><tr><th>Trade</th><th>Learn at</th><th>To open</th><th>Makes</th></tr></thead><tbody>
+      ${Sim.TRADE_KEYS.map(k => { const T = TR[k], e = Sim.EMPLOYERS.find(x => x.trade === k); return `<tr><td>${T.name} ${Sim.learned(s, k) ? '<span class="pill yes">learned</span>' : ''}</td><td>${esc(e.name)}</td><td>${Sim.costText(T.tiers[0].cost)}</td><td>${T.many} from ${Sim.recipeText(k)}</td></tr>`; }).join('')}</tbody></table>`;
+    return html;
+  }
+  for (const shop of s.shops) {
+    const T = TR[shop.trade], Ti = Sim.tierOf(shop), next = T.tiers[shop.tier + 1];
+    const unit = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * Sim.BUY[g], 0) / Ti.out;
+    html += `<h4>${esc(Ti.name)} · ${esc(Sim.PLOTS[shop.plot].name)}</h4><div class="grid2"><div class="box"><dl class="kv">
+      <dt>Each batch</dt><dd>${Sim.goodsName(shop.trade, Ti.out)} from ${Sim.recipeText(shop.trade)}</dd><dt>Time</dt><dd>${Ti.min} min</dd>
+      <dt>Storage and shelf</dt><dd>${Ti.cap} each</dd><dt>Open to customers</dt><dd>${String(T.hours[0]).padStart(2, '0')}:00–${T.hours[1]}:00</dd>
+      <dt>Travelers a day</dt><dd>about ${Ti.travelers}</dd><dt>Upkeep</dt><dd>${Ti.upkeep}c a day</dd><dt>Supplies if bought</dt><dd>${unit.toFixed(2)}c each</dd></dl></div>
+      <div class="box"><h5>Price: <span class="num" id="pv-${shop.id}">${shop.price}c</span></h5>
+      <input type="range" id="price-${shop.id}" data-shop="${shop.id}" min="1" max="${Math.round(T.wtp * 2.2)}" step="1" value="${shop.price}" aria-label="Price for ${T.many}">
+      <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div></div>`;
+    if (shop.worker) html += `<p><label><input type="checkbox" id="pol-${shop.id}" data-shop="${shop.id}" ${shop.policy.supplyRuns ? 'checked' : ''}> ${esc(shop.worker.name)} buys ${Object.keys(T.recipe).join(' and ')} at the Trading Post when storage runs out</label></p>`;
+    if (next) {
+      const can = Sim.canPay(s, next.cost, shop);
+      html += `<div class="box"><h5>Upgrade to ${esc(next.name)}</h5><dl class="kv"><dt>Cost</dt><dd>${Sim.costText(next.cost)}</dd><dt>You have</dt><dd>${s.coins}c${Sim.GOODS.filter(g => next.cost[g]).map(g => ', ' + (s.player.inv[g] + shop.stock[g]) + ' ' + g).join('')}</dd>
+        <dt>Batch</dt><dd>${Ti.out} → ${next.out}</dd><dt>Time</dt><dd>${Ti.min} → ${next.min} min</dd><dt>Storage</dt><dd>${Ti.cap} → ${next.cap}</dd><dt>Travelers</dt><dd>${Ti.travelers} → ${next.travelers} a day</dd><dt>Upkeep</dt><dd>${Ti.upkeep} → ${next.upkeep}c</dd></dl>
+        <div class="acts">${B_('Build the ' + esc(next.name), ['upgrade', shop.id], '', !can)}</div>${can ? '' : '<p>Goods you carry and goods in this shop\'s storage both count.</p>'}</div>`;
+    } else html += `<p>This is the finest ${T.name.toLowerCase()} in Hearthmoor.</p>`;
+  }
+  const free = Sim.PLOTS.map((p, i) => i).filter(i => !Sim.shopOnPlot(s, i));
+  if (free.length) html += `<p>${free.length === 1 ? 'One lot is' : free.length + ' lots are'} still empty on the square. Visit one to open another trade you have learned.</p>`;
   return html;
 }
 function pageStaff(s) {
   let html = `<h3>Staff</h3><p class="lead">Hire help, set pay, and see what they are doing.</p>`;
-  if (s.worker) {
-    const w = s.worker, st = s.stats;
-    html += `<div class="box"><h5>${esc(w.name)}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(w.skill)} (works at ${Math.round(w.skill * 100)}% speed)</dd><dt>Asked for</dt><dd>${w.ask}c a day</dd><dt>Mood</dt><dd>${Math.round(w.mood)}/100</dd><dt>Bakery hours today</dt><dd>${Sim.hm(st.workerMin)}</dd><dt>Batches baked today</dt><dd>${st.batchesBy.worker}</dd><dt>Customers served today</dt><dd>${st.servedBy.worker}</dd></dl>
+  if (!s.shops.length) return html + `<p>Once you own a shop you can hire someone to run it while you do other things.</p>`;
+  for (const shop of s.shops.filter(x => x.worker)) {
+    const w = shop.worker, st = s.stats.shops[shop.id] || { workerMin: 0, batchesBy: { worker: 0 }, servedBy: { worker: 0 } }, H = Sim.workerHours(shop);
+    html += `<div class="box"><h5>${esc(w.name)} · your ${TR[shop.trade].name.toLowerCase()}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(w.skill)} (${Math.round(w.skill * 100)}% speed)</dd><dt>Asked for</dt><dd>${w.ask}c a day</dd><dt>Mood</dt><dd>${Math.round(w.mood)}/100</dd><dt>Hours today</dt><dd>${Sim.hm(st.workerMin)}</dd><dt>Batches today</dt><dd>${st.batchesBy.worker}</dd><dt>Served today</dt><dd>${st.servedBy.worker}</dd></dl>
       <div class="bar mood ${w.mood < 30 ? 'low' : ''}"><i style="width:${Math.round(w.mood)}%"></i></div>
-      <p><b>Right now:</b> ${esc(w.why || '')}</p>
-      <h4>Daily wage</h4><div class="stepper">${`<button type="button" data-c='${JSON.stringify(['setWage', w.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${w.wage}c</output><button type="button" data-c='${JSON.stringify(['setWage', w.wage + 1])}' aria-label="Raise wage">+</button>`}</div>
-      <p>${w.wage < w.ask ? `Below what ${esc(w.name)} asked. Mood drops each day you pay less.` : w.wage > w.ask ? 'Above the asking wage. Mood rises faster.' : 'Matches the asking wage. Mood rises steadily.'} Wages are paid at 21:00. Unhappy workers (below 30) work slower, and a miserable worker quits after a warning.</p>
-      <p><b>Their day:</b> walk in at 06:00, work 07:00 to 19:00 with lunch at noon, home by 20:00. While working they serve waiting customers first, bake when the shelf runs low, and mind the counter otherwise.</p>
-      <div class="acts">${UI.confirm === 'fire' ? `<div class="confirm">Let ${esc(w.name)} go? You can hire someone new straight away. ${B_('Yes, let them go', ['fire'], 'warn')} ${B_('Keep them', ['ui', 'confirm', null], 'alt')}</div>` : B_('Let go&hellip;', ['ui', 'confirm', 'fire'], 'alt')}</div></div>`;
-  } else {
-    html += `<p>Two villagers want work. Pick one and set a daily wage. Paying below what they ask saves coin but makes them unhappy.</p><div class="grid2">`;
-    s.applicants.forEach((a, i) => {
-      const wage = UI['wage' + i] || a.ask;
-      html += `<div class="box"><h5>${esc(a.name)}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(a.skill)} (${Math.round(a.skill * 100)}% speed)</dd><dt>Asks for</dt><dd>${a.ask}c a day</dd></dl>
-        <div class="stepper" style="margin-top:8px"><button type="button" data-c='${JSON.stringify(['ui', 'wage', [i, wage - 1]])}' aria-label="Lower offer">&minus;</button><output class="num">${wage}c</output><button type="button" data-c='${JSON.stringify(['ui', 'wage', [i, wage + 1]])}' aria-label="Raise offer">+</button></div>
-        <div class="acts">${B_(`Hire ${esc(a.name)} at ${wage}c a day`, ['hire', i, wage])}</div></div>`;
-    });
-    html += `</div><p>Once hired, your worker bakes and serves on their own. That frees you to gather wood for upgrades or trade at the Trading Post. You will still need to keep grain and wood in storage, or tell them to buy it on the Bakery page.</p>`;
+      <p><b>Right now:</b> ${esc(w.why || '')}</p><p><b>Their day:</b> in by ${String(H.start).padStart(2, '0')}:00, a short break at ${H.lunch}:00, home after ${H.end}:00. They serve customers first, make more when the shelf runs low, and mind the counter otherwise.</p>
+      <div class="stepper"><button type="button" data-c='${JSON.stringify(['setWage', shop.id, w.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${w.wage}c</output><button type="button" data-c='${JSON.stringify(['setWage', shop.id, w.wage + 1])}' aria-label="Raise wage">+</button></div>
+      <p>${w.wage < w.ask ? 'Below what they asked. Mood drops each day.' : w.wage > w.ask ? 'Above the asking wage. Mood rises faster.' : 'Matches the asking wage.'} Paid at 21:00. Below 30 mood they work slower, and a miserable worker quits after a warning.</p>
+      <div class="acts">${UI.confirm === 'fire' + shop.id ? `<div class="confirm">Let ${esc(w.name)} go? ${B_('Yes, let them go', ['fire', shop.id], 'warn')} ${B_('Keep them', ['ui', 'confirm', null], 'alt')}</div>` : B_('Let go&hellip;', ['ui', 'confirm', 'fire' + shop.id], 'alt')}</div></div>`;
   }
+  const open = s.shops.filter(x => !x.worker);
+  if (open.length) {
+    html += `<h4>Looking for work today</h4><p>Pick someone and set a daily wage. Paying below what they ask saves coin but makes them unhappy. New faces come each morning.</p><div class="grid2">`;
+    s.applicants.forEach((a, i) => {
+      const wage = UI.hireWage[a.name] || a.ask;
+      html += `<div class="box"><h5>${esc(a.name)}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(a.skill)} (${Math.round(a.skill * 100)}%)</dd><dt>Asks for</dt><dd>${a.ask}c a day</dd></dl>
+        <div class="stepper" style="margin-top:8px"><button type="button" data-c='${esc(JSON.stringify(['ui', 'wage', [a.name, wage - 1]]))}' aria-label="Lower offer">&minus;</button><output class="num">${wage}c</output><button type="button" data-c='${esc(JSON.stringify(['ui', 'wage', [a.name, wage + 1]]))}' aria-label="Raise offer">+</button></div>
+        <div class="acts">${open.map(x => B_(`Hire for the ${TR[x.trade].name.toLowerCase()}`, ['hire', x.id, i, wage])).join('')}</div></div>`;
+    });
+    if (!s.applicants.length) html += `<p>Nobody else is looking today. Check again tomorrow morning.</p>`;
+    html += `</div>`;
+  }
+  return html;
+}
+function pageJobs(s) {
+  let html = `<h3>Work</h3><p class="lead">Learn a trade by working for someone who already knows it.</p>`;
+  if (s.job) {
+    const e = Sim.empById(s.job.emp);
+    html += `<div class="box"><h5>${esc(e.name)}</h5><dl class="kv"><dt>Boss</dt><dd>${esc(e.boss)}</dd><dt>Shift</dt><dd>${shiftText(e)}</dd><dt>Pay</dt><dd>${e.wage}c a shift</dd><dt>Shifts worked here</dt><dd>${s.job.shifts}</dd><dt>Strikes</dt><dd>${s.job.strikes} of 3</dd></dl>
+      <p>Be at the workstation for most of the shift to get full pay. Missing a shift gives a strike; at three you are let go. Getting let go costs nothing more: you can find work again the same day.</p>
+      <div class="acts">${B_('Go to work', ['work'])}${UI.confirm === 'quitb' ? B_('Yes, quit', ['quitJob'], 'warn') + B_('Stay', ['ui', 'confirm', null], 'alt') : B_('Quit&hellip;', ['ui', 'confirm', 'quitb'], 'alt')}</div></div>`;
+  } else html += `<p>You have no job right now. You can hold one job at a time.</p>`;
+  html += `<h4>Shops that hire</h4><table class="trades"><thead><tr><th>Shop</th><th>Shift</th><th>Pay</th><th>Your trade</th></tr></thead><tbody>
+    ${Sim.EMPLOYERS.map(e => `<tr><td>${esc(e.name)}<br><button type="button" class="place" data-c='${esc(JSON.stringify(['goto', 'emp:' + e.id]))}'>Go there</button></td><td class="num">${shiftText(e)}</td><td>${e.wage}c</td><td>${TR[e.trade].name}<br>${Sim.learned(s, e.trade) ? '<span class="pill yes">learned</span>' : `<span class="pill">${s.trades[e.trade]}/${Sim.LEARN_SHIFTS} shifts</span>`}</td></tr>`).join('')}</tbody></table>
+    <p>Each shift worked in a trade also makes you a little faster at it in your own shop, up to 30%.</p>`;
   return html;
 }
 function pageGoals(s) {
   const firstOpen = Sim.GOALS.findIndex(g => !g.done(s));
-  return `<h3>From Scrounger to Master Baker</h3><p class="lead">The first chapter of Hearthmoor.</p><ul class="goals">${Sim.GOALS.map((g, i) => `<li class="${g.done(s) ? 'done' : i === firstOpen ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(g.text)}</span></li>`).join('')}</ul>
-  <h4>How the village works</h4><p>Days run from 06:00 to 21:00, about four minutes of real time. Nights pass quickly. Villagers keep their own routines: work in the fields and woods, lunch at the well at noon, an evening in the square, and bed. Most buy bread once a day. Travelers stop by from the east road, and a better bakery draws more of them.</p>
-  <p>The books close at 21:00, when wages and upkeep are paid. You can never go into debt: if coin runs short, what can't be paid is skipped and explained in the ledger.</p>
-  <p>Lifetime: ${s.lifetime.sold} loaves sold for ${s.lifetime.revenue}c over ${s.lifetime.days} days.</p>`;
+  return `<h3>Chapter One: The Hired Hand</h3><p class="lead">From nothing to a business of your own.</p><ul class="goals">${Sim.GOALS.map((g, i) => `<li class="${g.done(s) ? 'done' : i === firstOpen ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(g.text)}</span></li>`).join('')}</ul>
+  <h4>How Hearthmoor works</h4><p>Days run from 06:00 to 21:00, about four minutes of real time. Nights pass quickly. Villagers keep their own routines: work in the fields, woods and iron pit, lunch at the well at noon, an evening in the square, and bed. Each shop draws its own customers, and a better building draws more travelers from the east road.</p>
+  <p>The books close at 21:00, when wages and upkeep are paid. You never go into debt: what can't be paid is skipped and explained in the ledger.</p>`;
 }
-function pageSave(s) {
+
+/* ----- pause menu ----- */
+function openPause(view) { UI.overlay = 'pause'; UI.pauseView = view || 'main'; UI.confirm = null; $('pause').hidden = false; $('book').hidden = true; renderPause(true); }
+function renderPause(turn) {
+  const pg = $('pausePage'), y = turn ? 0 : pg.scrollTop;
+  const back = `<button type="button" class="back" data-c='["ui","pview","main"]'>&larr; Back to the menu</button>`;
+  let html = '';
+  if (UI.pauseView === 'main') {
+    const sm = Sim.summary(G);
+    html = `<div class="paused">Paused</div><h3>${esc(G.name)} of Hearthmoor</h3><p class="lead num">Day ${sm.day}, ${sm.clock} · ${sm.coins}c · ${sm.shops} ${sm.shops === 1 ? 'shop' : 'shops'}${sm.job ? ' · works at ' + esc(sm.job) : ''}</p>
+    <div class="menu-list">
+      ${B_('Resume', ['ui', 'close'])}
+      ${B_('Ledger and management<small>Daily accounts, shops, staff, jobs and goals</small>', ['ui', 'book'], 'alt')}
+      ${B_('Records<small>Every number from this playthrough</small>', ['ui', 'pview', 'stats'], 'alt')}
+      ${B_('Save and export<small>Slot ' + slot + (lastSave ? ', saved ' + Math.max(0, Math.round((Date.now() - lastSave) / 1000)) + ' s ago' : '') + '</small>', ['ui', 'pview', 'save'], 'alt')}
+      ${B_('Settings', ['ui', 'pview', 'settings'], 'alt')}
+      ${B_('Return to the title<small>Your game is saved first</small>', ['ui', 'quitTitle'], 'alt')}
+    </div>`;
+  } else if (UI.pauseView === 'stats') html = back + statsHTML(G);
+  else if (UI.pauseView === 'save') html = back + saveHTML();
+  else html = back + settingsHTML();
+  pg.innerHTML = html; pg.scrollTop = y; turnPage(pg, turn);
+}
+function kv(rows) { return `<dl class="kv">${rows.map(r => `<dt class="${r[2] || ''}">${r[0]}</dt><dd class="${r[2] || ''}">${r[1]}</dd>`).join('')}</dl>`; }
+function statsHTML(s) {
+  const r = s.rec, sum = o => Object.values(o).reduce((a, b) => a + b, 0);
+  const byTrade = Sim.TRADE_KEYS.map(k => [TR[k].name, s.shops.filter(x => x.trade === k).length]).filter(x => x[1]);
+  const staff = s.shops.filter(x => x.worker).length;
+  const best = r.bestDay ? `${money(r.bestDay.profit)} on day ${r.bestDay.day}` : '—', worst = r.worstDay ? `${money(r.worstDay.profit)} on day ${r.worstDay.day}` : '—';
+  const P = Sim.TRADE_KEYS.map(k => TR[k].product);
+  const nice = { bread: 'Bread', tools: 'Tools', ale: 'Ale', furniture: 'Furniture' };
+  const group = (title, rows) => `<div class="box statgroup"><h4>${title}</h4>${kv(rows)}</div>`;
+  return `<h3>Records of ${esc(s.name)}</h3><p class="lead">This playthrough, day ${s.day}.</p><div class="stats">
+    ${group('Wealth', [['Coins on hand', s.coins + 'c'], ['Net worth', Sim.netWorth(s) + 'c'], ['Property value', Sim.propertyValue(s) + 'c'], ['Coins earned', r.coinsEarned + 'c'], ['Coins spent', r.coinsSpent + 'c'], ['Most coins at once', r.peakCoins + 'c'], ['Best day', best], ['Worst day', worst]])}
+    ${group('Property', [['Businesses owned', s.shops.length]].concat(byTrade.map(([n, c]) => ['&nbsp;&nbsp;' + n, c]), [['Shops opened', r.shopsOpened], ['Upgrades built', r.upgrades], ['Spent on buildings', r.invested + 'c'], ['Houses owned', 'later chapter', 'later'], ['Houses rented out', 'later chapter', 'later'], ['Rent collected', 'later chapter', 'later']]))}
+    ${group('Trade', [['Goods made', sum(r.made)]].concat(P.filter(k => r.made[k]).map(k => ['&nbsp;&nbsp;' + nice[k], r.made[k]]), [['Goods sold', r.goodsSold], ['Sales revenue', r.salesRevenue + 'c'], ['Customers served', r.served], ['Customers lost', r.lost], ['&nbsp;&nbsp;over the price', r.lostPrice], ['Raw goods sold', r.rawSales + 'c']]))}
+    ${group('People', [['Workers on staff', staff], ['Workers hired', r.workersHired], ['Workers let go', r.workersLetGo], ['Workers who quit', r.workersQuit], ['Wages paid', r.wagesPaid + 'c']])}
+    ${group('Work', [['Jobs held', r.jobsHeld], ['Shifts worked', r.shiftsWorked], ['Shifts missed', r.shiftsMissed], ['Times let go', r.timesFired], ['Jobs quit', r.jobsQuit], ['Wages earned', r.wagesEarned + 'c']].concat(Sim.TRADE_KEYS.map(k => [TR[k].name, Sim.learned(s, k) ? 'learned (' + s.trades[k] + ' shifts)' : s.trades[k] + '/' + Sim.LEARN_SHIFTS + ' shifts'])))}
+    ${group('Life', [['Days in Hearthmoor', r.days], ['Distance walked', (r.walked / 1000).toFixed(2) + ' km'], ['Grain gathered', r.gathered.grain], ['Wood chopped', r.gathered.wood], ['Ore dug', r.gathered.ore]])}
+  </div><p class="lead">Politics, battles and your dynasty will add their own records in later chapters.</p>`;
+}
+function saveHTML() {
   const ago = lastSave ? Math.round((Date.now() - lastSave) / 1000) : null;
-  return `<h3>Saving</h3><p class="lead">Your game saves itself every 10 seconds, whenever you leave the page, and when you close this book.</p>
+  return `<h3>Save and export</h3><p class="lead">Slot ${slot}. The game saves every 10 seconds, when you leave the page, and when you close a menu.</p>
   <p>${saveOk ? (ago != null ? `Last saved ${ago} seconds ago. The save before that is kept as a backup.` : 'Not saved yet.') : 'This browser is not letting the game save. Export a copy below to keep your progress.'}</p>
   <div class="acts">${B_('Save now', ['ui', 'save'])}</div>
-  <h4>Keep a copy</h4><p>Saves live in this browser only. Clearing site data erases them, so export a copy now and then.</p>
+  <h4>Keep a copy</h4><p>Saves live in this browser only. Clearing site data erases them, so export a copy now and then. Paste it into Load game on the title screen to bring it back, even on another device.</p>
   <div class="acts">${B_('Show save code', ['ui', 'export'], 'alt')}${UI.exportText ? B_('Copy code', ['ui', 'copy'], 'alt') : ''}</div>
-  ${UI.exportText ? `<textarea id="exportBox" readonly aria-label="Save code">${esc(UI.exportText)}</textarea>` : ''}
-  <h4>Load a copy</h4><textarea id="importBox" placeholder="Paste a save code here" aria-label="Paste save code"></textarea>
-  <div class="acts">${B_('Load this save', ['ui', 'import'], 'alt')}</div>${UI.importMsg ? `<p>${esc(UI.importMsg)}</p>` : ''}
-  <h4>Start over</h4>${UI.confirm === 'new' ? `<div class="confirm">Start a new game? Your current village will be replaced. Export it first if you want to keep it. <div class="acts">${B_('Yes, start over', ['ui', 'newgame'], 'warn')}${B_('Cancel', ['ui', 'confirm', null], 'alt')}</div></div>` : `<div class="acts">${B_('New game&hellip;', ['ui', 'confirm', 'new'], 'alt')}</div>`}`;
+  ${UI.exportText ? `<textarea id="exportBox" readonly aria-label="Save code">${esc(UI.exportText)}</textarea>` : ''}`;
 }
+function seg(id, value, opts) { return `<div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${value === v}" data-c='${esc(JSON.stringify(['ui', 'set', [id, v]]))}'>${n}</button>`).join('')}</div>`; }
+function settingsHTML() {
+  const st = meta.settings;
+  return `<h3>Settings</h3>
+  <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 3 minutes, normal about 4, relaxed about 6.</p></div>
+  <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
+  <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>`;
+}
+
+/* ----- title screen ----- */
+const CREST = `<svg class="crest" viewBox="0 0 512 512" aria-hidden="true"><path d="M136 176 H376 V292 C376 370 318 418 256 444 C194 418 136 370 136 292 Z" fill="#8c2e21" stroke="#a87d22" stroke-width="16" stroke-linejoin="round"/><path d="M196 380 V268 H212 V250 H230 V268 H244 V250 H268 V268 H282 V250 H300 V268 H316 V380 Z" fill="#e2b552"/><path d="M244 380 V340 A12 12 0 0 1 268 340 V380 Z" fill="#8c2e21"/><path d="M150 158 L136 72 L196 116 L256 52 L316 116 L376 72 L362 158 Z" fill="#e2b552" stroke="#7a4f12" stroke-width="8" stroke-linejoin="round"/><rect x="146" y="150" width="220" height="24" rx="6" fill="#e2b552" stroke="#7a4f12" stroke-width="8"/></svg>`;
+function slotLine(info) { if (!info) return 'Empty'; return `${esc(info.name)} · Day ${info.day} · ${info.coins}c · ${info.shops} ${info.shops === 1 ? 'shop' : 'shops'}${info.when ? ' · ' + ago(info.when) : ''}`; }
+function ago(t) { const m = Math.round((Date.now() - t) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 24) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; }
+function renderTitle() {
+  const pg = $('titlePage');
+  const back = `<button type="button" class="back" data-c='["ui","tview","main"]'>&larr; Back</button>`;
+  let html;
+  if (UI.titleView === 'main') {
+    const last = meta.lastSlot && slotInfo(meta.lastSlot);
+    html = `${CREST}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tmenu">
+      ${last ? `<button type="button" class="tbtn primary" data-c='["ui","continue"]'>Continue<small>${slotLine(last)}</small></button>` : ''}
+      <button type="button" class="tbtn ${last ? '' : 'primary'}" data-c='["ui","tview","new"]'>New game<small>Arrive with 5 coins and nothing else</small></button>
+      <button type="button" class="tbtn" data-c='["ui","tview","load"]'>Load game<small>Three save slots, or paste a save code</small></button>
+      <button type="button" class="tbtn" data-c='["ui","tview","settings"]'>Settings</button>
+    </div><div class="tfoot">Chapter One · The Hired Hand</div>`;
+  } else if (UI.titleView === 'new') {
+    const infos = [1, 2, 3].map(n => slotInfo(n));
+    if (UI.newSlot == null) UI.newSlot = (infos.findIndex(x => !x) + 1) || 1;
+    html = `${back}<h3>A new life</h3><p>You arrive in Hearthmoor with 5 coins. Find work, learn a trade, and build from there.</p>
+      <label for="newName">Your name</label><input type="text" id="newName" maxlength="18" value="${esc(UI.newName)}" autocomplete="off">
+      <label>Save in</label><div class="tmenu">${infos.map((info, i) => `<button type="button" class="tbtn ${UI.newSlot === i + 1 ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'newSlot', i + 1])}'>Slot ${i + 1}<small>${slotLine(info)}</small></button>`).join('')}</div>
+      ${infos[UI.newSlot - 1] ? `<p class="confirm">Slot ${UI.newSlot} holds a game. Starting here replaces it.</p>` : ''}
+      <div class="tmenu" style="margin-top:12px"><button type="button" class="tbtn primary" data-c='["ui","begin"]'>Begin</button></div>`;
+  } else if (UI.titleView === 'load') {
+    html = `${back}<h3>Load game</h3><div class="tmenu">${[1, 2, 3].map(n => { const info = slotInfo(n); return `<div class="slot"><div><b>Slot ${n}</b><span>${slotLine(info)}</span></div>${info ? B_('Load', ['ui', 'load', n]) + (UI.confirm === 'del' + n ? B_('Erase', ['ui', 'erase', n], 'warn') : B_('&times;', ['ui', 'confirm', 'del' + n], 'alt')) : ''}</div>`; }).join('')}</div>
+      ${UI.confirm && UI.confirm.startsWith('del') ? `<p>Tap Erase to delete slot ${UI.confirm.slice(3)} for good.</p>` : ''}
+      <label for="importBox">Load from a save code</label><textarea id="importBox" placeholder="Paste a save code here"></textarea>
+      <p>It loads into slot ${UI.newSlot || 1}${slotInfo(UI.newSlot || 1) ? ', replacing what is there' : ''}.</p>
+      <div class="tmenu"><button type="button" class="tbtn" data-c='["ui","import"]'>Load this code</button></div>${UI.importMsg ? `<p>${esc(UI.importMsg)}</p>` : ''}`;
+  } else html = back + settingsHTML();
+  pg.innerHTML = html;
+}
+function enterGame(game, n) {
+  G = game; slot = n; UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
+  meta.lastSlot = n; saveMeta();
+  resetMeshes(); focus.set(G.player.x, 0, G.player.z); panHold = 0;
+  ['title', 'book', 'pause'].forEach(id => $(id).hidden = true);
+  ['hud', 'panel', 'side'].forEach(id => $(id).hidden = false);
+  if (!(G.rec.days === 0 && G.t < 6 * 60 + 5)) { G.events.length = 0; toast('Welcome back, ' + G.name + '. Day ' + G.day + ', ' + Sim.clock(G.t) + '.', 'story'); }
+  saveNow(); hud(G); renderCard(true);
+}
+function toTitle() {
+  saveNow();
+  UI.mode = 'title'; UI.titleView = 'main'; UI.overlay = null; UI.confirm = null;
+  ['hud', 'panel', 'side', 'book', 'pause', 'night'].forEach(id => $(id).hidden = true);
+  $('toasts').innerHTML = '';
+  $('title').hidden = false; renderTitle();
+}
+function resetMeshes() { for (const [, g] of agentMeshes) dropChar(g); agentMeshes.clear(); for (const [, g] of workerMeshes) dropChar(g); workerMeshes.clear(); }
+
 function uiCmd(k, v) {
   if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
   if (k === 'tab') { UI.tab = v; UI.confirm = null; renderBook(true); return; }
-  if (k === 'close') { closeBook(); return; }
-  if (k === 'confirm') { UI.confirm = v; renderBook(); return; }
-  if (k === 'wage') { UI['wage' + v[0]] = clamp(v[1], 1, 30); renderBook(); return; }
-  if (k === 'save') { saveNow(); toast(saveOk ? 'Saved.' : 'Could not save in this browser. Export a copy instead.', saveOk ? 'good' : 'bad'); renderBook(); return; }
-  if (k === 'export') { UI.exportText = encodeSave(G); renderBook(); return; }
+  if (k === 'close') { closeOverlay(); return; }
+  if (k === 'book') { openBook(); return; }
+  if (k === 'pause') { openPause(); return; }
+  if (k === 'pview') { UI.pauseView = v; UI.exportText = ''; renderPause(true); return; }
+  if (k === 'tview') { UI.titleView = v; UI.confirm = null; UI.importMsg = ''; renderTitle(); return; }
+  if (k === 'confirm') { UI.confirm = v; if (UI.mode === 'title') renderTitle(); else if (UI.overlay === 'book') renderBook(); else renderCard(true); return; }
+  if (k === 'wage') { UI.hireWage[v[0]] = clamp(v[1], 1, 40); renderBook(); return; }
+  if (k === 'set') { meta.settings[v[0]] = v[1]; saveMeta(); if (UI.mode === 'title') renderTitle(); else renderPause(); return; }
+  if (k === 'save') { saveNow(); toast(saveOk ? 'Saved to slot ' + slot + '.' : 'Could not save in this browser. Export a copy instead.', saveOk ? 'good' : 'bad', true); renderPause(); return; }
+  if (k === 'export') { UI.exportText = encodeSave(G); renderPause(); return; }
   if (k === 'copy') {
-    const box = $('exportBox');
-    const fallback = () => { if (box) { box.focus(); box.select(); } toast('Code selected. Copy it with your keyboard or the share menu.', 'info'); };
-    try { navigator.clipboard.writeText(UI.exportText).then(() => toast('Save code copied.', 'good'), fallback); } catch (e) { fallback(); }
+    const box = $('exportBox'), fallback = () => { if (box) { box.focus(); box.select(); } toast('Code selected. Copy it with your keyboard or the share menu.', 'info', true); };
+    try { navigator.clipboard.writeText(UI.exportText).then(() => toast('Save code copied.', 'good', true), fallback); } catch (e) { fallback(); }
     return;
   }
+  if (k === 'quitTitle') { toTitle(); return; }
+  if (k === 'continue') { const n = meta.lastSlot, g = n && readSlot(n); if (g) enterGame(g, n); else { UI.titleView = 'load'; renderTitle(); } return; }
+  if (k === 'newSlot') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newSlot = v; renderTitle(); return; }
+  if (k === 'begin') {
+    const name = (($('newName') || {}).value || '').trim().slice(0, 18) || 'Wren';
+    UI.newName = name;
+    enterGame(Sim.newGame((Date.now() % 2147483647) | 0, name), UI.newSlot || 1); return;
+  }
+  if (k === 'load') { const g = readSlot(v); if (g) enterGame(g, v); else { UI.importMsg = 'That slot could not be read.'; renderTitle(); } return; }
+  if (k === 'erase') { store.del(KEY(v)); store.del(BAK(v)); store.del(KEY(v) + '.when'); if (meta.lastSlot === v) { meta.lastSlot = null; saveMeta(); } UI.confirm = null; renderTitle(); return; }
   if (k === 'import') {
     const t = ($('importBox') || {}).value || '';
-    try { G = decodeSave(t); UI.importMsg = 'Loaded. Welcome back to Day ' + G.day + '.'; resetView(); saveNow(); }
-    catch (e) { UI.importMsg = 'That code did not load: ' + e.message + '. Check that you pasted all of it.'; }
-    renderBook(); return;
+    try { const g = decodeSave(t); enterGame(g, UI.newSlot || 1); }
+    catch (e) { UI.importMsg = 'That code did not load: ' + e.message + '. Check that you pasted all of it.'; renderTitle(); }
   }
-  if (k === 'newgame') { G = Sim.newGame((Date.now() % 2147483647) | 0); UI.confirm = null; resetView(); saveNow(); closeBook(); return; }
 }
-function resetView() { UI.sel = null; UI.loc = null; focus.set(G.player.x, 0, G.player.z); G.events.length = 0; lastEventT = -1; for (const [id, g] of agentMeshes) dropChar(g); agentMeshes.clear(); }
 document.addEventListener('input', e => {
-  if (e.target.id === 'price') { Sim.cmd(G, 'setPrice', +e.target.value); const T = Sim.TIERS[G.tier]; $('pv').textContent = G.price + 'c'; $('pw').textContent = `About ${shareWilling(G.price, 6 + T.wtpBonus)}% of villagers and ${shareWilling(G.price, 6.5 + T.wtpBonus)}% of travelers will pay this.`; }
+  const id = e.target.id || '';
+  if (id.startsWith('price-')) {
+    const shop = Sim.shopById(G, +e.target.dataset.shop); if (!shop) return;
+    Sim.cmd(G, 'setPrice', shop.id, +e.target.value);
+    $('pv-' + shop.id).textContent = shop.price + 'c'; $('pw-' + shop.id).textContent = willText(shop);
+  }
+  if (id === 'newName') UI.newName = e.target.value;
 });
-document.addEventListener('change', e => { if (e.target.id === 'pol') act(['policy', 'supplyRuns', e.target.checked]); });
+document.addEventListener('change', e => { const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
+$('menuBtn').onclick = () => openPause();
 $('goal').onclick = () => openBook('goals');
-$('zin').onclick = () => zoom = clamp(zoom * 0.85, 0.55, 1.7);
-$('zout').onclick = () => zoom = clamp(zoom * 1.18, 0.55, 1.7);
+$('zin').onclick = () => zoom = clamp(zoom * 0.85, 0.55, 1.8);
+$('zout').onclick = () => zoom = clamp(zoom * 1.18, 0.55, 1.8);
 $('center').onclick = () => { panHold = 0; };
 $('fast').onclick = () => { UI.speed = UI.speed === 1 ? 2 : 1; $('fast').setAttribute('aria-pressed', UI.speed === 2); };
-$('book').addEventListener('click', e => { if (e.target.id === 'book') closeBook(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && UI.book) closeBook(); });
+['book', 'pause'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) closeOverlay(); }));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && UI.mode === 'play') { if (UI.overlay) closeOverlay(); else openPause(); } });
 
-/* ----- save triggers ----- */
 setInterval(() => { if (!document.hidden) saveNow(); }, 10000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
 window.addEventListener('pagehide', saveNow);
 window.addEventListener('beforeunload', saveNow);
 
 /* ----- main loop ----- */
-let lastEventT = -1, last = performance.now(), cardTimer = 0;
 function drainEvents() {
-  const ev = G.events;
-  if (!ev.length) return;
-  const fresh = ev.slice();
-  if (fresh.length) {
-    const coins = fresh.filter(e => e.kind === 'coin');
-    const rest = fresh.filter(e => e.kind !== 'coin');
-    rest.slice(-2).forEach(e => toast(e.text, e.kind));
-    if (coins.length) toast(coins.length === 1 ? coins[0].text : `${coins.length} sales just now.`, 'coin');
-  }
-  ev.length = 0;
+  if (!G || !G.events.length) return;
+  const fresh = G.events.slice(); G.events.length = 0;
+  const coins = fresh.filter(e => e.kind === 'coin'), rest = fresh.filter(e => e.kind !== 'coin');
+  rest.slice(-2).forEach(e => toast(e.text, e.kind));
+  if (coins.length) toast(coins.length === 1 ? coins[0].text : `${coins.length} sales just now.`, 'coin');
 }
+let last = performance.now(), uiTimer = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
-  if (!UI.book && !document.hidden) Sim.advance(G, dt * Sim.rate(G) * UI.speed);
-  drainEvents();
-  syncChars(G, t); syncBakery(G, t, dt); syncLight(G); syncCamera(G, dt);
-  cardTimer -= dt;
-  if (cardTimer <= 0) { cardTimer = 0.2; hud(G); if (!UI.book) renderCard(false); }
+  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); drainEvents(); }
+  syncChars(G, t); syncShops(G, t, dt);
+  syncLight(UI.mode === 'title' ? 18.4 : Sim.hourOf(G));
+  syncCamera(G, dt, t);
+  uiTimer -= dt;
+  if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-function start() {
-  resize(); focus.set(G.player.x, 0, G.player.z);
-  lastEventT = -1;
-  hud(G); renderCard(true);
-  if (!(G.lifetime.days === 0 && G.t < 6 * 60 + 5)) { G.events.length = 0; toast('Welcome back. Day ' + G.day + ', ' + Sim.clock(G.t) + '.', 'story'); }
+function boot(data) {
+  // the title screen shows your latest village behind it, or a fresh one
+  const fromHot = data && data.game ? (() => { try { return Sim.deserialize(data.game); } catch (e) { return null; } })() : null;
+  G = fromHot || (meta.lastSlot && readSlot(meta.lastSlot)) || Sim.newGame(4242);
+  G.events.length = 0;
+  if (hot && hot.snapshot) hot.snapshot(() => ({ game: UI.mode === 'play' ? Sim.serialize(G) : null, slot }));
+  resize();
+  if (fromHot && data.slot) enterGame(G, data.slot);
+  else renderTitle();
   requestAnimationFrame(t => { last = t; frame(t); });
 }
-
-window.__hm = { get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, openBook, saveNow };
+const hot = window.claude && window.claude.hot;
+window.__hm = { get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
 if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
 })();
 </script>

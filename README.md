@@ -1,6 +1,6 @@
 # Hearthmoor
 
-A medieval merchant-to-ruler life sim for phones, played in the browser. This is the first playable chapter: start with nothing, gather grain and wood, run a bakery, hire a worker, read the ledger to see why you earned or lost money, and upgrade from a bread stand to a stone bakery.
+A medieval merchant-to-ruler life sim for phones, played in the browser. Chapter One, The Hired Hand: arrive with 5 coins, work shifts at one of four village shops to learn a trade, then open your own bakery, smithy, tavern or joinery on an empty lot. Hire workers, read the ledger to see why you earned or lost money, and upgrade each shop through three buildings. Includes a title screen, three save slots, and a records page for each playthrough.
 
 **Play:** https://deskjoky.github.io/hearthmoor/
 
