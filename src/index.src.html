@@ -171,6 +171,32 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .menu-list .btn small { font-family: var(--f-body); }
 .back { border: 0; background: transparent; color: var(--ink-soft); padding: 6px 0; min-height: 36px; font-size: 14px; }
 .statgroup { margin-top: 14px; }
+/* patch notes: an old scroll that unrolls */
+.scrollwrap { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(10, 7, 5, .66);
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(16px, env(safe-area-inset-left, 0px)); }
+.scroll { width: min(540px, 100%); max-height: 100%; display: flex; flex-direction: column; filter: drop-shadow(0 14px 30px rgba(0,0,0,.6)); }
+.rod { position: relative; height: 20px; margin: 0 -14px; border-radius: 10px; flex: none; z-index: 1;
+  background: linear-gradient(180deg, #8a5f3a 0%, #5a3a22 45%, #3a2414 60%, #6b4a2e 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,.18); }
+.rod::before, .rod::after { content: ""; position: absolute; top: -5px; width: 22px; height: 30px; border-radius: 6px; background: radial-gradient(circle at 40% 35%, #d9b04a, #8a6a1e 70%); box-shadow: 0 2px 4px rgba(0,0,0,.5); }
+.rod::before { left: -14px; } .rod::after { right: -14px; }
+.vellum { position: relative; overflow-y: auto; margin: -6px 0; padding: 26px 28px 22px; min-height: 0;
+  background: radial-gradient(ellipse at 20% 15%, rgba(140, 100, 40, .12), transparent 40%), radial-gradient(ellipse at 85% 80%, rgba(120, 80, 30, .14), transparent 45%), linear-gradient(90deg, #d9c08e, #ecdcb6 8%, #f2e5c4 50%, #ecdcb6 92%, #d6bb86);
+  box-shadow: inset 0 10px 12px -8px rgba(60, 40, 20, .45), inset 0 -10px 12px -8px rgba(60, 40, 20, .45); }
+.scroll.unroll .vellum { animation: unroll .7s ease-out; }
+@keyframes unroll { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+.vellum h2 { font-family: var(--f-caps); font-weight: 400; font-size: 28px; text-align: center; margin: 0; color: var(--ink); }
+.vellum .sv { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 2px 0 12px; }
+.vellum .fleur { text-align: center; color: var(--seal); letter-spacing: .4em; margin: 4px 0 10px; }
+.vellum h3 { font-family: var(--f-display); font-weight: 400; font-size: 20px; margin: 10px 0 4px; }
+.vellum ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-family: var(--f-display); font-size: 16px; line-height: 1.4; }
+.vellum li::marker { color: var(--seal); }
+.vellum details { margin-top: 14px; } .vellum summary { cursor: pointer; font-family: var(--f-display); color: var(--ink-soft); }
+.vellum .wax { position: absolute; right: 18px; top: 14px; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 38% 35%, #b5463a, #7a2117 70%); box-shadow: 0 2px 4px rgba(0,0,0,.45), inset 0 0 0 4px rgba(0,0,0,.12); display: flex; align-items: center; justify-content: center; font-family: var(--f-caps); color: #f0cfb8; font-size: 20px; }
+.vellum .acts { justify-content: center; margin-top: 16px; }
+.vellum .btn { font-family: var(--f-display); font-size: 18px; min-width: 140px; }
+.tnews { display: block; margin: 8px auto 0; border: 0; background: none; font-family: var(--f-display); font-style: italic; color: var(--seal); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }
+@media (orientation: landscape) and (max-height: 520px) { .vellum { padding: 18px 26px 16px; } .vellum h2 { font-size: 24px; } .vellum ul { font-size: 15px; gap: 4px; } }
+@media (prefers-reduced-motion: reduce) { .scroll.unroll .vellum { animation: none; } }
 .card h2 .age { font-size: 16px; color: var(--ink-soft); }
 .plog { margin: 6px 0 0; padding-left: 16px; font-size: 13px; color: var(--ink-soft); line-height: 1.4; }
 .plist { display: grid; gap: 4px; }
@@ -321,6 +347,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 </div>
 <div class="sheet" id="pause" hidden>
   <div class="cover"><div class="page round" id="pausePage"></div></div>
+</div>
+<div class="scrollwrap" id="scroll" hidden>
+  <div class="scroll" role="dialog" aria-modal="true" aria-labelledby="scrollTitle">
+    <div class="rod"></div>
+    <div class="vellum" id="vellum"></div>
+    <div class="rod"></div>
+  </div>
 </div>
 <div class="title" id="title">
   <div class="tome"><div class="tome-page" id="titlePage"></div></div>
@@ -1753,7 +1786,7 @@ function renderTitle() {
   let left, right;
   if (UI.titleView === 'main') {
     const last = meta.lastSlot && slotInfo(meta.lastSlot);
-    left = `${CREST}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tfoot">Chapters One and Two<br>A Place in the Village</div>`;
+    left = `${CREST}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tfoot">Chapters One and Two<br>A Place in the Village</div><button type="button" class="tnews" data-c='["ui","notes"]'>What\u2019s new in version ${NOTES[0].v}</button>`;
     right = `<div class="tmenu">
       ${last ? `<button type="button" class="tbtn primary" data-c='["ui","continue"]'>Continue<small>${slotLine(last)}</small></button>` : ''}
       <button type="button" class="tbtn ${last ? '' : 'primary'}" data-c='["ui","tview","new"]'>New game<small>Arrive with 5 coins and nothing else</small></button>
@@ -1808,6 +1841,9 @@ function uiCmd(k, v) {
   if (k === 'map') { openMap(); return; }
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
   if (k === 'travel') { travel(v); return; }
+  if (k === 'notes') { showNotes(); return; }
+  if (k === 'closeNotes') { $('scroll').hidden = true; meta.seenNotes = NOTES[0].v; saveMeta(); return; }
+  if (k === 'reload') { saveNow(); meta.seenNotes = null; saveMeta(); location.reload(); return; }
   if (k === 'person') { UI.person = v; if (v && UI.overlay !== 'book') { UI.tab = 'people'; openBook(); } else renderBook(); return; }
   if (k === 'pview') { UI.pauseView = v; UI.exportText = ''; renderPause(true); return; }
   if (k === 'tview') { UI.titleView = v; UI.confirm = null; UI.importMsg = ''; renderTitle(); return; }
@@ -1883,6 +1919,52 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
+/* ----- patch notes and the update check ----- */
+const BUILD = '/*BUILD*/';
+const NOTES = [
+  { v: '0.9', date: '3 November', title: 'Hidden controls, and these tidings', items: [
+    'The walk and look controls are now invisible. Drag on the left side of the screen to walk, and on the right side to look around.',
+    'The camera turns the way you drag, tilts up and down, and pinches to zoom. Settings has look speed and invert options.',
+    'These patch notes now unroll the first time you open each new version.',
+    'The game checks for a newer version each time it opens and offers to reload, so you are never stuck on an old copy.'
+  ] },
+  { v: '0.8', date: '3 November', title: 'The people of Hearthmoor', items: [
+    'Everyone in the village has a name, age, purse, job, home and life story. Tap anyone to read it.',
+    'Wages, food and rent come out of real purses. People can be fired, fall behind on rent, be evicted, and leave.',
+    'Buy the village businesses and houses, set wages and rents, and live with the consequences.',
+    'The elder, the steward and even the lord hold offices that can change hands.'
+  ] },
+  { v: '0.7', date: '3 November', title: 'A map, and new ways to move', items: [
+    'A 3D map of the whole village in the pause menu. Tap a place to travel there.',
+    'Walk with your thumb instead of tapping where to go. Buildings, walls and trees are solid.',
+    'The title screen opens like a book in landscape.'
+  ] }
+];
+function showNotes() {
+  const [n, ...older] = NOTES;
+  $('vellum').innerHTML = `<div class="wax" aria-hidden="true">H</div><h2 id="scrollTitle">Tidings from Hearthmoor</h2><p class="sv">Version ${n.v} &middot; ${n.date}</p><div class="fleur" aria-hidden="true">&#10086; &#10086; &#10086;</div>
+    <h3>${esc(n.title)}</h3><ul>${n.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    ${older.length ? `<details><summary>Earlier tidings</summary>${older.map(o => `<h3>Version ${o.v}: ${esc(o.title)}</h3><ul>${o.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}</details>` : ''}
+    <div class="acts"><button type="button" class="btn" data-c='["ui","closeNotes"]'>Onward</button></div>`;
+  const sc = $('scroll'); sc.hidden = false;
+  const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
+}
+function showUpdate() {
+  if (!$('scroll').hidden) return;
+  $('vellum').innerHTML = `<div class="wax" aria-hidden="true">H</div><h2 id="scrollTitle">A New Edition</h2><div class="fleur" aria-hidden="true">&#10086; &#10086; &#10086;</div>
+    <p style="text-align:center;font-family:var(--f-display);font-size:17px;line-height:1.45">A newer version of Hearthmoor has arrived from the scribes. Reload to read it. Your game is saved first.</p>
+    <div class="acts"><button type="button" class="btn" data-c='["ui","reload"]'>Reload now</button><button type="button" class="btn alt" data-c='["ui","closeNotes"]'>Later</button></div>`;
+  const sc = $('scroll'); sc.hidden = false;
+  const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
+}
+function checkForUpdate() {
+  if (!/^\d/.test(BUILD)) return;
+  try {
+    fetch('version.json?_=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(j => { if (j && j.build && j.build !== BUILD && j.build > BUILD) showUpdate(); }).catch(() => { });
+  } catch (e) { }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
+setInterval(checkForUpdate, 10 * 60 * 1000);
 function boot(data) {
   // the title screen shows your latest village behind it, or a fresh one
   const fromHot = data && data.game ? (() => { try { return Sim.deserialize(data.game); } catch (e) { return null; } })() : null;
@@ -1892,6 +1974,8 @@ function boot(data) {
   resize();
   if (fromHot && data.slot) enterGame(G, data.slot);
   else renderTitle();
+  if (meta.seenNotes !== NOTES[0].v) showNotes();
+  checkForUpdate();
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 const hot = window.claude && window.claude.hot;
