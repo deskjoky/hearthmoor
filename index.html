@@ -83,8 +83,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .toasts { position: fixed; z-index: 6; left: 0; right: 0; top: 130px; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-.toast { max-width: 420px; background: var(--parch); border-left: 4px solid var(--ink-soft); border-radius: 4px; padding: 6px 10px; font-size: 14px; box-shadow: 0 3px 10px rgba(0,0,0,.35); animation: tin .25s ease-out; }
-.toast.coin { border-color: var(--gold); } .toast.bad { border-color: var(--seal); } .toast.good { border-color: var(--moss); } .toast.story { border-color: var(--leather); font-family: var(--f-display); font-size: 15px; }
+.toast { max-width: 340px; background: var(--parch); border-left: 3px solid var(--ink-soft); border-radius: 4px; padding: 4px 9px; font-size: 13px; line-height: 1.3; box-shadow: 0 3px 10px rgba(0,0,0,.35); animation: tin .25s ease-out; }
+.toast.coin { border-color: var(--gold); } .toast.bad { border-color: var(--seal); } .toast.good { border-color: var(--moss); } .toast.story { border-color: var(--leather); font-family: var(--f-display); font-size: 14px; }
 .toast.out { opacity: 0; transform: translateY(-6px); transition: .4s; }
 @keyframes tin { from { opacity: 0; transform: translateY(-8px); } }
 .night { position: fixed; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--f-display); font-style: italic; font-size: 22px; color: #e9d9b0; text-shadow: 0 2px 8px #000; pointer-events: none; }
@@ -94,10 +94,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .panel { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   padding-left: calc(max(16px, env(safe-area-inset-left, 0px)) + 160px); padding-right: calc(max(16px, env(safe-area-inset-right, 0px)) + 160px); pointer-events: none; }
-.card { pointer-events: auto; max-width: 560px; margin: 0 auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.4); padding: 10px 12px 12px; max-height: 46vh; overflow-y: auto; }
-.card h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.1; text-wrap: balance; }
-.card .sub { color: var(--ink-soft); font-size: 14px; margin-top: 2px; }
-.card .why { font-size: 14px; margin-top: 6px; padding: 6px 8px; background: rgba(255,255,255,.35); border-radius: 4px; }
+.card { pointer-events: auto; max-width: 440px; margin: 0 auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.4); padding: 10px 12px 12px; max-height: 46vh; overflow-y: auto; }
+.card h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 19px; line-height: 1.1; text-wrap: balance; }
+.card .sub { color: var(--ink-soft); font-size: 13px; margin-top: 2px; line-height: 1.3; }
+.card .why { font-size: 13px; margin-top: 5px; padding: 5px 7px; line-height: 1.3; background: rgba(255,255,255,.35); border-radius: 4px; }
 .card .why b { font-weight: 700; }
 .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .btn { border: 1px solid var(--ink); background: var(--ink); color: var(--parch); border-radius: 5px; padding: 8px 12px; min-height: 42px; font-weight: 500; font-size: 15px; }
@@ -179,37 +179,82 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .setting > span { display: block; font-weight: 700; margin-bottom: 6px; }
 .setting p { margin: 4px 0 0; color: var(--ink-soft); font-size: 14px; }
 
-/* pause menu */
+/* pause menu: an illuminated two-page spread */
+.pspread { display: grid; gap: 14px; }
+.pleaf { position: relative; border: 1px solid rgba(140,46,33,.35); box-shadow: inset 0 0 0 4px rgba(234,216,178,.9), inset 0 0 0 5px rgba(168,125,34,.45); border-radius: 4px; padding: 16px 18px; background: radial-gradient(ellipse at 50% 0%, rgba(255,250,235,.55), transparent 70%); }
+.corner { position: absolute; width: 18px; height: 18px; border-color: var(--gold); border-style: solid; opacity: .8; }
+.corner.tl { left: 6px; top: 6px; border-width: 2px 0 0 2px; } .corner.tr { right: 6px; top: 6px; border-width: 2px 2px 0 0; }
+.corner.bl { left: 6px; bottom: 6px; border-width: 0 0 2px 2px; } .corner.br { right: 6px; bottom: 6px; border-width: 0 2px 2px 0; }
+.pcrest .crest { width: 54px; height: 54px; margin: 0 auto; }
+.ptitle { text-align: center; font-family: var(--f-display); font-size: 30px; line-height: 1; margin-top: 2px; }
+.ptitle .drop { font-family: var(--f-caps); color: var(--seal); font-size: 40px; text-shadow: 1px 1px 0 rgba(168,125,34,.5); }
+.ppos { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 2px 0 12px; }
+.ptiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; }
+.ptile { display: flex; gap: 8px; align-items: center; background: rgba(255,255,255,.3); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; min-width: 0; }
+.ptile b { display: block; font-size: 14px; } .ptile span { display: block; font-size: 11px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ptile div { min-width: 0; }
+.ic { width: 22px; height: 22px; flex: none; stroke: var(--seal); stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.ic path[d^="M8 5 L19"] { fill: currentColor; }
+.pgoal { margin-top: 10px; font-family: var(--f-display); font-size: 15px; line-height: 1.3; padding: 7px 10px; border-left: 3px solid var(--seal); background: rgba(140,46,33,.06); }
+.pgoal span { display: block; font-family: var(--f-body); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+.pmenu-h { text-align: center; font-family: var(--f-caps); font-size: 18px; color: var(--ink-soft); margin-bottom: 8px; letter-spacing: .04em; }
+.pmenu-h::before, .pmenu-h::after { content: " \2766 "; color: var(--seal); font-size: 12px; }
+.pmenu { display: grid; gap: 5px; }
+.mi { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1px solid var(--line); background: rgba(255,255,255,.28); border-radius: 5px; padding: 6px 10px; min-height: 42px; }
+.mi b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 17px; line-height: 1.1; } .mi small { display: block; font-size: 11px; color: var(--ink-soft); }
+.mi.primary { background: var(--ink); color: var(--parch); border-color: var(--ink); } .mi.primary .ic { stroke: var(--gilt); color: var(--gilt); }
+.mi .ic { color: var(--seal); }
+@media (orientation: landscape) { .pspread { grid-template-columns: 1fr 1fr; } }
+@media (orientation: landscape) and (max-height: 520px) { .pleaf { padding: 10px 14px; } .pcrest .crest { width: 40px; height: 40px; } .ptitle { font-size: 24px; } .ptitle .drop { font-size: 32px; } .ppos { margin-bottom: 8px; } .ptile { padding: 3px 7px; } .mi { min-height: 36px; padding: 3px 9px; } .mi b { font-size: 15px; } .pgoal { font-size: 13px; padding: 5px 8px; margin-top: 7px; } }
 .menu-list { display: grid; gap: 8px; margin-top: 12px; }
 .menu-list .btn { text-align: left; font-family: var(--f-display); font-size: 19px; font-weight: 400; padding: 10px 14px; min-height: 52px; }
 .menu-list .btn small { font-family: var(--f-body); }
 .back { border: 0; background: transparent; color: var(--ink-soft); padding: 6px 0; min-height: 36px; font-size: 14px; }
 .statgroup { margin-top: 14px; }
+/* the work mini-game sits where the prompt card would */
+.mini { position: fixed; z-index: 7; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); width: min(400px, calc(100vw - 340px)); min-width: 280px;
+  background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.45); padding: 8px 12px 10px; }
+.mhead { display: flex; align-items: baseline; gap: 10px; } .mhead b { font-family: var(--f-display); font-weight: 400; font-size: 18px; } .mhead span { color: var(--ink-soft); font-size: 12px; margin-left: auto; }
+.mx { border: 0; background: none; font-size: 22px; line-height: 1; min-width: 32px; min-height: 32px; color: var(--ink-soft); }
+.mtrack { position: relative; height: 30px; margin: 6px 0 4px; border-radius: 15px; overflow: hidden; border: 1px solid rgba(42,31,22,.4); }
+.mtrack.bakery { background: linear-gradient(90deg, #5a3a22, #c88a3a 45%, #e8b450 55%, #8a2a14); }
+.mtrack.smithy { background: linear-gradient(90deg, #2a2624, #8a2a14 40%, #f0a030 65%, #fff1b0); }
+.mtrack.tavern { background: linear-gradient(90deg, #6b4a2e, #8a6438 80%, #6b4a2e); }
+.mtrack.joinery { background: repeating-linear-gradient(90deg, #c49a62 0 14px, #b88c56 14px 16px); }
+.mzone { position: absolute; top: 0; bottom: 0; background: rgba(255, 236, 160, .55); box-shadow: inset 0 0 0 2px rgba(255, 246, 210, .9); }
+.mtrack.tavern .mzone { background: rgba(240, 220, 140, .35); }
+.mline { position: absolute; top: -2px; bottom: -2px; width: 0; }
+.mneedle { position: absolute; top: -3px; bottom: -3px; width: 4px; margin-left: -2px; background: #f6efe0; box-shadow: 0 0 6px #000; border-radius: 2px; }
+.mtrack.tavern .mneedle { width: auto; left: 0 !important; right: auto; margin: 0; background: linear-gradient(#f3e3b0, #d9a640); box-shadow: none; border-radius: 0; }
+.mlabel { position: absolute; left: 10px; top: 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,248,230,.85); text-shadow: 0 1px 2px #000; pointer-events: none; }
+.mmsg { margin: 2px 0 6px; font-size: 13px; color: var(--ink-soft); min-height: 1.3em; }
+.mgo { width: 100%; min-height: 46px; font-family: var(--f-display); font-size: 19px; touch-action: none; }
+@media (orientation: portrait) { .mini { width: calc(100vw - 24px); bottom: calc(env(safe-area-inset-bottom, 0px) + 170px); } }
 /* patch notes: an old scroll that unrolls */
 .scrollwrap { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(10, 7, 5, .66);
   padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(16px, env(safe-area-inset-left, 0px)); }
-.scroll { width: min(540px, 100%); max-height: 100%; display: flex; flex-direction: column; filter: drop-shadow(0 14px 30px rgba(0,0,0,.6)); }
+.scroll { width: min(460px, 100%); max-height: 100%; display: flex; flex-direction: column; filter: drop-shadow(0 14px 30px rgba(0,0,0,.6)); }
 .rod { position: relative; height: 20px; margin: 0 -14px; border-radius: 10px; flex: none; z-index: 1;
   background: linear-gradient(180deg, #8a5f3a 0%, #5a3a22 45%, #3a2414 60%, #6b4a2e 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,.18); }
 .rod::before, .rod::after { content: ""; position: absolute; top: -5px; width: 22px; height: 30px; border-radius: 6px; background: radial-gradient(circle at 40% 35%, #d9b04a, #8a6a1e 70%); box-shadow: 0 2px 4px rgba(0,0,0,.5); }
 .rod::before { left: -14px; } .rod::after { right: -14px; }
-.vellum { position: relative; overflow-y: auto; margin: -6px 0; padding: 26px 28px 22px; min-height: 0;
+.vellum { position: relative; overflow-y: auto; margin: -6px 0; padding: 20px 24px 16px; min-height: 0;
   background: radial-gradient(ellipse at 20% 15%, rgba(140, 100, 40, .12), transparent 40%), radial-gradient(ellipse at 85% 80%, rgba(120, 80, 30, .14), transparent 45%), linear-gradient(90deg, #d9c08e, #ecdcb6 8%, #f2e5c4 50%, #ecdcb6 92%, #d6bb86);
   box-shadow: inset 0 10px 12px -8px rgba(60, 40, 20, .45), inset 0 -10px 12px -8px rgba(60, 40, 20, .45); }
 .scroll.unroll .vellum { animation: unroll .7s ease-out; }
 @keyframes unroll { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
-.vellum h2 { font-family: var(--f-caps); font-weight: 400; font-size: 28px; text-align: center; margin: 0; color: var(--ink); }
+.vellum h2 { font-family: var(--f-caps); font-weight: 400; font-size: 23px; text-align: center; margin: 0; color: var(--ink); }
 .vellum .sv { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 2px 0 12px; }
 .vellum .fleur { text-align: center; color: var(--seal); letter-spacing: .4em; margin: 4px 0 10px; }
-.vellum h3 { font-family: var(--f-display); font-weight: 400; font-size: 20px; margin: 10px 0 4px; }
-.vellum ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-family: var(--f-display); font-size: 16px; line-height: 1.4; }
+.vellum h3 { font-family: var(--f-display); font-weight: 400; font-size: 17px; margin: 8px 0 4px; }
+.vellum ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-family: var(--f-display); font-size: 14px; line-height: 1.35; }
 .vellum li::marker { color: var(--seal); }
 .vellum details { margin-top: 14px; } .vellum summary { cursor: pointer; font-family: var(--f-display); color: var(--ink-soft); }
-.vellum .wax { position: absolute; right: 18px; top: 14px; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 38% 35%, #b5463a, #7a2117 70%); box-shadow: 0 2px 4px rgba(0,0,0,.45), inset 0 0 0 4px rgba(0,0,0,.12); display: flex; align-items: center; justify-content: center; font-family: var(--f-caps); color: #f0cfb8; font-size: 20px; }
+.vellum .wax { position: absolute; right: 14px; top: 10px; width: 34px; height: 34px; font-size: 16px !important; border-radius: 50%; background: radial-gradient(circle at 38% 35%, #b5463a, #7a2117 70%); box-shadow: 0 2px 4px rgba(0,0,0,.45), inset 0 0 0 4px rgba(0,0,0,.12); display: flex; align-items: center; justify-content: center; font-family: var(--f-caps); color: #f0cfb8; font-size: 20px; }
 .vellum .acts { justify-content: center; margin-top: 16px; }
-.vellum .btn { font-family: var(--f-display); font-size: 18px; min-width: 140px; }
+.vellum .btn { font-family: var(--f-display); font-size: 16px; min-width: 120px; min-height: 38px; }
 .tnews { display: block; margin: 8px auto 0; border: 0; background: none; font-family: var(--f-display); font-style: italic; color: var(--seal); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }
-@media (orientation: landscape) and (max-height: 520px) { .vellum { padding: 18px 26px 16px; } .vellum h2 { font-size: 24px; } .vellum ul { font-size: 15px; gap: 4px; } }
+@media (orientation: landscape) and (max-height: 520px) { .vellum { padding: 14px 22px 12px; } .vellum h2 { font-size: 21px; } .vellum .sv { margin-bottom: 6px; } .vellum .fleur { margin: 2px 0 6px; } }
 @media (prefers-reduced-motion: reduce) { .scroll.unroll .vellum { animation: none; } }
 .card h2 .age { font-size: 16px; color: var(--ink-soft); }
 .plog { margin: 6px 0 0; padding-left: 16px; font-size: 13px; color: var(--ink-soft); line-height: 1.4; }
@@ -313,7 +358,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   .page h3 { font-size: 22px; } .page { padding: 12px 16px 18px; }
 }
 @media (orientation: landscape) and (max-height: 340px) { #pausePage .paused { display: none; } #pausePage .lead { margin: 2px 0; } .menu-list { margin-top: 8px; } .menu-list .btn { min-height: 42px; padding: 5px 12px; } }
-@media (min-width: 700px) { .card h2 { font-size: 24px; } }
+.card .btn { min-height: 36px; padding: 5px 10px; font-size: 14px; }
+.card .btn small { font-size: 11px; }
+.card .acts { gap: 5px; margin-top: 6px; }
+.card .plog { font-size: 12px; margin-top: 4px; }
+.card .plog li:nth-child(n+3) { display: none; }
 @media (orientation: portrait) {
   .panel { padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 170px); }
   .card { max-height: 34vh; }
@@ -349,6 +398,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   <div class="lookhint" id="stickR"><span>Drag here to look</span><span>Pinch to zoom</span></div>
 </div>
 <section class="panel" id="panel" hidden><div class="card" id="card"><div id="cardInfo"></div><div id="cardActs"></div></div></section>
+<div class="mini" id="mini" hidden></div>
 <div class="sheet" id="book" hidden>
   <div class="cover">
     <div class="bookhead"><div class="tabs" role="tablist" id="tabs"></div><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button></div>
@@ -1132,7 +1182,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (!s.job) return;
     const e = empById(s.job.emp), j = s.job;
     if (crossed(before, s.t, e.shift[0] * 60)) {
-      j.workedMin = 0; j.midShift = false;
+      j.workedMin = 0; j.midShift = false; j.tips = 0;
       event(s, 'Your shift at ' + e.name + ' starts now (' + pad(e.shift[0]) + '–' + pad(e.shift[1]) + ').', 'story');
     }
     if (crossed(before, s.t, e.shift[1] * 60)) endShift(s);
@@ -1968,6 +2018,17 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         addStanding(s, -5, 'the village talks about the eviction.');
         return ok();
       }
+      case 'shiftTip': {
+        // a job well done at work: a small tip from the boss, a better opinion, a little more skill
+        if (!s.job || !inShift(s) || !playerAtWork(s)) return fail('You need to be at work during your shift.');
+        const j = s.job, e = empById(j.emp), n = clamp(a | 0, 0, 3);
+        const room = Math.max(0, 8 - (j.tips || 0)), pay = Math.min(room, n);
+        if (pay > 0) { earn(s, pay); j.tips = (j.tips || 0) + pay; s.stats.jobPay += pay; s.rec.tipsEarned = (s.rec.tipsEarned || 0) + pay; }
+        s.trades[e.trade] = Math.round((s.trades[e.trade] + 0.05) * 100) / 100;
+        const boss = s.people && s.biz[j.emp] && s.people[s.biz[j.emp].owner];
+        if (boss) boss.opinion = clamp(boss.opinion + 1, -100, 100);
+        return ok(pay ? null : 'No more tips this shift, but ' + e.boss + ' noticed the good work.');
+      }
       case 'stop': p.action = null; p.dest = null; return ok();
     }
     return fail('Unknown command');
@@ -2083,7 +2144,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { } }
 };
-let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'all', motion: 'full', lookX: 'normal', lookY: 'normal', lookSpeed: 'normal' } };
+let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'all', motion: 'full', lookX: 'normal', lookY: 'normal', lookSpeed: 'normal', music: 'normal', sfx: 'normal', amb: 'normal' } };
 try { const m = JSON.parse(store.get(META) || 'null'); if (m) meta = Object.assign(meta, m, { settings: Object.assign(meta.settings, m.settings || {}) }); } catch (e) { }
 function saveMeta() { store.set(META, JSON.stringify(meta)); }
 // the first version kept one save under an older key: move it into slot 1
@@ -2901,6 +2962,7 @@ function toast(text, kind, force) {
   el.className = 'toast ' + (kind || 'info'); el.textContent = text;
   box.appendChild(el);
   while (box.children.length > 2) box.removeChild(box.firstChild);
+  if (kind === 'coin') Snd.play('coin');
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, kind === 'story' ? 6500 : 3800);
 }
 function where(s) { const p = s.player; return Object.keys(L).find(k => Math.hypot(p.x - L[k].x, p.z - L[k].z) < L[k].r) || null; }
@@ -2959,7 +3021,8 @@ function cardHTML(s) {
     const acts = [];
     if (mine) {
       const on = Sim.inShift(s), len = (e.shift[1] - e.shift[0]) * 60;
-      if (on) info += `<div class="why">${Sim.playerAtWork(s) ? '<b>Working your shift.</b> Stay here to get paid.' : '<b>Your shift is on.</b> Go to the workstation to be counted.'} Strikes: ${s.job.strikes}/3.</div>${progressBar(s.job.workedMin / (len * 0.6))}`;
+      if (on) info += `<div class="why">${Sim.playerAtWork(s) ? '<b>Working your shift.</b> Stay here to get paid, or lend a hand for tips.' : '<b>Your shift is on.</b> Go to the workstation to be counted.'} Strikes: ${s.job.strikes}/3.</div>${progressBar(s.job.workedMin / (len * 0.6))}`;
+      if (on && Sim.playerAtWork(s)) acts.push(B_(MINI[e.trade].name + '<small>tips so far: ' + (s.job.tips || 0) + '/8c</small>', ['ui', 'mini']));
       else info += `<div class="why">Your next shift is ${shiftText(e)}. You have worked ${s.job.shifts} ${s.job.shifts === 1 ? 'shift' : 'shifts'} here. Strikes: ${s.job.strikes}/3.</div>`;
       if (!Sim.playerAtWork(s)) acts.push(B_('Go to work', ['work']));
       acts.push(UI.confirm === 'quit' ? B_('Yes, quit', ['quitJob'], 'warn') + B_('Stay', ['ui', 'confirm', null], 'alt') : B_('Quit this job', ['ui', 'confirm', 'quit'], 'alt'));
@@ -3081,7 +3144,7 @@ function renderCard(force) {
   const info = i < 0 ? html : html.slice(0, i), rest = i < 0 ? '' : html.slice(i);
   if (force || info !== UI.ci) { $('cardInfo').innerHTML = info; UI.ci = info; }
   if (force || rest !== UI.cr) { $('cardActs').innerHTML = rest; UI.cr = rest; }
-  $('panel').hidden = !html || !!UI.overlay;
+  $('panel').hidden = !html || !!UI.overlay || mini.on;
 }
 document.addEventListener('click', e => {
   const btn = e.target.closest('[data-c]');
@@ -3123,7 +3186,7 @@ function closeOverlay() {
   if (UI.mode === 'play') ['hud', 'sticks'].forEach(id => $(id).hidden = false);
   saveNow(); renderCard(true);
 }
-function turnPage(el, turn) { if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
+function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
@@ -3425,21 +3488,62 @@ function renderPause(turn) {
   const back = `<button type="button" class="back" data-c='["ui","pview","main"]'>&larr; Back to the menu</button>`;
   let html = '';
   if (UI.pauseView === 'main') {
-    const sm = Sim.summary(G);
-    html = `<div class="paused">Paused</div><h3>${esc(G.name)} of Hearthmoor</h3><p class="lead num">Day ${sm.day}, ${sm.clock} · ${sm.coins}c · ${sm.shops} ${sm.shops === 1 ? 'shop' : 'shops'}${sm.job ? ' · works at ' + esc(sm.job) : ''}</p>
-    <div class="menu-list">
-      ${B_('Resume', ['ui', 'close'])}
-      ${B_('Map and travel<small>See the village and go anywhere</small>', ['ui', 'map'], 'alt')}
-      ${B_('Ledger and management<small>Accounts, shops, staff, jobs, goals</small>', ['ui', 'book'], 'alt')}
-      ${B_('Records<small>Every number from this playthrough</small>', ['ui', 'pview', 'stats'], 'alt')}
-      ${B_('Save and export<small>Slot ' + slot + (lastSave ? ', saved ' + Math.max(0, Math.round((Date.now() - lastSave) / 1000)) + ' s ago' : '') + '</small>', ['ui', 'pview', 'save'], 'alt')}
-      ${B_('Settings', ['ui', 'pview', 'settings'], 'alt')}
-      ${B_('Return to the title<small>Your game is saved first</small>', ['ui', 'quitTitle'], 'alt')}
-    </div>`;
+    html = pauseMainHTML(G);
   } else if (UI.pauseView === 'stats') html = back + statsHTML(G);
   else if (UI.pauseView === 'save') html = back + saveHTML();
   else html = back + settingsHTML();
   pg.innerHTML = html; pg.scrollTop = y; turnPage(pg, turn);
+}
+const ICONS = {
+  resume: '<path d="M8 5 L19 12 L8 19 Z"/>',
+  map: '<path d="M3 6 L9 4 L15 6 L21 4 V18 L15 20 L9 18 L3 20 Z M9 4 V18 M15 6 V20" fill="none"/>',
+  book: '<path d="M4 5 C7 4 10 4 12 6 C14 4 17 4 20 5 V19 C17 18 14 18 12 20 C10 18 7 18 4 19 Z M12 6 V20" fill="none"/>',
+  scroll: '<path d="M6 4 H17 A2 2 0 0 1 17 8 H8 V18 A2 2 0 0 1 4 18 V6 A2 2 0 0 1 6 4 Z M8 8 H18 V18 A2 2 0 0 1 16 20 H6 M11 11 H15 M11 14 H15" fill="none"/>',
+  quill: '<path d="M20 3 C13 4 8 9 6 17 L5 21 M6 17 C10 15 14 12 16 8 M9 12 L13 12" fill="none"/>',
+  gear: '<circle cx="12" cy="12" r="3.2" fill="none"/><path d="M12 2 V5 M12 19 V22 M2 12 H5 M19 12 H22 M4.9 4.9 L7 7 M17 17 L19.1 19.1 M4.9 19.1 L7 17 M17 7 L19.1 4.9" fill="none"/>',
+  door: '<path d="M6 21 V5 A6 6 0 0 1 18 5 V21 Z M14.5 13 H15.5 M3 21 H21" fill="none"/>',
+  coin: '<circle cx="12" cy="12" r="8" fill="none"/><circle cx="12" cy="12" r="4.5" fill="none"/>',
+  sun: '<circle cx="12" cy="12" r="4.5" fill="none"/><path d="M12 2.5 V5 M12 19 V21.5 M2.5 12 H5 M19 12 H21.5" fill="none"/>',
+  house: '<path d="M3 11 L12 4 L21 11 M5 10 V20 H19 V10 M10 20 V14 H14 V20" fill="none"/>',
+  crown: '<path d="M4 18 L3 7 L8 11 L12 5 L16 11 L21 7 L20 18 Z" fill="none"/>',
+  people: '<circle cx="9" cy="8" r="3" fill="none"/><circle cx="16.5" cy="9" r="2.4" fill="none"/><path d="M3.5 19 C4 15 6.5 13.5 9 13.5 C11.5 13.5 14 15 14.5 19 M14 14 C17 13 20 14.5 20.5 18.5" fill="none"/>'
+};
+const icon = (n, cls) => `<svg class="ic ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+function pauseMainHTML(s) {
+  const sm = Sim.summary(s), v = s.village;
+  const pos = s.offices && s.offices.lord === 'player' ? 'Lord of Hearthmoor' : s.offices && s.offices.elder === 'player' ? 'Elder of Hearthmoor' : v.council ? 'Councillor of Hearthmoor' : s.shops.length ? 'Shopkeeper of Hearthmoor' : s.job ? 'Hired hand at ' + sm.job : 'Newcomer to Hearthmoor';
+  const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
+  const here = s.people ? Sim.living(s).length : 0;
+  const tiles = [
+    ['sun', 'Day ' + sm.day, sm.clock],
+    ['coin', sm.coins + 'c', 'worth ' + sm.netWorth + 'c'],
+    ['house', s.shops.length + (s.biz ? Object.values(s.biz).filter(b => b.owner === 'player').length : 0) + ' businesses', (s.houses ? s.houses.filter(h => h.owner === 'player').length : 0) + ' houses'],
+    ['crown', 'Standing ' + v.standing, v.council ? 'on the council' : v.step > 0 ? 'known to the elder' : 'unknown'],
+    ['people', here + ' villagers', s.people ? Sim.living(s).filter(p => p.opinion >= 10).length + ' like you' : '']
+  ];
+  const item = (ic, label, sub, c, primary) => `<button type="button" class="mi ${primary ? 'primary' : ''}" data-c='${esc(JSON.stringify(c))}'>${icon(ic)}<span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`;
+  return `<div class="pspread">
+    <div class="pleaf pl">
+      <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+      <div class="pcrest">${CREST}</div>
+      <div class="ptitle"><span class="drop">${esc(s.name.charAt(0))}</span>${esc(s.name.slice(1))}</div>
+      <div class="ppos">${esc(pos)}</div>
+      <div class="ptiles">${tiles.map(t => `<div class="ptile">${icon(t[0])}<div><b class="num">${esc(t[1])}</b><span>${esc(t[2])}</span></div></div>`).join('')}</div>
+      ${g ? `<div class="pgoal"><span>Your next aim</span>${esc(g.text)}</div>` : ''}
+    </div>
+    <div class="pleaf pr">
+      <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+      <div class="pmenu-h">The Book of Days</div>
+      <div class="pmenu">
+        ${item('resume', 'Resume', '', ['ui', 'close'], true)}
+        ${item('map', 'Map and travel', 'The village from above', ['ui', 'map'])}
+        ${item('book', 'Ledger', 'Accounts, shops, people, property', ['ui', 'book'])}
+        ${item('scroll', 'Records', 'Every number of your life here', ['ui', 'pview', 'stats'])}
+        ${item('quill', 'Save and export', 'Slot ' + slot + (lastSave ? ', saved ' + Math.max(0, Math.round((Date.now() - lastSave) / 1000)) + ' s ago' : ''), ['ui', 'pview', 'save'])}
+        ${item('gear', 'Settings', 'Sound, camera, pace', ['ui', 'pview', 'settings'])}
+        ${item('door', 'Return to the title', 'Your game is saved first', ['ui', 'quitTitle'])}
+      </div>
+    </div></div>`;
 }
 function kv(rows) { return `<dl class="kv">${rows.map(r => `<dt class="${r[2] || ''}">${r[0]}</dt><dd class="${r[2] || ''}">${r[1]}</dd>`).join('')}</dl>`; }
 function statsHTML(s) {
@@ -3476,6 +3580,10 @@ function settingsHTML() {
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 3 minutes, normal about 4, relaxed about 6.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
   <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>
+  <h4>Sound</h4>
+  <div class="setting"><span>Music</span>${seg('music', st.music, [['off', 'Off'], ['low', 'Low'], ['normal', 'Normal']])}</div>
+  <div class="setting"><span>Sounds of the village</span>${seg('amb', st.amb, [['off', 'Off'], ['low', 'Low'], ['normal', 'Normal']])}<p>Wind, birdsong by day and crickets at night.</p></div>
+  <div class="setting"><span>Effects</span>${seg('sfx', st.sfx, [['off', 'Off'], ['low', 'Low'], ['normal', 'Normal']])}<p>Buttons, coins, pages and work. On an iPhone, the ring/silent switch must be on ring to hear anything.</p></div>
   <h4>Camera</h4>
   <div class="setting"><span>Look speed</span>${seg('lookSpeed', st.lookSpeed, [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']])}</div>
   <div class="setting"><span>Turning left and right</span>${seg('lookX', st.lookX, [['normal', 'Normal'], ['inverted', 'Inverted']])}<p>Normal: drag right and the view turns right.</p></div>
@@ -3548,6 +3656,8 @@ function uiCmd(k, v) {
   if (k === 'map') { openMap(); return; }
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
   if (k === 'travel') { travel(v); return; }
+  if (k === 'mini') { openMini(); return; }
+  if (k === 'miniClose') { closeMini(); return; }
   if (k === 'notes') { showNotes(); return; }
   if (k === 'closeNotes') { $('scroll').hidden = true; meta.seenNotes = NOTES[0].v; saveMeta(); return; }
   if (k === 'reload') { saveNow(); meta.seenNotes = null; saveMeta(); location.reload(); return; }
@@ -3556,7 +3666,7 @@ function uiCmd(k, v) {
   if (k === 'tview') { UI.titleView = v; UI.confirm = null; UI.importMsg = ''; renderTitle(); return; }
   if (k === 'confirm') { UI.confirm = v; if (UI.mode === 'title') renderTitle(); else if (UI.overlay === 'book') renderBook(); else renderCard(true); return; }
   if (k === 'wage') { UI.hireWage[v[0]] = clamp(v[1], 1, 40); renderBook(); return; }
-  if (k === 'set') { meta.settings[v[0]] = v[1]; saveMeta(); if (UI.mode === 'title') renderTitle(); else renderPause(); return; }
+  if (k === 'set') { meta.settings[v[0]] = v[1]; saveMeta(); Snd.vol(); if (UI.mode === 'title') renderTitle(); else renderPause(); return; }
   if (k === 'save') { saveNow(); toast(saveOk ? 'Saved to slot ' + slot + '.' : 'Could not save in this browser. Export a copy instead.', saveOk ? 'good' : 'bad', true); renderPause(); return; }
   if (k === 'export') { UI.exportText = encodeSave(G); renderPause(); return; }
   if (k === 'copy') {
@@ -3616,7 +3726,7 @@ let last = performance.now(), uiTimer = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
-  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { walkPlayer(G, dt); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); drainEvents(); }
+  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); walkPlayer(G, dt); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); drainEvents(); }
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 30; scene.fog.far = mapCam.dist + 140; updatePins(); }
@@ -3626,9 +3736,232 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
+/* ================= sound: everything is synthesized, nothing is downloaded ================= */
+const Snd = (function () {
+  let ctx = null, master, music, sfx, amb, noiseBuf, started = false, nextBar = 0, bar = 0, timer = null, windGain, windFilter, ambTimer = null;
+  const LEVEL = { off: 0, low: 0.4, normal: 0.8 };
+  const pluckCache = {};
+  function vol() {
+    if (!ctx) return;
+    const st = meta.settings;
+    music.gain.setTargetAtTime(0.32 * LEVEL[st.music || 'normal'], ctx.currentTime, 0.3);
+    sfx.gain.setTargetAtTime(0.9 * LEVEL[st.sfx || 'normal'], ctx.currentTime, 0.05);
+    amb.gain.setTargetAtTime(0.55 * LEVEL[st.amb || 'normal'], ctx.currentTime, 0.3);
+  }
+  function start() {
+    if (started) { if (ctx.state === 'suspended') ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try { ctx = new AC(); } catch (e) { return; }
+    started = true;
+    master = ctx.createGain(); master.gain.value = 0.9;
+    const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+    music = ctx.createGain(); sfx = ctx.createGain(); amb = ctx.createGain();
+    [music, sfx, amb].forEach(g => { g.gain.value = 0; g.connect(master); });
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // a soft wind under everything
+    const w = ctx.createBufferSource(); w.buffer = noiseBuf; w.loop = true;
+    windFilter = ctx.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.frequency.value = 420; windFilter.Q.value = 0.7;
+    windGain = ctx.createGain(); windGain.gain.value = 0.06;
+    w.connect(windFilter); windFilter.connect(windGain); windGain.connect(amb); w.start();
+    vol();
+    nextBar = ctx.currentTime + 0.2;
+    timer = setInterval(schedule, 120);
+    ambTimer = setInterval(ambience, 700);
+  }
+  // a plucked string, made with the Karplus-Strong method and kept for reuse
+  function pluckBuf(f) {
+    const key = Math.round(f);
+    if (pluckCache[key]) return pluckCache[key];
+    const sr = ctx.sampleRate, len = Math.floor(sr * 1.8), b = ctx.createBuffer(1, len, sr), out = b.getChannelData(0);
+    const N = Math.max(2, Math.round(sr / f)), ring = new Float32Array(N);
+    for (let i = 0; i < N; i++) ring[i] = Math.random() * 2 - 1;
+    let idx = 0;
+    for (let i = 0; i < len; i++) { const nx = (idx + 1) % N; const v = 0.497 * (ring[idx] + ring[nx]); out[i] = ring[idx]; ring[idx] = v; idx = nx; }
+    pluckCache[key] = b; return b;
+  }
+  function pluck(f, t, g, dest) {
+    const s = ctx.createBufferSource(); s.buffer = pluckBuf(f);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+    const gn = ctx.createGain(); gn.gain.value = g;
+    s.connect(lp); lp.connect(gn); gn.connect(dest || music); s.start(t); s.stop(t + 1.8);
+  }
+  function recorder(f, t, dur, g) {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = f * 2; const g2 = ctx.createGain(); g2.gain.value = 0.12;
+    const vib = ctx.createOscillator(); vib.frequency.value = 5.2; const vg = ctx.createGain(); vg.gain.value = f * 0.006; vib.connect(vg); vg.connect(o.frequency);
+    const gn = ctx.createGain(); gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(g, t + 0.08); gn.gain.setValueAtTime(g, t + dur - 0.1); gn.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(gn); o2.connect(g2); g2.connect(gn); gn.connect(music);
+    [o, o2, vib].forEach(x => { x.start(t); x.stop(t + dur + 0.05); });
+  }
+  function drone(f, t, dur, g) {
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 340;
+    const gn = ctx.createGain(); gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(g, t + 1.2); gn.gain.setValueAtTime(g, t + dur - 1.2); gn.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(lp); lp.connect(gn); gn.connect(music); o.start(t); o.stop(t + dur + 0.05);
+  }
+  // D dorian, a mode that sounds old: chords D minor, C, F, A minor, G
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  const CHORDS = { Dm: [50, 57, 62, 65], C: [48, 55, 60, 64], F: [53, 57, 60, 65], Am: [45, 52, 57, 60], G: [43, 50, 55, 59] };
+  const PROG = [['Dm', 'C', 'Dm', 'Am'], ['Dm', 'F', 'C', 'Dm'], ['F', 'C', 'G', 'Dm'], ['Dm', 'Am', 'C', 'Dm']];
+  const SCALE = [62, 64, 65, 67, 69, 71, 72, 74, 76];
+  let prog = PROG[0], mel = 4;
+  function schedule() {
+    if (!ctx || ctx.state !== 'running') return;
+    const night = UI.mode === 'play' && G && (Sim.hourOf(G) >= 20.5 || Sim.hourOf(G) < 6);
+    const beat = night ? 0.85 : 0.68;
+    while (nextBar < ctx.currentTime + 0.6) {
+      if (bar % 4 === 0) { prog = PROG[Math.floor(Math.random() * PROG.length)]; drone(hz(38), nextBar, beat * 16, 0.05); drone(hz(45), nextBar, beat * 16, 0.03); }
+      const ch = CHORDS[prog[bar % 4]];
+      // the lute: a rolling arpeggio, sparser at night
+      const pattern = night ? [0, 2] : [0, 1, 2, 3, 2, 1, 2, 3];
+      pattern.forEach((n, i) => pluck(hz(ch[n] + (i % 4 === 0 ? 0 : 12)), nextBar + i * beat / (night ? 1 : 2), i === 0 ? 0.5 : 0.28));
+      pluck(hz(ch[0] - 12), nextBar, 0.45);
+      // a recorder sings now and then, stepping through the mode
+      if (!night && bar % 8 >= 4 && Math.random() < 0.8) {
+        let t = nextBar;
+        const rhythm = [[1, 1], [0.5, 0.5, 1, 1], [1.5, 0.5, 1, 1], [2, 2]][Math.floor(Math.random() * 4)];
+        for (const r of rhythm) { mel = clamp(mel + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)], 0, SCALE.length - 1); recorder(hz(SCALE[mel]), t, r * beat * 0.95, 0.07); t += r * beat; }
+      }
+      nextBar += beat * 4; bar++;
+    }
+  }
+  // birds by day, crickets by night, and the wind rising and falling
+  function ambience() {
+    if (!ctx || ctx.state !== 'running') return;
+    const h = G ? Sim.hourOf(G) : 12, night = h >= 20.5 || h < 5.5, t = ctx.currentTime;
+    windGain.gain.setTargetAtTime(0.04 + Math.random() * 0.05, t, 1.5);
+    windFilter.frequency.setTargetAtTime(300 + Math.random() * 300, t, 2);
+    if (UI.mode !== 'play' || UI.overlay === 'map') return;
+    if (!night && Math.random() < 0.35) {
+      const f = 2200 + Math.random() * 1800, n = 2 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < n; i++) {
+        const o = ctx.createOscillator(), g = ctx.createGain(), s0 = t + i * (0.09 + Math.random() * 0.05);
+        o.frequency.setValueAtTime(f, s0); o.frequency.exponentialRampToValueAtTime(f * (1.2 + Math.random() * 0.4), s0 + 0.06);
+        g.gain.setValueAtTime(0, s0); g.gain.linearRampToValueAtTime(0.025, s0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0005, s0 + 0.08);
+        o.connect(g); g.connect(amb); o.start(s0); o.stop(s0 + 0.1);
+      }
+    }
+    if (night && Math.random() < 0.7) {
+      for (let i = 0; i < 6; i++) {
+        const o = ctx.createOscillator(), g = ctx.createGain(), s0 = t + i * 0.045;
+        o.frequency.value = 4400; g.gain.setValueAtTime(0, s0); g.gain.linearRampToValueAtTime(0.012, s0 + 0.008); g.gain.linearRampToValueAtTime(0, s0 + 0.03);
+        o.connect(g); g.connect(amb); o.start(s0); o.stop(s0 + 0.04);
+      }
+    }
+  }
+  function noise(t, dur, type, f, q, g, sweep) {
+    const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+    const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f, t); fl.Q.value = q || 1; if (sweep) fl.frequency.exponentialRampToValueAtTime(sweep, t + dur);
+    const gn = ctx.createGain(); gn.gain.setValueAtTime(g, t); gn.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+    s.connect(fl); fl.connect(gn); gn.connect(sfx); s.start(t, Math.random()); s.stop(t + dur + 0.02);
+  }
+  function tone(f, t, dur, g, type) {
+    const o = ctx.createOscillator(); o.type = type || 'sine'; o.frequency.value = f;
+    const gn = ctx.createGain(); gn.gain.setValueAtTime(g, t); gn.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+    o.connect(gn); gn.connect(sfx); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const FX = {
+    click(t) { noise(t, 0.05, 'bandpass', 1800, 2, 0.25); tone(180, t, 0.06, 0.12); },
+    page(t) { noise(t, 0.32, 'bandpass', 900, 0.8, 0.22, 3200); },
+    scroll(t) { noise(t, 0.7, 'lowpass', 2400, 0.7, 0.18, 500); tone(110, t, 0.3, 0.05); },
+    coin(t) { tone(1760, t, 0.25, 0.12); tone(2350, t + 0.05, 0.3, 0.1); },
+    good(t) { [74, 78, 81].forEach((m, i) => pluck(hz(m), t + i * 0.07, 0.5, sfx)); },
+    great(t) { [74, 78, 81, 86].forEach((m, i) => pluck(hz(m), t + i * 0.06, 0.55, sfx)); },
+    miss(t) { tone(110, t, 0.25, 0.25, 'triangle'); noise(t, 0.15, 'lowpass', 400, 1, 0.2); },
+    clang(t) { [820, 1270, 2130, 3010].forEach((f, i) => tone(f, t, 0.5 - i * 0.08, 0.09)); noise(t, 0.08, 'highpass', 3000, 1, 0.3); },
+    knead(t) { noise(t, 0.12, 'lowpass', 500, 1, 0.35); tone(90, t, 0.1, 0.2); },
+    saw(t) { noise(t, 0.18, 'bandpass', 2600, 3, 0.25, 1600); },
+    pour(t) { noise(t, 0.4, 'bandpass', 700, 2, 0.15, 1400); },
+    sizzle(t) { noise(t, 0.5, 'highpass', 4000, 0.5, 0.12); }
+  };
+  return {
+    start, vol,
+    play(name) { if (!ctx || ctx.state !== 'running' || !FX[name]) return; try { FX[name](ctx.currentTime + 0.01); } catch (e) { } },
+    suspend() { if (ctx && ctx.state === 'running') ctx.suspend(); },
+    resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  };
+})();
+// sound may only start after a touch, so the first touch anywhere wakes it
+['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, () => Snd.start(), { capture: true }));
+document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button, .pin, [data-c]')) Snd.play('click'); }, { capture: true });
+document.addEventListener('visibilitychange', () => { if (document.hidden) Snd.suspend(); else Snd.resume(); });
+
+/* ================= work mini-games: something to do on shift ================= */
+const MINI = {
+  bakery: { name: 'Bake the bread', verb: 'Pull it out', hint: 'Pull the loaf out when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'knead', bar: 'Heat of the oven', done: 'loaves', ok: 'Golden crust', bad: 'Burnt' },
+  smithy: { name: 'Strike the iron', verb: 'Strike', hint: 'Strike when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'clang', bar: 'Heat of the iron', done: 'tools', ok: 'Clean strike', bad: 'Cold iron' },
+  tavern: { name: 'Pour the ale', verb: 'Hold to pour', hint: 'Hold to pour and let go when the ale reaches the line. Too much and it spills.', kind: 'pour', sound: 'pour', bar: 'Mug', done: 'mugs', ok: 'A perfect pint', bad: 'Spilled' },
+  joinery: { name: 'Saw the plank', verb: 'Saw', hint: 'Saw when the needle is on your mark, inside the bright band.', kind: 'time', sound: 'saw', bar: 'Blade', done: 'cuts', ok: 'Straight cut', bad: 'Crooked' }
+};
+const mini = { on: false };
+function openMini() {
+  const e = Sim.empById(G.job.emp), M = MINI[e.trade];
+  Object.assign(mini, { on: true, trade: e.trade, M, pos: 0, dir: 1, speed: 0.55, zone: newZone(), level: 0, holding: false, streak: 0, perfects: 0, made: 0, hits: 0, msg: M.hint, flash: '' });
+  $('mini').hidden = false; $('panel').hidden = true; renderMini(true);
+}
+function closeMini() { mini.on = false; $('mini').hidden = true; renderCard(true); }
+function newZone() { const w = 0.16 + Math.random() * 0.06; const a = 0.15 + Math.random() * (0.7 - w); return [a, a + w]; }
+function renderMini(full) {
+  const M = mini.M;
+  if (full) {
+    $('mini').innerHTML = `<div class="mhead"><b>${M.name}</b><span id="mscore" class="num"></span><button type="button" class="mx" data-c='["ui","miniClose"]' aria-label="Stop">&times;</button></div>
+      <div class="mtrack ${mini.trade}"><div class="mzone" id="mzone"></div><div class="mline" id="mline"></div><div class="mneedle" id="mneedle"></div><span class="mlabel">${M.bar}</span></div>
+      <p class="mmsg" id="mmsg"></p>
+      <button type="button" class="btn mgo" id="mgo">${M.verb}</button>`;
+    const go = $('mgo');
+    if (M.kind === 'pour') {
+      const down = ev => { ev.preventDefault(); mini.holding = true; mini.level = 0; Snd.play('pour'); };
+      const up = ev => { ev.preventDefault(); if (mini.holding) { mini.holding = false; judge(); } };
+      go.addEventListener('pointerdown', down); go.addEventListener('pointerup', up); go.addEventListener('pointerleave', up); go.addEventListener('pointercancel', up);
+    } else go.addEventListener('pointerdown', ev => { ev.preventDefault(); judge(); });
+  }
+  const pos = M.kind === 'pour' ? mini.level : mini.pos;
+  if (M.kind === 'pour') $('mneedle').style.width = (Math.min(1.05, pos) * 100) + '%'; else $('mneedle').style.left = (Math.min(1.05, pos) * 100) + '%';
+  const z = M.kind === 'pour' ? [0.82, 0.95] : mini.zone;
+  $('mzone').style.left = (z[0] * 100) + '%'; $('mzone').style.width = ((z[1] - z[0]) * 100) + '%';
+  $('mline').style.left = (M.kind === 'pour' ? 100 : -10) + '%';
+  $('mmsg').textContent = mini.msg;
+  $('mscore').textContent = `${mini.made} ${M.done} · tips ${G.job ? (G.job.tips || 0) : 0}/8c`;
+}
+function stepMini(dt) {
+  if (!mini.on) return;
+  if (!G.job || !Sim.inShift(G) || !Sim.playerAtWork(G)) { closeMini(); toast('You stepped away from your work.', 'info', true); return; }
+  if (mini.M.kind === 'pour') { if (mini.holding) { mini.level += dt * 0.42; if (mini.level > 1.04) { mini.holding = false; judge(); } } }
+  else { mini.pos += mini.dir * mini.speed * dt; if (mini.pos > 1) { mini.pos = 1; mini.dir = -1; } if (mini.pos < 0) { mini.pos = 0; mini.dir = 1; } }
+  renderMini(false);
+}
+function judge() {
+  const M = mini.M;
+  let q;
+  if (M.kind === 'pour') { const l = mini.level; q = l > 1 ? 0 : l >= 0.86 && l <= 0.92 ? 2 : l >= 0.82 && l <= 0.95 ? 1 : 0; mini.level = 0; }
+  else { const [a, b] = mini.zone, mid = (a + b) / 2, half = (b - a) / 2, off = Math.abs(mini.pos - mid); q = off <= half * 0.35 ? 2 : off <= half ? 1 : 0; }
+  Snd.play(M.sound);
+  if (q) {
+    mini.hits++; mini.streak++; if (q === 2) mini.perfects++;
+    mini.msg = (q === 2 ? 'Perfect! ' : '') + M.ok + '.' + (mini.streak > 2 ? ' ' + mini.streak + ' in a row.' : '');
+    if (mini.hits % 4 === 0) {
+      const tip = mini.perfects >= 3 ? 2 : 1; mini.perfects = 0; mini.made++;
+      const r = Sim.cmd(G, 'shiftTip', tip);
+      Snd.play(tip > 1 ? 'great' : 'good');
+      mini.msg = r.ok && !r.msg ? `${Sim.empById(G.job.emp).boss} is pleased: +${tip}c tip.` : (r.msg || 'Good work.');
+      drainEvents();
+    }
+    mini.speed = Math.min(1.4, mini.speed + 0.04);
+  } else { Snd.play('miss'); mini.streak = 0; mini.msg = M.bad + '. Try again.'; mini.speed = Math.max(0.5, mini.speed - 0.06); }
+  mini.zone = newZone();
+  renderMini(false);
+}
+
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.03.2315';
+const BUILD = '2026.11.03.2326';
 const NOTES = [
+  { v: '0.10', date: '3 November', title: 'Sound, work, and a finer book', items: [
+    'Hearthmoor has sound: lute and recorder music, wind and birdsong by day, crickets at night, and sounds for coins, pages and work. Settings has volume for each.',
+    'On shift you can lend a hand: time the oven, strike the iron, pour the ale or saw the plank. Good work earns tips from your boss.',
+    'The pause menu is now an illuminated two-page spread with your crest, your standing, and a summary of your life.',
+    'Pop-ups, notes and this scroll are smaller.'
+  ] },
   { v: '0.9', date: '3 November', title: 'Hidden controls, and these tidings', items: [
     'The walk and look controls are now invisible. Drag on the left side of the screen to walk, and on the right side to look around.',
     'The camera turns the way you drag, tilts up and down, and pinches to zoom. Settings has look speed and invert options.',
@@ -3653,7 +3986,7 @@ function showNotes() {
     <h3>${esc(n.title)}</h3><ul>${n.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
     ${older.length ? `<details><summary>Earlier tidings</summary>${older.map(o => `<h3>Version ${o.v}: ${esc(o.title)}</h3><ul>${o.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}</details>` : ''}
     <div class="acts"><button type="button" class="btn" data-c='["ui","closeNotes"]'>Onward</button></div>`;
-  const sc = $('scroll'); sc.hidden = false;
+  const sc = $('scroll'); sc.hidden = false; Snd.play('scroll');
   const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
 }
 function showUpdate() {

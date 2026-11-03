@@ -752,7 +752,7 @@
     if (!s.job) return;
     const e = empById(s.job.emp), j = s.job;
     if (crossed(before, s.t, e.shift[0] * 60)) {
-      j.workedMin = 0; j.midShift = false;
+      j.workedMin = 0; j.midShift = false; j.tips = 0;
       event(s, 'Your shift at ' + e.name + ' starts now (' + pad(e.shift[0]) + '–' + pad(e.shift[1]) + ').', 'story');
     }
     if (crossed(before, s.t, e.shift[1] * 60)) endShift(s);
@@ -1587,6 +1587,17 @@
         moveOut(s, t, 'Evicted from ' + h.name + ' by ' + s.name + '.'); t.opinion = clamp(t.opinion - 50, -100, 100); s.rec.evictions++;
         addStanding(s, -5, 'the village talks about the eviction.');
         return ok();
+      }
+      case 'shiftTip': {
+        // a job well done at work: a small tip from the boss, a better opinion, a little more skill
+        if (!s.job || !inShift(s) || !playerAtWork(s)) return fail('You need to be at work during your shift.');
+        const j = s.job, e = empById(j.emp), n = clamp(a | 0, 0, 3);
+        const room = Math.max(0, 8 - (j.tips || 0)), pay = Math.min(room, n);
+        if (pay > 0) { earn(s, pay); j.tips = (j.tips || 0) + pay; s.stats.jobPay += pay; s.rec.tipsEarned = (s.rec.tipsEarned || 0) + pay; }
+        s.trades[e.trade] = Math.round((s.trades[e.trade] + 0.05) * 100) / 100;
+        const boss = s.people && s.biz[j.emp] && s.people[s.biz[j.emp].owner];
+        if (boss) boss.opinion = clamp(boss.opinion + 1, -100, 100);
+        return ok(pay ? null : 'No more tips this shift, but ' + e.boss + ' noticed the good work.');
       }
       case 'stop': p.action = null; p.dest = null; return ok();
     }
