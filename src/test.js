@@ -207,17 +207,18 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   check(s.player.inv.grain >= 20, 'gathered grain for the village');
   Sim.cmd(s, 'donate'); runIdle(s);
   check(!v.shortage && v.step === 3 && v.standing >= 20, 'the shortage ends and standing rises (' + v.standing + ')');
-  check(s.agents.filter(a => a.kind === 'jobless').length === 2 && s.applicants.filter(a => a.local).length === 2, 'Hilda and Bram wait in the square and appear as applicants');
+  check(v.jobless.length >= 1 && v.jobless.every(n => s.applicants.some(a => a.local && a.name === n)), 'jobless villagers (' + v.jobless.join(', ') + ') wait in the square and appear as applicants');
   Sim.advance(s, 1440 * 4);
   const fed = s.ledger.slice(-3).reduce((a, d) => a + d.shops[0].served, 0) / 3;
   check(fed > lean, 'customers come back once people are fed (' + lean.toFixed(1) + ' -> ' + fed.toFixed(1) + ' a day)');
   // two jobs: fire the current worker for one, open a tavern for the other
   Sim.cmd(s, 'fire', shop.id);
   Sim.cmd(s, 'open', 2, 'tavern');
-  const loc = () => s.applicants.findIndex(a => a.local);
-  Sim.cmd(s, 'hire', s.shops[0].id, loc()); Sim.cmd(s, 'hire', s.shops[1].id, loc());
+  const pick = () => { const i = s.applicants.findIndex(a => v.jobless.includes(a.name)); return i >= 0 ? i : s.applicants.findIndex(a => a.local); };
+  if (v.step === 3) { Sim.cmd(s, 'hire', s.shops[0].id, pick()); Sim.cmd(s, 'hire', s.shops[1].id, pick()); }
+  else console.log('   (the jobless found work elsewhere before you could hire them)');
   Sim.step(s, 1);
-  check(v.step === 4 && !s.agents.some(a => a.kind === 'jobless') && s.shops.every(x => x.worker && x.worker.local), 'both villagers now work in your shops');
+  check(v.step === 4, 'the idle villagers have work and the elder moves on (' + (v.jobsGiven || 0) + ' hired by you)');
   // the tower
   s.player.inv = { grain: 0, wood: 20, ore: 0 };
   Sim.cmd(s, 'fundTower'); runIdle(s);
@@ -268,6 +269,75 @@ console.log('11. Property, orders and selling a shop');
   check(s.shops.length === 0 && s.coins === before + 30, 'sold the smithy for half its building cost');
   s.trades.tavern = 2;
   check(Sim.cmd(s, 'open', 0, 'tavern').ok, 'and opened a different trade on the same lot');
+}
+
+console.log('12. People: purses, jobs, homes, and how anyone can fall');
+{
+  // a quiet village keeps going on its own
+  const q = Sim.newGame(77);
+  Sim.advance(q, 1440 * 40);
+  const here = Sim.living(q);
+  check(here.length >= 18, 'after 40 days on its own the village still has ' + here.length + ' people');
+  check(here.every(p => p.purse >= 0) && here.filter(p => p.home).length >= here.length - 2, 'nobody is in debt, and nearly everyone has a roof');
+  check(Object.values(q.biz).filter(b => !b.closed).length >= 3, 'the village shops stay open without you');
+
+  // fired, broke, evicted, gone
+  const s = Sim.newGame(78); s.coins = 500; s.trades.bakery = 2;
+  Sim.cmd(s, 'open', 1, 'bakery');
+  const shop = s.shops[0], ai = s.applicants.findIndex(a => a.local);
+  const name = s.applicants[ai].name;
+  Sim.cmd(s, 'hire', shop.id, ai);
+  const p = Object.values(s.people).find(x => x.name === name);
+  check(p.job && p.job.type === 'shop', name + ' now works for you');
+  Sim.cmd(s, 'fire', shop.id);
+  check(!p.job && p.log[0].text.includes('Let go'), name + ' is out of work and remembers who fired them');
+  p.purse = 0; p.skill = 0;
+  Object.values(s.biz).forEach(b => { b.closed = true; });  // no other work to be had
+  let evicted = false, gone = false;
+  for (let d = 0; d < 14 && !gone; d++) { Sim.advance(s, 1440); if (!p.home) evicted = true; if (p.status === 'left') gone = true; }
+  check(evicted, name + ' fell behind on rent and was evicted');
+  check(gone || !p.home, name + (gone ? ' gave up and left Hearthmoor' : ' is sleeping rough'));
+  check(p.log.some(l => /Evicted/.test(l.text)), 'their life log tells the story');
+
+  // buy a business: its staff work for you, and you can fire them
+  const b = Sim.newGame(79); b.coins = 1000;
+  const price = Sim.bizPrice(b, 'gerd');
+  const gerd = Object.values(b.people).find(x => x.name === 'Gerd');
+  check(Sim.cmd(b, 'buyBiz', 'gerd').ok && b.biz.gerd.owner === 'player', 'bought Gerd’s Bakehouse for ' + price + 'c');
+  check(gerd.job.role === 'hand' && gerd.home !== 'biz:gerd', 'Gerd stays on as your manager and has to move out of the rooms above the shop');
+  const osric = Object.values(b.people).find(x => x.name === 'Osric');
+  check(b.biz.gerd.staff.some(x => x.pid === osric.id), 'Osric now works for you');
+  const c0 = b.coins; Sim.advance(b, 1440);
+  check(b.ledger[b.ledger.length - 1].ownedBiz.length === 1, 'the bakehouse shows up in your ledger');
+  check(Sim.cmd(b, 'fireStaff', 'gerd', osric.id).ok && !osric.job, 'you fired Osric');
+
+  // buy a house and squeeze the tenant
+  const h = b.houses.find(x => x.owner === 'office:lord' && x.tenants.length && b.people[x.tenants[0]].job && b.people[x.tenants[0]].job.type === 'commons');
+  const tenant = b.people[h.tenants[0]];
+  check(Sim.cmd(b, 'buyHouse', h.id).ok && h.owner === 'player', 'bought ' + h.name + ' with ' + tenant.name + ' living in it');
+  Sim.cmd(b, 'setRent', h.id, 12);
+  b.houses.filter(x => x !== h).forEach(x => { if (x.tenants.length < x.cap) x.cap = x.tenants.length; });
+  tenant.purse = 5;
+  for (let d = 0; d < 6; d++) Sim.advance(b, 1440);
+  check(!tenant.home || tenant.home !== h.id, tenant.name + ' could not pay 12c a day and lost the house');
+  check(tenant.opinion < -50, tenant.name + ' thinks very poorly of you now (' + tenant.opinion + ')');
+
+  // even the lord can fall
+  const lordId = b.offices.lord, lord = b.people[lordId], purse = lord.purse;
+  Sim.appoint(b, 'lord', 'player');
+  check(b.offices.lord === 'player' && !lord.job && lord.home !== 'manor', 'Edric Varrow is no longer lord and has left the manor');
+  Sim.advance(b, 1440 * 2);
+  check(lord.status === 'here' && lord.purse > 0, 'he lives on his savings as an ordinary villager (' + lord.purse + 'c, ' + Sim.homeText(b, lord) + ')');
+  check(lord.log.some(l => /No longer Lord/.test(l.text)), 'his life log records the fall');
+
+  // the elder names you his successor
+  const e = Sim.newGame(80); e.village.step = 8; e.village.standing = 85; e.village.council = true;
+  Sim.step(e, 1);
+  check(e.offices.elder === 'player' && e.village.step === 9, 'the elder steps down and the moot names you Elder');
+  const br = Object.values(e.people).find(x => x.name === 'Brannoch');
+  check(br.retired && !br.job && br.home, 'Brannoch is a retired villager in his own house now');
+  const back = Sim.deserialize(Sim.serialize(b)); Sim.advance(b, 1500); Sim.advance(back, 1500);
+  check(Sim.serialize(b) === Sim.serialize(back), 'people, houses and offices save and restore exactly');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');

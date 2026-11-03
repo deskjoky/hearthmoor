@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 3;
+  const VERSION = 4;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -133,10 +133,22 @@
     'Rebuild the old watchtower on the east road (80c and 20 wood)',
     'Answer the elder’s summons to the Moot Hall',
     'Serve on the council: fund a village project and settle a dispute',
-    'Answer Lord Varrow’s letter at the manor gate'
+    'Answer Lord Varrow’s letter at the manor gate',
+    'Earn the village’s full trust (standing 80) so the elder names you his successor'
   ];
   const HOMES = [{ x: -27, z: 4 }, { x: -12, z: -24 }, { x: 3, z: -25 }, { x: 15, z: -25 }, { x: 30, z: -4 }, { x: -10, z: 27 }];
   const WORKER_HOMES = [{ x: 6, z: 27 }, { x: 18, z: 24 }, { x: -30, z: -6 }];
+  const NEW_HUTS = [{ x: -31, z: 14 }, { x: -20, z: -28 }, { x: 25, z: 22 }, { x: -18, z: 25 }, { x: 10, z: -30 }, { x: -28, z: -24 }];
+  const MANOR_HOME = { x: -7, z: -43.5 };
+  const BIZ_BASE = { bakery: 26, smithy: 30, tavern: 26, joinery: 23 };
+  const OFFICES = {
+    lord: { title: 'Lord of Hearthmoor', salary: 0, home: 'manor' },
+    steward: { title: 'Steward', salary: 10, home: 'manor' },
+    elder: { title: 'Village Elder', salary: 5, home: null },
+    taxman: { title: 'Tax collector', salary: 6, home: 'manor' },
+    guard: { title: 'Manor guard', salary: 6, home: 'manor' }
+  };
+  const FOOD = 3, ODD_JOBS = 3, COMMONS_PAY = 7, EVICT_AFTER = 3, LEAVE_AFTER = 4;
   const VILLAGERS = [
     { name: 'Aldric', job: 'field' }, { name: 'Maren', job: 'field' }, { name: 'Tobin', job: 'forest' },
     { name: 'Edda', job: 'pit' }, { name: 'Wynn', job: 'market' }, { name: 'Old Sela', job: 'well' }
@@ -224,7 +236,7 @@
     };
   }
   function freshStats(s) {
-    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, notes: [] };
+    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, owned: 0, salaries: 0, notes: [] };
     s.shops.forEach(x => { st.shops[x.id] = freshShopStats(x); });
     return st;
   }
@@ -239,7 +251,8 @@
       shopsOpened: 0, upgrades: 0, invested: 0, jobsHeld: 0, shiftsWorked: 0, shiftsMissed: 0, timesFired: 0, jobsQuit: 0,
       peakCoins: 0, days: 0,
       standingEarned: 0, elderTasks: 0, councilSince: null, projectsFunded: 0, disputesSettled: 0, grainDonated: 0, chestGiven: 0,
-      taxesPaid: 0, contractsDone: 0, contractsMissed: 0, housesOwned: 0, rentCollected: 0, shopsSold: 0
+      taxesPaid: 0, contractsDone: 0, contractsMissed: 0, housesOwned: 0, rentCollected: 0, shopsSold: 0,
+      evictions: 0, peopleLeft: 0, bizBought: 0, staffFired: 0, offices: 0, rentRaises: 0
     };
   }
   function freshVillage() {
@@ -258,13 +271,7 @@
       shops: [], nextShop: 1, job: null, trades: { bakery: 0, smithy: 0, tavern: 0, joinery: 0 },
       agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null, village: freshVillage()
     };
-    VILLAGERS.forEach((v, i) => {
-      const home = HOMES[i];
-      s.agents.push({
-        id: s.nextId++, kind: 'villager', name: v.name, job: v.job, home, x: home.x, z: home.z + 1.5, face: 0,
-        spot: jobSpot(s, v.job), mode: 'routine', phase: null, doing: 'Waking up', icon: null, iconUntil: 0, palette: i
-      });
-    });
+    setupPeople(s);
     openDay(s);
     event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + REALM.lord + ', with 5 coins. The four shops across the square are hiring.', 'story');
     return s;
@@ -283,6 +290,8 @@
   function openDay(s) {
     s.day = Math.floor((s.t - 360) / DAY) + 1;
     s.stats = freshStats(s);
+    if (s.people) peopleMorning(s);
+    for (const shop of s.shops) if (shop.worker && shop.worker.pid) { const wp = person(s, shop.worker.pid); shop.worker.home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 }; }
     const base = s.t - minuteOfDay(s.t);
     const sched = [];
     const v = s.village;
@@ -295,7 +304,7 @@
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
       const vr = T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0);
-      s.agents.filter(a => a.kind === 'villager').forEach(a => { if (rand(s) < vr) sched.push({ at: when(), id: a.id, shop: shop.id }); });
+      s.agents.filter(a => a.kind === 'person' && a.pid && s.people[a.pid] && s.people[a.pid].purse >= shop.price && !(s.people[a.pid].job && s.people[a.pid].job.office === 'guard')).forEach(a => { if (rand(s) < vr) sched.push({ at: when(), id: a.id, shop: shop.id }); });
       const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers));
       for (let i = 0; i < n; i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
@@ -326,14 +335,16 @@
 
   function makeApplicants(s) {
     s.applicants = [];
-    const taken = s.shops.filter(x => x.worker).map(x => x.worker.name);
-    for (const name of s.village.jobless) s.applicants.push({ name, skill: name === 'Hilda' ? 1.05 : 0.9, ask: name === 'Hilda' ? 9 : 7, local: true });
-    for (let i = 0; i < 2; i++) {
+    const taken = s.shops.filter(x => x.worker).map(x => x.worker.name).concat(Object.values(s.people || {}).map(p => p.name));
+    const seekers = s.people ? living(s).filter(p => !p.job && !p.retired) : [];
+    seekers.sort((a, b) => (s.village.jobless.includes(b.name) ? 1 : 0) - (s.village.jobless.includes(a.name) ? 1 : 0));
+    for (const p of seekers.slice(0, 4)) s.applicants.push({ name: p.name, pid: p.id, skill: Math.round((0.7 + p.skill * 0.5) * 100) / 100, ask: Math.round(4 + p.skill * 5), local: true });
+    for (let i = 0; i < (s.applicants.length >= 2 ? 1 : 2); i++) {
       const skill = Math.round((0.7 + rand(s) * 0.6) * 100) / 100;
       const ask = Math.round(3 + skill * 6);
       let name, guard = 0;
       do { name = APPLICANTS[Math.floor(rand(s) * APPLICANTS.length)]; guard++; } while ((s.applicants.some(a => a.name === name) || taken.includes(name) || JOBLESS.includes(name)) && guard < 50);
-      s.applicants.push({ name, skill, ask });
+      s.applicants.push({ name, skill, ask, newcomer: true });
     }
   }
   function skillLabel(skill) { return skill < 0.85 ? 'Slow but cheap' : skill < 1.1 ? 'Steady' : 'Quick hands'; }
@@ -341,12 +352,15 @@
   function closeDay(s) {
     const st = s.stats;
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
-    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, notes: st.notes.slice() };
+    if (s.people) { bizDay(s); peopleEvening(s); }
+    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, notes: st.notes.slice() };
+    entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
       if (w) {
         const paid = Math.min(s.coins, w.wage);
         spend(s, paid); ss.wages += paid; s.rec.wagesPaid += paid;
+        if (w.pid && s.people[w.pid]) s.people[w.pid].purse += paid;
         const full = paid >= w.wage;
         if (!full) { w.mood -= 25; w.unpaid = (w.unpaid || 0) + 1; }
         else { w.unpaid = 0; w.mood += w.wage >= w.ask ? 6 + Math.min(6, (w.wage - w.ask) * 2) : -(w.ask - w.wage) * 7; }
@@ -360,8 +374,8 @@
       e.notes = explainShop(s, shop, e);
       entry.shops.push(e);
     }
-    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given;
+    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned);
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries;
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
@@ -380,6 +394,7 @@
       if (w.mood < 15) {
         if (w.warned) {
           event(s, w.name + ' has quit the ' + TRADES[shop.trade].name.toLowerCase() + '. Pay was too low or late.', 'bad');
+          if (w.pid && s.people[w.pid]) { const wp = s.people[w.pid]; wp.job = null; wp.opinion = clamp(wp.opinion - 20, -100, 100); plog(s, wp, 'Quit your ' + TRADES[shop.trade].name.toLowerCase() + ': badly paid.'); addBody(s, wp, { x: w.x, z: w.z }); }
           const e = entry.shops.find(x => x.id === shop.id);
           if (e) e.notes.push({ text: w.name + ' quit after a second miserable day. Workers expect at least their asking wage, paid on time.' });
           shop.worker = null; s.rec.workersQuit++;
@@ -515,7 +530,10 @@
     if (a.phase === 'toShop') {
       const slot = queueSlot(shop, shop.queue.length);
       if (moveTo(a, slot.x, slot.z, speed)) {
-        if (shop.price > a.wtp) {
+        const buyer = a.pid && s.people[a.pid];
+        if (buyer && buyer.purse < shop.price) {
+          leaveShop(s, a, shop, 'broke'); shopStats(s, shop).broke = (shopStats(s, shop).broke || 0) + 1;
+        } else if (shop.price > a.wtp) {
           leaveShop(s, a, shop, 'tooExpensive');
           if (shopStats(s, shop).tooExpensive <= 2) event(s, a.name + ' thought ' + shop.price + 'c was too much for ' + T.product + '.', 'bad');
         } else if (shop.goods <= 0 && !canProduce(shop)) {
@@ -540,9 +558,12 @@
   }
 
   function taxTake(s) {
-    const due = s.shops.reduce((a, x) => a + 2 * (x.tier + 1), 0) + (s.village.cottage === 'let' ? 2 : 0);
+    const due = s.shops.reduce((a, x) => a + 2 * (x.tier + 1), 0) + (s.village.cottage === 'let' ? 2 : 0) + (s.people ? Object.values(s.biz).filter(b => b.owner === 'player' && !b.closed).length * 4 : 0);
+    const lord = s.offices && s.offices.lord, lordP = lord && lord !== 'player' && s.people[lord];
+    if (s.people) for (const b of Object.values(s.biz)) if (!b.closed && b.owner !== 'player') { const o = s.people[b.owner], t = Math.min(4, o.purse); o.purse -= t; if (lordP) lordP.purse += t; else if (lord === 'player') earn(s, t); }
+    if (lord === 'player') { event(s, 'Your tax collector brings in the week\u2019s taxes from the village businesses.', 'coin'); return; }
     const paid = Math.min(s.coins, due);
-    spend(s, paid); s.stats.tax += paid; s.rec.taxesPaid += paid;
+    spend(s, paid); s.stats.tax += paid; s.rec.taxesPaid += paid; if (lordP) lordP.purse += paid;
     let msg = 'The tax collector takes ' + paid + 'c for ' + REALM.lordShort + (due ? ' (2c for each level of every shop you own' + (s.village.cottage === 'let' ? ', 2c for the cottage' : '') + ').' : '. You own nothing taxable yet.');
     if (s.village.council) { s.village.chest += 20; msg += ' He leaves 20c in the council chest from the lord\u2019s purse.'; }
     event(s, msg, due ? 'bad' : 'info');
@@ -584,6 +605,7 @@
       a.indoors = false;
       if (a.mode === 'shop') updateShopper(s, a, dt);
       else if (a.kind === 'taxman') taxmanRoutine(s, a, dt);
+      else if (a.kind === 'person') personRoutine(s, a, dt);
       else if (a.kind === 'jobless') joblessRoutine(s, a, dt);
       else villagerRoutine(s, a, dt);
     }
@@ -634,8 +656,11 @@
     shop.serveProgress += dt * speed;
     if (shop.serveProgress >= SERVE_MIN) {
       const T = TRADES[shop.trade];
-      const qty = Math.min(front.qty, shop.goods), coin = qty * shop.price;
+      const buyer = front.pid && s.people[front.pid];
+      const qty = Math.max(0, Math.min(front.qty, shop.goods, buyer ? Math.floor(buyer.purse / shop.price) : 99)), coin = qty * shop.price;
+      if (qty <= 0) { shop.serveProgress = 0; leaveShop(s, front, shop, 'broke'); return; }
       shop.goods -= qty; earn(s, coin);
+      if (buyer) { buyer.purse -= coin; if (shop.trade === 'bakery' || shop.trade === 'tavern') buyer.ate += Math.min(coin, FOOD); }
       st.sold += qty; st.revenue += coin; st.served++; st.servedBy[pa ? 'player' : 'worker']++;
       s.rec.sold[T.product] += qty; s.rec.goodsSold += qty; s.rec.salesRevenue += coin; s.rec.served++;
       shop.serveProgress = 0;
@@ -849,21 +874,34 @@
     event(s, REALM.elder + ': "The harvest was thin and the granary is near empty. Folk are skipping meals and spending less. Bring 20 grain to the granary and they will remember it."', 'story');
   }
   function startJobs(s) {
-    const v = s.village; v.step = 3; v.jobless = JOBLESS.slice();
-    JOBLESS.forEach((name, i) => s.agents.push({ id: s.nextId++, kind: 'jobless', name, home: HOMES[1 + i], x: HOMES[1 + i].x, z: HOMES[1 + i].z + 1.5, face: 0, mode: 'routine', doing: 'Looking for work', icon: null, iconUntil: 0, palette: 7 + i }));
-    event(s, REALM.elder + ': "Hilda and Bram lost their places when the mill closed. They sit in the square every day. Give them work, and two families eat."', 'story');
+    const v = s.village; v.step = 3;
+    const idle = living(s).filter(p => !p.job && !p.retired).sort((a, b) => (JOBLESS.includes(b.name) ? 1 : 0) - (JOBLESS.includes(a.name) ? 1 : 0)).slice(0, 2);
+    v.jobless = idle.map(p => p.name);
+    event(s, REALM.elder + ': "' + (v.jobless.length ? v.jobless.join(' and ') + ' sit in the square every day with no work. Give them work, and their families eat.' : 'Everyone has work, thanks to you.') + '"', 'story');
     makeApplicants(s);
   }
   function checkVillage(s) {
     const v = s.village;
     if (v.step === 1 && s.shops.length) startShortage(s);
+    if (v.step === 3 && s.people) v.jobless = v.jobless.filter(n => { const p = Object.values(s.people).find(q => q.name === n); return p && p.status === 'here' && !p.job; });
     if (v.step === 3 && !v.jobless.length) {
-      v.step = 4; s.rec.elderTasks++; addStanding(s, 20, 'Hilda and Bram have work, and the square knows who gave it.');
+      v.step = 4; s.rec.elderTasks++;
+      const given = v.jobsGiven || 0;
+      addStanding(s, given >= 2 ? 20 : given ? 12 : 4, given ? 'the idle have work, and the square knows who gave it.' : 'the idle found work on their own; the elder is glad, though it was not your doing.');
       event(s, REALM.elder + ': "One more thing. The old watchtower on the east road fell in last winter. Bandits are on the Ashford road. Rebuild it: 80c and 20 wood."', 'story');
     }
     if (v.step === 6 && s.rec.projectsFunded >= 1 && s.rec.disputesSettled >= 1) {
       v.step = 7; v.letter = true;
       event(s, 'A rider brings a letter sealed in blue wax: "' + REALM.steward + ' would speak with the new councillor of Hearthmoor. Present yourself at the manor gate." — ' + REALM.lord, 'story');
+    }
+  }
+  function elderSuccession(s) {
+    const v = s.village;
+    if (v.step === 8 && v.standing >= 80 && s.offices.elder !== 'player') {
+      const old = s.offices.elder && s.people[s.offices.elder];
+      appoint(s, 'elder', 'player'); v.step = 9;
+      if (old) { old.retired = true; plog(s, old, 'Stepped down as Elder in favour of ' + s.name + '.'); }
+      event(s, (old ? old.name : 'The old elder') + ' stands before the moot: "I am old, and the village needs younger hands." The moot names you Elder of Hearthmoor. You draw the elder\u2019s 5c a day, and ' + (old ? old.name + ' is just a villager now.' : 'the hall is yours.'), 'story');
     }
   }
   function doTalk(s) {
@@ -887,7 +925,8 @@
       4: 'The watchtower needs ' + Math.max(0, 80 - v.towerCoin) + 'c and ' + Math.max(0, 20 - v.towerWood) + ' wood more.',
       6: 'Councillor. The chest holds ' + v.chest + 'c. Spend it where the village can see it.',
       7: 'The steward is waiting. Do not keep a lord\u2019s man waiting.',
-      8: 'You have done well by us. The lord knows your name now.'
+      8: 'You have done well by us. Keep earning the village\u2019s trust, and one day this hall will need a new elder.',
+      9: 'The hall is yours now, Elder.'
     };
     event(s, REALM.elder + ': "' + (lines[v.step] || 'Good day to you.') + '"', 'info');
   }
@@ -926,6 +965,314 @@
     else event(s, 'The gate is barred. A guard in blue and gold: "His lordship receives no one without the steward\u2019s leave."', 'info');
   }
   function atLoc(s, key) { return dist(s.player, LOCS[key]) < LOCS[key].r; }
+
+  /* ---------- people: everyone has a purse, a job and a home ---------- */
+  const person = (s, id) => s.people[id];
+  const living = s => Object.values(s.people).filter(p => p.status === 'here');
+  function plog(s, p, text) { p.log.unshift({ day: s.day, text }); if (p.log.length > 14) p.log.length = 14; }
+  function houseById(s, id) { return s.houses.find(h => h.id === id); }
+  function landlordName(s, owner) {
+    if (owner === 'player') return s.name;
+    if (owner === 'office:lord') return 'the lord of the manor';
+    if (owner && s.people[owner]) return s.people[owner].name;
+    return 'the village';
+  }
+  function officeHolder(s, office) { return s.offices[office]; }
+  function holderName(s, office) { const h = s.offices[office]; return h === 'player' ? s.name : h && s.people[h] ? s.people[h].name : 'nobody'; }
+  function newPerson(s, o) {
+    const id = 'p' + (s.nextPid++);
+    const p = Object.assign({ id, name: 'Someone', age: 30, purse: 20, skill: 0.6 + rand(s) * 0.6, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: [], palette: Math.floor(rand(s) * 10), ate: 0, retired: false }, o);
+    p.id = id; s.people[id] = p; return p;
+  }
+  function addBody(s, p, at) {
+    if (s.agents.some(a => a.pid === p.id)) return;
+    const pt = at || homePoint(s, p) || P.square;
+    s.agents.push({ id: s.nextId++, kind: 'person', pid: p.id, name: p.name, x: pt.x, z: pt.z, face: 0, mode: 'routine', doing: '', icon: null, iconUntil: 0, palette: p.palette, job: p.job && p.job.type === 'commons' ? p.job.what : null });
+  }
+  function bodyOf(s, p) { return s.agents.find(a => a.pid === p.id); }
+  function homePoint(s, p) {
+    if (!p.home) return null;
+    if (p.home === 'manor') return MANOR_HOME;
+    if (p.home.startsWith('biz:')) { const e = empById(p.home.slice(4)); return { x: e.x, z: e.z }; }
+    const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
+  }
+  function occupation(s, p) {
+    const j = p.job;
+    if (!j) return p.retired ? 'Retired' : p.status === 'left' ? 'Gone from Hearthmoor' : 'Out of work';
+    if (j.type === 'commons') return { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader at the post', well: 'Water-carrier' }[j.what];
+    if (j.type === 'biz') { const e = empById(j.biz), b = s.biz[j.biz]; return (j.role === 'owner' ? 'Owner of ' : (b.owner === 'player' ? 'Works for you at ' : 'Works at ')) + e.name; }
+    if (j.type === 'shop') { const sh = shopById(s, j.shop); return 'Works for you at your ' + (sh ? TRADES[sh.trade].name.toLowerCase() : 'shop'); }
+    if (j.type === 'office') return OFFICES[j.office].title;
+    return 'Working';
+  }
+  function homeText(s, p) {
+    if (!p.home) return p.status === 'left' ? 'Left the village' : 'Homeless, sleeping in the square';
+    if (p.home === 'manor') return 'Lives at Varrow Manor';
+    if (p.home.startsWith('biz:')) return 'Lives above ' + empById(p.home.slice(4)).name;
+    const h = houseById(s, p.home);
+    if (h.owner === p.id) return 'Owns ' + h.name;
+    return 'Rents ' + h.name + ' from ' + landlordName(s, h.owner) + ' at ' + h.rent + 'c a day' + (p.arrears ? ' (' + p.arrears + ' days behind)' : '');
+  }
+  function income(s, p) {
+    const j = p.job;
+    if (!j) return p.retired ? 0 : ODD_JOBS;
+    if (j.type === 'commons') return COMMONS_PAY - (s.village.shortage ? 2 : 0);
+    if (j.type === 'biz') { const b = s.biz[j.biz]; if (j.role === 'owner') return Math.max(0, Math.round(avg(b.profits))); const st = b.staff.find(x => x.pid === p.id); return st ? st.wage : 0; }
+    if (j.type === 'shop') { const sh = shopById(s, j.shop); return sh && sh.worker ? sh.worker.wage : 0; }
+    if (j.type === 'office') return OFFICES[j.office].salary;
+    return 0;
+  }
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+  function vacancy(s, maxRent) {
+    return s.houses.filter(h => h.cap > h.tenants.length && h.owner !== 'player-home' && (maxRent == null || h.rent <= maxRent)).sort((a, b) => a.rent - b.rent)[0] || null;
+  }
+  function moveIn(s, p, h) {
+    p.home = h.id; h.tenants.push(p.id); p.arrears = 0; p.owed = 0; p.homeless = 0;
+    plog(s, p, 'Moved into ' + h.name + (h.owner === p.id ? '' : ' (' + h.rent + 'c a day)') + '.');
+  }
+  function moveOut(s, p, why) {
+    if (!p.home) return;
+    const h = houseById(s, p.home);
+    if (h) h.tenants = h.tenants.filter(x => x !== p.id);
+    p.home = null; p.arrears = 0;
+    plog(s, p, why || 'Lost their home.');
+  }
+  function loseJob(s, p, why) {
+    const j = p.job; if (!j) return;
+    if (j.type === 'biz') { const b = s.biz[j.biz]; b.staff = b.staff.filter(x => x.pid !== p.id); }
+    if (j.type === 'shop') { const sh = shopById(s, j.shop); if (sh && sh.worker && sh.worker.pid === p.id) sh.worker = null; }
+    if (j.type === 'office' && s.offices[j.office] === p.id) s.offices[j.office] = null;
+    p.job = null; p.mood = clamp(p.mood - 20, 0, 100);
+    plog(s, p, why || 'Lost their job.');
+  }
+
+  function setupPeople(s) {
+    s.people = {}; s.nextPid = 1; s.houses = []; s.biz = {}; s.offices = {};
+    const hutName = i => ['Fern Cottage', 'The Long Hut', 'Brook House', 'Mill Row', 'Thorn Hut', 'Sela’s House', 'Upper Croft', 'Hill Croft', 'West Croft', 'Ash Lane', 'Pit Row', 'Wood End', 'North Croft', 'Marsh Hut', 'Pine Row'][i];
+    HOMES.concat(WORKER_HOMES, NEW_HUTS).forEach((h, i) => s.houses.push({ id: 'h' + i, name: hutName(i), x: h.x, z: h.z + (i < 6 ? 1.5 : 0), owner: 'office:lord', rent: 2, cap: 1, tenants: [] }));
+    const H = i => s.houses[i];
+    // the commons: farmers, a woodcutter, a miner, a trader, a water-carrier
+    VILLAGERS.forEach((v, i) => {
+      const p = newPerson(s, { name: v.name, age: [34, 29, 41, 26, 37, 68][i], purse: 18 + Math.floor(rand(s) * 14), job: { type: 'commons', what: v.job }, palette: i });
+      if (v.name === 'Old Sela') { H(i).owner = p.id; H(i).rent = 0; }
+      moveIn(s, p, H(i)); p.log = [];
+    });
+    // the four shops and their owners, who live above them
+    const owners = [['gerd', 'Gerd', 52], ['forge', 'Hollin', 44], ['tankard', 'Mother Ysolde', 58], ['ash', 'Ash', 47]];
+    const hands = [['gerd', 'Osric', 23], ['forge', 'Linnet', 27], ['tankard', 'Cade', 31], ['ash', 'Freya', 25]];
+    owners.forEach(([id, name, age], i) => {
+      const p = newPerson(s, { name, age, purse: 90 + Math.floor(rand(s) * 40), job: { type: 'biz', biz: id, role: 'owner' }, home: 'biz:' + id, palette: 3 + i });
+      const e = empById(id);
+      s.biz[id] = { id, trade: e.trade, owner: p.id, staff: [], profits: [8, 8, 8], closed: false, opened: 0, lastProfit: 0, lastRevenue: 0 };
+    });
+    hands.forEach(([id, name, age], i) => {
+      const p = newPerson(s, { name, age, purse: 14 + Math.floor(rand(s) * 10), job: { type: 'biz', biz: id, role: 'hand' }, palette: 6 + i });
+      s.biz[id].staff.push({ pid: p.id, wage: 7 }); moveIn(s, p, H(9 + i)); p.log = [];
+    });
+    // two people already out of work
+    JOBLESS.forEach((name, i) => { const p = newPerson(s, { name, age: [33, 38][i], purse: 16, palette: 7 + i }); moveIn(s, p, H(6 + i)); p.log = [{ day: 1, text: 'Lost their place when the mill closed.' }]; });
+    // the elder owns his house; the lord's household lives at the manor
+    const elder = newPerson(s, { name: 'Brannoch', age: 71, purse: 60, job: { type: 'office', office: 'elder' }, palette: 4 });
+    H(8).owner = elder.id; H(8).rent = 0; moveIn(s, elder, H(8)); elder.log = [];
+    s.offices.elder = elder.id;
+    [['lord', 'Edric Varrow', 49, 420], ['steward', 'Merrin', 45, 120], ['taxman', 'Pell', 39, 40], ['guard', 'Hobb', 33, 30]].forEach(([office, name, age, purse]) => {
+      const p = newPerson(s, { name, age, purse, job: { type: 'office', office }, home: 'manor', palette: 2 });
+      s.offices[office] = p.id;
+    });
+    for (const p of living(s)) if (!['lord', 'steward', 'taxman'].includes(p.job && p.job.office)) addBody(s, p);
+    // commons need their work spots
+    s.agents.forEach(a => { if (a.job) a.spot = jobSpot(s, a.job); });
+  }
+
+  /* the village's businesses keep their own books */
+  function bizDay(s) {
+    const pop = living(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length);
+    for (const id in s.biz) {
+      const b = s.biz[id];
+      if (b.closed) { b.lastProfit = 0; continue; }
+      const own = b.owner === 'player' ? null : person(s, b.owner);
+      const workers = b.staff.length + (own ? 1 : 0);
+      const competition = Math.max(0.35, 1 - 0.28 * s.shops.filter(x => x.trade === b.trade).length);
+      const revenue = Math.round(BIZ_BASE[b.trade] * (0.55 + 0.55 * employed) * Math.min(1.5, 0.5 + 0.5 * workers) * competition * (s.village.shortage && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1));
+      let wages = 0;
+      for (const st of b.staff) {
+        const w = person(s, st.pid);
+        const payer = b.owner === 'player' ? s.coins : own.purse;
+        const paid = Math.min(st.wage, Math.max(0, payer));
+        if (b.owner === 'player') spend(s, paid); else own.purse -= paid;
+        w.purse += paid; wages += paid;
+        if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
+      }
+      const supplies = Math.round(revenue * 0.35), profit = revenue - supplies - wages - 3;
+      b.lastRevenue = revenue; b.lastProfit = profit; b.lastWages = wages;
+      b.profits.push(profit); if (b.profits.length > 5) b.profits.shift();
+      if (b.owner === 'player') {
+        const net = revenue - supplies - 3;
+        if (net >= 0) earn(s, net); else spend(s, Math.min(s.coins, -net));
+        s.stats.owned = (s.stats.owned || 0) + profit;
+        continue;
+      }
+      own.purse += revenue - supplies - 3;
+      // owners hire when doing well and let people go when not
+      const recent = avg(b.profits.slice(-3));
+      if (recent < -1 && b.staff.length) {
+        const st = b.staff[b.staff.length - 1], w = person(s, st.pid);
+        loseJob(s, w, 'Let go from ' + empById(id).name + ': trade was too slow.');
+        b.laidOff = s.day;
+        event(s, own.name + ' has let ' + w.name + ' go from ' + empById(id).name + '. Business is slow.', 'bad');
+      } else if (recent > 12 && b.staff.length < 2) {
+        const seek = pop.find(p => !p.job && !p.retired && p.status === 'here');
+        if (seek) { seek.job = { type: 'biz', biz: id, role: 'hand' }; b.staff.push({ pid: seek.id, wage: 7 }); plog(s, seek, 'Hired by ' + own.name + ' at ' + empById(id).name + '.'); event(s, own.name + ' hired ' + seek.name + ' at ' + empById(id).name + '.', 'info'); }
+      }
+      if (own.purse <= 0 && b.profits.every(x => x < 0)) {
+        b.closed = true;
+        b.staff.slice().forEach(st => loseJob(s, person(s, st.pid), empById(id).name + ' closed its doors.'));
+        loseJob(s, own, 'Their business, ' + empById(id).name + ', failed.');
+        own.purse = Math.max(own.purse, 0);
+        if (own.home === 'biz:' + id) { own.home = null; plog(s, own, 'Had to leave the rooms above the shop.'); }
+        event(s, empById(id).name + ' has closed. ' + own.name + ' is out of work and out of a home.', 'bad');
+      }
+    }
+  }
+
+  /* wages, food and rent at the end of each day */
+  function peopleEvening(s) {
+    const lordHolder = s.offices.lord;
+    if (lordHolder && lordHolder !== 'player' && s.people[lordHolder]) s.people[lordHolder].purse += 18; // the lord's farms and woods beyond the village
+    if (s.offices.elder === 'player') { const L = lordHolder && lordHolder !== 'player' && s.people[lordHolder]; const sal = OFFICES.elder.salary; if (L && L.purse >= sal) { L.purse -= sal; earn(s, sal); s.stats.jobPay += sal; } }
+    for (const p of living(s)) {
+      const j = p.job;
+      // incomes that are not paid by a business or by you
+      if (!j) { if (!p.retired) p.purse += ODD_JOBS; }
+      else if (j.type === 'commons') p.purse += income(s, p);
+      else if (j.type === 'office' && OFFICES[j.office].salary) {
+        const sal = OFFICES[j.office].salary;
+        if (lordHolder === 'player') { const paid = Math.min(s.coins, sal); spend(s, paid); s.stats.salaries = (s.stats.salaries || 0) + paid; p.purse += paid; }
+        else if (lordHolder && s.people[lordHolder]) { const L = s.people[lordHolder], paid = Math.min(Math.max(0, L.purse), sal); L.purse -= paid; p.purse += paid; }
+      }
+      // food: what they bought at your shops today counts toward it
+      const food = Math.max(0, FOOD - p.ate); const paidFood = Math.min(p.purse, food); p.purse -= paidFood;
+      if (paidFood < food) { p.mood = clamp(p.mood - 10, 0, 100); if (!p.hungry) plog(s, p, 'Went to bed hungry.'); p.hungry = true; } else p.hungry = false;
+      p.ate = 0;
+      // rent
+      const h = p.home && houseById(s, p.home);
+      if (h && h.owner !== p.id && h.rent > 0) {
+        // rent owed piles up: paying today does not clear what was missed before
+        p.owed = (p.owed || 0) + h.rent;
+        const pay = Math.min(p.purse, p.owed);
+        if (pay > 0) {
+          p.purse -= pay; p.owed -= pay;
+          if (h.owner === 'player') { earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay; }
+          else if (h.owner === 'office:lord') { if (lordHolder === 'player') { earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay; } else if (lordHolder && s.people[lordHolder]) s.people[lordHolder].purse += pay; }
+          else if (s.people[h.owner]) s.people[h.owner].purse += pay;
+        }
+        p.arrears = Math.ceil(p.owed / h.rent);
+        if (p.owed > 0) {
+          p.mood = clamp(p.mood - 8, 0, 100);
+          plog(s, p, 'Owes ' + p.owed + 'c in rent (' + p.arrears + ' days behind).');
+          if (p.arrears >= EVICT_AFTER) {
+            p.owed = 0;
+            moveOut(s, p, 'Evicted from ' + h.name + ' after ' + EVICT_AFTER + ' days of unpaid rent.');
+            s.rec.evictions++;
+            event(s, p.name + ' has been evicted from ' + h.name + (h.owner === 'player' ? ' (your house)' : '') + '.', 'bad');
+          }
+        }
+      }
+      // mood drifts with circumstances
+      const target = (p.job ? 60 : 30) + (p.home ? 15 : -20) + (p.purse > 30 ? 10 : p.purse < 5 ? -10 : 0);
+      p.mood = clamp(p.mood + (target - p.mood) * 0.3, 0, 100);
+      p.purse = Math.max(0, Math.round(p.purse));
+    }
+  }
+
+  /* each morning: the jobless look for work, the homeless for a roof, and some give up */
+  function peopleMorning(s) {
+    for (const p of living(s)) {
+      if (!p.home) {
+        p.homeless++;
+        const affordable = Math.max(1, Math.floor(income(s, p) - FOOD));
+        const h = vacancy(s, p.purse >= 20 ? 99 : affordable);
+        if (h) moveIn(s, p, h);
+      } else if (p.job && p.home !== 'manor' && !String(p.home).startsWith('biz:')) {
+        // tenants whose rent has outgrown their pay look for somewhere cheaper
+        const h = houseById(s, p.home);
+        if (h && h.owner !== p.id && h.rent > income(s, p) - 1 && p.purse < h.rent * 4) {
+          const cheaper = vacancy(s, Math.max(1, income(s, p) - FOOD));
+          if (cheaper && cheaper.rent < h.rent) { moveOut(s, p, 'Moved out of ' + h.name + ': the rent of ' + h.rent + 'c was more than they could pay.'); moveIn(s, p, cheaper); }
+        }
+      }
+      if (!p.job && !p.retired) {
+        const open = Object.values(s.biz).find(b => !b.closed && b.owner !== 'player' && b.staff.length < 1 && avg(b.profits.slice(-3)) > 3 && !(s.day - (b.laidOff || -99) < 6));
+        if (open) { open.staff.push({ pid: p.id, wage: 7 }); p.job = { type: 'biz', biz: open.id, role: 'hand' }; plog(s, p, 'Found work at ' + empById(open.id).name + '.'); }
+      }
+      if (!p.home && !p.job && p.homeless >= LEAVE_AFTER && p.purse < 5 && !p.retired) {
+        p.status = 'left'; plog(s, p, 'Left Hearthmoor for Ashford with nothing.');
+        const b = bodyOf(s, p); if (b) b.gone = true;
+        s.rec.peopleLeft++;
+        event(s, p.name + ' has left Hearthmoor, homeless and out of work.', 'bad');
+      }
+    }
+    // newcomers arrive when there is a roof and work to be had
+    const jobless = living(s).filter(p => !p.job && !p.retired).length;
+    if (jobless === 0 && vacancy(s, 3) && rand(s) < 0.3) {
+      const names = ['Rowan', 'Elsbeth', 'Tam', 'Hesper', 'Wat', 'Mabel', 'Odo', 'Gwen', 'Alard', 'Juliana'];
+      const used = new Set(Object.values(s.people).map(p => p.name));
+      const name = names.find(n => !used.has(n));
+      if (name) { const p = newPerson(s, { name, age: 20 + Math.floor(rand(s) * 25), purse: 15 }); moveIn(s, p, vacancy(s, 3)); p.log.push({ day: s.day, text: 'Arrived from Ashford looking for work.' }); addBody(s, p, P.road); event(s, name + ' has arrived from Ashford looking for work.', 'info'); }
+    }
+  }
+
+  /* people walk through their own day */
+  function personRoutine(s, a, dt) {
+    const p = s.people[a.pid];
+    if (!p || p.status !== 'here') { a.gone = true; return; }
+    const h = hourOf(s), night = h < 6 || h >= 21, j = p.job;
+    const home = homePoint(s, p);
+    let tgt = null, doing = '', working = false;
+    if (night) { tgt = home || { x: P.well.x - 1.6 + (a.id % 3) * 0.8, z: P.well.z + 1.8 }; doing = home ? 'Asleep' : 'Sleeping rough by the well'; }
+    else if (j && j.type === 'commons') {
+      if (h < 7) { tgt = a.spot; doing = 'Walking to work'; }
+      else if (h < 12 || (h >= 13 && h < 17)) { tgt = a.spot; doing = jobDoing(j.what); working = true; }
+      else if (h < 13) { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = s.village.shortage ? 'Hungry: the granary is nearly empty' : 'Lunch by the well'; }
+    } else if (j && j.type === 'biz') {
+      const e = empById(j.biz), hrs = j.role === 'owner' ? [7, 18] : e.shift;
+      if (h >= hrs[0] && h < hrs[1] && !s.biz[j.biz].closed) { tgt = j.role === 'owner' ? { x: e.x, z: e.z - 0.4 } : e.spot; doing = j.role === 'owner' ? 'Minding the counter' : 'Working the ' + TRADES[e.trade].station; working = true; a.faceTo = Math.PI; }
+    } else if (j && j.type === 'office') {
+      if (j.office === 'elder' && h >= 8 && h < 18) { tgt = { x: -1.8, z: -11.2 }; doing = 'Keeping the Moot Hall'; }
+      else if (j.office === 'guard') { tgt = { x: -3.6, z: -36.4 }; doing = 'Guarding the manor gate'; }
+      else { tgt = MANOR_HOME; doing = 'At the manor'; }
+    }
+    if (!tgt) {
+      if (h >= 17) { tgt = { x: P.plaza.x + ((a.id % 4) - 1.5) * 1.4, z: P.plaza.z + ((a.id % 2) ? 1.2 : -1) }; doing = 'Chatting in the square'; }
+      else if (!j && !p.retired) { tgt = { x: P.square.x - 2 + (a.id % 5), z: P.square.z + ((a.id % 2) ? 0.6 : -0.6) }; doing = 'In the square, looking for work'; }
+      else { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = 'Passing the time by the well'; }
+    }
+    const arrived = moveTo(a, tgt.x, tgt.z, 0.9 * dt);
+    a.doing = arrived ? doing : 'On the way: ' + doing.toLowerCase();
+    a.working = arrived && working;
+    a.indoors = arrived && night && !!home;
+    if (arrived && a.faceTo != null && working) a.face = a.faceTo;
+  }
+
+  /* buying, renting and firing */
+  function bizPrice(s, id) { const b = s.biz[id]; return b.closed ? 100 : Math.round(150 + 25 * Math.max(0, avg(b.profits))); }
+  function housePrice(s, h) { return 40 + h.rent * 45; }
+  function sellerWilling(s, ownerPid) { const o = s.people[ownerPid]; return !o || o.opinion > -40; }
+
+  /* offices change hands */
+  function appoint(s, office, holder) {
+    const prev = s.offices[office], O = OFFICES[office];
+    if (prev && prev !== 'player' && s.people[prev]) {
+      const p = s.people[prev];
+      loseJob(s, p, 'No longer ' + O.title + '.');
+      if (O.home === 'manor' && p.home === 'manor') { p.home = null; plog(s, p, 'Had to leave the manor.'); if (!bodyOf(s, p)) addBody(s, p, P.gate); }
+      p.opinion = clamp(p.opinion - (holder === 'player' ? 60 : 0), -100, 100);
+      if (p.age >= 65) p.retired = true;
+    }
+    s.offices[office] = holder;
+    if (holder && holder !== 'player') { const p = s.people[holder]; if (p.job) loseJob(s, p, 'Left their work to become ' + O.title + '.'); p.job = { type: 'office', office }; if (O.home === 'manor') { moveOut(s, p, 'Moved into the manor.'); p.home = 'manor'; } }
+    if (holder === 'player') s.rec.offices = (s.rec.offices || 0) + 1;
+  }
 
   /* ---------- commands ---------- */
   const ok = msg => ({ ok: true, msg });
@@ -1051,24 +1398,28 @@
         const ap = s.applicants[b];
         if (!ap) return fail('That applicant has gone.');
         const wage = clamp(Math.round(c || ap.ask), 1, 40);
-        const used = s.shops.filter(x => x.worker).map(x => x.worker.home);
-        const home = WORKER_HOMES.find(h => !used.includes(h)) || WORKER_HOMES[0];
-        shop.worker = { name: ap.name, skill: ap.skill, ask: ap.ask, wage, mood: 60, x: P.road.x - 6, z: P.plaza.z, face: 0, home, task: null, why: 'Just hired', warned: false, carry: null, sup: null, hiredDay: s.day };
+        let wp = ap.pid && s.people ? s.people[ap.pid] : null;
+        if (!wp && s.people) { wp = newPerson(s, { name: ap.name, age: 20 + Math.floor(rand(s) * 20), purse: 10, skill: (ap.skill - 0.7) / 0.6 }); wp.log.push({ day: s.day, text: 'Came to Hearthmoor for work.' }); const h = vacancy(s, 4); if (h) moveIn(s, wp, h); }
+        const home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 };
+        shop.worker = { pid: wp ? wp.id : null, name: ap.name, skill: ap.skill, ask: ap.ask, wage, mood: 60, x: P.road.x - 6, z: P.plaza.z, face: 0, home, task: null, why: 'Just hired', warned: false, carry: null, sup: null, hiredDay: s.day };
         s.applicants.splice(b, 1); s.rec.workersHired++;
-        if (ap.local) {
-          s.village.jobless = s.village.jobless.filter(n => n !== ap.name);
-          const ag = s.agents.find(x => x.kind === 'jobless' && x.name === ap.name);
-          if (ag) { shop.worker.x = ag.x; shop.worker.z = ag.z; s.agents = s.agents.filter(x => x !== ag); }
-          shop.worker.local = true;
+        if (wp) {
+          wp.job = { type: 'shop', shop: shop.id }; plog(s, wp, 'Hired by ' + s.name + ' at ' + wage + 'c a day.'); wp.opinion = clamp(wp.opinion + 15, -100, 100);
+          const ag = bodyOf(s, wp); if (ag) { shop.worker.x = ag.x; shop.worker.z = ag.z; s.agents = s.agents.filter(x => x !== ag); }
+          if (ap.local) shop.worker.local = true;
+          if (!wp.home) event(s, wp.name + ' has no home to go to at night. Without a roof, their mood will suffer.', 'bad');
         }
+        if (s.village.jobless.includes(ap.name)) s.village.jobsGiven = (s.village.jobsGiven || 0) + 1;
+        s.village.jobless = s.village.jobless.filter(n => n !== ap.name);
         event(s, ap.name + ' will work at your ' + TRADES[shop.trade].name.toLowerCase() + ' for ' + wage + 'c a day, paid at closing (21:00).', 'good');
         return ok();
       }
       case 'setWage': if (shop && shop.worker) shop.worker.wage = clamp(Math.round(b), 1, 40); return ok();
       case 'fire': {
         if (!shop || !shop.worker) return fail('No worker to let go.');
-        const w = shop.worker; shop.worker = null; s.rec.workersLetGo++;
-        event(s, 'You let ' + w.name + ' go.', 'info');
+        const w = shop.worker; shop.worker = null; s.rec.workersLetGo++; s.rec.staffFired++;
+        if (w.pid && s.people && s.people[w.pid]) { const wp = s.people[w.pid]; wp.job = null; wp.opinion = clamp(wp.opinion - 30, -100, 100); wp.mood = clamp(wp.mood - 20, 0, 100); plog(s, wp, 'Let go by ' + s.name + '.'); addBody(s, wp, { x: w.x, z: w.z }); }
+        event(s, 'You let ' + w.name + ' go.' + (w.pid ? ' They will need to find other work to keep up with their rent.' : ''), 'info');
         return ok();
       }
       case 'upgrade': {
@@ -1156,13 +1507,85 @@
       case 'sellShop': {
         if (!shop) return fail('No such shop.');
         const refund = Math.floor(TRADES[shop.trade].tiers.slice(0, shop.tier + 1).reduce((t, x) => t + (x.cost.coin || 0), 0) / 2);
-        if (shop.worker) s.rec.workersLetGo++;
+        if (shop.worker) { s.rec.workersLetGo++; const w = shop.worker; if (w.pid && s.people && s.people[w.pid]) { const wp = s.people[w.pid]; wp.job = null; plog(s, wp, 'Lost their job when ' + s.name + ' sold the shop.'); addBody(s, wp, { x: w.x, z: w.z }); } }
         shop.queue.slice().forEach(id => { const ag = agentById(s, id); if (ag) leaveShop(s, ag, null, null); });
         s.shops = s.shops.filter(x => x !== shop);
         s.schedule = s.schedule.filter(e => e.shop !== shop.id);
         earn(s, refund); s.rec.shopsSold++;
         if (p.action && p.action.shop === shop.id) p.action = null;
         event(s, 'You sold your ' + TRADES[shop.trade].name.toLowerCase() + ' for ' + refund + 'c. The ' + PLOTS[shop.plot].name + ' is free again.', 'info');
+        return ok();
+      }
+      case 'buyBiz': {
+        const bz = s.biz && s.biz[a];
+        if (!bz) return fail('No such business.');
+        if (bz.owner === 'player') return fail('You already own it.');
+        const owner = s.people[bz.owner];
+        if (!sellerWilling(s, bz.owner)) return fail(owner.name + ' will not sell to you.');
+        const price = bizPrice(s, a);
+        if (s.coins < price) return fail(empById(a).name + ' costs ' + price + 'c.');
+        spend(s, price); s.rec.invested += price; owner.purse += price; s.rec.bizBought++;
+        bz.owner = 'player';
+        if (!owner.job || owner.job.biz === a) { owner.job = { type: 'biz', biz: a, role: 'hand' }; bz.staff.unshift({ pid: owner.id, wage: 8 }); }
+        plog(s, owner, 'Sold ' + empById(a).name + ' to ' + s.name + ' for ' + price + 'c, and stayed on as manager at 8c a day.');
+        if (owner.home === 'biz:' + a) { owner.home = null; const h = vacancy(s, 99); if (h) moveIn(s, owner, h); else plog(s, owner, 'Has nowhere to live now the rooms above the shop are yours.'); }
+        if (bz.closed) { bz.closed = false; bz.profits = [0, 0, 0]; }
+        if (s.job && s.job.emp === a) { s.job = null; event(s, 'You own the place now, so you no longer work shifts there.', 'info'); }
+        bz.staff.forEach(st => { const w = s.people[st.pid]; if (w !== owner) plog(s, w, 'Now works for ' + s.name + ', who bought ' + empById(a).name + '.'); });
+        event(s, 'You bought ' + empById(a).name + ' for ' + price + 'c. Its staff now work for you, and its profits are yours.', 'story');
+        return ok();
+      }
+      case 'fireStaff': {
+        const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
+        const w = s.people[b]; if (!w) return fail('No such person.');
+        loseJob(s, w, 'Let go by ' + s.name + ' from ' + empById(a).name + '.');
+        w.opinion = clamp(w.opinion - 30, -100, 100); s.rec.staffFired++;
+        event(s, 'You let ' + w.name + ' go from ' + empById(a).name + '.', 'info');
+        return ok();
+      }
+      case 'hireStaff': {
+        const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
+        const w = s.people[b]; if (!w || w.job) return fail('They are not looking for work.');
+        if (bz.staff.length >= 3) return fail('Three staff is all the shop can use.');
+        bz.staff.push({ pid: w.id, wage: clamp(c || 7, 1, 40) }); w.job = { type: 'biz', biz: a, role: 'hand' };
+        plog(s, w, 'Hired by ' + s.name + ' at ' + empById(a).name + '.'); w.opinion = clamp(w.opinion + 15, -100, 100); s.rec.workersHired++;
+        if (s.village.jobless.includes(w.name)) s.village.jobsGiven = (s.village.jobsGiven || 0) + 1;
+        s.village.jobless = s.village.jobless.filter(n => n !== w.name);
+        return ok();
+      }
+      case 'setStaffWage': {
+        const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
+        const st = bz.staff.find(x => x.pid === b); if (st) st.wage = clamp(Math.round(c), 1, 40);
+        return ok();
+      }
+      case 'buyHouse': {
+        const h = s.houses && houseById(s, a);
+        if (!h) return fail('No such house.');
+        if (h.owner === 'player') return fail('It is already yours.');
+        if (h.owner && h.owner !== 'office:lord' && h.tenants.includes(h.owner)) return fail(s.people[h.owner].name + ' lives there and will not sell their home.');
+        if (h.owner && h.owner !== 'office:lord' && !sellerWilling(s, h.owner)) return fail('The owner will not sell to you.');
+        const price = housePrice(s, h);
+        if (s.coins < price) return fail(h.name + ' costs ' + price + 'c.');
+        spend(s, price); s.rec.invested += price; s.rec.housesOwned++;
+        const seller = h.owner === 'office:lord' ? s.offices.lord : h.owner;
+        if (seller && seller !== 'player' && s.people[seller]) s.people[seller].purse += price;
+        h.owner = 'player';
+        h.tenants.forEach(id => plog(s, s.people[id], 'Now rents from ' + s.name + ', who bought ' + h.name + '.'));
+        event(s, 'You bought ' + h.name + ' for ' + price + 'c. ' + (h.tenants.length ? 'Its tenant now pays rent to you.' : 'It stands empty; someone may move in.'), 'story');
+        return ok();
+      }
+      case 'setRent': {
+        const h = s.houses && houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
+        const n = clamp(Math.round(b), 0, 20);
+        if (n > h.rent) { s.rec.rentRaises++; h.tenants.forEach(id => { const t = s.people[id]; t.opinion = clamp(t.opinion - 10 * (n - h.rent), -100, 100); plog(s, t, 'Rent raised to ' + n + 'c a day by ' + s.name + '.'); }); }
+        if (n < h.rent) h.tenants.forEach(id => { const t = s.people[id]; t.opinion = clamp(t.opinion + 5, -100, 100); plog(s, t, 'Rent lowered to ' + n + 'c a day.'); });
+        h.rent = n; return ok();
+      }
+      case 'evict': {
+        const h = s.houses && houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
+        const t = s.people[b]; if (!t || !h.tenants.includes(b)) return fail('They do not live there.');
+        moveOut(s, t, 'Evicted from ' + h.name + ' by ' + s.name + '.'); t.opinion = clamp(t.opinion - 50, -100, 100); s.rec.evictions++;
+        addStanding(s, -5, 'the village talks about the eviction.');
         return ok();
       }
       case 'stop': p.action = null; p.dest = null; return ok();
@@ -1186,6 +1609,7 @@
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
     checkVillage(s);
+    if (s.people && s.village.step === 8) elderSuccession(s);
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
   }
   function advance(s, minutes) { let left = minutes; while (left > 1e-9) { const d = Math.min(1, left); step(s, d); left -= d; } }
@@ -1231,12 +1655,29 @@
       for (const k of ['rent', 'tax', 'contract', 'given', 'property']) if (s.stats[k] === undefined) s.stats[k] = 0;
       event(s, 'Hearthmoor has a Moot Hall now, and ' + REALM.elder + ' would like a word with you.', 'story');
     }
+    if (s.v === 3) {
+      s.v = 4;
+      const fr = freshRecords(); for (const k in fr) if (s.rec[k] === undefined) s.rec[k] = fr[k];
+      s.agents = s.agents.filter(a => a.kind === 'traveler' || a.kind === 'taxman');
+      s.shops.forEach(x => x.queue = []);
+      setupPeople(s);
+      for (const shop of s.shops) if (shop.worker) {
+        const w = shop.worker; let wp = Object.values(s.people).find(p => p.name === w.name && !p.job);
+        if (wp) { const ag = bodyOf(s, wp); if (ag) s.agents = s.agents.filter(a => a !== ag); }
+        else { wp = newPerson(s, { name: w.name, age: 30, purse: 15 }); const h = vacancy(s, 4); if (h) moveIn(s, wp, h); }
+        wp.job = { type: 'shop', shop: shop.id }; w.pid = wp.id; w.home = homePoint(s, wp) || { x: P.well.x - 1.5, z: P.well.z + 2.2 };
+      }
+      if (s.village.step >= 4) s.village.jobless = [];
+      if (s.village.step === 3) s.village.jobless = living(s).filter(p => !p.job && !p.retired).slice(0, 2).map(p => p.name);
+      event(s, 'Everyone in Hearthmoor now has a purse, a job and a home of their own. Tap anyone to see their life.', 'story');
+    }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
 
   const api = {
-    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct,
+    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
+    person, living, occupation, homeText, income, houseById, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
