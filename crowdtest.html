@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hearthmoor Crowd Test</title>
+<style>
+:root { --ink: #2a1f16; --parch: #efe3c6; --seal: #8e2b22; --moss: #4f6b3a; }
+html, body { margin: 0; height: 100%; background: #1b1510; color: var(--ink); font: 15px/1.4 Georgia, serif; overflow: hidden; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.panel { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: max(8px, env(safe-area-inset-left, 0px)); width: min(340px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; background: rgba(239, 227, 198, .94); border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+h1 { font-size: 18px; margin: 0 0 4px; } p { margin: 4px 0; font-size: 13px; }
+button { font: inherit; font-size: 15px; padding: 8px 12px; border-radius: 6px; border: 1px solid #6b4a2e; background: #5a3a22; color: #f6e8c8; min-height: 40px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+td, th { padding: 2px 4px; text-align: right; border-bottom: 1px solid rgba(42,31,22,.15); } th:first-child, td:first-child { text-align: left; }
+.ok { color: var(--moss); font-weight: 700; } .bad { color: var(--seal); font-weight: 700; }
+textarea { width: 100%; height: 70px; font: 11px monospace; margin-top: 6px; box-sizing: border-box; }
+#live { font-weight: 700; }
+</style></head><body>
+<canvas id="c"></canvas>
+<div class="panel">
+  <h1>Hearthmoor crowd test</h1>
+  <p>Measures how many walking villagers this phone can draw at a smooth frame rate, in a town of 300 buildings. Hold the phone in landscape, keep the screen on, and tap Run. It takes about two minutes.</p>
+  <p><button id="run" type="button">Run the test</button> <span id="live"></span></p>
+  <table id="tbl"><thead><tr><th>People</th><th>Today's way</th><th>Batched way</th></tr></thead><tbody></tbody></table>
+  <p id="done" hidden>Done. Copy the line below and paste it to Claude.</p>
+  <textarea id="out" readonly hidden></textarea>
+</div>
+<script src="vendor/three.min.js"></script>
+<script>
+'use strict';
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixelRatio < 2, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#9fb7c4'); scene.fog = new THREE.Fog('#9fb7c4', 60, 160);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 400);
+scene.add(new THREE.HemisphereLight('#fff6e0', '#55613a', 0.9));
+const sun = new THREE.DirectionalLight('#fff0d0', 0.8); sun.position.set(30, 50, 20); scene.add(sun);
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+const M = c => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+// ground and a town of 300 buildings, drawn the efficient way so only the people vary
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M('#6f8a45')); ground.rotation.x = -Math.PI / 2; scene.add(ground);
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const N_HOUSE = 300, hb = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), M('#d9c9a3'), N_HOUSE), hr = new THREE.InstancedMesh(new THREE.ConeGeometry(0.8, 0.6, 4), M('#8e4a2a'), N_HOUSE);
+const tmp = new THREE.Object3D();
+for (let i = 0; i < N_HOUSE; i++) {
+  const gx = (i % 20) - 10, gz = Math.floor(i / 20) - 7, w = 4 + rnd() * 3, d = 4 + rnd() * 3, h = 3 + rnd() * 3, x = gx * 11 + rnd() * 2, z = gz * 11 + rnd() * 2;
+  if (Math.abs(gx) < 2 && Math.abs(gz) < 2) { tmp.scale.set(0.001, 0.001, 0.001); } else tmp.scale.set(w, h, d);
+  tmp.position.set(x, h / 2, z); tmp.rotation.set(0, (rnd() - 0.5) * 0.3, 0); tmp.updateMatrix(); hb.setMatrixAt(i, tmp.matrix);
+  if (Math.abs(gx) < 2 && Math.abs(gz) < 2) tmp.scale.set(0.001, 0.001, 0.001); else tmp.scale.set(w * 0.9, h * 0.8, d * 0.9);
+  tmp.position.set(x, h + h * 0.24, z); tmp.rotation.set(0, Math.PI / 4, 0); tmp.updateMatrix(); hr.setMatrixAt(i, tmp.matrix);
+}
+scene.add(hb, hr);
+// a character like the game's: body, head, two hands, a hat, a shadow
+const G = { body: new THREE.CylinderGeometry(0.26, 0.34, 0.72, 7), head: new THREE.SphereGeometry(0.22, 8, 6), hand: new THREE.SphereGeometry(0.08, 5, 4), hat: new THREE.CylinderGeometry(0.24, 0.26, 0.14, 7), shadow: new THREE.CircleGeometry(0.36, 10) };
+const tunics = ['#7a3b2a', '#2f5a7a', '#5d6b2f', '#8a6a2a', '#4b3b5a', '#6b4a2e'].map(M), skin = M('#e3b78f'), hatM = M('#d8b85a'), shM = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.22, depthWrite: false });
+let people = [], mode = null, singles = [], inst = null;
+function makeWalkers(n) { people = []; for (let i = 0; i < n; i++) people.push({ x: (rnd() - 0.5) * 140, z: (rnd() - 0.5) * 120, a: rnd() * 6.28, s: 0.9 + rnd() * 0.6, p: rnd() * 6 }); }
+function clear() {
+  singles.forEach(g => scene.remove(g)); singles = [];
+  if (inst) { inst.forEach(m => { scene.remove(m); m.dispose && m.dispose(); }); inst = null; }
+}
+function buildSingles() {
+  for (const q of people) {
+    const g = new THREE.Group();
+    const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
+    add(G.body, tunics[singles.length % tunics.length], 0, 0.36, 0); add(G.head, skin, 0, 0.92, 0); add(G.hand, skin, -0.33, 0.42, 0); add(G.hand, skin, 0.33, 0.42, 0); add(G.hat, hatM, 0, 1.1, 0);
+    const s = add(G.shadow, shM, 0, 0.03, 0); s.rotation.x = -Math.PI / 2;
+    scene.add(g); singles.push(g);
+  }
+}
+function buildInst() {
+  const n = people.length;
+  inst = [new THREE.InstancedMesh(G.body, M('#ffffff'), n), new THREE.InstancedMesh(G.head, skin, n), new THREE.InstancedMesh(G.hand, skin, n * 2), new THREE.InstancedMesh(G.hat, hatM, n), new THREE.InstancedMesh(G.shadow, shM, n)];
+  const cols = ['#7a3b2a', '#2f5a7a', '#5d6b2f', '#8a6a2a', '#4b3b5a', '#6b4a2e'].map(c => new THREE.Color(c));
+  for (let i = 0; i < n; i++) inst[0].setColorAt(i, cols[i % cols.length]);
+  inst.forEach(m => { m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); });
+}
+function step(dt, t) {
+  for (const q of people) {
+    q.x += Math.sin(q.a) * q.s * dt; q.z += Math.cos(q.a) * q.s * dt;
+    if (Math.abs(q.x) > 70 || Math.abs(q.z) > 60) q.a += Math.PI;
+    if (rnd() < 0.002) q.a += (rnd() - 0.5) * 2;
+  }
+  if (mode === 'single') singles.forEach((g, i) => { const q = people[i]; g.position.set(q.x, Math.abs(Math.sin(t * 8 + q.p)) * 0.06, q.z); g.rotation.y = q.a; });
+  else if (mode === 'inst') {
+    const [b, h, hd, ht, sh] = inst;
+    people.forEach((q, i) => {
+      const bob = Math.abs(Math.sin(t * 8 + q.p)) * 0.06, sw = Math.sin(t * 8 + q.p) * 0.12, c = Math.cos(q.a), s = Math.sin(q.a);
+      tmp.rotation.set(0, q.a, 0); tmp.scale.set(1, 1, 1);
+      tmp.position.set(q.x, 0.36 + bob, q.z); tmp.updateMatrix(); b.setMatrixAt(i, tmp.matrix);
+      tmp.position.set(q.x, 0.92 + bob, q.z); tmp.updateMatrix(); h.setMatrixAt(i, tmp.matrix);
+      tmp.position.set(q.x, 1.1 + bob, q.z); tmp.updateMatrix(); ht.setMatrixAt(i, tmp.matrix);
+      tmp.position.set(q.x - 0.33 * c + sw * s, 0.42 + bob, q.z + 0.33 * s + sw * c); tmp.updateMatrix(); hd.setMatrixAt(i * 2, tmp.matrix);
+      tmp.position.set(q.x + 0.33 * c - sw * s, 0.42 + bob, q.z - 0.33 * s - sw * c); tmp.updateMatrix(); hd.setMatrixAt(i * 2 + 1, tmp.matrix);
+      tmp.rotation.set(-Math.PI / 2, 0, 0); tmp.position.set(q.x, 0.03, q.z); tmp.updateMatrix(); sh.setMatrixAt(i, tmp.matrix);
+    });
+    inst.forEach(m => m.instanceMatrix.needsUpdate = true);
+  }
+}
+let last = performance.now(), frames = [], camT = 0;
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; frames.push(now);
+  camT += dt * 0.15;
+  camera.position.set(Math.sin(camT) * 26, 18, Math.cos(camT) * 26); camera.lookAt(0, 0, 0);
+  step(dt, now / 1000);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+function measure(ms) { return new Promise(r => { setTimeout(() => { frames = []; setTimeout(() => { const f = frames.slice(); const span = (f[f.length - 1] - f[0]) / 1000; const gaps = f.slice(1).map((x, i) => x - f[i]).sort((a, b) => a - b); r({ fps: Math.round((f.length - 1) / span), p95: Math.round(gaps[Math.floor(gaps.length * 0.95)] || 0) }); }, ms); }, 800); }); }
+const SIZES = [50, 100, 200, 400, 800, 1600], results = [];
+const cell = r => r ? `<span class="${r.fps >= 55 ? 'ok' : r.fps < 30 ? 'bad' : ''}">${r.fps} fps</span>` : '';
+function table() { document.querySelector('#tbl tbody').innerHTML = results.map(r => `<tr><td>${r.n}</td><td>${cell(r.single)}</td><td>${cell(r.inst)}</td></tr>`).join(''); }
+document.getElementById('run').addEventListener('click', async () => {
+  const btn = document.getElementById('run'); btn.disabled = true; results.length = 0;
+  let wake = null; try { wake = await navigator.wakeLock.request('screen'); } catch (e) { }
+  for (const n of SIZES) {
+    const row = { n }; results.push(row);
+    makeWalkers(n);
+    for (const m of ['single', 'inst']) {
+      if (m === 'single' && n > 800 && results.some(r => r.single && r.single.fps < 20)) continue;
+      clear(); mode = m; if (m === 'single') buildSingles(); else buildInst();
+      document.getElementById('live').textContent = `${n} people, ${m === 'single' ? 'today’s way' : 'batched way'}…`;
+      row[m] = await measure(5000); table();
+    }
+  }
+  clear(); mode = null;
+  document.getElementById('live').textContent = '';
+  const info = { ua: navigator.userAgent.replace(/\s+/g, ' ').slice(0, 140), dpr: devicePixelRatio, w: innerWidth, h: innerHeight, r: results.map(r => [r.n, r.single ? r.single.fps : null, r.single ? r.single.p95 : null, r.inst ? r.inst.fps : null, r.inst ? r.inst.p95 : null]) };
+  const out = document.getElementById('out'); out.value = 'HEARTHMOOR-CROWD ' + JSON.stringify(info); out.hidden = false; document.getElementById('done').hidden = false;
+  btn.disabled = false; if (wake) try { wake.release(); } catch (e) { }
+});
+</script>
+</body></html>
