@@ -284,6 +284,20 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   width: min(560px, calc(100vw - 32px)); background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
 .mapcard div { flex: 1; min-width: 0; } .mapcard b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 20px; } .mapcard span { font-size: 14px; color: var(--ink-soft); }
 @media (orientation: landscape) and (max-height: 520px) { .maptop span { display: none; } }
+.benchhud { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); background: rgba(32, 26, 20, .86); color: #f1e3c2; border-radius: 8px; padding: 6px 12px; font-size: 13px; max-width: calc(100vw - 32px); pointer-events: none; }
+.benchhud.done { background: var(--parch); color: var(--ink); pointer-events: auto; width: min(560px, calc(100vw - 32px)); font-size: 14px; }
+.benchhud textarea { display: block; width: 100%; height: 64px; margin-top: 6px; font: 11px ui-monospace, monospace; }
+.maptabs { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.maptabs button { border: 0; background: transparent; font-family: var(--f-display); font-size: 16px; padding: 0 12px; min-height: 34px; color: var(--ink-soft); }
+.maptabs button + button { border-left: 1px solid var(--line); }
+.maptabs button[aria-pressed="true"] { background: var(--leather); color: var(--parch); }
+.worldmap { position: absolute; inset: 0; pointer-events: auto; background: #2a1d12; overflow: hidden; touch-action: none; }
+.worldsvg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.worldsvg svg { width: 100%; height: 100%; transform-origin: 50% 50%; }
+.wpl:hover rect { stroke: #8e2b22; }
+.worldcard { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); display: flex; align-items: center; gap: 12px;
+  width: min(600px, calc(100vw - 32px)); background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.55); }
+.worldcard div { flex: 1; min-width: 0; } .worldcard b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 20px; } .worldcard span { font-size: 13px; color: var(--ink-soft); } .worldcard p { margin: 3px 0 0; font-size: 14px; line-height: 1.35; }
 .map { margin-top: 6px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #e9d6ad; }
 .map svg { display: block; width: 100%; height: auto; max-height: calc(100vh - 145px); font-family: var(--f-display); }
 .maphead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
@@ -404,8 +418,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 <div class="mapui" id="mapui" hidden>
   <div class="mapveil"></div>
   <div class="pins" id="pins"></div>
-  <div class="maptop"><h2>Hearthmoor</h2><span>Drag to look around &middot; pinch to zoom &middot; tap a place</span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the map">&times;</button></div>
-  <div class="mapzoom"><button type="button" id="mzin" aria-label="Zoom in">+</button><button type="button" id="mzout" aria-label="Zoom out">&minus;</button></div>
+  <div class="worldmap" id="worldmap" hidden><div class="worldsvg" id="worldsvg"></div><div class="worldcard" id="worldcard" hidden></div></div>
+  <div class="maptop"><h2 id="mapTitle">Hearthmoor</h2><div class="maptabs" id="mapTabs" role="group" aria-label="Which map"><button type="button" data-m="village" aria-pressed="true" data-c='["ui","mapMode","village"]'>Village</button><button type="button" data-m="world" aria-pressed="false" data-c='["ui","mapMode","world"]'>World</button></div><span>Drag to look around &middot; pinch to zoom &middot; tap a place</span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the map">&times;</button></div>
+  <div class="mapzoom" id="mapzoomBox"><button type="button" id="mzin" aria-label="Zoom in">+</button><button type="button" id="mzout" aria-label="Zoom out">&minus;</button></div>
   <div class="mapcard" id="mapcard" hidden></div>
 </div>
 <div class="sheet" id="pause" hidden>
@@ -439,7 +454,7 @@ const SLOTS = 3, KEY = n => 'hearthmoor.slot.' + n, BAK = n => 'hearthmoor.slot.
 // Small keys (settings, timestamps) are also kept in localStorage; if the database is unavailable, everything falls back to it.
 const mem = new Map();
 let idb = null;
-const BIG = k => /^hearthmoor\.slot\.\d(\.bak)?$/.test(k);
+const BIG = k => /^hearthmoor\.(slot\.\d(\.bak)?|bench)$/.test(k);
 const ls = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -1275,7 +1290,7 @@ function animChar(g, t, opts) {
 }
 function syncChars(s, t) {
   const p = s.player, carry = Sim.carried(s);
-  placeChar(playerMesh, p, t, { moving: p.moving && !!p.dest, working: !!p.action || p.working, pack: carry ? 0.7 + carry / 30 : 0, selected: UI.sel === 'player' });
+  placeChar(playerMesh, p, t, { moving: !!p.moving, working: !!p.action || p.working, pack: carry ? 0.7 + carry / 30 : 0, selected: UI.sel === 'player' });
   const seenW = new Set();
   for (const shop of s.shops) {
     const w = shop.worker; if (!w) continue;
@@ -1573,7 +1588,11 @@ function walkPlayer(s, dt) {
   if (key !== solidKey) { solidCache = solidsNow(s); solidKey = key; }
   // small steps so a slow frame can never carry you through a wall
   const n = Math.max(1, Math.ceil(speed / 0.15));
-  for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); }
+  // villagers and workers are solid too
+  const crowd = [];
+  for (const a of s.agents) if (!a.gone && !a.indoors && Math.abs(a.x - p.x) < 4 && Math.abs(a.z - p.z) < 4) crowd.push({ c: 1, x: a.x, z: a.z, r: a.kid ? 0.22 : 0.3 });
+  for (const sh of s.shops) { const w = sh.worker; if (w && !w.indoors && Math.abs(w.x - p.x) < 4 && Math.abs(w.z - p.z) < 4) crowd.push({ c: 1, x: w.x, z: w.z, r: 0.3 }); }
+  for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); if (crowd.length) collide(p, crowd); }
   s.rec.walked += Math.hypot(p.x - ox, p.z - oz);
   p.face = Math.atan2(vx, vz); p.moving = true;
   UI.loc = null;
@@ -2162,8 +2181,154 @@ function openMap() {
   UI.overlay = 'map'; UI.mapSel = null;
   ['book', 'pause', 'panel', 'hud', 'sticks'].forEach(id => $(id).hidden = true);
   mapCam.x = clamp(G.player.x * 0.5, -40, 40); mapCam.z = clamp(G.player.z * 0.5 - 8, -40, 20); mapCam.dist = 120;
-  $('mapui').hidden = false; $('toasts').hidden = true; renderMapCard();
+  $('mapui').hidden = false; $('toasts').hidden = true; setMapMode(UI.mapMode || 'village');
 }
+/* ================= the world map: two kingdoms across the Sundering Sea =================
+   Drawn as an illustrated parchment chart. Only Hearthmoor can be entered for now; the other
+   settlements show what each is and when its road opens. */
+const WORLD = [
+  { id: 'hearthmoor', name: 'Hearthmoor', k: 'A', tier: 'Starting village', pop: 30, x: 215, y: 735, kind: 'star', why: 'A farming village on the road to Oakbridge, where your story begins.', stage: 0 },
+  { id: 'greenhaven', name: 'Greenhaven', k: 'A', tier: 'Small farming town', pop: 80, x: 120, y: 430, kind: 'town', why: 'River-meadow farms and a great mill. Flour, wool and cattle.', stage: 2 },
+  { id: 'oakbridge', name: 'Oakbridge', k: 'A', tier: 'Market city', pop: 240, x: 365, y: 575, kind: 'city', why: 'The bridge where the south road meets the coast road. Markets, cloth and carts.', stage: 2 },
+  { id: 'ironcrest', name: 'Ironcrest', k: 'A', tier: 'Mining city', pop: 200, x: 455, y: 150, kind: 'city', why: 'Mountain mines and smelters. Iron, tools and weapons.', stage: 3 },
+  { id: 'crownmere', name: 'Crownmere', k: 'A', tier: 'Capital of Alderwyn', pop: 1150, x: 330, y: 330, kind: 'capital', why: 'The royal seat on its lake beneath the mountains: the court, the guilds and the crown.', stage: 3 },
+  { id: 'eastwatch', name: 'Eastwatch', k: 'A', tier: 'Port city', pop: 480, x: 560, y: 520, kind: 'port', why: 'Alderwyn’s harbour and naval yard. Ships for the crossing to Valdoria.', stage: 3 },
+  { id: 'stormrest', name: 'Stormrest Isle', k: 'S', tier: 'Island anchorage', pop: 0, x: 800, y: 560, kind: 'isle', why: 'A lighthouse and a small anchorage halfway across the Sundering Sea.', stage: 4 },
+  { id: 'dawnport', name: 'Dawnport', k: 'V', tier: 'Port city', pop: 450, x: 1050, y: 520, kind: 'port', why: 'Valdoria’s harbour and fishing fleet. Fish, salt and overseas trade.', stage: 4 },
+  { id: 'stonewatch', name: 'Stonewatch', k: 'V', tier: 'Fortified city', pop: 210, x: 1255, y: 185, kind: 'fort', why: 'The fortress guarding the northern pass. Soldiers, stone and arms.', stage: 4 },
+  { id: 'goldmeadow', name: 'Goldmeadow', k: 'V', tier: 'Small farming town', pop: 85, x: 1300, y: 700, kind: 'town', why: 'The breadbasket of the plains. Wheat, ale and horses.', stage: 4 },
+  { id: 'thornwick', name: 'Thornwick', k: 'V', tier: 'Small forest town', pop: 65, x: 1520, y: 520, kind: 'town', why: 'A timber town on the eastern edge of the forest, with room to grow.', stage: 4 },
+  { id: 'valdor', name: 'Valdor', k: 'V', tier: 'Capital of Valdoria', pop: 1100, x: 1320, y: 420, kind: 'capital', why: 'The walled river capital and the Valdorian court. Wine, silk and banking.', stage: 5 }
+];
+const KINGDOM = { A: 'Kingdom of Alderwyn', V: 'Kingdom of Valdoria', S: 'The Sundering Sea' };
+const W_ROADS = [['hearthmoor', 'oakbridge'], ['oakbridge', 'crownmere'], ['oakbridge', 'eastwatch'], ['crownmere', 'greenhaven'], ['crownmere', 'ironcrest'],
+  ['dawnport', 'valdor'], ['valdor', 'stonewatch'], ['valdor', 'thornwick'], ['valdor', 'goldmeadow']];
+function worldSVG(sel) {
+  let sd = 9001; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+  const W = 1600, H = 900, f = n => n.toFixed(1);
+  // coastlines, wobbling with bays and headlands
+  const coast = (base, amp, side) => { const pts = []; for (let y = -10; y <= H + 10; y += 14) { const x = base(y) + Math.sin(y * 0.031) * amp + Math.sin(y * 0.11 + 1) * amp * 0.35 + (r() - 0.5) * 7 * side; pts.push([x, y]); } return pts; };
+  const west = coast(y => 640 - Math.max(0, 1 - Math.abs(y - 520) / 120) * 70 + (y > 650 ? (y - 650) * 0.25 : 0), 24, 1);
+  const east = coast(y => 965 + Math.max(0, 1 - Math.abs(y - 520) / 110) * 60 - (y > 700 ? (y - 700) * 0.2 : 0), 22, -1);
+  const westPath = 'M-10,-10 ' + west.map(([x, y]) => `L${f(x)},${f(y)}`).join(' ') + ` L-10,${H + 10} Z`;
+  const eastPath = `M${W + 10},-10 ` + east.map(([x, y]) => `L${f(x)},${f(y)}`).join(' ') + ` L${W + 10},${H + 10} Z`;
+  const coastLine = pts => 'M' + pts.map(([x, y]) => `${f(x)},${f(y)}`).join(' L');
+  const P = id => WORLD.find(s => s.id === id);
+  // mountains along the north of both kingdoms
+  const mountain = (x, y, s) => `<g transform="translate(${f(x)},${f(y)}) scale(${f(s)})"><path d="M-30,0 L-4,-44 L22,0 Z" fill="#8f8a7c" stroke="#4a4136" stroke-width="2"/><path d="M-4,-44 L6,-26 L-2,-30 L-10,-22 L-15,-27 Z" fill="#f2ede0"/><path d="M-4,-44 L22,0 L4,0 Z" fill="#6f6a5e" opacity=".55"/></g>`;
+  let mts = '';
+  for (let i = 0; i < 26; i++) { const x = 30 + i * 22 + r() * 14, y = 70 + r() * 70 + (x > 380 && x < 520 ? 20 : 0); if (Math.abs(x - 455) < 40 && y > 110) continue; mts += mountain(x, y, 0.8 + r() * 0.6); }
+  for (let i = 0; i < 26; i++) { const x = 1010 + i * 22 + r() * 14, y = 60 + r() * 80; if (Math.abs(x - 1255) < 40 && y > 120) continue; mts += mountain(x, y, 0.8 + r() * 0.6); }
+  // forests
+  const tree = (x, y, c) => `<path d="M${f(x)},${f(y - 13)} l7,13 h-14 Z" fill="${c}" stroke="#2f3a22" stroke-width="1"/><rect x="${f(x - 1)}" y="${f(y)}" width="2" height="4" fill="#4a3424"/>`;
+  let trees = '';
+  const grove = (cx, cy, n, rad, c) => { for (let i = 0; i < n; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * rad; trees += tree(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.7, c); } };
+  grove(90, 640, 60, 90, '#3f5a32'); grove(160, 260, 30, 70, '#456238'); grove(500, 380, 18, 40, '#456238'); grove(250, 470, 16, 40, '#4c6a3c'); grove(80, 820, 26, 60, '#3f5a32');
+  grove(1480, 330, 40, 90, '#5c6a34'); grove(1540, 610, 30, 60, '#55622f'); grove(1130, 300, 18, 45, '#5c6a34'); grove(1430, 820, 14, 40, '#5c6a34');
+  // farmland
+  const fields = (x, y, c1, c2) => { let s = ''; for (let i = 0; i < 6; i++) { const fx = x + (i % 3) * 34, fy = y + Math.floor(i / 3) * 22; s += `<rect x="${fx}" y="${fy}" width="32" height="20" fill="${i % 2 ? c1 : c2}" stroke="#7a6a3a" stroke-width="1" transform="skewX(-12)"/>`; } return s; };
+  // rivers
+  const rivers = [`M455,190 C420,250 380,300 345,330 C330,380 360,450 370,540 C380,600 470,560 560,520`, `M330,330 C250,360 170,400 120,430 C80,450 40,470 -10,480`,
+    `M1255,215 C1280,300 1310,370 1320,420 C1300,470 1180,500 1060,520`, `M1320,420 C1400,460 1450,500 1520,520 C1560,530 1590,535 1610,540`, `M1320,430 C1310,520 1300,600 1300,690`];
+  // roads between settlements
+  const roads = W_ROADS.map(([a, b]) => { const A = P(a), B = P(b), mx = (A.x + B.x) / 2 + (A.y - B.y) * 0.12, my = (A.y + B.y) / 2 + (B.x - A.x) * 0.12; return `<path d="M${A.x},${A.y} Q${f(mx)},${f(my)} ${B.x},${B.y}" fill="none" stroke="#7a5a32" stroke-width="3.5" stroke-dasharray="${A.id === 'hearthmoor' || B.id === 'hearthmoor' ? '0' : '10 6'}" opacity=".8"/>`; }).join('');
+  const searoute = `<path d="M${P('eastwatch').x + 20},${P('eastwatch').y + 10} Q690,600 ${P('stormrest').x - 20},${P('stormrest').y} Q920,520 ${P('dawnport').x - 20},${P('dawnport').y + 10}" fill="none" stroke="#f5ecd2" stroke-width="4" stroke-dasharray="2 12" stroke-linecap="round"/>`;
+  // waves and ships
+  let waves = ''; for (let i = 0; i < 40; i++) { const x = 650 + r() * 300, y = 30 + r() * 840; waves += `<path d="M${f(x)},${f(y)} q6,-5 12,0 q6,5 12,0" fill="none" stroke="#5f8796" stroke-width="1.6" opacity=".7"/>`; }
+  const ship = (x, y, s) => `<g transform="translate(${x},${y}) scale(${s})"><path d="M-22,0 Q0,12 22,0 L18,-4 L-18,-4 Z" fill="#6b4a2e" stroke="#3a2a1c" stroke-width="1.5"/><path d="M0,-4 V-40" stroke="#3a2a1c" stroke-width="2"/><path d="M2,-38 Q18,-24 2,-10 Z" fill="#efe3c6" stroke="#6b5a40" stroke-width="1"/><path d="M-2,-34 Q-14,-22 -2,-12 Z" fill="#efe3c6" stroke="#6b5a40" stroke-width="1"/><path d="M0,-40 l10,3 l-10,3" fill="#8e2b22"/></g>`;
+  // settlement emblems
+  const house = (x, y, s, c) => `<g transform="translate(${f(x)},${f(y)}) scale(${s})"><rect x="-8" y="-8" width="16" height="10" fill="#e6d5ad" stroke="#3a2a1c" stroke-width="1.5"/><path d="M-11,-8 L0,-18 L11,-8 Z" fill="${c || '#a0472e'}" stroke="#3a2a1c" stroke-width="1.5"/></g>`;
+  const towerG = (x, y, h, c) => `<rect x="${x - 6}" y="${y - h}" width="12" height="${h}" fill="#c9bfa8" stroke="#3a2a1c" stroke-width="1.5"/><path d="M${x - 8},${y - h} L${x},${y - h - 12} L${x + 8},${y - h} Z" fill="${c}" stroke="#3a2a1c" stroke-width="1.5"/>`;
+  const emblem = s => {
+    const roof = s.k === 'V' ? '#b5482e' : '#8a4a32';
+    if (s.kind === 'star') return house(-10, 4, 1, '#8a6d3a') + house(10, 6, 0.9, '#8a6d3a') + `<path d="M0,-34 l5,10 11,1 -8,7 3,11 -11,-6 -11,6 3,-11 -8,-7 11,-1 Z" fill="#d9b04a" stroke="#5a3a12" stroke-width="1.5"/>`;
+    if (s.kind === 'town') return house(-12, 6, 1, roof) + house(6, 2, 1.1, roof) + house(14, 12, 0.8, roof);
+    if (s.kind === 'isle') return `<rect x="-4" y="-28" width="8" height="28" fill="#efe3c6" stroke="#3a2a1c" stroke-width="1.5"/><rect x="-4" y="-20" width="8" height="5" fill="#8e2b22"/><circle cx="0" cy="-31" r="5" fill="#f5cf73" stroke="#3a2a1c"/>`;
+    let g = house(-18, 10, 1, roof) + house(16, 12, 1, roof) + house(-4, 14, 1.1, roof);
+    if (s.kind === 'city' || s.kind === 'port') g += towerG(0, 4, 26, roof);
+    if (s.kind === 'port') g += `<path d="M-28,18 h56" stroke="#5b4029" stroke-width="4"/><path d="M-20,18 v8 M0,18 v8 M20,18 v8" stroke="#5b4029" stroke-width="2"/>`;
+    if (s.kind === 'fort') g = `<rect x="-26" y="-14" width="52" height="24" fill="#b9b09a" stroke="#3a2a1c" stroke-width="1.6"/>` + towerG(-22, 10, 34, roof) + towerG(22, 10, 34, roof) + towerG(0, 10, 40, roof);
+    if (s.kind === 'capital') g = `<path d="M-46,18 v-22 h92 v22 Z" fill="#c9bfa8" stroke="#3a2a1c" stroke-width="1.6"/>` + house(-30, 12, 1.1, roof) + house(30, 12, 1.1, roof) + towerG(-36, 2, 34, roof) + towerG(36, 2, 34, roof) + towerG(-14, -2, 46, roof) + towerG(14, -2, 46, roof) + towerG(0, -6, 62, roof)
+      + `<path d="M-9,-84 l4,7 5,-9 5,9 4,-7 v10 h-18 Z" fill="#d9b04a" stroke="#5a3a12" stroke-width="1.4"/><path d="M${s.k === 'V' ? '0,-70 v-14 l14,4 -14,4' : '0,-70 v-14 l14,4 -14,4'}" fill="${s.k === 'V' ? '#9a2a1e' : '#2f5a2e'}" stroke="#3a2a1c"/>`;
+    return g;
+  };
+  const label = s => {
+    const big = s.kind === 'capital', w = s.name.length * (big ? 17 : 14) + 28, y = big ? 44 : 34;
+    return `<g transform="translate(0,${y})"><rect x="${-w / 2}" y="-20" width="${w}" height="${big ? 50 : 30}" rx="4" fill="${sel === s.id ? '#2a1f16' : '#f2e5c4'}" stroke="#6b4a2e" stroke-width="2"/>
+      <text text-anchor="middle" y="${big ? 1 : 2}" font-size="${big ? 26 : 21}" fill="${sel === s.id ? '#f5cf73' : '#2a1f16'}" font-family="IM Fell English SC, IM Fell English, serif">${s.name}</text>
+      ${big ? `<text text-anchor="middle" y="22" font-size="16" font-style="italic" fill="${sel === s.id ? '#e9dcbc' : '#5a4636'}">Capital</text>` : ''}${s.kind === 'star' ? `<text text-anchor="middle" y="${30}" font-size="15" font-style="italic" fill="#5a4636">Your beginning</text>` : ''}</g>`;
+  };
+  const places = WORLD.map(s => `<g class="wpl" data-c='${JSON.stringify(['ui', 'worldSel', s.id])}' transform="translate(${s.x},${s.y})" style="cursor:pointer"><circle r="46" fill="transparent"/>${emblem(s)}${label(s)}</g>`).join('');
+  // heraldry: the white tree of Alderwyn, the griffin wing of Valdoria
+  const shield = (x, y, fill, body, name) => `<g transform="translate(${x},${y})"><path d="M-46,-52 h92 v54 q0,38 -46,56 q-46,-18 -46,-56 Z" fill="${fill}" stroke="#d9b04a" stroke-width="4"/>${body}<path d="M-14,-62 l5,-10 9,6 9,-6 5,10 Z" fill="#d9b04a" stroke="#5a3a12"/>
+    <g transform="translate(0,82)"><rect x="-96" y="-22" width="192" height="44" rx="6" fill="#f2e5c4" stroke="#6b4a2e" stroke-width="2.5"/><text text-anchor="middle" y="-3" font-size="15" fill="#5a4636" font-style="italic">Kingdom of</text><text text-anchor="middle" y="17" font-size="22" fill="#2a1f16" font-family="IM Fell English SC, serif">${name}</text></g></g>`;
+  const treeArms = `<path d="M0,40 V0" stroke="#e8dcbc" stroke-width="6"/><circle cx="0" cy="-8" r="20" fill="#e8dcbc"/><circle cx="-16" cy="4" r="12" fill="#e8dcbc"/><circle cx="16" cy="4" r="12" fill="#e8dcbc"/><path d="M-14,40 h28" stroke="#e8dcbc" stroke-width="4"/>`;
+  const wingArms = `<path d="M-22,30 C-30,0 -10,-30 20,-34 C6,-24 22,-20 10,-12 C26,-10 18,0 6,0 C20,6 10,16 -2,12 C0,24 -10,28 -22,30 Z" fill="#d9b04a" stroke="#5a3a12" stroke-width="2"/><circle cx="14" cy="-28" r="3" fill="#5a3a12"/>`;
+  const compass = `<g transform="translate(1500,800)"><circle r="44" fill="#f2e5c4" stroke="#6b4a2e" stroke-width="2"/><path d="M0,-56 L9,0 L0,56 L-9,0 Z" fill="#8e2b22" stroke="#3a2a1c" stroke-width="1.5"/><path d="M-56,0 L0,9 L56,0 L0,-9 Z" fill="#c9a24a" stroke="#3a2a1c" stroke-width="1.5"/><text y="-62" text-anchor="middle" font-size="20" font-family="IM Fell English SC, serif" fill="#2a1f16">N</text><text y="78" text-anchor="middle" font-size="16" fill="#2a1f16">S</text><text x="-70" y="6" text-anchor="middle" font-size="16" fill="#2a1f16">W</text><text x="70" y="6" text-anchor="middle" font-size="16" fill="#2a1f16">E</text></g>`;
+  const title = `<g transform="translate(800,52)"><path d="M-300,-30 h600 l-26,30 26,30 h-600 l26,-30 Z" fill="#efdfbd" stroke="#6b4a2e" stroke-width="3"/><text text-anchor="middle" y="4" font-size="40" font-family="IM Fell English SC, serif" fill="#2a1f16">The World of Hearthmoor</text><text text-anchor="middle" y="27" font-size="16" font-style="italic" fill="#5a4636">Two kingdoms across the Sundering Sea</text></g>`;
+  const seaName = `<text x="800" y="300" text-anchor="middle" font-size="42" font-style="italic" fill="#2c5466" letter-spacing="6" font-family="IM Fell English, serif">THE</text><text x="800" y="352" text-anchor="middle" font-size="46" font-style="italic" fill="#2c5466" letter-spacing="4" font-family="IM Fell English, serif">SUNDERING SEA</text>`;
+  const legend = `<g transform="translate(800,858)"><rect x="-300" y="-26" width="600" height="44" rx="6" fill="#efdfbd" stroke="#6b4a2e" stroke-width="2"/><text text-anchor="middle" y="2" font-size="17" fill="#2a1f16">&#9733; Your beginning &#160;&#183;&#160; &#9819; Capital &#160;&#183;&#160; dashed roads not yet open &#160;&#183;&#160; dots: sea route</text></g>`;
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The World of Hearthmoor" font-family="IM Fell English, serif">
+    <defs><radialGradient id="wvig" cx="50%" cy="50%" r="70%"><stop offset="60%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#3a2410" stop-opacity=".45"/></radialGradient>
+      <linearGradient id="wsea" x1="0" x2="1"><stop offset="0" stop-color="#6f9aa6"/><stop offset=".5" stop-color="#5e8c9c"/><stop offset="1" stop-color="#6f9aa6"/></linearGradient></defs>
+    <rect width="${W}" height="${H}" fill="url(#wsea)"/>${waves}
+    <path d="${westPath}" fill="#b9c48d"/><path d="${eastPath}" fill="#d6c787"/>
+    <path d="${coastLine(west)}" fill="none" stroke="#3f5a5a" stroke-width="3"/><path d="${coastLine(east)}" fill="none" stroke="#3f5a5a" stroke-width="3"/>
+    <path d="${coastLine(west.map(([x, y]) => [x + 9, y]))}" fill="none" stroke="#e9f0e6" stroke-width="2" opacity=".5"/><path d="${coastLine(east.map(([x, y]) => [x - 9, y]))}" fill="none" stroke="#e9f0e6" stroke-width="2" opacity=".5"/>
+    <ellipse cx="800" cy="565" rx="34" ry="20" fill="#c9c48d" stroke="#3f5a5a" stroke-width="2.5"/>
+    <g transform="translate(70,180) skewX(0)">${fields(60, 210, '#d8c46a', '#c9b45a')}</g>${fields(150, 700, '#d8c46a', '#c4b05a')}${fields(1250, 735, '#e2c45a', '#d4b24a')}${fields(1340, 640, '#e2c45a', '#cfae48')}
+    ${rivers.map(d => `<path d="${d}" fill="none" stroke="#5e8c9c" stroke-width="5" stroke-linecap="round"/>`).join('')}
+    <ellipse cx="300" cy="300" rx="38" ry="18" fill="#6f9aa6" stroke="#3f5a5a" stroke-width="2"/>
+    ${mts}${trees}${roads}${searoute}
+    ${ship(700, 420, 1.1)}${ship(905, 690, 1.25)}${ship(760, 160, 0.9)}
+    ${seaName}${places}
+    <g transform="translate(578,236) scale(.78)">${shield(0, 0, '#2f5a2e', treeArms, 'Alderwyn')}</g><g transform="translate(1024,236) scale(.78)">${shield(0, 0, '#8e2b22', wingArms, 'Valdoria')}</g>
+    ${title}${compass}${legend}
+    <rect width="${W}" height="${H}" fill="url(#wvig)" pointer-events="none"/>
+    <rect x="8" y="8" width="${W - 16}" height="${H - 16}" fill="none" stroke="#3a2416" stroke-width="10" pointer-events="none"/><rect x="20" y="20" width="${W - 40}" height="${H - 40}" fill="none" stroke="#a87d22" stroke-width="2.5" pointer-events="none"/>
+  </svg>`;
+}
+const worldView = { s: 1, x: 0, y: 0 };
+function renderWorldCard() {
+  const el = $('worldcard'), s = WORLD.find(w => w.id === UI.worldSel);
+  if (!s) { el.hidden = true; return; }
+  const here = s.id === 'hearthmoor';
+  const status = here ? 'You are here.' : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
+  el.innerHTML = `<div><b>${esc(s.name)}</b><span>${esc(KINGDOM[s.k])} &middot; ${esc(s.tier)}${s.pop ? ' &middot; about ' + s.pop.toLocaleString() + ' people' : ''}</span><p>${esc(s.why)} <i>${esc(status)}</i></p></div>${here ? B_('Village map', ['ui', 'mapMode', 'village']) : ''}`;
+  el.hidden = false;
+}
+function renderWorld() {
+  $('worldsvg').innerHTML = worldSVG(UI.worldSel);
+  applyWorldView(); renderWorldCard();
+}
+function applyWorldView() {
+  const box = $('worldsvg'), r = box.getBoundingClientRect(), svg = box.firstElementChild; if (!svg) return;
+  worldView.s = clamp(worldView.s, 1, 3.5);
+  const maxX = r.width * (worldView.s - 1) / 2, maxY = r.height * (worldView.s - 1) / 2;
+  worldView.x = clamp(worldView.x, -maxX, maxX); worldView.y = clamp(worldView.y, -maxY, maxY);
+  svg.style.transform = `translate(${worldView.x}px, ${worldView.y}px) scale(${worldView.s})`;
+}
+(function worldInput() {
+  const box = $('worldsvg'), pts = new Map(); let pinch = null, moved = 0;
+  box.addEventListener('pointerdown', e => { pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: worldView.s }; } });
+  box.addEventListener('pointermove', e => {
+    const p = pts.get(e.pointerId); if (!p) return;
+    if (pts.size === 2 && pinch) { p.x = e.clientX; p.y = e.clientY; const [a, b] = [...pts.values()]; worldView.s = pinch.s * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(20, pinch.d); applyWorldView(); return; }
+    worldView.x += e.clientX - p.x; worldView.y += e.clientY - p.y; moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y); p.x = e.clientX; p.y = e.clientY; applyWorldView();
+  });
+  const end = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
+  box.addEventListener('pointerup', end); box.addEventListener('pointercancel', end);
+  box.addEventListener('click', e => { if (moved > 8) { e.stopPropagation(); e.preventDefault(); } }, true);
+  box.addEventListener('wheel', e => { e.preventDefault(); worldView.s *= e.deltaY > 0 ? 0.9 : 1.1; applyWorldView(); }, { passive: false });
+})();
+function setMapMode(m) {
+  UI.mapMode = m;
+  $('worldmap').hidden = m !== 'world'; $('pins').hidden = m === 'world'; $('mapcard').hidden = m === 'world' || !UI.mapSel; $('mapzoomBox').hidden = m === 'world';
+  $('mapTitle').textContent = m === 'world' ? 'The World' : 'Hearthmoor';
+  document.querySelectorAll('#mapTabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
+  if (m === 'world') { worldView.s = 1; worldView.x = 0; worldView.y = 0; renderWorld(); } else renderMapCard();
+}
+
 /* ----- pause menu ----- */
 function openPause(view) { UI.overlay = 'pause'; $('panel').hidden = true; UI.pauseView = view || 'main'; UI.confirm = null; $('pause').hidden = false; $('book').hidden = true; renderPause(true); }
 function renderPause(turn) {
@@ -2339,6 +2504,8 @@ function uiCmd(k, v) {
   if (k === 'pause') { openPause(); return; }
   if (k === 'map') { openMap(); return; }
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
+  if (k === 'mapMode') { setMapMode(v); return; }
+  if (k === 'worldSel') { UI.worldSel = UI.worldSel === v ? null : v; renderWorld(); return; }
   if (k === 'travel') { travel(v); return; }
   if (k === 'mini') { openMini(); return; }
   if (k === 'miniClose') { closeMini(); return; }
@@ -2413,14 +2580,15 @@ let last = performance.now(), uiTimer = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
-  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); walkPlayer(G, dt); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); drainEvents(); }
+  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
   syncCamera(G, dt, t);
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
-  renderer.render(scene, camera);
+  if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(scene, camera);
+  if (bench) bench.frame(now);
   requestAnimationFrame(frame);
 }
 /* ================= sound: everything is synthesized, nothing is downloaded ================= */
@@ -2674,6 +2842,14 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.14', date: '3 November', title: 'The world map, and solid crowds', items: [
+    'The map now has a World tab: an illustrated chart of Alderwyn and Valdoria across the Sundering Sea. Tap any town to read about it and when its road opens.',
+    'People are solid. Villagers, workers and you can no longer walk through each other.',
+    'Crowds spread out: at the well, in the square and at the notice board, everyone finds their own spot, a little different each day, and faces the people they are with.',
+    'Your arms now swing as you walk, like everyone else\u2019s.',
+    'Evenings: villagers set off for home one by one from about 20:00 and walk back at a natural pace. The night only speeds up once everyone is indoors.',
+    'Customers at the lots south of the square now queue in front of your counter, not behind it.'
+  ] },
   { v: '0.13', date: '3 November', title: 'Hearthmoor, rebuilt', items: [
     'A new, larger Hearthmoor: winding lanes around a central square, a stream with a bridge on the road east to Oakbridge, and the Pine Woods to the west.',
     'Tamsin\u2019s Mill turns on a millrace that runs from the stream along the foot of the manor\u2019s rise. Varrow Manor sits on that rise behind its garden wall.',
@@ -2744,6 +2920,48 @@ function checkForUpdate() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
 setInterval(checkForUpdate, 10 * 60 * 1000);
+/* ----- the capital-sized phone test: open the game with ?citytest=600 -----
+   Hundreds of extra residents with homes and jobs live their real routines around the village,
+   while you walk a tour through the crowds and the game saves every 10 seconds. */
+let bench = null;
+function startBench(n, minutes) {
+  const g = Sim.newGame(777, 'Tester');
+  g.coins = 5000; ['bakery', 'tavern', 'smithy'].forEach(t => { g.trades[t] = 3; }); g.player.inv.ore = 20;
+  [[0, 'bakery'], [1, 'tavern'], [2, 'smithy']].forEach(([plot, trade]) => { Sim.cmd(g, 'open', plot, trade); const sh = g.shops[g.shops.length - 1]; if (g.applicants.length) { Sim.cmd(g, 'hire', sh.id, 0, 12); Sim.cmd(g, 'policy', sh.id, 'supplyRuns', true); } });
+  const load = Sim.cityLoad(g, n);
+  Sim.advance(g, 60 * 3);   // start at 09:00, when the village is busy
+  g.houses.filter(h => /^c/.test(h.id)).forEach((h, i) => cottage(fr(h.x, h.z, facing(h.x, h.z, 0, 4)), { w: 5, d: 4, h: 2.4, wall: WALLS[i % 4], roof: THATCH[i % 4], washing: i % 4 === 0 }));
+  flushBuild();
+  const keepSlot = meta.lastSlot;
+  enterGame(g, null); meta.lastSlot = keepSlot; saveMeta();
+  setSpeed(2);
+  const tour = ['plot1', 'well', 'mill', 'hall', 'market', 'bridge', 'field', 'plot0', 'barn', 'lots', 'emp:tankard', 'well'];
+  const B = bench = { start: performance.now(), end: performance.now() + minutes * 60000, n: load.people, houses: load.houses, gaps: [], last: 0, simT: [], saves: [], saveKB: 0, tourI: 0, nextTour: 0, nextSave: performance.now() + 10000, calls: 0, tris: 0, done: false };
+  const el = document.createElement('div'); el.className = 'benchhud'; document.body.appendChild(el);
+  B.sim = ms => B.simT.push(ms);
+  B.frame = now => {
+    if (B.done) return;
+    if (B.last) B.gaps.push(now - B.last); B.last = now;
+    if (now > B.nextTour) { B.nextTour = now + 35000; act(['goto', tour[B.tourI++ % tour.length]]); }
+    if (now > B.nextSave) { B.nextSave = now + 10000; const t0 = performance.now(); const str = Sim.serialize(G); store.set('hearthmoor.bench', str); B.saves.push(performance.now() - t0); B.saveKB = Math.round(str.length / 1024); }
+    if (B.gaps.length % 30 === 0) { B.calls = Math.max(B.calls, renderer.info.render.calls); B.tris = Math.max(B.tris, renderer.info.render.triangles);
+      const recent = B.gaps.slice(-60), fps = Math.round(1000 / (recent.reduce((a, b) => a + b, 0) / Math.max(1, recent.length)));
+      el.textContent = `City test: ${B.n} extra people, ${Sim.living(G).length} in all · ${fps} fps · ${Math.max(0, Math.ceil((B.end - now) / 60000))} min left`; }
+    if (now >= B.end) finishBench(el);
+  };
+}
+function finishBench(el) {
+  const B = bench; B.done = true; setSpeed(1);
+  const g = B.gaps.slice().sort((a, b) => a - b), pct = q => Math.round(g[Math.min(g.length - 1, Math.floor(g.length * q))]);
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+  const res = { ua: navigator.userAgent.replace(/\s+/g, ' ').slice(0, 140), dpr: devicePixelRatio, w: innerWidth, h: innerHeight, minutes: Math.round((performance.now() - B.start) / 600) / 100,
+    people: Sim.living(G).length, extra: B.n, houses: B.houses, agents: G.agents.length, fps: Math.round(1000 / avg(B.gaps)), p95: pct(0.95), p99: pct(0.99), worst: Math.round(g[g.length - 1] || 0),
+    simAvg: +avg(B.simT).toFixed(2), simMax: +Math.max(0, ...B.simT).toFixed(1), saveAvg: +avg(B.saves).toFixed(1), saveMax: +Math.max(0, ...B.saves).toFixed(1), saveKB: B.saveKB, calls: B.calls, tris: B.tris,
+    sold: G.rec.goodsSold, day: G.day, clock: Sim.clock(G.t) };
+  try { store.del('hearthmoor.bench'); } catch (e) { }
+  el.innerHTML = `<b>City test finished.</b> ${res.fps} fps on average; 95% of frames under ${res.p95} ms. Copy the line below and paste it to Claude.<textarea readonly>HEARTHMOOR-CITY ${JSON.stringify(res)}</textarea>`;
+  el.classList.add('done');
+}
 function boot(data) {
   // the title screen shows your latest village behind it, or a fresh one
   const fromHot = data && data.game ? (() => { try { return Sim.deserialize(data.game); } catch (e) { return null; } })() : null;
@@ -2751,6 +2969,8 @@ function boot(data) {
   G.events.length = 0;
   if (hot && hot.snapshot) hot.snapshot(() => ({ game: UI.mode === 'play' ? Sim.serialize(G) : null, slot }));
   resize();
+  const bq = new URLSearchParams(location.search), bn = bq.get('citytest');
+  if (bn) { startBench(clamp(+bn || 600, 50, 2000), clamp(+(bq.get('min') || 20), 1, 60)); requestAnimationFrame(t => { last = t; frame(t); }); return; }
   if (fromHot && data.slot) enterGame(G, data.slot);
   else renderTitle();
   if (meta.seenNotes !== NOTES[0].v) showNotes();

@@ -222,6 +222,8 @@
   function moveTo(a, tx, tz, step, s) {
     step *= WALKX;
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
+    // close enough: someone else may be standing right on the spot, so don't keep shuffling into them
+    if (d < 0.45 && a.moving === false) return true;
     if (d <= step || d < 0.05) { if (s) s.rec.walked += d; a.x = tx; a.z = tz; a.moving = false; return true; }
     a.x += dx / d * step; a.z += dz / d * step; a.face = Math.atan2(dx, dz); a.moving = true;
     if (s) s.rec.walked += step;
@@ -244,7 +246,7 @@
   const shopOnPlot = (s, i) => s.shops.find(x => x.plot === i);
   const tierOf = shop => TRADES[shop.trade].tiers[shop.tier];
   const plotPt = (shop, k) => { const L0 = PLOTS[shop.plot], d = L0.dir || 1; return { x: L0.x + REL[k].x * d, z: L0.z + REL[k].z * d }; };
-  const queueSlot = (shop, i) => { const q = plotPt(shop, 'queue0'); return { x: q.x, z: q.z + i * 1.0 }; };
+  const queueSlot = (shop, i) => { const q = plotPt(shop, 'queue0'); return { x: q.x, z: q.z + i * 1.0 * (PLOTS[shop.plot].dir || 1) }; };
   const empById = id => BIZ_SITES.find(e => e.id === id);
   function learned(s, trade) { return s.trades[trade] >= LEARN_SHIFTS; }
   function tradeSpeed(s, trade) { return 1 + Math.min(0.3, s.trades[trade] * 0.03); }
@@ -628,8 +630,8 @@
     if (h < 6 || h >= 21) { tgt = a.home; doing = 'Asleep'; }
     else if (h < 7) { tgt = a.spot; doing = 'Walking to work'; }
     else if (h < 12 || (h >= 13 && h < 17)) { tgt = a.spot; doing = jobDoing(a.job); working = true; }
-    else if (h < 13) { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = s.village.shortage ? 'Hungry: the granary is nearly empty' : 'Lunch by the well'; }
-    else { tgt = { x: P.plaza.x + ((a.id % 4) - 1.5) * 1.4, z: P.plaza.z + ((a.id % 2) ? 1.2 : -1) }; doing = 'Chatting in the square'; }
+    else if (h < 13) { tgt = wellSpot(s, a.id); doing = s.village.shortage ? 'Hungry: the granary is nearly empty' : 'Lunch by the well'; }
+    else { tgt = chatSpot(s, a.id); doing = 'Chatting in the square'; }
     const arrived = moveTo(a, tgt.x, tgt.z, 0.9 * dt);
     a.doing = arrived ? doing : (doing === 'Asleep' ? 'Heading home' : doing.startsWith('Walking') ? doing : 'On the way: ' + doing.toLowerCase());
     a.working = arrived && working;
@@ -1309,21 +1311,33 @@
     }
   }
 
+  /* where people stand when they gather: spread out, a little different every day, facing each other */
+  function h01(a, b, c) { let x = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791); x = Math.imul(x ^ (x >>> 15), 2246822507); x = Math.imul(x ^ (x >>> 13), 3266489909); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; }
+  function ringSpot(cx, cz, r0, r1, id, day, salt) {
+    const a = h01(id, day, salt) * Math.PI * 2, r = r0 + h01(id, day, salt + 7) * (r1 - r0);
+    return { x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r, look: { x: cx, z: cz } };
+  }
+  // chatting: small groups of two to four, each in its own circle
+  function chatSpot(s, id) {
+    const g = Math.floor(h01(id, s.day, 3) * 4), ga = g * 1.57 + (s.day % 7) * 0.6, gc = { x: P.plaza.x + Math.cos(ga) * 3.4, z: P.plaza.z + 0.5 + Math.sin(ga) * 2.6 };
+    return ringSpot(gc.x, gc.z, 0.75, 1.0, id, s.day, 11);
+  }
+  const wellSpot = (s, id, salt) => ringSpot(LOCS.well.x, LOCS.well.z, 2, 4.6, id, s.day, salt || 5);
   /* people walk through their own day */
   function personRoutine(s, a, dt) {
     const p = s.people[a.pid];
     if (!p || p.status !== 'here') { a.gone = true; return; }
-    const h = hourOf(s), night = h < 6 || h >= 21, j = p.job;
+    const h = hourOf(s), night = h < 6 || h >= 20.2 + h01(a.id, s.day, 31) * 0.7, j = p.job;
     const home = homePoint(s, p);
     let tgt = null, doing = '', working = false;
-    if (night) { tgt = home || { x: P.well.x - 1.6 + (a.id % 3) * 0.8, z: P.well.z + 1.8 }; doing = home ? 'Asleep' : 'Sleeping rough by the well'; }
+    if (night) { tgt = home || wellSpot(s, a.id, 9); doing = home ? 'Asleep' : 'Sleeping rough by the well'; }
     else if (j && j.type === 'commons') {
       if (h < 7) { tgt = a.spot; doing = 'Walking to work'; }
       else if (h < 12 || (h >= 13 && h < 17)) { tgt = a.spot; doing = jobDoing(j.what); working = true; }
-      else if (h < 13) { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = s.village.shortage ? 'Hungry: the granary is nearly empty' : 'Lunch by the well'; }
+      else if (h < 13) { tgt = wellSpot(s, a.id); doing = s.village.shortage ? 'Hungry: the granary is nearly empty' : 'Lunch by the well'; }
     } else if (j && j.type === 'biz') {
       const e = empById(j.biz), hrs = j.role === 'owner' ? [7, 18] : e.shift;
-      if (h >= hrs[0] && h < hrs[1] && !s.biz[j.biz].closed) { tgt = j.role === 'owner' ? (e.id === 'mill' ? { x: -27.6, z: -38.4 } : { x: e.x, z: e.z + 0.4 * e.dir }) : e.spot; doing = e.id === 'mill' ? (j.role === 'owner' ? 'Grinding grain at the mill' : 'Hauling sacks of flour') : j.role === 'owner' ? 'Minding the counter' : 'Working the ' + TRADES[e.trade].station; working = true; a.faceTo = Math.PI; }
+      if (h >= hrs[0] && h < hrs[1] && !s.biz[j.biz].closed) { tgt = j.role === 'owner' ? (e.id === 'mill' ? { x: -27.6, z: -38.4 } : { x: e.x, z: e.z + 0.4 * e.dir }) : e.id === 'mill' ? e.spot : { x: e.x + 0.9 * e.dir, z: e.z - 1.2 * e.dir }; doing = e.id === 'mill' ? (j.role === 'owner' ? 'Grinding grain at the mill' : 'Hauling sacks of flour') : j.role === 'owner' ? 'Minding the counter' : 'Working the ' + TRADES[e.trade].station; working = true; a.faceTo = e.dir > 0 ? 0 : Math.PI; }
     } else if (j && j.type === 'office') {
       if (j.office === 'elder' && h >= 8 && h < 18) { tgt = P.elderDesk; doing = 'Keeping the Village Hall'; }
       else if (j.office === 'guard') { tgt = P.guardPost; doing = 'Guarding the manor gate'; }
@@ -1332,18 +1346,19 @@
     if (!tgt && p.kid) {
       if (h < 8 || h >= 19) { tgt = home || P.plaza; doing = 'At home with the family'; }
       else if (p.age >= 10 && h < 12) { tgt = home ? { x: home.x + 2.2, z: home.z + 2.4 } : P.plaza; doing = 'Helping with chores at home'; working = true; }
-      else { tgt = { x: P.plaza.x - 3 + (a.id % 6), z: P.plaza.z + 2 + ((a.id % 3) - 1) * 1.4 }; doing = 'Playing in the square'; }
+      else { tgt = ringSpot(P.plaza.x, P.plaza.z + 1, 0.5, 4.5, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in the square'; }
     }
     if (!tgt) {
-      if (h >= 17) { tgt = { x: P.plaza.x + ((a.id % 4) - 1.5) * 1.4, z: P.plaza.z + ((a.id % 2) ? 1.2 : -1) }; doing = 'Chatting in the square'; }
-      else if (!j && !p.retired && !p.kid) { tgt = { x: P.square.x - 2 + (a.id % 5), z: P.square.z + ((a.id % 2) ? 0.6 : -0.6) }; doing = 'In the square, looking for work'; }
-      else { tgt = { x: P.well.x + ((a.id % 3) - 1) * 1.2, z: P.well.z + 1 }; doing = 'Passing the time by the well'; }
+      if (h >= 17) { tgt = chatSpot(s, a.id); doing = 'Chatting in the square'; }
+      else if (!j && !p.retired && !p.kid) { tgt = ringSpot(-4.5, -1, 1.2, 3, a.id, s.day, 17); tgt.look = { x: -4.5, z: -2.5 }; doing = 'At the notice board, looking for work'; }
+      else { tgt = wellSpot(s, a.id, 21); doing = 'Passing the time by the well'; }
     }
     const arrived = moveTo(a, tgt.x, tgt.z, 0.9 * dt);
-    a.doing = arrived ? doing : 'On the way: ' + doing.toLowerCase();
+    a.doing = arrived ? doing : doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + doing.toLowerCase();
     a.working = arrived && working;
     a.indoors = arrived && night && !!home;
     if (arrived && a.faceTo != null && working) a.face = a.faceTo;
+    else if (arrived && tgt.look) a.face = Math.atan2(tgt.look.x - a.x, tgt.look.z - a.z);
   }
 
   /* ---------- who rules, and how they fall: debt, respect, approval and the moot ----------
@@ -2058,7 +2073,13 @@
   function crossed(a, b, mark) { return Math.floor((b - mark) / DAY) > Math.floor((a - mark) / DAY); }
   // daylight (06:00-21:00) lasts about 18 real minutes at normal pace; nights pass in about 12 seconds
   const DAY_RATE = 900 / 1080;
-  function rate(s) { const h = hourOf(s); return (h >= 21 || h < 6) ? 45 : DAY_RATE; }
+  // the night only rushes by once everyone has walked home (or by 22:30 at the latest), so nobody races through the dark
+  function settled(s) {
+    for (const a of s.agents) if (a.kind === 'person' && !a.indoors && a.moving) return false;
+    for (const sh of s.shops) if (sh.worker && !sh.worker.indoors && sh.worker.moving) return false;
+    return true;
+  }
+  function rate(s) { const h = hourOf(s); if (h < 6) return 45; if (h < 21) return DAY_RATE; return h >= 22.5 || settled(s) ? 45 : DAY_RATE; }
   function step(s, dt) {
     const before = s.t;
     s.t += dt;
@@ -2071,10 +2092,37 @@
     for (const shop of s.shops) updateWorker(s, shop, dt);
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
+    separate(s);
     checkVillage(s);
     if (s.people && s.village.step === 8) elderSuccession(s);
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
     if (s.coins < 0 && -s.coins > (s.rec.maxDebt || 0)) s.rec.maxDebt = -s.coins;
+  }
+  // people are solid: nobody walks through anybody else, you included
+  const BODY_R = 0.3;
+  const SEP = { o: [], r: [], w: [], cell: new Map() };
+  function separate(s) {
+    const O = SEP.o, R = SEP.r, Wt = SEP.w; O.length = 0; R.length = 0; Wt.length = 0;
+    for (const a of s.agents) if (!a.gone && !a.indoors) { O.push(a); R.push(a.kid ? 0.22 : BODY_R); Wt.push(1); }
+    for (const sh of s.shops) if (sh.worker && !sh.worker.indoors) { O.push(sh.worker); R.push(BODY_R); Wt.push(1); }
+    O.push(s.player); R.push(BODY_R); Wt.push(0.35);   // you are shouldered aside less than you shoulder others
+    const cell = SEP.cell; cell.clear();
+    const K = (x, z) => (Math.floor(x) + 2048) * 4096 + (Math.floor(z) + 2048);
+    for (let i = 0; i < O.length; i++) { const k = K(O[i].x, O[i].z), c = cell.get(k); if (c) c.push(i); else cell.set(k, [i]); }
+    for (let i = 0; i < O.length; i++) {
+      const A = O[i], cx = Math.floor(A.x) + 2048, cz = Math.floor(A.z) + 2048;
+      for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gz = cz - 1; gz <= cz + 1; gz++) {
+        const c = cell.get(gx * 4096 + gz); if (!c) continue;
+        for (let n = 0; n < c.length; n++) {
+          const j = c[n]; if (j <= i) continue;
+          const B = O[j], dx = B.x - A.x, dz = B.z - A.z, m = R[i] + R[j];
+          if (dx > m || dx < -m || dz > m || dz < -m) continue;
+          const d = Math.sqrt(dx * dx + dz * dz); if (d >= m) continue;
+          const nx = d > 1e-6 ? dx / d : Math.cos(i * 2.4 + j), nz = d > 1e-6 ? dz / d : Math.sin(i * 2.4 + j), push = m - d, tw = Wt[i] + Wt[j];
+          A.x -= nx * push * Wt[i] / tw; A.z -= nz * push * Wt[i] / tw; B.x += nx * push * Wt[j] / tw; B.z += nz * push * Wt[j] / tw;
+        }
+      }
+    }
   }
   function advance(s, minutes) { let left = minutes; while (left > 1e-9) { const d = Math.min(1, left); step(s, d); left -= d; } }
 
@@ -2107,6 +2155,34 @@
     openDay(s);
     event(s, 'Hearthmoor has grown: the square now has four shops that hire, and you can open new trades. Your bakery moved to the Middle lot.', 'story');
     return s;
+  }
+  /* a capital-sized stress test: hundreds of extra residents with homes, households and jobs,
+     living their real routines alongside the village. Used only by the phone performance test. */
+  function cityLoad(s, n) {
+    const sites = [];
+    for (let z = 50; z <= 84; z += 8.5) for (let x = -86; x <= 86; x += 8) if (Math.abs(x) > 4) sites.push({ x, z });
+    for (let x = 60; x <= 92; x += 8.5) for (let z = -62; z <= 40; z += 8.5) if (Math.abs(z - 4) > 5) sites.push({ x, z });
+    for (let x = -92; x <= -70; x += 8.5) for (let z = -40; z <= 40; z += 8.5) sites.push({ x, z });
+    const jobs = ['field', 'forest', 'pit', 'market', 'well'];
+    let made = 0, hi = 0;
+    while (made < n && hi < sites.length) {
+      const site = sites[hi], h = { id: 'c' + hi, name: 'Row ' + (hi + 1), x: site.x, z: site.z, owner: 'office:lord', rent: 2, cap: 4, tenants: [] }; hi++;
+      s.houses.push(h);
+      const size = 2 + Math.floor(rand(s) * 4);
+      let head = null;
+      for (let k = 0; k < size && made < n; k++, made++) {
+        const kid = head && k >= 2;
+        const p = newPerson(s, { name: 'Resident ' + (made + 1), age: kid ? 4 + Math.floor(rand(s) * 10) : 20 + Math.floor(rand(s) * 40), purse: kid ? 0 : 25 + Math.floor(rand(s) * 20), palette: Math.floor(rand(s) * 10) });
+        if (!kid && rand(s) < 0.9) p.job = { type: 'commons', what: jobs[Math.floor(rand(s) * jobs.length)] };
+        if (kid) { p.kid = true; p.parents = [head.id]; p.hh = head.hh || head.id; }
+        else if (head) p.hh = head.hh || head.id;
+        else head = p;
+        moveIn(s, p, h); p.log = []; p.rep = 15; p.thrift = 0.5;
+        addBody(s, p);
+      }
+    }
+    s.agents.forEach(a => { if (a.job && !a.spot) a.spot = jobSpot(s, a.job); });
+    return { people: made, houses: hi };
   }
   // a save from before the rebuild: everyone and everything moves into the new Hearthmoor
   function relocate(s) {
@@ -2188,7 +2264,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    HOUSES, MILL, BIZ_SITES, relocate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    HOUSES, MILL, BIZ_SITES, relocate, cityLoad, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
