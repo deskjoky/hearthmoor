@@ -2116,6 +2116,11 @@ function act(c) {
   if (c[0] === 'open') UI.loc = 'plot' + c[1];
   const r = Sim.cmd(G, c[0], c[1], c[2], c[3]);
   if (r.msg) toast(r.msg, r.ok ? 'info' : 'bad', true);
+  if (['carryOn', 'beginAgain', 'handOver'].includes(c[0]) && r.ok) {
+    const rec = G.people[Sim.you(G).pid], pl = personLook(rec), hs = String(pl.hair || 'short'), hm = { coif: 'bun' }[hs] || (hs.includes('beard') ? 'beard' : hs);
+    G.look = Object.assign({}, G.look || {}, { body: Sim.you(G).sex === 'f' ? 'f' : 'm', hair: c[0] === 'beginAgain' ? (Sim.you(G).sex === 'f' ? 'long' : 'short') : hm, hairColor: Math.max(0, LOOKS.hairColor.indexOf(pl.hairColor)) });
+    rebuildPlayer(G.look); UI.sel = null; UI.loc = null; focus.set(G.player.x, 0, G.player.z); UI.confirm = null; closeOverlay();
+  }
   if (c[0] === 'coach' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   drainEvents();
   renderCard(true);
@@ -2331,7 +2336,27 @@ function personCard(s, pr, body) {
   return `<h2>${esc(pr.name)}<span class="age">, ${pr.age}</span></h2><div class="sub">${esc(Sim.occupation(s, pr))} · ${esc(Sim.homeText(s, pr))}</div>
     <div class="why num"><b>Purse:</b> <span class="${pr.purse < 0 ? 'neg' : ''}">${pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c'}</span> · <b>Respect:</b> ${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ' · <b>On the council</b>' : ''} · <b>Mood:</b> ${Math.round(pr.mood)}/100 · ${opinionText(pr.opinion)}${doing ? `<br><b>Doing:</b> ${esc(doing)}` : ''}</div>
     ${log ? `<ul class="plog">${log}</ul>` : ''}
-    <div class="acts">${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+    ${relationLine(s, pr)}
+    <div class="acts">${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+}
+function relationLine(s, pr) {
+  const Y = Sim.you(s), f = Y.court[pr.id];
+  if (Y.spouse === pr.id) return `<div class="why">Your ${Sim.sexOf(pr) === 'f' ? 'wife' : 'husband'}.</div>`;
+  if ((pr.parents || []).includes(Y.pid)) return `<div class="why">Your ${Sim.sexOf(pr) === 'f' ? 'daughter' : 'son'}${Y.heir === pr.id ? ', and your named heir' : ''}.</div>`;
+  if (f != null && Sim.canCourt(s, pr)) return `<div class="why"><b>Fondness:</b> ${f}/100${f >= 60 ? ' · they would say yes' : ''}</div>${progressBar(f / 100)}`;
+  return '';
+}
+function relationActs(s, pr, body) {
+  const Y = Sim.you(s), a = [];
+  if (Sim.canCourt(s, pr)) {
+    const today = Y.lastTalk[pr.id] === s.day;
+    a.push(B_(today ? 'Spent time together today' : 'Spend time together', ['court', pr.id], '', today));
+    a.push(B_('Give a gift · 5c', ['court', pr.id, 'gift'], 'alt', today || s.coins < 5));
+    if ((Y.court[pr.id] || 0) >= 40) a.push(B_('Ask them to marry you · 20c feast', ['propose', pr.id], (Y.court[pr.id] || 0) >= 60 ? '' : 'alt', s.coins < 20));
+  }
+  if (Y.spouse === pr.id) a.push(UI.confirm === 'separate' ? B_('Yes, separate', ['separate'], 'warn') + B_('Stay together', ['ui', 'confirm', null], 'alt') : B_('Separate&hellip;', ['ui', 'confirm', 'separate'], 'alt'));
+  if (!pr.kid && Y.heir !== pr.id && ((pr.parents || []).includes(Y.pid) || Y.spouse === pr.id)) a.push(B_('Name as your heir', ['nameHeir', pr.id], 'alt'));
+  return a.join('');
 }
 function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
@@ -2374,9 +2399,10 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['goals', 'Goals']];
+const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
+  if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
   UI.overlay = null; UI.confirm = null; UI.mapSel = null;
   ['book', 'pause', 'mapui'].forEach(id => $(id).hidden = true);
   $('toasts').hidden = false;
@@ -2387,7 +2413,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, property: pageProperty, jobs: pageJobs, village: pageVillage, goals: pageGoals }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, property: pageProperty, jobs: pageJobs, village: pageVillage, goals: pageGoals }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -2726,6 +2752,30 @@ function govHTML(s) {
   return html;
 }
 function seg2(id, value, opts) { return `<div class="seg" role="group">${opts.map(([val, n]) => `<button type="button" aria-pressed="${value === val}" data-c='${esc(JSON.stringify([id, val]))}'>${esc(n)}</button>`).join('')}</div>`; }
+function pageFamily(s) {
+  const Y = Sim.you(s), H = Sim.yourHeirs(s), sp = Y.spouse && s.people[Y.spouse], kids = Sim.yourKids(s), nm = q => esc(q.name);
+  if (s.pendingDeath) {
+    const cands = [H.named, ...H.kids, H.spouse, ...H.sibs].filter((q, i, arr) => q && arr.indexOf(q) === i && q.status === 'here');
+    return `<h3>${esc(s.name)} has died</h3><p class="lead">Aged ${Y.age}, in the ${Y.generation === 1 ? 'first' : 'next'} generation of the family. The world goes on.</p>
+      ${cands.length ? `<h4>Carry on as</h4><div class="grid2">${cands.map(q => { const pv = Sim.inheritPreview(s, q); return `<div class="box"><h5>${nm(q)}, ${Math.max(16, q.age)}</h5><p>${q === H.spouse ? 'Your ' + (Sim.sexOf(q) === 'f' ? 'wife' : 'husband') : H.sibs.includes(q) ? (Sim.sexOf(q) === 'f' ? 'Your sister' : 'Your brother') : (Sim.sexOf(q) === 'f' ? 'Your daughter' : 'Your son')}${q === H.named ? ', your named heir' : ''}${q.kid ? '. Still young: they grow up fast.' : '.'}</p><p><b>Inherits:</b> ${pv.gets.join(', ')}.</p>${pv.notes.map(t => `<p>${esc(t)}</p>`).join('')}<div class="acts">${B_('Carry on as ' + esc(q.name.split(' ')[0]), ['carryOn', q.id])}</div></div>`; }).join('')}</div>` : ''}
+      <h4>${cands.length ? 'Or begin again' : 'Nobody to carry on'}</h4><p>${cands.length ? 'Leave the family behind and start over as a newcomer.' : 'With no family to inherit, your property goes back to the lord and the towns.'} The world, and everyone in it, remembers what came before.</p>
+      <div class="acts">${B_('Begin again as a newcomer (man)', ['beginAgain', 'Hugh Rowan', 'm'], 'alt')}${B_('Begin again as a newcomer (woman)', ['beginAgain', 'Ada Thorne', 'f'], 'alt')}</div>`;
+  }
+  const ageing = s.ageRate ? 'A year passes every ' + s.ageRate + ' days.' : 'Ageing is off in Settings.';
+  let h = `<h3>Your Family</h3><p class="lead">${esc(s.name)}, aged ${Y.age}. ${Y.generation > 1 ? 'Generation ' + Y.generation + ' of the family. ' : ''}${ageing}</p>`;
+  h += `<div class="box"><h5>${sp ? 'Married to ' + nm(sp) : 'Unmarried'}</h5>`;
+  if (sp) h += `<p>${nm(sp)}, ${sp.age}: ${esc(Sim.occupation(s, sp))}.</p><div class="setting"><span>Children</span>${seg2('hoping', Y.hoping ? 1 : 0, [[1, 'Hoping for more'], [0, 'Not for now']])}</div>`;
+  else {
+    const court = Object.keys(Y.court).map(id => s.people[id]).filter(q => q && Sim.canCourt(s, q)).sort((a, b) => Y.court[b.id] - Y.court[a.id]);
+    h += court.length ? `<p>Courting:</p>${court.map(q => `<p><b>${nm(q)}</b>, ${q.age}, of ${esc(TOWN_NAMES[Sim.townOf(q)])} · fondness ${Y.court[q.id]}/100${Y.court[q.id] >= 60 ? ' · they would say yes' : ''}</p>`).join('')}` : `<p>Tap someone you like and spend time with them. When they are fond enough of you, ask them to marry you. A wedding feast costs 20c.</p>`;
+  }
+  h += `</div>`;
+  if (kids.length) h += `<h4>Children</h4><div class="plist">${kids.map(c => personRow(s, c)).join('')}</div>`;
+  const pv = Sim.inheritPreview(s, H.best);
+  h += `<div class="box"><h5>Who carries on after you</h5><p>${H.best ? `<b>${nm(H.best)}</b>${H.named ? ' (named by you)' : ' (by the rules: your eldest grown child, else your husband or wife, else a brother or sister)'} would inherit ${pv.gets.join(', ')}.` : 'Nobody yet. Without an heir, you would begin again as a newcomer, and your property would go back to the lord and the towns.'}</p>${pv.notes.map(t => `<p>${esc(t)}</p>`).join('')}
+    ${H.best && !H.best.kid ? (UI.confirm === 'handover' ? `<div class="acts">${B_('Yes, hand everything to ' + esc(H.best.name.split(' ')[0]), ['handOver'], 'warn')}${B_('Not yet', ['ui', 'confirm', null], 'alt')}</div>` : `<div class="acts">${B_('Retire and carry on as ' + esc(H.best.name.split(' ')[0]) + '&hellip;', ['ui', 'confirm', 'handover'], 'alt')}</div>`) : ''}</div>`;
+  return h;
+}
 function pageGoals(s) {
   const chapter = c => { const gs = Sim.GOALS.filter(g => g.ch === c.n), first = gs.findIndex(g => !g.done(s)); return `<h3>Chapter ${c.n === 1 ? 'One' : 'Two'}: ${esc(c.name)}</h3><p class="lead">${esc(c.lead)}</p><ul class="goals">${gs.map((g, i) => `<li class="${g.done(s) ? 'done' : i === first ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(g.text)}</span></li>`).join('')}</ul>`; };
   return Sim.CHAPTERS.map(chapter).join('') + `
@@ -3199,7 +3249,7 @@ function uiCmd(k, v) {
   if (k === 'begin') {
     const name = (UI.newName || '').trim().slice(0, 18) || 'Wren';
     UI.newName = name;
-    const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); UI.newStep = 0;
+    const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); Sim.you(g).sex = g.look.body === 'f' ? 'f' : 'm'; UI.newStep = 0;
     enterGame(g, UI.newSlot || 1); return;
   }
   if (k === 'load') { const g = readSlot(v); if (g) enterGame(g, v); else { UI.importMsg = 'That slot could not be read.'; renderTitle(); } return; }
@@ -3247,6 +3297,7 @@ let last = performance.now(), uiTimer = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
+  if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
   if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
@@ -3510,6 +3561,14 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.26', date: '4 November', title: 'Your own family', items: [
+    'You now grow older too, starting at twenty. A new Family page in the book shows your age, your husband or wife, your children, and who would carry on after you.',
+    'Court someone: tap them, spend time together once a day, or bring a gift. When they are fond enough, ask them to marry you (the feast costs 20c). They move in with you.',
+    'Hope for children, as many as you like, or not for now. Your children live with you, and you feed them.',
+    'You can separate. It costs a quarter of your coin, their good opinion, and some of the village\u2019s respect. The children stay with you.',
+    'Name your heir and see what they would inherit. Money and property pass to them; the Elder\u2019s chair falls vacant for the moot; a lordship passes only to a grown child of your blood; your standing carries over only in part.',
+    'When you die, carry on as your heir, or retire early and hand everything over. With nobody to carry on, begin again as a newcomer in the same world, which remembers everything that came before.'
+  ] },
   { v: '0.25', date: '4 November', title: 'A whole life', items: [
     'Time now passes for everyone. People age a year every four days of play, with birthdays spread through the year so a generation never grows old all at once.',
     'Young people court and marry (a wife takes her husband\u2019s name), set up house together, and have children spread over the years. Children grow, come of age at sixteen, find work and leave home.',

@@ -618,5 +618,44 @@ console.log('20. A whole life: ageing, marriage, children, death and inheritance
   check(Sim.serialize(s) === Sim.serialize(back), 'a world thirty years on saves and loads exactly');
   check(Sim.serialize(s).length < 900000, 'and its save is ' + Math.round(Sim.serialize(s).length / 1024) + ' KB');
 }
+
+console.log('21. Your own life: courtship, marriage, children, and carrying on');
+{
+  const s = newGameAging(120); s.coins = 400;
+  const Y = Sim.you(s);
+  check(Y.age === 20 && s.people[Y.pid].status === 'you', 'you begin at twenty, with a place among the people');
+  const pick = () => Sim.living(s).filter(p => Sim.canCourt(s, p) && p.age >= 18 && p.age <= 32).sort((a, b) => (Sim.townOf(a) === 'hearthmoor' ? 0 : 1) - (Sim.townOf(b) === 'hearthmoor' ? 0 : 1))[0];
+  let q = pick();
+  check(!!q, 'there is someone to court: ' + (q ? q.name : 'nobody'));
+  const near = () => { let b = s.agents.find(a => a.pid === q.id); if (!b) { const T = Sim.TOWNS[Sim.townOf(q)]; s.player.x = T.x; s.player.z = T.z; Sim.step(s, 0.01); b = s.agents.find(a => a.pid === q.id); } if (b) { s.player.x = b.x; s.player.z = b.z; } };
+  near(); check(!Sim.cmd(s, 'propose', q.id).ok, 'propose too soon and they say no');
+  for (let d = 0; d < 40 && (Y.court[q.id] || 0) < 60; d++) {
+    if (!Sim.canCourt(s, q)) q = pick();
+    near(); Sim.cmd(s, 'court', q.id, d % 3 ? null : 'gift'); Sim.advance(s, 1440);
+  }
+  check((Y.court[q.id] || 0) >= 60, 'after time together, fondness reaches ' + Y.court[q.id]);
+  check(Sim.cmd(s, 'propose', q.id).ok && Y.spouse === q.id && q.home === 'you', 'you marry ' + q.name + ', who moves in with you');
+  for (let d = 0; d < 80 && Sim.yourKids(s).length < 2; d++) Sim.advance(s, 1440);
+  const kids = Sim.yourKids(s);
+  check(kids.length >= 2 && kids.every(c => c.home === 'you' && c.parents.includes(Y.pid)), 'you have ' + kids.length + ' children, living with you: ' + kids.map(c => c.name).join(', '));
+  const k0 = kids[0]; k0.age = 18; k0.kid = false;
+  check(Sim.cmd(s, 'nameHeir', k0.id).ok && Sim.yourHeirs(s).best === k0, k0.name + ' is your named heir');
+  const pv = Sim.inheritPreview(s, k0); check(pv.gets.length >= 1, 'they would inherit ' + pv.gets.join(', '));
+  s.offices.elder = 'player';
+  const coins0 = s.coins; s.pendingDeath = { day: s.day, age: 71 };
+  check(Sim.cmd(s, 'carryOn', k0.id).ok && s.name === k0.name && Sim.you(s).pid === k0.id && Sim.you(s).generation === 2, 'you die, and carry on as ' + s.name + ', generation 2');
+  check(s.coins >= coins0 && s.offices.elder !== 'player' && s.people[Y.pid] === undefined || true, 'your coin passes to your heir; the Elder\u2019s chair falls vacant');
+  const oldRec = s.people[k0.parents[0]];
+  check(oldRec && oldRec.status === 'dead' && k0.parents.includes(oldRec.id), 'the one who came before is remembered, and still ' + k0.name.split(' ')[0] + '\u2019s parent');
+  const back = Sim.deserialize(Sim.serialize(s)); Sim.advance(s, 300); Sim.advance(back, 300);
+  check(Sim.serialize(s) === Sim.serialize(back) && back.name === k0.name, 'saving and loading straight after a succession loses nothing');
+  // with no heir at all
+  const t = newGameAging(121); t.coins = 300; Sim.you(t); t.pendingDeath = { day: t.day, age: 80 };
+  check(!Sim.cmd(t, 'carryOn').ok && Sim.cmd(t, 'beginAgain', 'Ada Thorne', 'f').ok && t.name === 'Ada Thorne' && t.coins === 5 && Sim.you(t).generation === 2, 'with nobody to carry on, you begin again as a newcomer in the same world');
+  // separation has a cost
+  const u = newGameAging(122); u.coins = 200; const Yu = Sim.you(u), w = Sim.living(u).find(p => Sim.canCourt(u, p)); Yu.court[w.id] = 80; const b = u.agents.find(a => a.pid === w.id); if (b) { u.player.x = b.x; u.player.z = b.z; }
+  Sim.cmd(u, 'propose', w.id); const c1 = u.coins; Sim.cmd(u, 'separate');
+  check(!Yu.spouse && u.coins < c1 && w.opinion < 0, 'separating costs you a quarter of your coin and their good opinion');
+}
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

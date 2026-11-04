@@ -339,6 +339,7 @@
     initGov(s);
     setupOakbridge(s);
     setupGreenhaven(s);
+    you(s).age = 20; s.you.bday = 3;
     openDay(s);
     event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. The four shops across the square are hiring.', 'story');
     return s;
@@ -1155,6 +1156,7 @@
   function homePoint(s, p) {
     if (!p.home) return null;
     if (p.home === 'manor') return MANOR_HOME;
+    if (p.home === 'you') return { x: P.home.x + 1.5, z: P.home.z + 1.5 };
     if (p.home.startsWith('biz:')) { const e = empById(p.home.slice(4)); return { x: e.x, z: e.z }; }
     const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
   }
@@ -1172,6 +1174,7 @@
   function homeText(s, p) {
     if (!p.home) return p.status === 'left' ? 'Left the village' : 'Homeless, sleeping in the square';
     if (p.home === 'manor') return 'Lives at Varrow Manor';
+    if (p.home === 'you') return 'Lives with you';
     if (p.home.startsWith('biz:')) return 'Lives above ' + empById(p.home.slice(4)).name;
     const h = houseById(s, p.home);
     if (h.owner === p.id) return 'Owns ' + h.name;
@@ -1339,8 +1342,10 @@
       }
       // food: what they bought at your shops today counts toward it
       // children eat from their parents' purse
-      const payer = p.kid ? (parentsOf(s, p).find(q => q.purse > 0) || p) : p;
-      const food = Math.max(0, (p.kid ? FOOD - 1 : FOOD) - p.ate); const paidFood = Math.min(Math.max(0, payer.purse), food); payer.purse -= paidFood;
+      const yours = p.kid && s.you && (p.parents || []).includes(s.you.pid);
+      const payer = yours ? null : p.kid ? (parentsOf(s, p).find(q => q.purse > 0) || p) : p;
+      const food = Math.max(0, (p.kid ? FOOD - 1 : FOOD) - p.ate); let paidFood;
+      if (yours) { spend(s, food); s.stats.family = (s.stats.family || 0) + food; paidFood = food; } else { paidFood = Math.min(Math.max(0, payer.purse), food); payer.purse -= paidFood; }
       if (paidFood < food) { p.mood = clamp(p.mood - 10, 0, 100); if (!p.hungry) plog(s, p, 'Went to bed hungry.'); p.hungry = true; } else p.hungry = false;
       p.ate = 0;
       // rent
@@ -1391,6 +1396,7 @@
   function lifeDay(s) {
     const rate = s.ageRate; if (!rate) return;
     const today = s.day % rate;
+    yourBirthday(s, today);
     for (const p of living(s)) {
       if (isHousehold(p) && p.job && p.job.office !== 'lord') continue;   // the manor's servants come and go
       if (bdayOf(s, p) !== today) continue;
@@ -1406,7 +1412,7 @@
         const h = vacancy(s, Math.max(1, income(s, p) - FOOD), townOf(p)); if (h) { moveOut(s, p, 'Left the family home.'); moveIn(s, p, h); }
       }
       // courtship and marriage
-      if (!p.kid && !p.spouse && p.age >= 18 && p.age <= 45 && rand(s) < 0.3) {
+      if (!p.kid && !p.spouse && p.age >= 18 && p.age <= 45 && rand(s) < 0.2) {
         const sx = sexOf(p), mate = living(s).find(q => q !== p && !q.kid && !q.spouse && townOf(q) === townOf(p) && sexOf(q) !== sx && Math.abs(q.age - p.age) <= 8 && q.age >= 18 && !sameFamily(p, q) && !isHousehold(q));
         if (mate) marry(s, p, mate);
       }
@@ -1481,16 +1487,127 @@
     if (s.gov) s.gov.council = s.gov.council.filter(x => x !== p.id);
     for (const sh of s.shops) if (sh.worker && sh.worker.pid === p.id) { sh.worker = null; event(s, p.name + ', who worked at your ' + TRADES[sh.trade].name.toLowerCase() + ', has died.', 'bad'); }
     if (p.home && houseById(s, p.home)) { const h = houseById(s, p.home); h.tenants = h.tenants.filter(x => x !== p.id); }
+    if (s.you && s.you.spouse === p.id) { s.you.spouse = null; s.you.widowed = p.id; event(s, 'Your ' + (sexOf(p) === 'f' ? 'wife' : 'husband') + ', ' + p.name + ', has died, aged ' + p.age + '.', 'story'); }
     if (H.spouse) { H.spouse.spouse = null; H.spouse.widowed = p.id; H.spouse.mood = clamp(H.spouse.mood - 30, 0, 100); plog(s, H.spouse, 'Widowed: ' + p.name + ' has died.'); }
     if (p.hh) { /* their household carries on under whoever is left */ }
     living(s).filter(q => q.hh === p.id).forEach(q => { q.hh = H.spouse ? H.spouse.id : null; });
     event(s, p.name + ' of ' + town + ' has died, aged ' + p.age + '.' + (heir ? ' ' + heir.name + ' inherits' + (said.length ? ' ' + said.join(' and ') : '') + '.' : ''), townOf(p) === 'hearthmoor' ? 'story' : 'info');
   }
 
+  /* ---------- your own life: courtship, marriage, children, and who carries on after you ----------
+     You have a record among the people (status 'you') so family trees can include you; your heir becomes you. */
+  function you(s) {
+    if (!s.you) s.you = { age: 22, bday: 1, spouse: null, court: {}, heir: null, hoping: true, generation: 1, family: null, sex: s.look && s.look.body === 'f' ? 'f' : 'm', lastTalk: {} };
+    const Y = s.you;
+    if (!Y.pid || !s.people[Y.pid]) { const r = newPerson(s, { name: s.name, age: Y.age, purse: 0, sex: Y.sex, palette: 0 }); r.status = 'you'; r.log = [{ day: s.day, text: 'Came to Hearthmoor with nothing.' }]; Y.pid = r.id; }
+    const r = s.people[Y.pid]; r.name = s.name; r.age = Y.age; r.sex = Y.sex; r.spouse = Y.spouse;
+    return Y;
+  }
+  const familyName = s => { const Y = you(s); return Y.family || (s.name.includes(' ') ? surname(s.name) : s.name); };
+  const yourKids = s => { const Y = you(s); return Object.values(s.people).filter(q => (q.parents || []).includes(Y.pid)); };
+  const canCourt = (s, q) => { const Y = you(s); return q && q.status === 'here' && !q.kid && q.age >= 18 && !q.spouse && !Y.spouse && sexOf(q) !== Y.sex && !isHousehold(q) && !(q.parents || []).includes(Y.pid); };
+  function yourBirthday(s, today) {
+    const Y = you(s); if (s.pendingDeath || Y.bday % s.ageRate !== today) return;
+    Y.age++; s.people[Y.pid].age = Y.age;
+    const die = Y.age >= 95 ? 1 : Y.age >= 80 ? 0.22 : Y.age >= 70 ? 0.08 : Y.age >= 60 ? 0.02 : 0;
+    if (rand(s) < die) { s.pendingDeath = { day: s.day, age: Y.age }; event(s, 'You have died, aged ' + Y.age + '. Your story passes on.', 'story'); return; }
+    if (Y.age === 60 || Y.age === 70) event(s, 'You turn ' + Y.age + '. It may be time to think about who carries on after you: see the Family page.', 'story');
+    // children, if you and your spouse are hoping for them
+    const sp = Y.spouse && s.people[Y.spouse];
+    if (sp && sp.status === 'here' && Y.hoping) {
+      const mother = Y.sex === 'f' ? Y : sp, mAge = mother === Y ? Y.age : sp.age, kids = yourKids(s).filter(c => c.kid && c.status === 'here').length;
+      if (mAge >= 18 && mAge <= 42 && rand(s) < Math.max(0.15, 0.55 - kids * 0.06)) yourChild(s, sp);
+    }
+  }
+  function yourChild(s, sp) {
+    const Y = you(s), fem = rand(s) < 0.5, L = fem ? BABY_F : BABY_M, fam = familyName(s);
+    let name = L[Math.floor(rand(s) * L.length)] + ' ' + fam; for (let k = 0; k < 8 && Object.values(s.people).some(q => q.name === name); k++) name = L[Math.floor(rand(s) * L.length)] + ' ' + fam;
+    const c = newPerson(s, { name, age: 0, purse: 0, rep: 0, palette: Math.floor(rand(s) * 10), sex: fem ? 'f' : 'm', born: s.day, home: 'you' });
+    c.kid = true; c.parents = [Y.pid, sp.id]; c.log = [{ day: s.day, text: 'Born to ' + s.name + ' and ' + sp.name + '.' }];
+    plog(s, sp, 'Had a ' + (fem ? 'daughter' : 'son') + ', ' + c.name.split(' ')[0] + ', with ' + s.name + '.');
+    if (bodyOf(s, sp) || !s.bodiesIn || s.bodiesIn === 'hearthmoor') addBody(s, c);
+    event(s, 'You and ' + sp.name + ' have a ' + (fem ? 'daughter' : 'son') + ': ' + c.name + '.', 'story');
+    return c;
+  }
+  function wedYou(s, q) {
+    const Y = you(s); Y.spouse = q.id; q.spouse = Y.pid; Y.court = {};
+    if (q.job && q.job.type === 'office' && HOUSEHOLD.includes(q.job.office)) loseJob(s, q, 'Left the manor to marry.');
+    if (q.home && q.home !== 'you') moveOut(s, q, 'Moved in with ' + s.name + '.');
+    if (townOf(q) !== 'hearthmoor') { if (q.job && (q.job.type !== 'biz' || q.job.role !== 'owner')) loseJob(s, q, 'Left their work to move to Hearthmoor.'); q.town = undefined; }
+    q.home = 'you'; q.opinion = clamp((q.opinion || 0) + 30, -100, 100);
+    if (Y.sex === 'm' && sexOf(q) === 'f') { q.maiden = q.maiden || q.name; const nn = q.name.split(' ')[0] + ' ' + familyName(s); if (!Object.values(s.people).some(x => x.name === nn)) q.name = nn; }
+    plog(s, q, 'Married ' + s.name + '.'); s.people[Y.pid].log.unshift({ day: s.day, text: 'Married ' + q.name + '.' });
+    addStanding(s, 5, 'the village celebrated your wedding.');
+  }
+  function yourHeirs(s) {
+    const Y = you(s), sp = Y.spouse && s.people[Y.spouse], kids = yourKids(s).filter(c => c.status === 'here').sort((a, b) => b.age - a.age);
+    const named = Y.heir && s.people[Y.heir] && s.people[Y.heir].status === 'here' ? s.people[Y.heir] : null;
+    const me = s.people[Y.pid], sibs = me && (me.parents || []).length ? living(s).filter(q => (q.parents || []).some(id => me.parents.includes(id))).sort((a, b) => b.age - a.age) : [];
+    const spo = sp && sp.status === 'here' ? sp : null;
+    return { named, kids, spouse: spo, sibs, best: named || kids.find(c => !c.kid) || spo || sibs.find(c => !c.kid) || kids[0] || sibs[0] || null };
+  }
+  // what passes on: coin and property by the inheritance rules; offices fall vacant; a lordship passes to a grown child of the blood
+  function inheritPreview(s, h) {
+    const out = [(s.coins < 0 ? 'your debt of ' + (-s.coins) + 'c' : s.coins + 'c in coin')];
+    if (s.shops.length) out.push(s.shops.length + (s.shops.length === 1 ? ' shop' : ' shops'));
+    const bz = Object.values(s.biz || {}).filter(b => b.owner === 'player').length; if (bz) out.push(bz + (bz === 1 ? ' business' : ' businesses'));
+    const hs = s.houses.filter(x => x.owner === 'player').length; if (hs) out.push(hs + (hs === 1 ? ' house' : ' houses'));
+    if (s.player.horse) out.push('your horse ' + s.player.horse.name);
+    const notes = [];
+    if (s.offices.elder === 'player') notes.push('The Elder\u2019s chair is elected: it falls vacant and the moot chooses.');
+    if (s.offices.lord === 'player') notes.push(h && (h.parents || []).includes(you(s).pid) && !h.kid ? 'The lordship passes to ' + h.name + ', with the crown\u2019s recognition.' : 'The lordship needs a grown child of your blood; without one it passes out of the family.');
+    if (s.village.council) notes.push('A council seat is earned: ' + (h ? h.name : 'your heir') + ' starts with part of your standing and must earn the rest.');
+    return { gets: out, notes };
+  }
+  function succeed(s, h, why) {
+    const Y = you(s), old = s.people[Y.pid], v = s.village, wasLord = s.offices.lord === 'player';
+    // the one who came before joins the dead (or retires to live with the family)
+    old.name = s.name; old.age = Y.age; old.spouse = Y.spouse;
+    if (why === 'retire') { old.status = 'here'; old.retired = true; old.home = 'you'; old.town = undefined; old.purse = 0; old.rep = Math.round(v.standing * 0.8); old.log.unshift({ day: s.day, text: 'Handed everything to ' + h.name + ' and retired.' }); addBody(s, old); }
+    else { old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + '.' }); const sp = Y.spouse && s.people[Y.spouse]; if (sp) { sp.spouse = null; sp.widowed = old.id; } }
+    // offices: the Elder's chair is elected, so it falls vacant; the lordship passes only to a grown child of the blood
+    if (s.offices.elder === 'player') { s.offices.elder = null; govLog(s, 'The Elder\u2019s chair stands empty. The moot will choose.', 'story'); }
+    if (wasLord) { if ((h.parents || []).includes(Y.pid) && !h.kid) { /* kept below */ } else { s.offices.lord = null; replaceLord(s, 'the old lord is gone and no child of the blood can take the title'); } }
+    if (s.offices.steward === 'player') s.offices.steward = null;
+    // the heir steps into your shoes: your coin and property, their own purse, part of your standing, and the town's memory of your family
+    const b = bodyOf(s, h); if (b) { s.player.x = b.x; s.player.z = b.z; s.agents = s.agents.filter(x => x !== b); }
+    if (h.job) loseJob(s, h, 'Gave up their work to take on the family\u2019s affairs.');
+    if (h.home && h.home !== 'you') moveOut(s, h, 'Moved into the family home.');
+    s.coins += Math.max(0, h.purse); h.purse = 0;
+    const prev = s.name; s.name = h.name; s.job = null; s.player.dest = null; s.player.action = null;
+    Y.age = Math.max(16, h.age); Y.sex = sexOf(h); Y.spouse = h.spouse && s.people[h.spouse] && s.people[h.spouse].status === 'here' ? h.spouse : null; Y.heir = null; Y.court = {}; Y.generation++; Y.family = surname(h.name);
+    if (Y.spouse) { const sp = s.people[Y.spouse]; sp.spouse = h.id; if (sp.home !== 'you') { moveOut(s, sp, 'Moved in with ' + h.name + '.'); sp.home = 'you'; } }
+    // the heir's own record becomes yours; your children stay listed as theirs
+    h.status = 'you'; h.kid = false; h.town = undefined; Y.pid = h.id; h.log.unshift({ day: s.day, text: why === 'retire' ? 'Took over from ' + prev + '.' : 'Inherited everything from ' + prev + '.' });
+    v.standing = Math.round(v.standing * 0.4 + (h.rep || 0) * 0.3);
+    if (v.standing < 40 && v.council && s.gov) { v.council = false; s.gov.lostSeatDay = s.day; }
+    for (const q of Object.values(s.people)) if (q.status === 'here' && q.id !== h.id) q.opinion = Math.round((q.opinion || 0) * 0.5);
+    if (wasLord && s.offices.lord === 'player') govLog(s, h.name + ' succeeds ' + prev + ' as lord of Hearthmoor, recognised by ' + REALM.king + '.', 'story');
+    s.rec.generations = Y.generation;
+    s.pendingDeath = null;
+    event(s, (why === 'retire' ? prev + ' hands everything to ' : 'You carry on as ') + h.name + ', aged ' + Y.age + '. Generation ' + Y.generation + ' of the family.', 'story');
+  }
+  // with nobody to carry on: the family's property goes back to the lord and the town, and you begin again as a newcomer
+  function beginAgain(s, name, sex) {
+    const Y = you(s), old = s.people[Y.pid];
+    old.name = s.name; old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
+    if (s.offices.elder === 'player') s.offices.elder = null;
+    if (s.offices.lord === 'player') { s.offices.lord = null; replaceLord(s, 'the old lord died without an heir'); }
+    s.houses.filter(h => h.owner === 'player').forEach(h => { h.owner = 'office:lord'; });
+    Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => { b.closed = true; b.manager = null; });
+    s.shops.slice().forEach(sh => { if (sh.worker && sh.worker.pid && s.people[sh.worker.pid]) s.people[sh.worker.pid].job = null; });
+    s.shops = []; s.coins = 5; s.job = null; s.village.council = false; s.village.standing = 0; s.player.horse = null; s.player.riding = false;
+    s.name = name || 'Wren'; s.player.x = P.home.x; s.player.z = P.home.z;
+    const gen = Y.generation; s.you = null; const Z = you(s); Z.generation = gen + 1; Z.sex = sex || 'm'; Z.age = 20;
+    s.pendingDeath = null;
+    event(s, 'A newcomer arrives in Hearthmoor with 5 coins: ' + s.name + '. The world remembers those who came before.', 'story');
+  }
+
   /* each morning: the jobless look for work, the homeless for a roof, and some give up */
   function peopleMorning(s) {
     lifeDay(s);
     for (const k of living(s).filter(q => q.kid)) {
+      if (s.you && (k.parents || []).includes(s.you.pid)) { if (k.home !== 'you') { if (k.home && houseById(s, k.home)) moveOut(s, k, 'Came home.'); k.home = 'you'; } continue; }
       const pars = parentsOf(s, k), par = pars.find(q => q.home) || pars[0];
       if (!pars.length) { if ((k.parents || []).length && !(k.parents || []).some(id => s.people[id] && s.people[id].status === 'here')) { k.status = 'left'; plog(s, k, 'Left Hearthmoor with family.'); const b = bodyOf(s, k); if (b) b.gone = true; } continue; }
       if (par.home !== k.home) {
@@ -2749,6 +2866,38 @@
         addStanding(s, o.standing, 'the council rules: ' + o.label.toLowerCase() + '.');
         return ok();
       }
+      case 'court': {
+        // spend time with someone: once a day, and it means more the more they think of you
+        const q = s.people[a], Y = you(s); if (!canCourt(s, q)) return fail('You cannot court them.');
+        if (Y.lastTalk[q.id] === s.day) return fail('You have spent time with ' + q.name.split(' ')[0] + ' today.');
+        const body = bodyOf(s, q); if (!body || dist(p, body) > 8) return fail('Go and find ' + q.name.split(' ')[0] + ' first.');
+        Y.lastTalk[q.id] = s.day;
+        const gift = b === 'gift'; if (gift) { if (s.coins < 5) return fail('A gift costs 5c.'); spend(s, 5); }
+        const gain = Math.round(6 + (q.opinion || 0) * 0.08 + s.village.standing * 0.05 + (gift ? 6 : 0) + rand(s) * 5);
+        Y.court[q.id] = clamp((Y.court[q.id] || 0) + gain, 0, 100); q.opinion = clamp((q.opinion || 0) + 3, -100, 100);
+        return ok((gift ? 'You give ' + q.name.split(' ')[0] + ' a gift and spend time together.' : 'You spend time with ' + q.name.split(' ')[0] + '.') + ' (fondness ' + Y.court[q.id] + '/100)');
+      }
+      case 'propose': {
+        const q = s.people[a], Y = you(s); if (!canCourt(s, q)) return fail('You cannot marry them.');
+        if ((Y.court[q.id] || 0) < 60) { Y.court[q.id] = Math.max(0, (Y.court[q.id] || 0) - 15); q.opinion = clamp((q.opinion || 0) - 5, -100, 100); return fail(q.name.split(' ')[0] + ' is not ready to say yes. Spend more time together first.'); }
+        if (s.coins < 20) return fail('A wedding feast costs 20c.');
+        spend(s, 20); wedYou(s, q); event(s, 'You marry ' + q.name + '. The village comes to the feast.', 'story'); return ok();
+      }
+      case 'separate': {
+        const Y = you(s), q = Y.spouse && s.people[Y.spouse]; if (!q) return fail('You are not married.');
+        const share = Math.max(0, Math.floor(s.coins * 0.25)); spend(s, share); q.purse += share;
+        q.spouse = null; Y.spouse = null; q.opinion = clamp((q.opinion || 0) - 70, -100, 100); q.mood = clamp(q.mood - 30, 0, 100);
+        q.home = null; const h = vacancy(s, 99, townOf(q)); if (h) moveIn(s, q, h);
+        plog(s, q, 'Separated from ' + s.name + ', who paid ' + share + 'c.'); addStanding(s, -8, 'the village talks about your separation.'); approveHolder(s, 'player', -4);
+        for (const c of yourKids(s)) if (c.kid && c.status === 'here') c.opinion = clamp((c.opinion || 0) - 20, -100, 100);
+        event(s, 'You and ' + q.name + ' separate. ' + q.name.split(' ')[0] + ' takes ' + share + 'c and moves out. The children stay with you.', 'bad');
+        return ok();
+      }
+      case 'hoping': you(s).hoping = !!a; return ok();
+      case 'nameHeir': { const q = s.people[a]; if (!q || q.status !== 'here' || q.kid) return fail('Your heir must be grown.'); if (!(q.parents || []).includes(you(s).pid) && q.id !== you(s).spouse && (q.opinion || 0) < 30) return fail(q.name + ' does not know you well enough.'); you(s).heir = q.id; return ok(q.name + ' is now your named heir.'); }
+      case 'handOver': { const h = yourHeirs(s).best; if (!h || h.kid) return fail('There is no grown heir to hand over to.'); succeed(s, h, 'retire'); return ok(); }
+      case 'carryOn': { if (!s.pendingDeath) return fail('Not now.'); const h = (a && s.people[a] && s.people[a].status === 'here') ? s.people[a] : yourHeirs(s).best; if (!h) return fail('There is nobody to carry on.'); if (h.kid) { h.kid = false; h.age = Math.max(h.age, 16); } succeed(s, h, 'death'); return ok(); }
+      case 'beginAgain': { if (!s.pendingDeath) return fail('Not now.'); beginAgain(s, a, b); return ok(); }
       case 'ageRate': if (AGE_RATES[a] == null) return fail('Unknown pace.'); s.ageRate = AGE_RATES[a]; return ok();
       case 'works': {
         if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder sets the village works.');
@@ -3196,7 +3345,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
