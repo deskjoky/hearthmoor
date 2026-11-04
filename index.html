@@ -4666,6 +4666,196 @@ function cottage(f, o) {
   }
 }
 const G_BARREL = new THREE.CylinderGeometry(0.4, 0.36, 0.7, 8);
+/* ----- every trade its own building: what you see from the street says what goes on inside -----
+   Front faces +z (the street). Footprint about 7.6 wide and 6.6 deep, with yards and props out front or to the side. */
+const G_HEMI = new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), G_CYL = new THREE.CylinderGeometry(1, 1, 1, 10), G_KILN = new THREE.CylinderGeometry(0.75, 1.25, 1, 10);
+const G_WHEEL = new THREE.TorusGeometry(0.7, 0.08, 4, 12), G_HULL = new THREE.CylinderGeometry(1, 1, 1, 10, 1, false, 0, Math.PI);
+const TRADE_KIND = { smithy: 'smithy', tavern: 'tavern', bakery: 'bakery', butcher: 'butcher', goldsmith: 'fine', apothecary: 'fine', chandler: 'fine', tailor: 'fine', weaver: 'weaver', potter: 'potter', tanner: 'tanner', joinery: 'yard', wheelwright: 'yard', cooper: 'yard', carter: 'yard', boatwright: 'yard', mason: 'mason', dairy: 'dairy' };
+function tradeHouse(f, trade, i, o) {
+  o = o || {};
+  const STONE = o.stone || '#9a948a', STONE2 = o.stone2 || '#8b877c', SLATE = o.slate || '#3f4a5a', TILE = o.tile || '#7a3f2b', wall = WALLS[(i + 1) % 4];
+  const roofs = o.roofs || [TILE, '#5e4a2c', SLATE], roof = roofs[i % roofs.length], c = o.sign || '#8a6a2a';
+  const kind = TRADE_KIND[trade] || 'shop';
+  const sign = (x, y, z, col, w) => { box(f, BEAMS, x - 0.5, y + 0.45, z, 1.3, 0.1, 0.1); box(f, col, x, y, z, w || 0.9, 0.8, 0.06); box(f, '#e8dcbc', x, y, z + 0.04, 0.4, 0.4, 0.02); };
+  const footing = (w, d) => box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.8, d + 0.4);
+  const frame = (w, y, h, z) => { for (let k = 0; k <= 3; k++) box(f, BEAMS, -w / 2 + k * w / 3, y, z, 0.16, h, 0.08); box(f, BEAMS, 0, y - h / 2, z, w, 0.14, 0.08); };
+  if (kind === 'smithy') {
+    // a low stone forge with a great chimney, and an open-fronted shed where the anvil rings
+    footing(7.4, 6);
+    box(f, STONE2, -1.2, 1.8, -0.2, 5, 3.2, 5.6); part(f, roofG(6.4, 5.6, 2), SLATE, -1.2, 3.4, -0.2);
+    box(f, '#2a1f16', -1.6, 1.4, 2.62, 2.2, 2.4, 0.06); win(f, -3.1, 2.1, 2.62, 0.7, 0.6, 0.06);
+    box(f, STONE, -3.2, 4.4, -1.6, 1.3, 6.2, 1.3); box(f, '#55504a', -3.2, 7.6, -1.6, 1.6, 0.3, 1.6);
+    [[1.6, -2.6], [3.8, -2.6], [1.6, 2.8], [3.8, 2.8]].forEach(([x, z]) => box(f, BEAMS, x, 1.5, z, 0.2, 3, 0.2));
+    box(f, SLATE, 2.7, 3.15, 0.1, 2.9, 0.16, 6.2, 0, 0, -0.18);
+    box(f, STONE, 2.9, 0.55, -1.6, 1.8, 1.1, 1.6); box(f, '#e0662a', 2.9, 1.12, -1.6, 1.2, 0.06, 1.0); box(f, STONE, 2.9, 2.2, -2.2, 1.0, 2.2, 0.5);
+    box(f, '#3a3632', 2.6, 0.35, 1.2, 0.4, 0.7, 0.3); box(f, '#4a4744', 2.6, 0.78, 1.2, 0.9, 0.18, 0.36);
+    part(f, G_BARREL, '#5b4029', 3.6, 0.35, 2.2); box(f, '#3a4a55', 3.6, 0.71, 2.2, 0.6, 0.02, 0.6);
+    for (let k = 0; k < 4; k++) box(f, '#5a5550', 3.95, 1.6, -0.6 + k * 0.5, 0.05, 0.9, 0.08);
+    box(f, '#3a3632', -4.1, 0.25, 1.8, 0.8, 0.5, 1.2); for (let k = 0; k < 4; k++) part(f, GEO.ore, '#4a4744', -4.1 + (k % 2) * 0.3, 0.6, 1.5 + k * 0.2);
+    sign(-0.2, 2.9, 2.75, '#2a2826');
+  } else if (kind === 'tavern') {
+    // a big inn: stone below, a jettied plaster floor above, dormers, benches out front
+    footing(7.8, 6.4);
+    box(f, STONE2, 0, 1.7, 0, 7.6, 3, 6.2); box(f, wall, 0, 4.5, 0.25, 8.2, 2.6, 6.8); frame(8.2, 4.5, 2.6, 3.66);
+    part(f, roofG(7.6, 8.6, 4), roof, 0, 5.8, 0.25);
+    [-2.2, 2.2].forEach(x => { box(f, wall, x, 7, 2.6, 1.3, 1.2, 1.4); part(f, roofG(1.6, 1.5, 0.7), roof, x, 7.6, 2.6, Math.PI / 2); win(f, x, 7, 3.32, 0.6, 0.6, 0.04); });
+    box(f, STONE, 3.4, 7.6, -1.6, 0.9, 4.2, 0.9);
+    box(f, '#2a1f16', 0, 1.4, 3.12, 2.2, 2.4, 0.06); [-2.8, -1.7, 1.7, 2.8].forEach(x => win(f, x, 1.9, 3.12, 0.7, 1, 0.06)); [-3.2, -1.1, 1.1, 3.2].forEach(x => win(f, x, 4.5, 3.66, 0.7, 0.8, 0.06));
+    box(f, BEAMS, 3.9, 3.5, 3.9, 0.1, 0.1, 1.6); box(f, c, 3.9, 2.7, 4.4, 0.06, 1.1, 1.0); box(f, '#d9b04a', 3.94, 2.7, 4.4, 0.02, 0.5, 0.5);
+    [-2.6, 2.6].forEach(x => { box(f, '#6b4a2e', x, 0.75, 4.6, 1.8, 0.1, 0.8); box(f, BEAMS, x, 0.37, 4.6, 0.12, 0.74, 0.6); box(f, '#6b4a2e', x, 0.42, 3.95, 1.8, 0.08, 0.32); box(f, '#6b4a2e', x, 0.42, 5.25, 1.8, 0.08, 0.32); part(f, GEO.mug, '#8a6438', x - 0.4, 0.8, 4.6); part(f, GEO.mug, '#8a6438', x + 0.4, 0.8, 4.5); });
+    part(f, G_BARREL, '#6b4a2e', -4.2, 0.35, 2.2); part(f, G_BARREL, '#7a5232', -4.2, 0.35, 1.3); part(f, G_BARREL, '#6b4a2e', -4.2, 1.05, 1.75, 0, Math.PI / 2);
+  } else if (kind === 'bakery') {
+    // whitewashed, with the great domed oven bulging out of the side and loaves on the hatch
+    footing(6.6, 5.6);
+    box(f, '#e6dcc4', 0.4, 2.0, 0, 6.4, 3.6, 5.4); frame(6.4, 2.0, 3.6, 2.72);
+    part(f, roofG(6.4, 7, 2.8), o.thatch ? THATCH[i % 4] : TILE, 0.4, 3.8, 0);
+    part(f, G_HEMI, '#b9866a', -3.0, 0.3, -0.6, 0, 0, 0, 1.7, 1.6, 1.7); box(f, '#9a6a4e', -3.6, 2.3, -0.6, 0.6, 1.6, 0.6); box(f, '#2a1f16', -4.4, 0.7, -0.6, 0.06, 0.7, 0.7);
+    for (let k = 0; k < 8; k++) part(f, GEO.log, '#7a5232', -3.4 + (k % 4) * 0.3, 0.15 + Math.floor(k / 4) * 0.24, 1.8, Math.PI / 2, 0, Math.PI / 2);
+    box(f, '#2a1f16', -0.8, 1.3, 2.74, 1.0, 2.0, 0.06); box(f, '#2a1f16', 1.8, 1.8, 2.74, 2.0, 1.2, 0.06);
+    box(f, '#a77a4a', 1.8, 1.2, 3.1, 2.4, 0.12, 0.8); for (let k = 0; k < 6; k++) part(f, GEO.loaf, '#c48a3f', 1.0 + k * 0.32, 1.35, 3.1, 0, 0, 0, 1.3, 0.9, 1.6);
+    box(f, '#e2d3a8', 1.8, 2.6, 3.3, 2.6, 0.06, 1.2, 0, 0.35);
+    for (let k = 0; k < 3; k++) part(f, GEO.sack, '#e8dcbc', 3.6, 0.3 + (k > 1 ? 0.4 : 0), 1.6 + (k % 2) * 0.6, 0, 0, 0, 1.2, 1.1, 1.2);
+    sign(-2.2, 2.9, 2.86, '#c48a3f');
+  } else if (kind === 'butcher') {
+    // a deep striped awning over an open counter, hams hung from the rail
+    footing(6.6, 5.8);
+    box(f, wall, 0, 1.7, 0, 6.4, 3, 5.6); box(f, wall, 0, 4.4, 0.2, 6.8, 2.4, 6); frame(6.8, 4.4, 2.4, 3.22);
+    part(f, roofG(6.6, 7.2, 2.8), roof, 0, 5.6, 0.2);
+    box(f, '#2a1f16', -0.4, 1.4, 2.82, 4.4, 2.0, 0.06); box(f, '#a77a4a', -0.4, 0.9, 3.3, 4.4, 0.14, 0.9);
+    for (let k = 0; k < 7; k++) box(f, k % 2 ? '#efe6d0' : '#8e2b22', -3.0 + k * 0.87, 2.85, 3.7, 0.87, 0.06, 2.0, 0, 0.3);
+    box(f, BEAMS, -0.4, 2.45, 3.5, 4.4, 0.06, 0.06); for (let k = 0; k < 5; k++) part(f, GEO.sack, '#9a4a3a', -2.0 + k * 0.8, 2.05, 3.5, 0, 0, 0, 0.6, 1.2, 0.6);
+    for (let k = 0; k < 4; k++) part(f, GEO.sack, '#b5604a', -1.8 + k * 0.9, 1.05, 3.3, 0, 0, 0, 0.9, 0.4, 0.7);
+    box(f, '#3b2a1c', 2.6, 1.2, 2.82, 0.9, 1.9, 0.06); part(f, G_CYL, '#7a5634', 3.4, 0.4, 3.6, 0, 0, 0, 0.45, 0.8, 0.45);
+    win(f, -1.6, 4.4, 3.22, 0.7, 0.7, 0.06); win(f, 1.6, 4.4, 3.22, 0.7, 0.7, 0.06);
+  } else if (kind === 'fine') {
+    // a tall, narrow townhouse with a bay window full of wares
+    const gold = trade === 'goldsmith', apo = trade === 'apothecary', can = trade === 'chandler';
+    const accent = gold ? '#d9b04a' : apo ? '#3f6b4a' : can ? '#c9a24a' : '#6d5a78';
+    footing(6.2, 5.8);
+    box(f, STONE, 0, 1.7, 0, 6, 3, 5.6); box(f, gold ? STONE : wall, 0, 4.5, 0, 6, 2.6, 5.6); box(f, gold ? STONE2 : wall, 0, 7, 0.15, 6.2, 2.4, 5.9);
+    if (!gold) frame(6, 4.5, 2.6, 2.82);
+    part(f, roofG(6.2, 6.6, 3.2), gold ? SLATE : roof, 0, 8.2, 0.1); box(f, STONE2, -2.2, 9.4, -1.2, 0.7, 2.6, 0.7);
+    box(f, accent, 1.2, 1.9, 3.15, 2.8, 2.0, 0.9); win(f, 1.2, 2.0, 3.62, 2.4, 1.4, 0.04); box(f, accent, 1.2, 3.0, 3.25, 3.0, 0.2, 1.1); box(f, accent, 1.2, 0.85, 3.25, 3.0, 0.15, 1.1);
+    const ware = gold ? '#e8c45a' : apo ? '#5f8f6a' : can ? '#f2e3a6' : '#8a5a78';
+    for (let k = 0; k < 5; k++) box(f, ware, 0.3 + k * 0.45, 1.25, 3.55, 0.2, gold ? 0.15 : can ? 0.4 : 0.28, 0.2);
+    box(f, '#3b2a1c', -1.8, 1.3, 2.82, 1.0, 2.2, 0.06); box(f, accent, -1.8, 2.55, 2.84, 1.3, 0.18, 0.06);
+    [-1.4, 1.4].forEach(x => { win(f, x, 4.5, 2.82, 0.8, 1.0, 0.06); win(f, x, 7.0, 2.97, 0.7, 0.9, 0.06); box(f, accent, x - 0.6, 4.5, 2.84, 0.2, 1.0, 0.04); box(f, accent, x + 0.6, 4.5, 2.84, 0.2, 1.0, 0.04); });
+    if (apo) for (let k = 0; k < 4; k++) part(f, GEO.sack, '#6f8f45', -2.4 + k * 0.4, 3.4, 3.0, 0, 0, 0, 0.35, 0.8, 0.35);
+    if (gold) box(f, '#3a3632', -3.1, 3.0, 2.85, 0.2, 6.0, 0.06);
+    box(f, BEAMS, 3.3, 3.6, 3.0, 0.9, 0.1, 0.1); box(f, accent, 3.6, 3.0, 3.0, 0.75, 0.9, 0.06); box(f, '#f1e3c2', 3.6, 3.0, 3.04, 0.35, 0.35, 0.02);
+  } else if (kind === 'weaver') {
+    // a long loft with a row of tall windows for light, dyed cloth drying on poles outside
+    footing(7.6, 5.6);
+    box(f, wall, 0, 1.6, 0, 7.4, 2.8, 5.4); box(f, wall, 0, 4.2, 0, 7.4, 2.4, 5.4); frame(7.4, 4.2, 2.4, 2.72); frame(7.4, 1.6, 2.8, 2.72);
+    part(f, roofG(6.2, 8, 2.6), o.thatch ? THATCH[(i + 1) % 4] : roof, 0, 5.4, 0);
+    for (let k = 0; k < 5; k++) win(f, -3 + k * 1.5, 4.3, 2.74, 0.9, 1.4, 0.04);
+    box(f, '#2a1f16', -2.2, 1.3, 2.74, 1.1, 2.1, 0.06); win(f, 0.4, 1.7, 2.74, 0.9, 0.9, 0.04); win(f, 2.4, 1.7, 2.74, 0.9, 0.9, 0.04);
+    box(f, BEAMS, 4.4, 1.3, 0.8, 0.12, 2.6, 0.12); box(f, BEAMS, 4.4, 1.3, -2.2, 0.12, 2.6, 0.12); box(f, BEAMS, 4.4, 2.55, -0.7, 0.08, 0.08, 3.2);
+    ['#2f5d7a', '#8e2b22', '#c9a24a', '#4f6b3a'].forEach((col, k) => box(f, col, 4.4, 1.75, -1.85 + k * 0.75, 0.04, 1.6, 0.6));
+    for (let k = 0; k < 3; k++) part(f, G_CYL, ['#2f5d7a', '#8e2b22', '#e9e1cc'][k], 1.6 + k * 0.7, 0.3, 3.3, 0, 0, Math.PI / 2, 0.22, 1.0, 0.22);
+    sign(-3.6, 2.4, 2.86, '#2f5d7a');
+  } else if (kind === 'potter') {
+    // a thatched workshop beside its bottle kiln, pots drying on boards
+    footing(5.6, 5.4);
+    box(f, wall, 1.0, 1.7, 0, 5.4, 3, 5.2); frame(5.4, 1.7, 3, 2.62); part(f, roofG(6.2, 6, 2.6), THATCH[(i + 2) % 4], 1.0, 3.2, 0);
+    box(f, '#2a1f16', 0.2, 1.3, 2.64, 1.0, 2.0, 0.06); win(f, 2.4, 1.8, 2.64, 0.9, 0.8, 0.04);
+    part(f, G_KILN, '#a86a4a', -3.0, 1.9, -0.6, 0, 0, 0, 1.4, 3.8, 1.4); part(f, G_CYL, '#8e5a40', -3.0, 4.2, -0.6, 0, 0, 0, 0.55, 1.2, 0.55); box(f, '#2a1f16', -3.0, 0.6, 1.2, 0.7, 0.9, 0.1);
+    [3.0, 3.5].forEach((z, r) => { box(f, '#8a6d48', 0.8, 0.5 + r * 0.45, z, 4.2, 0.08, 0.4); for (let k = 0; k < 7; k++) part(f, G_KILN, ['#b5704a', '#a8714d', '#c88a5a'][k % 3], -1.0 + k * 0.6, 0.73 + r * 0.45, z, 0, Math.PI, 0, 0.18, 0.38, 0.18); });
+  } else if (kind === 'tanner') {
+    // an open shed and a yard of soaking vats, with hides stretched on frames
+    footing(5, 5);
+    box(f, '#a89270', -1.4, 1.5, -0.6, 4.8, 2.6, 4.8); part(f, roofG(5.6, 5.4, 2), '#5e4a2c', -1.4, 2.8, -0.6); box(f, '#2a1f16', -1.4, 1.2, 1.82, 1.6, 2.0, 0.06);
+    for (let k = 0; k < 3; k++) { part(f, G_CYL, '#5b4029', 2.6, 0.45, -2.0 + k * 1.6, 0, 0, 0, 0.7, 0.9, 0.7); part(f, G_CYL, ['#6b5a3a', '#7a6a4a', '#4f4a3a'][k], 2.6, 0.9, -2.0 + k * 1.6, 0, 0, 0, 0.62, 0.02, 0.62); }
+    [-2.8, -0.2].forEach(x => { box(f, BEAMS, x - 0.9, 1.0, 3.4, 0.1, 2, 0.1); box(f, BEAMS, x + 0.9, 1.0, 3.4, 0.1, 2, 0.1); box(f, '#9a6a44', x, 1.3, 3.4, 1.6, 1.3, 0.04); });
+  } else if (kind === 'yard') {
+    // a timber workshop with its great doors open on a yard of work
+    footing(7, 5.8);
+    box(f, '#8a6d48', 0, 2.0, -0.2, 7, 3.6, 5.6); [-3.5, -1.2, 1.2, 3.5].forEach(x => box(f, BEAMS, x, 2.0, 2.62, 0.18, 3.6, 0.08));
+    part(f, roofG(6.6, 7.6, 2.6), roof, 0, 3.8, -0.2);
+    box(f, '#2a1f16', 0, 1.6, 2.62, 3.2, 2.8, 0.06); box(f, '#6b4a2e', -2.2, 1.6, 3.3, 1.2, 2.8, 0.1, 0.9); box(f, '#6b4a2e', 2.2, 1.6, 3.3, 1.2, 2.8, 0.1, -0.9);
+    for (let k = 0; k < 9; k++) part(f, GEO.log, '#9a7650', -4.3 + (k % 3) * 0.3, 0.2 + Math.floor(k / 3) * 0.26, 0.2, 0, 0, Math.PI / 2, 1, 2.6, 1);
+    if (trade === 'wheelwright' || trade === 'carter') [0, 1, 2].forEach(k => part(f, G_WHEEL, '#6b4a2e', 4.1, 0.75, 1.8 - k * 0.6, Math.PI / 2));
+    if (trade === 'carter') { box(f, '#7a5634', 2.2, 0.9, 4.6, 2.4, 0.5, 1.4); part(f, G_WHEEL, '#5b4029', 2.2, 0.7, 5.35); part(f, G_WHEEL, '#5b4029', 2.2, 0.7, 3.85); box(f, BEAMS, 0.4, 0.8, 4.6, 1.6, 0.08, 0.08); }
+    if (trade === 'cooper') [[3.9, 0.35, 2.0], [3.9, 0.35, 1.1], [3.9, 0.35, 0.2], [3.9, 1.05, 1.55], [3.9, 1.05, 0.65], [-2.4, 0.35, 4.0]].forEach(([x, y, z]) => part(f, G_BARREL, '#7a5232', x, y, z));
+    if (trade === 'boatwright') { box(f, BEAMS, 1.6, 0.5, 4.6, 0.3, 1, 0.3); box(f, BEAMS, -1.6, 0.5, 4.6, 0.3, 1, 0.3); part(f, G_HEMI, '#7a5634', 0, 1.0, 4.6, 0, 0, 0, 2.6, 0.8, 0.85); box(f, '#5b4029', 0, 1.02, 4.6, 5.3, 0.06, 0.12); }
+    if (trade === 'joinery') { box(f, '#9a7650', 2.4, 0.6, 4.2, 1.6, 0.12, 0.5); box(f, BEAMS, 2.4, 0.3, 4.2, 1.2, 0.6, 0.08); for (let k = 0; k < 5; k++) box(f, '#b08a5a', 4.0, 0.06 + k * 0.08, 1.6, 0.5, 0.06, 2.6); }
+    sign(3.4, 3.2, 2.76, c);
+  } else if (kind === 'mason') {
+    // a dressed-stone lodge with a yard of blocks and a timber crane
+    footing(6.4, 5.6);
+    box(f, STONE, -0.6, 1.8, -0.4, 6, 3.2, 5.2); part(f, roofG(5.8, 6.6, 2.2), SLATE, -0.6, 3.4, -0.4); box(f, '#2a1f16', -1.4, 1.3, 2.22, 1.4, 2.2, 0.06); win(f, 1.0, 2.0, 2.22, 0.8, 0.8, 0.04);
+    [[3.4, 0.4, 1.4, 1.2, 0.8, 0.9], [3.4, 1.15, 1.4, 0.9, 0.7, 0.8], [2.2, 0.35, 3.8, 1.4, 0.7, 1.0], [0.4, 0.3, 3.9, 0.9, 0.6, 0.9], [3.6, 0.4, -1.6, 1.0, 0.8, 1.6]].forEach(([x, y, z, w, h, d]) => box(f, '#c9c2b2', x, y, z, w, h, d));
+    box(f, BEAMS, -3.8, 2.6, 3.2, 0.3, 5.2, 0.3); box(f, BEAMS, -2.6, 4.9, 3.6, 2.6, 0.2, 0.2, -0.3); box(f, '#8a7a5a', -1.5, 3.6, 4.0, 0.03, 2.4, 0.03); box(f, '#c9c2b2', -1.5, 2.2, 4.0, 0.7, 0.5, 0.6);
+  } else if (kind === 'dairy') {
+    footing(6.4, 5.4);
+    box(f, '#e6dcc4', 0, 1.6, 0, 6.2, 2.8, 5.2); frame(6.2, 1.6, 2.8, 2.62); part(f, roofG(6, 6.8, 2.4), THATCH[i % 4], 0, 3.0, 0);
+    box(f, '#2a1f16', -1, 1.2, 2.64, 1.0, 1.9, 0.06); win(f, 1.4, 1.7, 2.64, 0.9, 0.7, 0.04);
+    for (let k = 0; k < 4; k++) part(f, G_CYL, '#b9b4ab', 1.2 + k * 0.6, 0.4, 3.2, 0, 0, 0, 0.25, 0.8, 0.25);
+    box(f, '#8a6d48', -3.6, 0.5, 2.2, 0.8, 0.1, 2.2); for (let k = 0; k < 3; k++) part(f, GEO.sack, '#f1e3b0', -3.6, 0.7, 1.5 + k * 0.7, 0, 0, 0, 0.9, 0.5, 0.9);
+    sign(3.4, 2.4, 2.76, '#e8dcbc');
+  } else {
+    // anything else: the plain shop with the family upstairs
+    footing(7.4, 6.4);
+    box(f, STONE2, 0, 1.8, 0, 7, 2.8, 6); box(f, wall, 0, 4.5, 0.3, 7.4, 2.6, 6.6); frame(7.4, 4.5, 2.6, 3.62);
+    part(f, roofG(7.4, 7.8, 3), roof, 0, 5.8, 0.3);
+    box(f, '#2a1f16', 0, 1.6, 3.02, 4.2, 2.2, 0.06); win(f, -2.6, 1.9, 3.02, 0.9, 0.9, 0.06); win(f, 2.6, 1.9, 3.02, 0.9, 0.9, 0.06);
+    for (let k = 0; k < 5; k++) box(f, k % 2 ? '#e2d3a8' : c, -2 + k, 3.0, 3.6, 1, 0.06, 1.4, 0, 0.3);
+    sign(4.2, 2.9, 3.4, c);
+  }
+}
+/* ----- town houses in many shapes: a seeded mix so no street repeats itself ----- */
+function townHouse(f, h, i, o) {
+  o = o || {};
+  const STONE = o.stone || '#9a948a', STONE2 = o.stone2 || '#8b877c', SLATE = o.slate || '#3f4a5a', TILE = o.tile || '#7a3f2b';
+  const r = ((i * 2654435761) >>> 0) / 4294967296, r2 = ((i * 40503 + 7919) % 1000) / 1000;
+  const walls = o.walls || WALLS, wall = walls[(i + (r2 * 4 | 0)) % walls.length];
+  const roof = (o.roofs || [TILE, '#5e4a2c', '#6b4a2e', SLATE])[(r * 17 | 0) % (o.roofs ? o.roofs.length : 4)];
+  const door = ['#3b2a1c', '#5a3a28', '#2f4f6a', '#4f6b3a', '#7a3b2a'][(i * 7) % 5], side = r2 < 0.5 ? -1 : 1;
+  const shutters = r2 > 0.55 ? ['#2f4f6a', '#4f6b3a', '#7a3b2a', '#6b4a2e'][i % 4] : null;
+  const wn = (x, y, z, w, hh) => { win(f, x, y, z, w, hh, 0.06); if (shutters) { box(f, shutters, x - w / 2 - 0.18, y, z, 0.3, hh, 0.04); box(f, shutters, x + w / 2 + 0.18, y, z, 0.3, hh, 0.04); } };
+  const box2 = (x, y, z) => { if (r < 0.4) { box(f, '#6b4a2e', x, y, z, 0.9, 0.18, 0.24); box(f, ['#c2412d', '#e8c45a', '#d97aa0', '#e9e1cc'][i % 4], x, y + 0.16, z, 0.8, 0.16, 0.18); } };
+  let type;
+  if (h.tall) type = ['jetty', 'stone3', 'cross', 'jetty'][(r * 4) | 0];
+  else type = ['cottage', 'stonecot', 'longhouse', 'cottage2'][(r * 4) | 0];
+  if (o.stoneTown && type === 'jetty' && r2 < 0.5) type = 'stone3';
+  if (type === 'jetty') {
+    const w = 5.8 + (r2 * 0.6), d = 5.2;
+    box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.8, d + 0.4); box(f, wall, 0, 1.7, 0, w, 2.6, d); box(f, wall, 0, 4.2, 0.3, w + 0.4, 2.4, d + 0.6);
+    for (let k = 0; k <= 3; k++) box(f, BEAMS, -w / 2 - 0.2 + k * (w + 0.4) / 3, 4.2, d / 2 + 0.62, 0.16, 2.4, 0.08); box(f, BEAMS, 0, 3.0, d / 2 + 0.62, w + 0.4, 0.18, 0.1);
+    for (let k = 0; k < 3; k++) box(f, BEAMS, -w / 2 + k * w / 2, 2.95, d / 2 + 0.25, 0.14, 0.14, 0.6);
+    part(f, roofG(d + 1.2, w + 0.8, 2.9), roof, 0, 5.4, 0.3); box(f, '#6c675e', side * (w / 2 - 0.7), 6.6, -1, 0.6, 2.4, 0.6);
+    box(f, door, -1.4 * side, 1.0, d / 2 + 0.02, 0.9, 1.6, 0.08); wn(1.3 * side, 1.7, d / 2 + 0.02, 0.7, 0.6); wn(-1.5, 4.2, d / 2 + 0.62, 0.6, 0.6); wn(1.5, 4.2, d / 2 + 0.62, 0.6, 0.6); box2(1.3 * side, 1.25, d / 2 + 0.14);
+  } else if (type === 'stone3') {
+    const w = 5.2 + r2 * 0.8, d = 5.4;
+    box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.8, d + 0.4); box(f, STONE, 0, 3.4, 0, w, 6.6, d); box(f, STONE2, 0, 2.3, d / 2 + 0.02, w + 0.1, 0.16, 0.08); box(f, STONE2, 0, 4.7, d / 2 + 0.02, w + 0.1, 0.16, 0.08);
+    part(f, roofG(d + 0.8, w + 0.5, 2.6), r < 0.6 ? SLATE : roof, 0, 6.7, 0); box(f, STONE2, -side * (w / 2 - 0.6), 8.2, -1.2, 0.7, 2.4, 0.7);
+    box(f, door, side * 1.2, 1.0, d / 2 + 0.03, 0.9, 1.7, 0.08); box(f, STONE2, side * 1.2, 1.95, d / 2 + 0.05, 1.2, 0.18, 0.08);
+    wn(-side * 1.1, 1.5, d / 2 + 0.03, 0.7, 0.8); [-1.2, 1.2].forEach(x => { wn(x, 3.6, d / 2 + 0.03, 0.6, 0.8); wn(x, 5.7, d / 2 + 0.03, 0.55, 0.7); }); box2(-1.2, 3.1, d / 2 + 0.14);
+  } else if (type === 'cross') {
+    const w = 6.0, d = 5.0;
+    box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.8, d + 0.4); box(f, wall, 0, 2.6, 0, w, 4.6, d); box(f, BEAMS, 0, 2.7, d / 2 + 0.02, w + 0.1, 0.16, 0.08);
+    for (let k = 0; k <= 4; k++) box(f, BEAMS, -w / 2 + k * w / 4, 2.6, d / 2 + 0.02, 0.14, 4.6, 0.06);
+    part(f, roofG(d + 0.8, w + 0.6, 2.6), roof, 0, 4.9, 0);
+    box(f, wall, side * 1.4, 5.2, 1.4, 2.4, 1.4, 2.4); part(f, roofG(2.8, 2.6, 1.4), roof, side * 1.4, 5.9, 1.6, Math.PI / 2); wn(side * 1.4, 5.2, 2.62, 0.6, 0.6);
+    box(f, door, -side * 1.4, 1.0, d / 2 + 0.03, 0.9, 1.6, 0.08); wn(side * 1.4, 1.7, d / 2 + 0.03, 0.8, 0.7); wn(-side * 1.4, 3.7, d / 2 + 0.03, 0.6, 0.6); box(f, '#6c675e', -side * 2.3, 6.4, -1.2, 0.6, 2.2, 0.6);
+  } else if (type === 'stonecot') {
+    const w = 5.0 + r2 * 0.6, d = 4.2;
+    box(f, ['#8b877c', '#9a948a', '#a89a80', '#b9a47a'][i % 4], 0, 1.2, 0, w, 2.4, d); part(f, roofG(d + 0.8, w + 0.6, 2.1), r2 < 0.5 ? THATCH[i % 4] : roof, 0, 2.4, 0);
+    box(f, '#6c675e', side * (w / 2 - 0.5), 3.4, 0, 0.6, 2.4, 0.6);
+    box(f, door, -side * 1.1, 0.9, d / 2 + 0.03, 0.8, 1.6, 0.08); wn(side * 1.1, 1.4, d / 2 + 0.03, 0.6, 0.6); box2(side * 1.1, 0.95, d / 2 + 0.14);
+    if (r2 > 0.6) { box(f, '#8a6d48', -side * (w / 2 + 0.7), 0.5, 0.6, 1.2, 1.0, 2.0); box(f, roof, -side * (w / 2 + 0.7), 1.08, 0.6, 1.4, 0.1, 2.2, 0, 0, side * 0.25); }
+  } else if (type === 'longhouse') {
+    const w = 5.8, d = 3.9;
+    box(f, '#7d776a', 0, 0.15, 0, w + 0.4, 0.7, d + 0.4); box(f, wall, 0, 1.5, 0, w, 2.2, d);
+    [-w / 2, -w / 6, w / 6, w / 2].forEach(x => box(f, BEAMS, x, 1.5, d / 2 + 0.02, 0.16, 2.2, 0.08));
+    part(f, roofG(d + 1, w + 0.8, 2.4), THATCH[(i + 1) % 4], 0, 2.6, 0); box(f, wall, 0, 3.3, 1.8, 1.2, 0.9, 0.8); part(f, roofG(1.4, 1.0, 0.6), THATCH[(i + 1) % 4], 0, 3.7, 1.8, Math.PI / 2); win(f, 0, 3.3, 2.22, 0.5, 0.45, 0.04);
+    box(f, door, side * 1.8, 1.0, d / 2 + 0.03, 0.8, 1.5, 0.08); wn(-side * 0.6, 1.5, d / 2 + 0.03, 0.6, 0.5); wn(-side * 2.1, 1.5, d / 2 + 0.03, 0.6, 0.5);
+    box(f, '#6c675e', -side * (w / 2 - 0.6), 3.8, -0.4, 0.6, 2.2, 0.6);
+  } else {
+    cottage(f, { w: 5.0, d: 4.2, h: 2.4 + r2 * 0.4, wall, roof: THATCH[i % 4], yard: false, door, doorX: side * 0.9 });
+    box2(-side * 1.4, 0.95, 2.24);
+  }
+}
 HOUSES.forEach((h, i) => {
   const FACE = [[-2, -22], [6, -22], [-32, -2], [-26, 22], [26, 22], [28, 6], [-23, -14], [4, 41], [-30, 28], [-4, 43]][i] || [0, 4];
   const ry = facing(h.x, h.z, FACE[0], FACE[1]);
@@ -4978,29 +5168,13 @@ const CROPS = [
   [[-4, 3, 0.4], [4, 3, -0.4], [0, -5, 0]].forEach(([u, v, ry]) => { const g = M4(O.green.x + u, Y, O.green.z + v, ry); box(g, '#6b4a2e', 0, 0.45, 0, 2, 0.12, 0.5); box(g, '#5b4029', -0.8, 0.22, 0, 0.12, 0.45, 0.4); box(g, '#5b4029', 0.8, 0.22, 0, 0.12, 0.45, 0.4); });
   // homes: tall timber townhouses near the squares, cottages further out
   O.houses.forEach((h, i) => {
-    const f = at(h.x, h.z, h.face), wall = WALLS[i % 4], roof = ['#7a3f2b', '#5e4a2c', '#6b4a2e', SLATE][i % 4];
-    if (h.tall) {
-      box(f, '#7d776a', 0, 0.2, 0, 6.4, 0.8, 5.8); box(f, wall, 0, 1.7, 0, 6, 2.6, 5.4); box(f, wall, 0, 4.3, 0.25, 6.4, 2.6, 5.9);
-      [-3, -1, 1, 3].forEach(x => box(f, BEAMS, x, 4.3, 3.22, 0.16, 2.6, 0.08)); box(f, BEAMS, 0, 3.05, 3.22, 6.4, 0.16, 0.1);
-      part(f, roofG(6.6, 6.8, 2.8), roof, 0, 5.6, 0.2); box(f, '#6c675e', 2.2, 6.6, -1, 0.6, 2.4, 0.6);
-      box(f, '#3b2a1c', -1.6, 1.0, 2.72, 0.9, 1.6, 0.08); win(f, 1.2, 1.7, 2.72, 0.7, 0.6, 0.06); win(f, -1.6, 4.3, 3.22, 0.6, 0.6, 0.06); win(f, 1.6, 4.3, 3.22, 0.6, 0.6, 0.06);
-    } else cottage(f, { w: 5.2, d: 4.2, h: 2.4, wall, roof: THATCH[i % 4], yard: false, door: ['#3b2a1c', '#5a3a28', '#2f4f6a'][i % 3] });
+    townHouse(at(h.x, h.z, h.face), h, i, { stone: STONE, stone2: STONE2, slate: SLATE, tile: '#7a3f2b' });
     // a kitchen garden behind some of them
     if (i % 3 === 0) { const b = M4(h.x - Math.sin(h.face) * 6.2, groundH(h.x, h.z) + 0.04, h.z - Math.cos(h.face) * 6.2, h.face); box(b, '#6e5a36', 0, 0, 0, 4.4, 0.1, 2.6); for (let k = 0; k < 6; k++) part(b, GEO.sack, k % 2 ? '#5f8a3e' : '#7aa04a', -1.8 + (k % 3) * 1.8, 0.2, -0.6 + Math.floor(k / 3) * 1.2, 0, 0, 0, 0.9, 0.7, 0.9); }
   });
   // the businesses: shop on the ground floor, the family above, a sign over the street
   const SIGN = { bakery: '#c48a3f', tavern: '#3f6b3a', smithy: '#4a4744', joinery: '#a77a4a', butcher: '#8e2b22', chandler: '#e8d36a', tailor: '#6d5a78', wheelwright: '#7a5232', cooper: '#6b4a2e', weaver: '#2f5d7a', potter: '#a8714d', carter: '#5b4029', boatwright: '#3f5a5a', goldsmith: '#d9b04a', apothecary: '#4f6b3a', mason: '#8b877c', tanner: '#6b4a2e' };
-  O.biz.forEach((b, i) => {
-    const f = at(b.x, b.z, b.face), c = SIGN[b.trade] || '#8a6a2a';
-    box(f, '#7d776a', 0, 0.2, 0, 7.4, 0.8, 6.4); box(f, STONE2, 0, 1.8, 0, 7, 2.8, 6); box(f, WALLS[(i + 1) % 4], 0, 4.5, 0.3, 7.4, 2.6, 6.6);
-    [-3.5, -1.2, 1.2, 3.5].forEach(x => box(f, BEAMS, x, 4.5, 3.62, 0.16, 2.6, 0.08));
-    part(f, roofG(7.4, 7.8, 3), ['#7a3f2b', '#5e4a2c', SLATE][i % 3], 0, 5.8, 0.3);
-    box(f, '#2a1f16', 0, 1.6, 3.02, 4.2, 2.2, 0.06); win(f, -2.6, 1.9, 3.02, 0.9, 0.9, 0.06); win(f, 2.6, 1.9, 3.02, 0.9, 0.9, 0.06); win(f, -1.8, 4.5, 3.62, 0.7, 0.7, 0.06); win(f, 1.8, 4.5, 3.62, 0.7, 0.7, 0.06);
-    for (let k = 0; k < 5; k++) box(f, k % 2 ? '#e2d3a8' : c, -2 + k, 3.0, 3.6, 1, 0.06, 1.4, 0, 0.3);
-    box(f, BEAMS, 3.8, 3.4, 3.4, 1.4, 0.1, 0.1); box(f, c, 4.2, 2.9, 3.4, 0.9, 0.8, 0.06); box(f, '#e8dcbc', 4.2, 2.9, 3.44, 0.4, 0.4, 0.02);
-    box(f, '#7a5634', 1.2, 0.45, 4.1, 2.4, 0.9, 0.8);
-    part(f, G_BARREL, '#6b4a2e', -3.0, 0.35, 3.9); part(f, G_BARREL, '#7a5232', -2.2, 0.35, 4.2);
-  });
+  O.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i, { stone: STONE, stone2: STONE2, slate: SLATE, tile: '#7a3f2b', roofs: ['#7a3f2b', '#5e4a2c', SLATE], sign: SIGN[b.trade] }));
   // the town hall, with its clock tower, on the hall square
   const hf = at(O.hall.x, O.hall.z, O.hall.face);
   box(hf, '#7d776a', 0, 0.3, 0, 15, 1, 10); box(hf, STONE, 0, 3.6, 0, 14, 6.4, 9); part(hf, roofG(9.6, 14.6, 3.6), SLATE, 0, 6.8, 0);
@@ -5071,20 +5245,7 @@ const CROPS = [
   });
   // the shops round the green: a shop below, the family above, a sign out front
   const SIGN = { bakery: '#c48a3f', tavern: '#3f6b3a', smithy: '#4a4744', dairy: '#e8e2d0', weaver: '#2f5d7a', butcher: '#8e2b22', wheelwright: '#7a5232' };
-  H.biz.forEach((b, i) => {
-    if (b.id === 'g_mill' || b.id === 'g_estate') return;
-    const f = at(b.x, b.z, b.face), c = SIGN[b.trade] || '#8a6a2a', big = b.id === 'g_plough';
-    const w = big ? 9 : 7, d = big ? 7 : 6;
-    box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.6, d + 0.4); box(f, WALLS[(i + 3) % 4], 0, 1.7, 0, w, 2.8, d); box(f, WALLS[(i + 1) % 4], 0, 4.3, 0.2, w + 0.3, 2.4, d + 0.4);
-    [-w / 2, -w / 6, w / 6, w / 2].forEach(x => box(f, BEAMS, x, 3, d / 2 + 0.02, 0.16, 5.6, 0.08));
-    part(f, roofG(d + 1, w + 0.8, 3), THATCH[(i + 2) % 4], 0, 5.5, 0.2);
-    box(f, '#2a1f16', 0, 1.5, d / 2 + 0.02, 2.4, 2.4, 0.06); win(f, -w / 3, 1.9, d / 2 + 0.02, 0.9, 0.9, 0.06); win(f, w / 3, 1.9, d / 2 + 0.02, 0.9, 0.9, 0.06); win(f, -w / 4, 4.3, d / 2 + 0.42, 0.7, 0.7, 0.06); win(f, w / 4, 4.3, d / 2 + 0.42, 0.7, 0.7, 0.06);
-    box(f, BEAMS, w / 2 + 0.4, 3.2, d / 2 + 0.3, 1.4, 0.1, 0.1); box(f, c, w / 2 + 0.9, 2.7, d / 2 + 0.3, 0.9, 0.8, 0.06);
-    if (big) { box(f, '#6b4a2e', -2.5, 0.45, d / 2 + 1.8, 2.2, 0.1, 0.8); box(f, '#6b4a2e', 2.5, 0.45, d / 2 + 1.8, 2.2, 0.1, 0.8); part(f, G_BARREL, '#6b4a2e', 4, 0.35, d / 2 + 1); }
-    if (b.trade === 'smithy') { box(f, '#4a4744', w / 2 - 1, 6.4, -1, 0.8, 2.6, 0.8); box(f, '#3a3632', -w / 2 - 1, 0.5, d / 2 - 1, 1, 1, 1); }
-    if (b.trade === 'wheelwright') [0, 1.2].forEach(k => part(f, new THREE.TorusGeometry(0.7, 0.08, 4, 12), '#6b4a2e', -w / 2 - 0.5, 0.75, d / 2 - 1 - k, Math.PI / 2));
-    if (b.trade === 'dairy') for (let k = 0; k < 3; k++) part(f, new THREE.CylinderGeometry(0.25, 0.25, 0.8, 8), '#b9b4ab', -w / 2 + 0.8 + k * 0.6, 0.4, d / 2 + 0.6);
-  });
+  H.biz.forEach((b, i) => { if (b.id === 'g_mill' || b.id === 'g_estate') return; tradeHouse(at(b.x, b.z, b.face), b.trade, i, { roofs: THATCH, thatch: true, sign: SIGN[b.trade] }); });
   // the Great Mill: stone below, timber above, and its wheel turning in the river
   const mb = H.biz.find(b => b.id === 'g_mill'), mf = at(mb.x, mb.z, mb.face);
   box(mf, '#8b877c', 0, 2.4, 0, 10, 4.8, 9); box(mf, '#b9a47a', 0, 6.4, 0, 10.4, 3.2, 9.4); [-5, -2.5, 0, 2.5, 5].forEach(x => box(mf, BEAMS, x, 6.4, 4.72, 0.18, 3.2, 0.08));
@@ -5207,26 +5368,11 @@ const CM_Y = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), CM_TREES = [];
   [O.guildSq, O.southSq, O.courtSq].forEach((q, i) => later(q.x, q.z, () => { const c = fr(q.x, q.z); part(c, new THREE.CylinderGeometry(2, 2.4, 0.6, 8), '#86847a', 0, 0.3, 0); box(c, STONE2, 0, 2.6, 0, 0.6, 4.2, 0.6); box(c, i === 2 ? GOLD : STONE2, 0, 4, 0, 1.8, 0.45, 0.45); }));
   // homes: tall timber townhouses and stone cottages; kept simple, there are hundreds of them
   O.houses.forEach((h, i) => later(h.x, h.z, () => {
-    const f = at(h.x, h.z, h.face), wall = WALLS[i % 4], roof = [TILE, '#5e4a2c', '#6b4a2e', SLATE][i % 4];
-    if (h.tall) {
-      box(f, '#7d776a', 0, 0.3, 0, 6.4, 0.8, 5.8); box(f, wall, 0, 2.6, 0, 6, 4.6, 5.4); box(f, BEAMS, 0, 2.7, 2.72, 6.1, 0.16, 0.08);
-      part(f, roofG(6.4, 6.6, 2.8), roof, 0, 4.9, 0); box(f, '#6c675e', 2.2, 6, -1, 0.6, 2.2, 0.6);
-      box(f, '#3b2a1c', -1.6, 1.0, 2.72, 0.9, 1.6, 0.08); win(f, 1.2, 1.7, 2.72, 0.7, 0.6, 0.06); win(f, -1.6, 3.7, 2.72, 0.6, 0.6, 0.06); win(f, 1.6, 3.7, 2.72, 0.6, 0.6, 0.06);
-    } else {
-      box(f, ['#8b877c', '#9a948a', '#a89a80', '#b9a47a'][i % 4], 0, 1.2, 0, 5.2, 2.4, 4.2); part(f, roofG(4.8, 5.8, 2), [TILE, THATCH[i % 4], '#5e4a2c', SLATE][(i >> 2) % 4], 0, 2.4, 0);
-      box(f, '#3b2a1c', -1.2, 0.9, 2.12, 0.8, 1.6, 0.08); win(f, 1.2, 1.4, 2.12, 0.6, 0.6, 0.06);
-    }
+    townHouse(at(h.x, h.z, h.face), h, i + 11, { stone: STONE, stone2: STONE2, slate: SLATE, tile: TILE, stoneTown: true, roofs: [SLATE, TILE, SLATE, '#5e4a2c', TILE] });
   }));
   // the shops and inns
   const SIGN = { bakery: '#c48a3f', tavern: '#3f6b3a', smithy: '#4a4744', joinery: '#a77a4a', butcher: '#8e2b22', chandler: '#e8d36a', tailor: '#6d5a78', wheelwright: '#7a5232', cooper: '#6b4a2e', weaver: '#2f5d7a', potter: '#a8714d', carter: '#5b4029', boatwright: '#3f5a5a', goldsmith: '#d9b04a', apothecary: '#4f6b3a', mason: '#8b877c', tanner: '#6b4a2e' };
-  O.biz.forEach((b, i) => later(b.x, b.z, () => {
-    const f = at(b.x, b.z, b.face), c = SIGN[b.trade] || '#8a6a2a';
-    box(f, '#7d776a', 0, 0.25, 0, 7.4, 0.7, 6.4); box(f, STONE2, 0, 1.8, 0, 7, 2.8, 6); box(f, WALLS[(i + 1) % 4], 0, 4.5, 0.3, 7.4, 2.6, 6.6);
-    [-3.5, 0, 3.5].forEach(x => box(f, BEAMS, x, 4.5, 3.62, 0.16, 2.6, 0.08)); part(f, roofG(7.4, 7.8, 3), [TILE, '#5e4a2c', SLATE][i % 3], 0, 5.8, 0.3);
-    box(f, '#2a1f16', 0, 1.6, 3.02, 4.2, 2.2, 0.06); win(f, -2.6, 1.9, 3.02, 0.9, 0.9, 0.06); win(f, 2.6, 1.9, 3.02, 0.9, 0.9, 0.06); win(f, 0, 4.5, 3.62, 0.8, 0.8, 0.06);
-    for (let k = 0; k < 5; k++) box(f, k % 2 ? '#e2d3a8' : c, -2 + k, 3.0, 3.6, 1, 0.06, 1.4, 0, 0.3);
-    box(f, BEAMS, 3.8, 3.4, 3.4, 1.4, 0.1, 0.1); box(f, c, 4.2, 2.9, 3.4, 0.9, 0.8, 0.06);
-  }));
+  O.biz.forEach((b, i) => later(b.x, b.z, () => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 5, { stone: STONE, stone2: STONE2, slate: SLATE, tile: TILE, roofs: [SLATE, TILE, SLATE, '#5e4a2c'], sign: SIGN[b.trade] })));
   // the great houses of the Court Quarter, behind their walls
   O.mansions.forEach((m, i) => later(m.x, m.z, () => {
     const f = at(m.x, m.z, m.face);
@@ -7666,8 +7812,16 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.1712';
+const BUILD = '2026.11.04.1851';
 const NOTES = [
+  { v: '0.31', date: '4 November', title: 'Every trade its own building', items: [
+    'Shops in Oakbridge, Greenhaven and Crownmere no longer share one design. You can tell what goes on inside from the street.',
+    'Smithies are low stone forges with a great chimney and an open shed where the anvil and glowing hearth stand. Taverns are big inns with a jettied upper floor, dormers, benches and ale out front.',
+    'Bakeries are whitewashed with a domed bread oven bulging from the side and loaves on the hatch. Butchers have a striped awning with hams hanging over the counter.',
+    'Goldsmiths, apothecaries, chandlers and tailors are tall, narrow townhouses with a bay window of wares. Weavers have a row of tall windows and dyed cloth drying outside; potters have a bottle kiln; tanners a yard of vats and stretched hides.',
+    'Joiners, wheelwrights, coopers, carters and boatwrights work from timber workshops with their great doors open on a yard of wheels, barrels, carts or an upturned hull. Masons have a stone lodge, blocks and a crane.',
+    'Houses come in many more shapes: jettied timber townhouses, three-storey stone houses, houses with a gable over the street, longhouses with a dormer, and stone and thatched cottages, with shutters and window boxes on some.'
+  ] },
   { v: '0.30', date: '4 November', title: 'Quieter place cards', items: [
     'Walking past a place no longer opens its big card. A small tab with its name shows at the bottom instead: tap it to open the card, and tap \u25be to fold it away again.',
     'Places you chose to go to, your own job while on shift, and your own shops and businesses still open fully, since you need their buttons.',
