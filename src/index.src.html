@@ -51,6 +51,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chip { background: rgba(32, 26, 20, .74); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
 .chip b { color: #f5cf73; font-weight: 700; }
 .chip.on { background: rgba(74, 102, 52, .9); }
+.treewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; padding-bottom: 6px; background: radial-gradient(ellipse at center, rgba(255,248,226,.6), rgba(0,0,0,0)); border-radius: 8px; }
+.tree { display: block; margin: 0 auto; font-family: var(--f-body); }
+.tree .tname { font-family: var(--f-display); font-size: 14px; fill: #2a1f16; }
+.tree .tsub { font-size: 11px; fill: #5e4a38; } .tree .trel { font-size: 11px; font-style: italic; fill: #8e2b22; }
+.tree .tlabel { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; fill: #7a5a32; } .tree .tmark { font-size: 14px; fill: #8e2b22; }
+.tree .tnode { cursor: pointer; } .tree .tnode.dead rect { opacity: .85; } .tree .tnode.me rect { fill: #f7e3a6; }
+.tree .tnode:hover rect, .tree .tnode:focus rect { stroke-width: 3; }
 .warnbox { border-color: #8e2b22 !important; }
 .chip.btn { pointer-events: auto; cursor: pointer; border: 1px solid rgba(226, 181, 82, .7); }
 .goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
@@ -2337,7 +2344,7 @@ function personCard(s, pr, body) {
     <div class="why num"><b>Purse:</b> <span class="${pr.purse < 0 ? 'neg' : ''}">${pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c'}</span> · <b>Respect:</b> ${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ' · <b>On the council</b>' : ''} · <b>Mood:</b> ${Math.round(pr.mood)}/100 · ${opinionText(pr.opinion)}${doing ? `<br><b>Doing:</b> ${esc(doing)}` : ''}</div>
     ${log ? `<ul class="plog">${log}</ul>` : ''}
     ${relationLine(s, pr)}
-    <div class="acts">${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+    <div class="acts">${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
 }
 function relationLine(s, pr) {
   const Y = Sim.you(s), f = Y.court[pr.id];
@@ -2413,7 +2420,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, property: pageProperty, jobs: pageJobs, village: pageVillage, goals: pageGoals }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, goals: pageGoals }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -2599,6 +2606,7 @@ function personDetail(s, pr) {
   return `<div class="pdetail"><dl class="kv"><dt>Age</dt><dd>${pr.age}</dd><dt>Work</dt><dd>${esc(Sim.occupation(s, pr))}</dd><dt>Earns</dt><dd>about ${Sim.income(s, pr)}c a day</dd><dt>Home</dt><dd>${esc(Sim.homeText(s, pr))}</dd><dt>Respect</dt><dd>${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ', on the council' : ''}</dd><dt>Purse</dt><dd>${pr.purse}c</dd><dt>Mood</dt><dd>${Math.round(pr.mood)}/100</dd><dt>Of you</dt><dd>${opinionText(pr.opinion)} (${pr.opinion})</dd></dl>
     ${mine.length ? `<p><b>${mine.join(' ')}</b></p>` : ''}
     ${familyLine(s, pr)}
+    <div class="acts">${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
 const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven' };
@@ -2752,6 +2760,47 @@ function govHTML(s) {
   return html;
 }
 function seg2(id, value, opts) { return `<div class="seg" role="group">${opts.map(([val, n]) => `<button type="button" aria-pressed="${value === val}" data-c='${esc(JSON.stringify([id, val]))}'>${esc(n)}</button>`).join('')}</div>`; }
+/* ----- family trees: drawn on parchment, centred on one person, with their parents and grandparents above,
+   their husband or wife and brothers and sisters beside them, and their children and grandchildren below ----- */
+function pageTree(s) {
+  const Y = Sim.you(s), cid = UI.tree && s.people[UI.tree] ? UI.tree : Y.pid, C = s.people[cid];
+  const kidsOf = id => Object.values(s.people).filter(q => (q.parents || []).includes(id)).sort((a, b) => b.age - a.age);
+  const par = id => ((s.people[id] && s.people[id].parents) || []).map(x => s.people[x]).filter(Boolean);
+  const spouseOf = p => p.spouse && s.people[p.spouse] ? s.people[p.spouse] : p.widowed && s.people[p.widowed] ? s.people[p.widowed] : null;
+  const sibs = C.parents && C.parents.length ? Object.values(s.people).filter(q => q !== C && (q.parents || []).some(x => C.parents.includes(x))).sort((a, b) => b.age - a.age).slice(0, 6) : [];
+  const rows = [];
+  const gp = par(cid).flatMap(p => par(p.id)).slice(0, 4), pa = par(cid), sp = spouseOf(C), kids = kidsOf(cid).slice(0, 8), gk = kids.flatMap(k => kidsOf(k.id)).slice(0, 10);
+  if (gp.length) rows.push({ label: 'Grandparents', ppl: gp });
+  if (pa.length) rows.push({ label: 'Parents', ppl: pa });
+  rows.push({ label: '', ppl: [...sibs.slice(0, Math.ceil(sibs.length / 2)), C, ...(sp ? [sp] : []), ...sibs.slice(Math.ceil(sibs.length / 2))], centre: true });
+  if (kids.length) rows.push({ label: 'Children', ppl: kids });
+  if (gk.length) rows.push({ label: 'Grandchildren', ppl: gk });
+  const W = 150, Hh = 58, GX = 18, GY = 46, maxN = Math.max(...rows.map(r => r.ppl.length)), width = Math.max(560, maxN * (W + GX) + 40), height = rows.length * (Hh + GY) + 20;
+  const pos = new Map();
+  rows.forEach((r, ri) => { const tw = r.ppl.length * W + (r.ppl.length - 1) * GX, x0 = (width - tw) / 2; r.ppl.forEach((p, i) => pos.set(p.id, { x: x0 + i * (W + GX), y: 14 + ri * (Hh + GY) })); });
+  let lines = '';
+  const link = (a, b, dash) => { const A = pos.get(a), B = pos.get(b); if (!A || !B) return; const x1 = A.x + W / 2, y1 = A.y + Hh, x2 = B.x + W / 2, y2 = B.y, my = (y1 + y2) / 2; lines += `<path d="M${x1},${y1} V${my} H${x2} V${y2}" fill="none" stroke="#7a5a32" stroke-width="1.6" ${dash ? 'stroke-dasharray="4 3"' : ''}/>`; };
+  for (const [id] of pos) for (const pid of (s.people[id].parents || [])) if (pos.has(pid)) link(pid, id);
+  if (sp && pos.has(sp.id)) { const A = pos.get(cid), B = pos.get(sp.id); lines += `<path d="M${A.x + W},${A.y + Hh / 2} H${B.x}" stroke="#8e2b22" stroke-width="2.2" fill="none"/><text x="${(A.x + W + B.x) / 2}" y="${A.y + Hh / 2 - 5}" text-anchor="middle" class="tmark">&#9901;</text>`; }
+  const B = UI.treeB && s.people[UI.treeB];
+  const node = p => {
+    const P = pos.get(p.id), dead = p.status === 'dead', me = p.id === Y.pid, f = Sim.sexOf(p) === 'f', rel = p.id === cid ? '' : Sim.relation(s, cid, p.id);
+    const life = dead ? 'died at ' + p.age : p.status === 'left' ? 'moved away' : (p.kid ? 'child, ' : '') + 'age ' + p.age;
+    return `<g class="tnode ${dead ? 'dead' : ''} ${p.id === cid ? 'centre' : ''} ${me ? 'me' : ''}" data-c='${JSON.stringify(['ui', UI.treePick ? 'treeB' : 'tree', p.id])}' role="button" tabindex="0">
+      <rect x="${P.x}" y="${P.y}" width="${W}" height="${Hh}" rx="8" fill="${dead ? '#e3d6b6' : '#f4e7c8'}" stroke="${f ? '#8e2b22' : '#2f4f6a'}" stroke-width="${p.id === cid ? 3 : 1.4}"/>
+      <text x="${P.x + W / 2}" y="${P.y + 22}" text-anchor="middle" class="tname">${esc(p.name.length > 19 ? p.name.slice(0, 18) + '\u2026' : p.name)}${dead ? ' \u2020' : ''}</text>
+      <text x="${P.x + W / 2}" y="${P.y + 38}" text-anchor="middle" class="tsub">${esc(me ? 'you, ' + life : life)}</text>
+      ${rel ? `<text x="${P.x + W / 2}" y="${P.y + 52}" text-anchor="middle" class="trel">${esc(rel)}</text>` : ''}</g>`;
+  };
+  const labels = rows.map((r, ri) => r.label ? `<text x="10" y="${14 + ri * (Hh + GY) - 6}" class="tlabel">${r.label}</text>` : '').join('');
+  const svg = `<svg class="tree" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Family tree of ${esc(C.name)}">${labels}${lines}${[...pos.keys()].map(id => node(s.people[id])).join('')}</svg>`;
+  const relYou = cid !== Y.pid ? Sim.relation(s, Y.pid, cid) : null;
+  const relB = B ? Sim.relation(s, cid, B.id) : null;
+  return `<h3>Family Tree of ${esc(C.name)}</h3><p class="lead">${C.status === 'dead' ? 'Died aged ' + C.age + '.' : esc(Sim.occupation(s, C)) + ', ' + C.age + '.'} ${cid === Y.pid ? 'This is you.' : relYou ? esc(C.name.split(' ')[0]) + ' is your ' + esc(relYou) + '.' : 'Not related to you by blood or marriage.'} Tap anyone to centre the tree on them.</p>
+    <div class="acts">${cid !== Y.pid ? B_('Back to your own tree', ['ui', 'tree', Y.pid], 'alt') : ''}${B_(UI.treePick ? 'Tap someone to compare\u2026' : 'How are two people related?', ['ui', 'treePick', !UI.treePick], UI.treePick ? '' : 'alt')}${B_('Their life', ['ui', 'person', cid], 'alt')}</div>
+    ${B ? `<div class="why"><b>${esc(B.name)}</b> is ${esc(C.name)}\u2019s <b>${esc(relB || 'no relation by blood or marriage')}</b>.</div>` : ''}
+    <div class="treewrap">${svg}</div>`;
+}
 function pageFamily(s) {
   const Y = Sim.you(s), H = Sim.yourHeirs(s), sp = Y.spouse && s.people[Y.spouse], kids = Sim.yourKids(s), nm = q => esc(q.name);
   if (s.pendingDeath) {
@@ -2762,7 +2811,7 @@ function pageFamily(s) {
       <div class="acts">${B_('Begin again as a newcomer (man)', ['beginAgain', 'Hugh Rowan', 'm'], 'alt')}${B_('Begin again as a newcomer (woman)', ['beginAgain', 'Ada Thorne', 'f'], 'alt')}</div>`;
   }
   const ageing = s.ageRate ? 'A year passes every ' + s.ageRate + ' days.' : 'Ageing is off in Settings.';
-  let h = `<h3>Your Family</h3><p class="lead">${esc(s.name)}, aged ${Y.age}. ${Y.generation > 1 ? 'Generation ' + Y.generation + ' of the family. ' : ''}${ageing}</p>`;
+  let h = `<h3>Your Family</h3><div class="acts">${B_('Your family tree', ['ui', 'tree', Y.pid])}</div><p class="lead">${esc(s.name)}, aged ${Y.age}. ${Y.generation > 1 ? 'Generation ' + Y.generation + ' of the family. ' : ''}${ageing}</p>`;
   h += `<div class="box"><h5>${sp ? 'Married to ' + nm(sp) : 'Unmarried'}</h5>`;
   if (sp) h += `<p>${nm(sp)}, ${sp.age}: ${esc(Sim.occupation(s, sp))}.</p><div class="setting"><span>Children</span>${seg2('hoping', Y.hoping ? 1 : 0, [[1, 'Hoping for more'], [0, 'Not for now']])}</div>`;
   else {
@@ -3212,6 +3261,9 @@ function uiCmd(k, v) {
   if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
   if (k === 'tab') { UI.tab = v; UI.confirm = null; renderBook(true); return; }
   if (k === 'ptown') { UI.ptown = v; renderBook(true); return; }
+  if (k === 'tree') { UI.tree = v; UI.treeB = null; UI.tab = 'tree'; if (UI.overlay !== 'book') openBook('tree'); else renderBook(true); return; }
+  if (k === 'treeB') { UI.treeB = v; UI.treePick = false; renderBook(true); return; }
+  if (k === 'treePick') { UI.treePick = !!v; if (!v) UI.treeB = null; renderBook(true); return; }
   if (k === 'close') { closeOverlay(); return; }
   if (k === 'book') { openBook(); return; }
   if (k === 'pause') { openPause(); return; }
@@ -3561,6 +3613,12 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.27', date: '4 November', title: 'Family trees', items: [
+    'Every person now has a family tree, drawn on parchment: grandparents and parents above, husband or wife and brothers and sisters beside, children and grandchildren below. The dead are marked with a cross.',
+    'Open your own tree from the Family page, or anyone\u2019s from their card or their page in the book. Tap anyone in a tree to centre it on them and follow a family back through the generations.',
+    'Every box says how that person is related to whoever the tree is centred on: father, half-sister, second cousin once removed, mother-in-law, uncle by marriage and so on. The heading says how they are related to you.',
+    'Tap "How are two people related?" and then anyone in the tree to compare the two.'
+  ] },
   { v: '0.26', date: '4 November', title: 'Your own family', items: [
     'You now grow older too, starting at twenty. A new Family page in the book shows your age, your husband or wife, your children, and who would carry on after you.',
     'Court someone: tap them, spend time together once a day, or bring a gift. When they are fond enough, ask them to marry you (the feast costs 20c). They move in with you.',

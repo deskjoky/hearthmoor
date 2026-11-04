@@ -657,5 +657,19 @@ console.log('21. Your own life: courtship, marriage, children, and carrying on')
   Sim.cmd(u, 'propose', w.id); const c1 = u.coins; Sim.cmd(u, 'separate');
   check(!Yu.spouse && u.coins < c1 && w.opinion < 0, 'separating costs you a quarter of your coin and their good opinion');
 }
+
+console.log('22. Family trees: how is anyone related to anyone');
+{
+  const s = Sim.newGame(130), P = n => Object.values(s.people).find(p => p.name === n);
+  const g = Sim.newGame(131); const mk = (name, sex, parents) => { const p = { id: 'x' + name, name, sex, age: 30, parents: parents || [], status: 'here', log: [] }; g.people[p.id] = p; return p; };
+  const gf = mk('Old Hal', 'm'), gm = mk('Old Meg', 'f'), dad = mk('Dad', 'm', [gf.id, gm.id]), aunt = mk('Aunt Una', 'f', [gf.id, gm.id]);
+  const mum = mk('Mum', 'f'); dad.spouse = mum.id; mum.spouse = dad.id; const me = mk('Me', 'm', [dad.id, mum.id]), sis = mk('Sis', 'f', [dad.id, mum.id]), half = mk('Half', 'm', [dad.id]);
+  const cuz = mk('Cuz', 'f', [aunt.id]), cuzKid = mk('CuzKid', 'm', [cuz.id]), wife = mk('Wife', 'f'); me.spouse = wife.id; wife.spouse = me.id; const wifeMum = mk('WifeMum', 'f'); wife.parents = [wifeMum.id];
+  const R = (a, b) => Sim.relation(g, a.id, b.id);
+  const cases = [[me, dad, 'father'], [me, gm, 'grandmother'], [me, sis, 'sister'], [me, half, 'half-brother'], [me, aunt, 'aunt'], [me, cuz, 'first cousin'], [me, cuzKid, 'first cousin once removed'], [me, wife, 'wife'], [me, wifeMum, 'mother-in-law'], [wifeMum, me, 'son-in-law'], [aunt, me, 'nephew'], [gf, me, 'grandson']];
+  const bad = cases.filter(([a, b, r]) => R(a, b) !== r);
+  check(!bad.length, 'relations come out right: ' + cases.map(([a, b, r]) => b.name + ' is ' + a.name + '\u2019s ' + R(a, b)).slice(0, 6).join(', ') + '\u2026' + (bad.length ? ' WRONG: ' + bad.map(([a, b, r]) => b.name + '=' + R(a, b) + ' not ' + r).join(', ') : ''));
+  check(Sim.relation(g, me.id, mk('Stranger', 'm').id) === null, 'strangers are not related');
+}
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

@@ -1139,7 +1139,7 @@
   function officeHolder(s, office) { return s.offices[office]; }
   function holderName(s, office) { const h = s.offices[office]; return h === 'player' ? s.name : h && s.people[h] ? s.people[h].name : 'nobody'; }
   // women and men: known from their names (and their titles), so old saves need nothing new
-  const FEMALE = new Set(['Alda', 'Alys', 'Avice', 'Beatrix', 'Cecily', 'Constance', 'Dulcie', 'Eda', 'Edda', 'Edith', 'Elsie', 'Faye', 'Freya', 'Gerd', 'Gisela', 'Hawise', 'Helewise', 'Hilda', 'Ida', 'Imogen', 'Isabel', 'Isolde', 'Joan', 'Jocelyn', 'Katrin', 'Lettice', 'Linnet', 'Mabyn', 'Maren', 'Maud', 'Meriel', 'Merrin', 'Muriel', 'Nell', 'Nesta', 'Orabel', 'Ottilie', 'Petra', 'Philippa', 'Quenby', 'Rohese', 'Rosamund', 'Sabine', 'Sela', 'Sibyl', 'Tamsin', 'Tibby', 'Tiffany', 'Tilly', 'Una', 'Wynn', 'Yseult', 'Alys', 'Mother', 'Goodwife', 'Widow', 'Lady']);
+  const FEMALE = new Set(['Alda', 'Alys', 'Avice', 'Beatrix', 'Cecily', 'Constance', 'Dulcie', 'Eda', 'Edda', 'Edith', 'Elsie', 'Faye', 'Freya', 'Gerd', 'Gisela', 'Hawise', 'Helewise', 'Hilda', 'Ida', 'Imogen', 'Isabel', 'Isolde', 'Joan', 'Jocelyn', 'Katrin', 'Lettice', 'Linnet', 'Mabyn', 'Maren', 'Maud', 'Meriel', 'Merrin', 'Muriel', 'Nell', 'Nesta', 'Orabel', 'Ottilie', 'Petra', 'Philippa', 'Quenby', 'Rohese', 'Rosamund', 'Sabine', 'Sela', 'Sibyl', 'Tamsin', 'Tibby', 'Tiffany', 'Tilly', 'Una', 'Wynn', 'Yseult', 'Alys', 'Mabel', 'Agnes', 'Elsbeth', 'Annis', 'Margery', 'Alice', 'Emma', 'Mother', 'Goodwife', 'Widow', 'Lady']);
   const firstName = n => { const w = String(n || '').split(' '); return ['Old', 'Young', 'Elder', 'Steward', 'Lord', 'Mayor', 'Reeve'].includes(w[0]) && w[1] ? w[1] : w[0]; };
   function sexOf(p) { if (!p) return 'm'; if (p.sex) return p.sex; const w = String(p.name || '').split(' ')[0]; return FEMALE.has(w) || FEMALE.has(firstName(p.name)) ? 'f' : 'm'; }
   function newPerson(s, o) {
@@ -1601,6 +1601,38 @@
     const gen = Y.generation; s.you = null; const Z = you(s); Z.generation = gen + 1; Z.sex = sex || 'm'; Z.age = 20;
     s.pendingDeath = null;
     event(s, 'A newcomer arrives in Hearthmoor with 5 coins: ' + s.name + '. The world remembers those who came before.', 'story');
+  }
+
+  /* ---------- how are we related? ---------- */
+  function ancestors(s, id) { const out = new Map(), q = [[id, 0]]; while (q.length) { const [x, d] = q.shift(); const p = s.people[x]; if (!p || d > 8) continue; for (const pid of p.parents || []) if (!out.has(pid)) { out.set(pid, d + 1); q.push([pid, d + 1]); } } return out; }
+  function bloodRelation(s, a, b) {
+    if (a === b) return 'self';
+    const A = ancestors(s, a), B = ancestors(s, b), pb = s.people[b], f = sexOf(pb) === 'f';
+    const greats = n => n > 0 ? 'great-'.repeat(n) : '';
+    if (A.has(b)) { const d = A.get(b); return d === 1 ? (f ? 'mother' : 'father') : greats(d - 2) + (f ? 'grandmother' : 'grandfather'); }
+    if (B.has(a)) { const d = B.get(a); return d === 1 ? (f ? 'daughter' : 'son') : greats(d - 2) + (f ? 'granddaughter' : 'grandson'); }
+    let best = null; for (const [x, da] of A) if (B.has(x)) { const db = B.get(x); if (!best || da + db < best[0] + best[1]) best = [da, db]; }
+    if (!best) return null;
+    const [da, db] = best;
+    if (da === 1 && db === 1) { const shared = (s.people[a].parents || []).filter(x => (pb.parents || []).includes(x)).length; return (shared < 2 && ((s.people[a].parents || []).length > 1 || (pb.parents || []).length > 1) ? 'half-' : '') + (f ? 'sister' : 'brother'); }
+    if (da === 1) return greats(db - 2) + (f ? 'niece' : 'nephew');
+    if (db === 1) return greats(da - 2) + (f ? 'aunt' : 'uncle');
+    const deg = Math.min(da, db) - 1, rem = Math.abs(da - db), ord = ['', 'first', 'second', 'third', 'fourth', 'fifth'][deg] || deg + 'th';
+    return ord + ' cousin' + (rem ? (rem === 1 ? ' once removed' : rem === 2 ? ' twice removed' : ' ' + rem + ' times removed') : '');
+  }
+  // b is a's ___
+  function relation(s, a, b) {
+    const pa = s.people[a], pb = s.people[b]; if (!pa || !pb) return null;
+    const r = bloodRelation(s, a, b); if (r) return r;
+    const f = sexOf(pb) === 'f';
+    if (pa.spouse === b || pb.spouse === a) return f ? 'wife' : 'husband';
+    if (pa.widowed === b || pb.widowed === a) return 'late ' + (f ? 'wife' : 'husband');
+    // in-laws: through a's spouse, or through b's spouse
+    const sa = pa.spouse || pa.widowed;
+    if (sa) { const r2 = bloodRelation(s, sa, b); if (r2 && ['mother', 'father', 'sister', 'brother', 'half-sister', 'half-brother'].includes(r2)) return r2 + '-in-law'; if (r2 === 'son' || r2 === 'daughter') return 'step' + r2; }
+    const sb = pb.spouse || pb.widowed;
+    if (sb) { const r3 = bloodRelation(s, a, sb); if (r3 === 'son' || r3 === 'daughter') return f ? 'daughter-in-law' : 'son-in-law'; if (r3 && /sister|brother/.test(r3)) return (f ? 'sister' : 'brother') + '-in-law'; if (r3 === 'mother' || r3 === 'father') return f ? 'stepmother' : 'stepfather'; if (r3 === 'uncle' || r3 === 'aunt') return f ? 'aunt by marriage' : 'uncle by marriage'; if (r3) return r3 + '\u2019s ' + (f ? 'wife' : 'husband'); }
+    return null;
   }
 
   /* each morning: the jobless look for work, the homeless for a roof, and some give up */
@@ -3345,7 +3377,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
