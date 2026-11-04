@@ -530,5 +530,28 @@ console.log('17. Getting about: coaches, a horse, and the roads between towns');
   check(!Sim.cmd(s, 'coach', 'hearthmoor').ok, 'no coaches run after seven at night');
   check(Sim.cmd(s, 'sellHorse').ok && !s.player.horse, 'you can sell your horse back to the ostler');
 }
+
+console.log('18. Managers: someone you trust runs the place while you are away');
+{
+  const s = Sim.newGame(7); s.coins = 3000; s.trades.bakery = 5;
+  Sim.cmd(s, 'buyBiz', 'o_bell'); Sim.cmd(s, 'open', 1, 'bakery'); const sh = s.shops[0];
+  const cb = Sim.managerCandidates(s, 'biz', 'o_bell'), cs = Sim.managerCandidates(s, 'shop', sh.id);
+  check(cb.length && cb.every(c => Sim.townOf(s.people[c.pid]) === 'oakbridge') && cs.every(c => Sim.townOf(s.people[c.pid]) === 'hearthmoor'), 'managers come from the town where the business is');
+  check(Sim.cmd(s, 'hireManager', 'biz', 'o_bell', cb[0].pid).ok && Sim.cmd(s, 'hireManager', 'shop', sh.id, cs[0].pid).ok, 'hired ' + cb[0].name + ' for The Bell and ' + cs[0].name + ' for your bakery');
+  check(s.people[cb[0].pid].job.type === 'manage' && Sim.occupation(s, s.people[cb[0].pid]).includes('The Bell'), 'a manager\u2019s job is to manage');
+  s.player.x = Sim.STAGE.greenhaven.x; s.player.z = Sim.STAGE.greenhaven.z;
+  Sim.advance(s, 1440 * 12);
+  check(sh.worker && sh.policy.supplyRuns, 'the bakery\u2019s manager hired ' + sh.worker.name + ' and keeps supplies coming, with you in Greenhaven');
+  const led = s.ledger.slice(-5).map(e => e.shops[0] ? e.shops[0].profit : 0);
+  check(led.every(x => x > 0), 'the managed bakery makes a profit every day: ' + led.join(', ') + 'c');
+  check((s.reports || []).length >= 20 && s.reports.some(r => r.text.startsWith('The Bell')), 'managers report every evening (' + s.reports.length + ' reports)');
+  // a big repair comes to you
+  s.biz.o_bell.manager.budget = 0; for (let d = 0; d < 60 && !(s.decisions || []).length; d++) Sim.advance(s, 1440);
+  const d0 = (s.decisions || [])[0];
+  check(d0 && s.biz.o_bell.disrepair, 'a costly repair waits on your word: ' + (d0 ? d0.text : 'none'));
+  if (d0) { const c0 = s.coins; check(Sim.cmd(s, 'decide', d0.id, 'pay').ok && !s.biz.o_bell.disrepair && s.coins === c0 - d0.cost, 'paying for it puts The Bell right'); }
+  check(Sim.cmd(s, 'fireManager', 'shop', sh.id).ok && !sh.manager && s.people[cs[0].pid].job === null, 'you can let a manager go');
+  const back = Sim.deserialize(Sim.serialize(s)); check(back.biz.o_bell.manager && back.biz.o_bell.manager.name === cb[0].name, 'managers survive saving and loading');
+}
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

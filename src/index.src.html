@@ -51,6 +51,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chip { background: rgba(32, 26, 20, .74); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
 .chip b { color: #f5cf73; font-weight: 700; }
 .chip.on { background: rgba(74, 102, 52, .9); }
+.warnbox { border-color: #8e2b22 !important; }
 .chip.btn { pointer-events: auto; cursor: pointer; border: 1px solid rgba(226, 181, 82, .7); }
 .goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .goal em { font-family: var(--f-display); font-style: italic; color: #f5cf73; font-size: 14px; }
@@ -2421,7 +2422,15 @@ function pageLedger(s) {
     }
     html += `</div>`;
   }
-  return html;
+  return html.replace('</p>', '</p>' + managerNews(s));
+}
+function managerNews(s) {
+  const dec = s.decisions || [], rep = (s.reports || []).slice(0, 8);
+  if (!dec.length && !rep.length) return '';
+  let h = '';
+  if (dec.length) h += `<div class="box warnbox"><h5>Waiting on your word</h5>${dec.map(d => `<p>${esc(d.text)}</p><div class="acts">${B_('Pay ' + d.cost + 'c to mend it', ['decide', d.id, 'pay'], '', s.coins < d.cost)}${B_('Let it wait', ['decide', d.id, 'wait'], 'alt')}</div>`).join('')}</div>`;
+  if (rep.length) h += `<div class="box"><h5>From your managers</h5><ul class="plog">${rep.map(r => `<li>Day ${r.day}: ${esc(r.text)}</li>`).join('')}</ul></div>`;
+  return h;
 }
 function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
 function willing(shop, price, trav) { const T = TR[shop.trade]; return Math.round(100 * (1 - 0.5 * (1 + erf((price - Sim.wtpMean(shop, trav)) / (T.sd * Math.SQRT2))))); }
@@ -2457,9 +2466,33 @@ function pageShops(s) {
   if (free.length) html += `<p>${free.length === 1 ? 'One lot is' : free.length + ' lots are'} still empty on the square. Visit one to open another trade you have learned.</p>`;
   return html;
 }
+const mgrLabel = k => k < 0.85 ? 'Careless, cheap' : k < 1.1 ? 'Steady' : 'Sharp, costs more';
+function managerBox(s, kind, ref, title) {
+  const o = kind === 'shop' ? Sim.shopById(s, ref) : s.biz[ref], m = o && o.manager;
+  if (!o) return '';
+  if (m) {
+    const p = s.people[m.pid];
+    return `<div class="box"><h5>${esc(title)}: managed by ${esc(m.name)}</h5><dl class="kv"><dt>Skill</dt><dd>${mgrLabel(m.skill)}</dd><dt>Wage</dt><dd>${m.wage}c a day</dd><dt>Since</dt><dd>day ${m.since}</dd></dl>
+      <p><b>Daily budget</b> for raises, hiring and small repairs. Anything costing more comes to you.</p>
+      <div class="stepper"><button type="button" data-c='${JSON.stringify(['managerBudget', kind, ref, m.budget - 5])}' aria-label="Lower budget">&minus;</button><output class="num">${m.budget}c</output><button type="button" data-c='${JSON.stringify(['managerBudget', kind, ref, m.budget + 5])}' aria-label="Raise budget">+</button></div>
+      ${kind === 'biz' ? `<p><b>Staff to keep</b> besides the manager:</p><div class="stepper"><button type="button" data-c='${JSON.stringify(['staffTarget', ref, (m.staffTarget || 0) - 1])}' aria-label="Fewer staff">&minus;</button><output class="num">${m.staffTarget || 0}</output><button type="button" data-c='${JSON.stringify(['staffTarget', ref, (m.staffTarget || 0) + 1])}' aria-label="More staff">+</button></div>` : '<p>They keep a worker on, pay fair wages, order supplies and set the price to what sells.</p>'}
+      ${o.disrepair ? `<p class="why">Needs mending: takings are down by a third. ${B_('Mend it · ' + (o.repairCost || 30) + 'c', ['repairBiz', ref], '', s.coins < (o.repairCost || 30))}</p>` : ''}
+      <div class="acts">${UI.confirm === 'mgr' + kind + ref ? B_('Yes, let ' + esc(m.name) + ' go', ['fireManager', kind, ref], 'warn') + B_('Keep them', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'mgr' + kind + ref], 'alt')}</div></div>`;
+  }
+  const cands = Sim.managerCandidates(s, kind, ref);
+  return `<div class="box"><h5>${esc(title)}: no manager</h5><p>${kind === 'shop' ? 'A manager keeps a worker on, orders supplies, sets prices and reports to you each evening.' : 'A manager hires and keeps staff, pays fair wages and small repairs, and reports to you each evening.'}</p>
+    ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}</span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
+}
 function pageStaff(s) {
   let html = `<h3>Staff</h3><p class="lead">Hire help, set pay, and see what they are doing.</p>`;
-  if (!s.shops.length) return html + `<p>Once you own a shop you can hire someone to run it while you do other things.</p>`;
+  const owned = Object.values(s.biz || {}).filter(b => b.owner === 'player');
+  if (s.shops.length || owned.length) {
+    html += `<h4>Managers</h4><p>Put someone you trust in charge, set a daily budget, and they run the place while you are elsewhere. Their reports and anything they need you for appear in the ledger.</p><div class="grid2">`;
+    s.shops.forEach(x => { html += managerBox(s, 'shop', x.id, 'Your ' + TR[x.trade].name.toLowerCase()); });
+    owned.forEach(b => { html += managerBox(s, 'biz', b.id, Sim.empById(b.id).name); });
+    html += `</div>`;
+  }
+  if (!s.shops.length) return html + (owned.length ? '' : `<p>Once you own a shop you can hire someone to run it while you do other things.</p>`);
   for (const shop of s.shops.filter(x => x.worker)) {
     const w = shop.worker, st = s.stats.shops[shop.id] || { workerMin: 0, batchesBy: { worker: 0 }, servedBy: { worker: 0 } }, H = Sim.workerHours(shop);
     html += `<div class="box"><h5>${esc(w.name)} · your ${TR[shop.trade].name.toLowerCase()}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(w.skill)} (${Math.round(w.skill * 100)}% speed)</dd><dt>Asked for</dt><dd>${w.ask}c a day</dd><dt>Mood</dt><dd>${Math.round(w.mood)}/100</dd><dt>Hours today</dt><dd>${Sim.hm(st.workerMin)}</dd><dt>Batches today</dt><dd>${st.batchesBy.worker}</dd><dt>Served today</dt><dd>${st.servedBy.worker}</dd></dl>
@@ -3423,6 +3456,13 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.23', date: '4 November', title: 'Managers', items: [
+    'Hire a manager for any shop or business you own, from the people of the town it stands in. See them on the Staff page.',
+    'Managers keep a worker on, pay fair wages, take on staff, order supplies and set prices to what sells, all within a daily budget you choose.',
+    'Small repairs are paid from the budget. Bigger ones come to you in the ledger as a decision: mend it, or let it wait while takings suffer.',
+    'Every evening each manager reports how the day went. Their reports are at the top of the ledger.',
+    'A sharp manager costs more; a careless one is cheap and now and then loses you a few coins.'
+  ] },
   { v: '0.22', date: '4 November', title: 'Coaches and horses', items: [
     'Each town has a stage post: a coaching office with a coach and horses waiting. Coaches run to the other towns from six in the morning until seven at night, for a few coins.',
     'Buy a horse at any stage post for 140c. Riding is more than twice as fast as walking. Mount and get down from the button at the top of the screen; stabling costs 1c a night.',

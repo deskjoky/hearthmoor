@@ -454,6 +454,7 @@
     if (!s.rec.worstDay || entry.profit < s.rec.worstDay.profit) s.rec.worstDay = { profit: entry.profit, day: entry.day };
     event(s, 'Books closed for Day ' + entry.day + ': ' + (entry.profit >= 0 ? 'up ' : 'down ') + Math.abs(entry.profit) + 'c. Open the ledger to see why.', entry.profit >= 0 ? 'good' : 'bad');
 
+    if (s.people) managersDay(s, entry);
     for (const shop of s.shops) {
       const w = shop.worker;
       if (!w) continue;
@@ -470,6 +471,71 @@
     for (const shop of s.shops) {
       shop.queue.slice().forEach(id => { const a = agentById(s, id); if (a) leaveShop(s, a, shop, null); });
       shop.queue = [];
+    }
+  }
+
+  /* ---------- managers: someone you trust runs a business day to day, inside the budget you set ----------
+     They keep a worker on, pay fair wages, order supplies, nudge prices to what sells, hire staff, and pay for
+     small repairs. Anything bigger comes back to you as a decision. A more skilled manager costs more and slips less. */
+  const managerOf = (s, kind, ref) => { const o = kind === 'shop' ? shopById(s, ref) : s.biz && s.biz[ref]; return o && o.manager ? o.manager : null; };
+  function managedName(s, kind, ref) { if (kind === 'shop') { const sh = shopById(s, ref); return sh ? 'your ' + TRADES[sh.trade].name.toLowerCase() : 'a shop'; } const e = empById(ref); return e ? e.name : 'a business'; }
+  function managedSpot(s, kind, ref) {
+    if (kind === 'shop') { const sh = shopById(s, ref); return sh ? plotPt(sh, 'bench') : null; }
+    const e = empById(ref); if (!e) return null; return e.front || (e.dir ? { x: e.x, z: e.z + 3.4 * e.dir } : { x: e.x, z: e.z + 3 });
+  }
+  const townOfBiz = (s, kind, ref) => kind === 'shop' ? 'hearthmoor' : ((s.biz[ref] && s.biz[ref].town) || 'hearthmoor');
+  const managerAsk = p => Math.round(6 + Math.min(1.4, p.skill || 0.8) * 6);
+  function managerCandidates(s, kind, ref) {
+    const town = townOfBiz(s, kind, ref);
+    return living(s).filter(p => townOf(p) === town && !p.kid && !p.retired && p.age >= 22 && p.age <= 62 && (!p.job || p.job.type === 'commons' || (p.job.type === 'biz' && p.job.role === 'hand' && s.biz[p.job.biz] && s.biz[p.job.biz].owner === 'player')) && !isHousehold(p))
+      .sort((a, b) => ((b.skill || 0.8) * 40 + (b.rep || 0) * 0.5 + (b.opinion || 0) * 0.2) - ((a.skill || 0.8) * 40 + (a.rep || 0) * 0.5 + (a.opinion || 0) * 0.2)).slice(0, 4)
+      .map(p => ({ pid: p.id, name: p.name, skill: p.skill || 0.8, ask: managerAsk(p), now: occupation(s, p) }));
+  }
+  function report(s, text) { s.reports = s.reports || []; s.reports.unshift({ day: s.day, text }); if (s.reports.length > 40) s.reports.length = 40; }
+  function releaseManager(s, m, why) { const p = m && s.people[m.pid]; if (p && p.job && p.job.type === 'manage') { p.job = null; plog(s, p, why || 'No longer a manager.'); } }
+  function managersDay(s, entry) {
+    // anyone whose business has gone (sold, seized) goes back to looking for work
+    for (const p of living(s)) if (p.job && p.job.type === 'manage' && !managerOf(s, p.job.kind, p.job.ref)) { p.job = null; plog(s, p, 'The business they managed changed hands.'); }
+    for (const shop of s.shops) {
+      const m = shop.manager; if (!m) continue;
+      const mp = s.people[m.pid]; if (!mp || mp.status !== 'here') { shop.manager = null; report(s, 'Your ' + TRADES[shop.trade].name.toLowerCase() + ' has lost its manager.'); continue; }
+      spend(s, m.wage); mp.purse += m.wage; s.rec.wagesPaid += m.wage;
+      let budget = m.budget, did = [];
+      const ss = shopStats(s, shop), T = TRADES[shop.trade], floor = Math.ceil(Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Math.max(1, tierOf(shop).out) * 1.1);
+      if (!shop.policy.supplyRuns) { shop.policy.supplyRuns = true; did.push('set the worker to buy supplies'); }
+      if (!shop.worker && s.applicants && s.applicants.length) {
+        const pick = s.applicants.map((a, i) => ({ a, i })).filter(x => x.a.ask <= budget + 9).sort((x, y) => y.a.skill / y.a.ask - x.a.skill / x.a.ask)[0];
+        if (pick) { const r = cmd(s, 'hire', shop.id, pick.i, pick.a.ask); if (r.ok) did.push('hired ' + pick.a.name + ' at ' + pick.a.ask + 'c'); }
+      }
+      if (shop.worker && shop.worker.wage < shop.worker.ask && shop.worker.ask - shop.worker.wage <= budget) { budget -= shop.worker.ask - shop.worker.wage; shop.worker.wage = shop.worker.ask; did.push('raised ' + shop.worker.name + '\u2019s pay to ' + shop.worker.ask + 'c'); }
+      if (ss.tooExpensive > Math.max(2, ss.sold * 0.25) && shop.price > floor) { shop.price--; did.push('lowered the price to ' + shop.price + 'c (' + ss.tooExpensive + ' turned away)'); }
+      else if (ss.soldOut > 0 && ss.tooExpensive <= 1 && shop.price < Math.round(T.wtp * 1.4)) { shop.price++; did.push('raised the price to ' + shop.price + 'c (sold out)'); }
+      if (rand(s) < (1.15 - m.skill) * 0.22) { const loss = 2 + Math.floor(rand(s) * 5); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
+      const e = entry.shops.find(x => x.id === shop.id);
+      report(s, managedName(s, 'shop', shop.id).replace(/^your/, 'Your') + ' (' + m.name + '): ' + (e ? e.revenue + 'c in, ' + e.profit + 'c profit' : 'quiet day') + (did.length ? '. ' + did.join('; ') + '.' : '.'));
+    }
+    for (const b of Object.values(s.biz)) {
+      const m = b.manager; if (!m) continue;
+      if (b.owner !== 'player') { releaseManager(s, m, 'The business they managed was sold.'); b.manager = null; continue; }
+      const mp = s.people[m.pid]; if (!mp || mp.status !== 'here') { b.manager = null; report(s, empById(b.id).name + ' has lost its manager.'); continue; }
+      spend(s, m.wage); mp.purse += m.wage; s.rec.wagesPaid += m.wage;
+      let budget = m.budget; const did = [], town = b.town || 'hearthmoor', name = empById(b.id).name;
+      const target = m.staffTarget || 2;
+      if (b.staff.length < target) {
+        const seek = living(s).find(p => idleAdult(p) && p.status === 'here' && townOf(p) === town && p.age >= 16 && p.age <= 60);
+        if (seek && 7 <= budget + 7) { seek.job = { type: 'biz', biz: b.id, role: 'hand' }; b.staff.push({ pid: seek.id, wage: 7 }); plog(s, seek, 'Taken on at ' + name + ' by its manager, ' + m.name + '.'); did.push('took on ' + seek.name + ' at 7c'); }
+      } else if (b.staff.length > target && avg(b.profits.slice(-3)) < 0) {
+        const st = b.staff.pop(), w = s.people[st.pid]; if (w) { w.job = null; plog(s, w, 'Let go from ' + name + ' to save money.'); did.push('let ' + w.name + ' go to save money'); }
+      }
+      for (const st of b.staff) { const w = s.people[st.pid]; if (w && w.mood < 35 && st.wage < 9 && budget >= 1) { st.wage++; budget--; did.push('gave ' + w.name + ' a raise to ' + st.wage + 'c'); } }
+      // wear and tear: small repairs are paid within the budget, big ones come to you
+      if (!b.disrepair && !(s.decisions || []).some(d => d.biz === b.id) && rand(s) < 0.06) {
+        const cost = 12 + Math.floor(rand(s) * 50), what = ['the roof leaks', 'a beam has split', 'the oven has cracked', 'the cart axle broke', 'the shutters need replacing'][Math.floor(rand(s) * 5)];
+        if (cost <= budget * 3) { spend(s, cost); did.push(what + ', and ' + m.name + ' paid ' + cost + 'c to mend it'); }
+        else { b.disrepair = true; b.repairCost = cost; s.decisions = s.decisions || []; s.decisions.push({ id: (s.nextDecision = (s.nextDecision || 0) + 1), day: s.day, biz: b.id, cost, text: m.name + ' writes from ' + name + ': ' + what + '. Mending it costs ' + cost + 'c, more than the budget you gave. Until it is fixed, takings are down by a third.' }); did.push(what + ' (too costly to mend without you: see the ledger)'); event(s, 'A decision from ' + name + ': ' + what + '. Mending it costs ' + cost + 'c.', 'bad'); }
+      }
+      if (rand(s) < (1.15 - m.skill) * 0.18) { const loss = 2 + Math.floor(rand(s) * 6); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
+      report(s, name + ' (' + m.name + '): ' + (b.lastRevenue || 0) + 'c in, ' + (b.lastProfit || 0) + 'c profit' + (did.length ? '. ' + did.join('; ') + '.' : '.'));
     }
   }
 
@@ -1091,6 +1157,7 @@
     if (j.type === 'biz') { const e = empById(j.biz), b = s.biz[j.biz]; return (j.role === 'owner' ? 'Owner of ' : (b.owner === 'player' ? 'Works for you at ' : 'Works at ')) + e.name; }
     if (j.type === 'office' && j.office === 'mayor') return 'Mayor of Oakbridge';
     if (j.type === 'shop') { const sh = shopById(s, j.shop); return 'Works for you at your ' + (sh ? TRADES[sh.trade].name.toLowerCase() : 'shop'); }
+    if (j.type === 'manage') return 'Manages ' + managedName(s, j.kind, j.ref) + ' for you';
     if (j.type === 'office') return OFFICES[j.office].title;
     return 'Working';
   }
@@ -1108,6 +1175,7 @@
     if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0);
     if (j.type === 'biz') { const b = s.biz[j.biz]; if (j.role === 'owner') return Math.max(0, Math.round(avg(b.profits))); const st = b.staff.find(x => x.pid === p.id); return st ? st.wage : 0; }
     if (j.type === 'shop') { const sh = shopById(s, j.shop); return sh && sh.worker ? sh.worker.wage : 0; }
+    if (j.type === 'manage') { const m = managerOf(s, j.kind, j.ref); return m ? m.wage : 0; }
     if (j.type === 'office') return OFFICES[j.office].salary;
     return 0;
   }
@@ -1205,7 +1273,7 @@
       const workers = b.staff.length + (own ? 1 : 0);
       const rivals = Object.values(s.biz).filter(x => x !== b && !x.closed && x.trade === b.trade && (x.town || 'hearthmoor') === (b.town || 'hearthmoor')).length;
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
-      const revenue = Math.round(BIZ_BASE[b.trade] * (0.55 + 0.55 * employed) * Math.min(1.5, 0.5 + 0.5 * workers) * competition * (s.village.shortage && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1));
+      const revenue = Math.round((b.disrepair ? 0.7 : 1) * BIZ_BASE[b.trade] * (0.55 + 0.55 * employed) * Math.min(1.5, 0.5 + 0.5 * workers) * competition * (s.village.shortage && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1));
       let wages = 0;
       for (const st of b.staff) {
         const w = person(s, st.pid);
@@ -1434,6 +1502,9 @@
     } else if (j && j.type === 'biz') {
       const e = empById(j.biz), hrs = j.role === 'owner' ? [7, 18] : e.shift;
       if (h >= hrs[0] && h < hrs[1] && !s.biz[j.biz].closed) { tgt = e.oak ? (j.role === 'owner' ? e.front : ringSpot(e.spot.x, e.spot.z, 0.4, 1.6, a.id, 1, 41)) : j.role === 'owner' ? (e.id === 'mill' ? { x: -27.6, z: -38.4 } : { x: e.x, z: e.z + 0.4 * e.dir }) : e.id === 'mill' ? e.spot : { x: e.x + 0.9 * e.dir, z: e.z - 1.2 * e.dir }; doing = e.oak ? (j.role === 'owner' ? 'Minding ' + e.name : 'At work in ' + e.name) : e.id === 'mill' ? (j.role === 'owner' ? 'Grinding grain at the mill' : 'Hauling sacks of flour') : j.role === 'owner' ? 'Minding the counter' : 'Working the ' + TRADES[e.trade].station; working = true; a.faceTo = e.oak ? e.face + Math.PI : e.dir > 0 ? 0 : Math.PI; }
+    } else if (j && j.type === 'manage') {
+      const at = managedSpot(s, j.kind, j.ref);
+      if (at && h >= 7 && h < 18) { tgt = ringSpot(at.x, at.z, 0.4, 1.4, a.id, s.day, 47); doing = 'Managing ' + managedName(s, j.kind, j.ref); working = true; }
     } else if (j && j.type === 'office') {
       if (j.office === 'elder' && h >= 8 && h < 18) { tgt = P.elderDesk; doing = 'Keeping the Village Hall'; }
       else if (j.office === 'guard') { tgt = P.guardPost; doing = 'Guarding the manor gate'; }
@@ -1947,7 +2018,7 @@
   LOCS.oakkeep = { x: OAK.keep.x, z: OAK.keep.z + 9, r: 6, name: 'Oakbridge Keep', town: 'oakbridge' };
   LOCS.oakbridge = { x: OAK.bridge.x, z: OAK.bridge.z, r: 6, name: 'The Oak Bridge', town: 'oakbridge' };
   OAK.biz.forEach(b0 => { LOCS['ob:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'oakbridge' }; });
-  const OAK_JOBS = { docks: ['Porter on the quay', 'Hauling cargo on the quay'], carting: ['Carter', 'Loading carts'], watch: ['Town watchman', 'Keeping watch at the gate'], washing: ['Washerwoman', 'Washing linen at the river steps'], oakfields: ['Field hand', 'Working the fields outside the walls'], labour: ['Labourer', 'Hauling stone on the east bank'] };
+  const OAK_JOBS = { docks: ['Porter on the quay', 'Hauling cargo on the quay'], carting: ['Carter', 'Loading carts'], watch: ['Town watchman', 'Keeping watch at the gate'], washing: ['Washer', 'Washing linen at the river steps'], oakfields: ['Field hand', 'Working the fields outside the walls'], labour: ['Labourer', 'Hauling stone on the east bank'] };
   OAK.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
   /* ---------- Greenhaven: a farming town on the river Green (Stage II) ----------
      Cottages around a broad village green with its maypole and well; the Great Mill on the river;
@@ -2686,6 +2757,35 @@
         return ok();
       }
       case 'ride': if (!p.horse) return fail('You have no horse.'); p.riding = !p.riding; return ok();
+      case 'hireManager': {
+        // a: 'shop' or 'biz', b: its id, c: the person
+        const o = a === 'shop' ? shopById(s, b) : s.biz[b];
+        if (!o || (a === 'biz' && o.owner !== 'player')) return fail('That is not your business.');
+        if (o.manager) return fail('It already has a manager.');
+        const cand = managerCandidates(s, a, b).find(x => x.pid === c); if (!cand) return fail('They cannot take the post.');
+        const q = s.people[c];
+        if (q.job && q.job.type === 'biz') { const ob = s.biz[q.job.biz]; if (ob) ob.staff = ob.staff.filter(x => x.pid !== q.id); }
+        q.job = { type: 'manage', kind: a, ref: b }; q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
+        o.manager = { pid: q.id, name: q.name, skill: cand.skill, wage: cand.ask, budget: 10, staffTarget: a === 'biz' ? Math.max(1, o.staff.length) : 0, since: s.day };
+        plog(s, q, 'Became manager of ' + managedName(s, a, b) + ' for ' + s.name + ' at ' + cand.ask + 'c a day.');
+        event(s, q.name + ' will manage ' + managedName(s, a, b) + ' for ' + cand.ask + 'c a day, with a budget of 10c a day for wages, supplies and repairs.', 'good');
+        return ok();
+      }
+      case 'fireManager': {
+        const o = a === 'shop' ? shopById(s, b) : s.biz[b]; if (!o || !o.manager) return fail('No manager there.');
+        releaseManager(s, o.manager, 'Let go as manager by ' + s.name + '.'); const q = s.people[o.manager.pid]; if (q) q.opinion = clamp((q.opinion || 0) - 15, -100, 100);
+        o.manager = null; return ok();
+      }
+      case 'managerBudget': { const o = a === 'shop' ? shopById(s, b) : s.biz[b]; if (!o || !o.manager) return fail('No manager there.'); o.manager.budget = clamp(Math.round(c), 0, 60); return ok(); }
+      case 'repairBiz': { const o = s.biz[a]; if (!o || o.owner !== 'player' || !o.disrepair) return fail('Nothing needs mending.'); const c0 = o.repairCost || 30; if (s.coins < c0) return fail('Mending it costs ' + c0 + 'c.'); spend(s, c0); o.disrepair = false; s.decisions = (s.decisions || []).filter(d => d.biz !== a); report(s, empById(a).name + ': mended for ' + c0 + 'c.'); return ok(); }
+      case 'staffTarget': { const o = s.biz[a]; if (!o || !o.manager) return fail('No manager there.'); o.manager.staffTarget = clamp(Math.round(b), 0, 4); return ok(); }
+      case 'decide': {
+        const i = (s.decisions || []).findIndex(d => d.id === a); if (i < 0) return fail('That has been settled.');
+        const d = s.decisions[i], o = s.biz[d.biz];
+        if (b === 'pay') { if (s.coins < d.cost) return fail('Mending it costs ' + d.cost + 'c.'); spend(s, d.cost); if (o) o.disrepair = false; report(s, empById(d.biz).name + ': mended for ' + d.cost + 'c, on your word.'); }
+        else report(s, empById(d.biz).name + ': left unmended for now. Takings stay down until it is fixed.');
+        s.decisions.splice(i, 1); return ok();
+      }
     }
     return fail('Unknown command');
   }
@@ -2905,7 +3005,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
