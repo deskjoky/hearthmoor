@@ -82,6 +82,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .fast:first-child { border-left: 0; }
 .fast[aria-pressed="true"] { background: var(--leather); color: var(--parch); }
 /* thumbsticks rest in the lower corners and jump to wherever your thumb lands */
+.minimap { position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + 66px); right: max(12px, calc(env(safe-area-inset-right, 0px) + 6px)); width: 116px; padding: 0; border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.minimap canvas { width: 116px; height: 116px; border-radius: 50%; border: 3px solid #e8d6ae; box-shadow: 0 0 0 1px #5b4630, 0 3px 10px rgba(0,0,0,.45); background: #7d8f55; display: block; }
+.minimap span { font: 400 13px var(--f-display); color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 5px; padding: 1px 8px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .sticks { display: none; } /* the controls work without anything drawn on screen */
 .stick { position: fixed; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(241, 227, 194, .45); background: radial-gradient(circle, rgba(20,14,10,.18), rgba(20,14,10,.38)); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); opacity: .55; transition: opacity .15s; }
 .stick.l { left: calc(max(16px, env(safe-area-inset-left, 0px)) + 18px); }
@@ -423,6 +426,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
 
 <canvas id="world" aria-label="The village of Hearthmoor"></canvas>
+<button type="button" class="minimap" id="minimap" hidden aria-label="Open the map"><canvas id="miniCv" width="232" height="232"></canvas><span id="miniName">Hearthmoor</span></button>
 <header class="hud" id="hud" hidden>
   <div class="strip">
     <button class="icon-btn" id="menuBtn" type="button" aria-label="Pause and open the menu"><span></span></button>
@@ -7088,6 +7092,7 @@ function settingsHTML() {
   ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast'], ['off', 'Off']])}<p>How fast everyone grows older: a year every 6, 4 or 3 days. At normal pace a life lasts many hours of play; children grow up while you build. Off stops time for everyone.</p></div>` : ''}
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 12 minutes, normal about 18, relaxed about 24. Wages, hunger, rent and work all follow the same clock.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
+  <div class="setting"><span>Minimap</span>${seg('minimap', st.minimap || 'on', [['on', 'Shown'], ['off', 'Hidden']])}<p>A small map in the top corner, north at the top. Tap it to open the full map.</p></div>
   <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>
   <h4>Sound</h4>
   <div class="setting"><span>Music</span>${seg('music', st.music, [['off', 'Off'], ['low', 'Low'], ['normal', 'Normal']])}</div>
@@ -7157,7 +7162,7 @@ function renderTitle() {
   } else {
     const st = meta.settings;
     left = `${back}<h3>Settings</h3><div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>About 12, 18 or 24 minutes a day.</p></div>`;
-    right = `<div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}</div>
+    right = `<div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}</div><div class="setting"><span>Minimap</span>${seg('minimap', st.minimap || 'on', [['on', 'Shown'], ['off', 'Hidden']])}</div>
       <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>`;
   }
   pg.innerHTML = `<div class="spread"><div class="leaf">${left}</div><div class="leaf">${right}</div></div>`;
@@ -7274,6 +7279,112 @@ function drainEvents() {
   if (coins.length) toast(coins.length === 1 ? coins[0].text : `${coins.length} sales just now.`, 'coin');
 }
 let last = performance.now(), uiTimer = 0;
+/* ================= the minimap: a small chart of the streets around you, north at the top ================= */
+const Mini = (function () {
+  const items = [];   // drawn in layer order: {L, k, ...}
+  const COL = { field: '#a39a5c', pasture: '#8fa25e', water: '#5b8fb4', road: '#c9b383', street: '#dccca4', plaza: '#d4c39b', house: '#a1593b', big: '#6a4330', wall: '#4b4038', mine: '#e8b84a' };
+  const line = (L, pts, w, c) => { const xs = pts.map(p => p[0]), zs = pts.map(p => p[1]); items.push({ L, k: 'line', pts, w, c, x0: Math.min(...xs) - w, x1: Math.max(...xs) + w, z0: Math.min(...zs) - w, z1: Math.max(...zs) + w }); };
+  const rect = (L, x, z, w, d, face, c) => items.push({ L, k: 'rect', x, z, w, d, face: face || 0, c, x0: x - w, x1: x + w, z0: z - w, z1: z + w });
+  const circ = (L, x, z, r, c) => items.push({ L, k: 'circ', x, z, r, c, x0: x - r, x1: x + r, z0: z - r, z1: z + r });
+  const ell = (L, x, z, rx, rz, c) => items.push({ L, k: 'ell', x, z, rx, rz, c, x0: x - rx, x1: x + rx, z0: z - rz, z1: z + rz });
+  // water
+  line(1, chaikin(RIVER, 2), 17.6, COL.water); line(1, chaikin(GREEN, 2), 10.6, COL.water); line(1, STREAM, 3.4, COL.water); line(1, RACE, 1.6, COL.water); line(1, TAIL, 1.4, COL.water);
+  circ(1, POND.x, POND.z, POND.r, COL.water); ell(1, Sim.LAKE.x, Sim.LAKE.z, Sim.LAKE.rx, Sim.LAKE.rz, COL.water);
+  // roads
+  Object.values(Sim.ROADS).forEach(r => line(2, r, 4, COL.road));
+  LANES.forEach(ln => line(2, ln.pts, ln.w + 0.4, COL.road)); circ(2, SQ.x, SQ.z, 10.4, COL.road);
+  // Hearthmoor
+  HOUSES.forEach(h => rect(4, h.x, h.z, h.cap >= 4 ? 6 : 4.6, h.cap >= 4 ? 4.6 : 3.8, 0, COL.house));
+  Sim.EMPLOYERS.forEach(e => rect(4, e.x, e.z - 0.8 * e.dir, 8.4, 5.6, 0, COL.house));
+  rect(4, L.hall.x, L.hall.z, 5.8, 8.8, 0, COL.big); rect(4, L.manor.x - 1.4, L.manor.z, 18.8, 6.8, 0, COL.big); rect(4, Sim.MILL.x, Sim.MILL.z, 6.8, 5.6, 0, COL.big);
+  rect(4, L.granary.x, L.granary.z, 3.8, 3.8, 0, COL.big); rect(4, L.home.x, L.home.z, 3.8, 3.4, 0, COL.house); rect(4, L.cottage.x, L.cottage.z, 4, 3.6, 0, COL.house);
+  { const bc = new THREE.Vector3(0, 0, 0).applyMatrix4(V.barnFrame); rect(4, bc.x, bc.z, 8.4, 7, 0, COL.big); }
+  { const mx = L.manor.x, mz = L.manor.z, gz = Sim.P.gate.z - 1.4; line(5, [[mx - 2.4, gz], [-16, gz], [-16, mz - 12], [20, mz - 12], [20, gz], [mx + 2.4, gz]], 0.9, COL.wall); }
+  // Oakbridge
+  { const O = Sim.OAK; line(2, O.streets ? [] : [], 0, COL.street);
+    [O.square, O.hallSq, O.guildSq, O.green].forEach(q => q && circ(3, q.x, q.z, q.r, COL.plaza));
+    O.streets.forEach(st => line(2, st.pts, st.w, COL.street));
+    line(2, [[O.bridge.ax, O.bridge.az], [O.bridge.bx, O.bridge.bz]], O.bridge.w, COL.street);
+    O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house));
+    O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house));
+    rect(4, O.hall.x, O.hall.z, 12, 8, O.hall.face, COL.big); rect(4, O.guildhall.x, O.guildhall.z, 10, 7, O.guildhall.face, COL.big); rect(4, O.keep.x, O.keep.z, 13, 13, 0, COL.big);
+    line(5, O.wall, 1.6, COL.wall); }
+  // Greenhaven
+  { const H = Sim.GH;
+    H.fields.forEach(f => rect(0, f.x, f.z, f.w, f.d, 0, COL.field)); H.pastures.forEach(f => rect(0, f.x, f.z, f.w, f.d, 0, COL.pasture)); rect(0, H.orchard.x, H.orchard.z, H.orchard.w, H.orchard.d, 0, COL.pasture);
+    circ(3, H.green.x, H.green.z, H.green.r, '#93a85f');
+    H.streets.forEach(st => line(2, st.pts, st.w, COL.road));
+    line(2, [[H.bridge.ax, H.bridge.az], [H.bridge.bx, H.bridge.bz]], H.bridge.w, COL.street);
+    H.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 7.6 : 5, 4.2, h.face, COL.house));
+    H.biz.forEach(b => rect(4, b.x, b.z, b.id === 'g_mill' ? 10 : b.id === 'g_plough' ? 8 : 6.4, b.id === 'g_mill' ? 8 : 5.6, b.face, b.id === 'g_estate' ? COL.big : COL.house));
+    rect(4, H.hall.x, H.hall.z, 10, 6, H.hall.face, COL.big); rect(4, H.estate.x, H.estate.z, 22, 11, H.estate.face, COL.big); }
+  // Crownmere
+  { const O = Sim.CM;
+    O.streets.forEach(st => line(2, st.pts, st.w, COL.street));
+    O.squares.forEach(q => circ(3, q.x, q.z, q.r, COL.plaza));
+    O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house));
+    O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house));
+    O.mansions.forEach(m => rect(4, m.x, m.z, 15, 9, m.face, COL.big));
+    rect(4, O.cathedral.x, O.cathedral.z, 26, 12, O.cathedral.face, COL.big); rect(4, O.hall.x, O.hall.z, 15, 10, O.hall.face, COL.big);
+    { const c = O.castle, ux = Math.cos(c.face), uz = -Math.sin(c.face), vx = Math.sin(c.face), vz = Math.cos(c.face), P = (u, v) => [c.x + ux * u + vx * v, c.z + uz * u + vz * v];
+      rect(3, c.x, c.z, 48, 40, -c.face, COL.plaza); line(5, [P(-24, -20), P(24, -20), P(24, 20), P(-24, 20), P(-24, -20)], 2.4, COL.wall); const k = P(0, -4); rect(4, k[0], k[1], 16, 14, c.face, COL.big); }
+    line(5, O.wall, 2, COL.wall); }
+  // the stage posts
+  Object.values(Sim.STAGE).forEach(st => rect(4, st.x, st.z, 7, 4, st.face, COL.big));
+  items.sort((a, b) => a.L - b.L);
+  const cv = $('miniCv'), ctx = cv.getContext('2d'), N = cv.width;
+  let lx = 1e9, lz = 0, ly = 0, lt = 0, lr = 0, acc = 0;
+  function draw(px, pz, yaw, R) {
+    const S = N / 2 / R;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#7d8f55'; ctx.fillRect(0, 0, N, N);
+    ctx.setTransform(S, 0, 0, S, N / 2 - px * S, N / 2 - pz * S);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const x0 = px - R * 1.5, x1 = px + R * 1.5, z0 = pz - R * 1.5, z1 = pz + R * 1.5;
+    for (const it of items) {
+      if (it.x1 < x0 || it.x0 > x1 || it.z1 < z0 || it.z0 > z1) continue;
+      ctx.fillStyle = ctx.strokeStyle = it.c;
+      if (it.k === 'line') { ctx.lineWidth = Math.max(it.w, 1.2 / S); ctx.beginPath(); it.pts.forEach(([x, z], i) => i ? ctx.lineTo(x, z) : ctx.moveTo(x, z)); ctx.stroke(); }
+      else if (it.k === 'circ') { ctx.beginPath(); ctx.arc(it.x, it.z, it.r, 0, Math.PI * 2); ctx.fill(); }
+      else if (it.k === 'ell') { ctx.beginPath(); ctx.ellipse(it.x, it.z, it.rx, it.rz, 0, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.save(); ctx.translate(it.x, it.z); ctx.rotate(-it.face); ctx.fillRect(-it.w / 2, -it.d / 2, it.w, it.d); ctx.restore(); }
+    }
+    // your home and your businesses, marked in gold
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const dot = (x, z, c, r) => { const sx = N / 2 + (x - px) * S, sz = N / 2 + (z - pz) * S; if (Math.hypot(sx - N / 2, sz - N / 2) > N / 2 - 6) return; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx, sz, r, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#2a1d12'; ctx.stroke(); };
+    for (const m of mineMarks()) dot(m.x, m.z, COL.mine, 5);
+    // you: a view cone for where the camera looks, and an arrow
+    const c = N / 2, dx = -Math.sin(yaw), dz = -Math.cos(yaw), a = Math.atan2(dz, dx);
+    const g = ctx.createRadialGradient(c, c, 4, c, c, N * 0.34); g.addColorStop(0, 'rgba(255,244,214,.55)'); g.addColorStop(1, 'rgba(255,244,214,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(c, c); ctx.arc(c, c, N * 0.34, a - 0.55, a + 0.55); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.translate(c, c); ctx.rotate(a + Math.PI / 2);
+    ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(8, 8); ctx.lineTo(0, 4); ctx.lineTo(-8, 8); ctx.closePath(); ctx.fillStyle = '#fff6dc'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#2a1d12'; ctx.stroke(); ctx.restore();
+    // north
+    ctx.font = '700 20px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(32,26,20,.8)'; ctx.strokeText('N', c, 16); ctx.fillStyle = '#f5e7c4'; ctx.fillText('N', c, 16);
+  }
+  function mineMarks() {
+    const out = [], s = G; if (!s) return out;
+    out.push(L.home);
+    try { for (const h of s.houses || []) if (String(h.owner).startsWith('player') && h.x != null) out.push(h); } catch (e) { }
+    try { for (const sh of Object.values(s.shops || {})) if (sh.owner === 'player' && sh.plot != null && Sim.PLOTS[sh.plot]) out.push(Sim.PLOTS[sh.plot]); } catch (e) { }
+    try { for (const b of Object.values(s.biz || {})) if (b.owner === 'player') { const e = Sim.empById(b.id); if (e) out.push(e); } } catch (e) { }
+    return out;
+  }
+  return {
+    update(dt) {
+      const el = $('minimap'), show = UI.mode === 'play' && !UI.overlay && G && meta.settings.minimap !== 'off';
+      if (el.hidden === show) el.hidden = !show;
+      if (!show) return;
+      acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85 }[t] || 60; })();
+      if (acc < 0.1 && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
+      if (acc < 0.1) return;
+      acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
+      draw(p.x, p.z, cam.yaw, R);
+      const t = townHere(), inTown = R !== 120, nm = inTown ? TOWN_NAMES[t] : 'On the road';
+      if (nm !== lt) { $('miniName').textContent = nm; lt = nm; }
+    }
+  };
+})();
+$('minimap').onclick = () => { if (UI.mode === 'play' && !UI.overlay) openMap(); };
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
@@ -7284,6 +7395,7 @@ function frame(now) {
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
   syncCamera(G, dt, t);
+  if (G) Mini.update(dt);
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
   if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(scene, camera);
@@ -7539,8 +7651,13 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.1653';
+const BUILD = '2026.11.04.1705';
 const NOTES = [
+  { v: '0.29', date: '4 November', title: 'A minimap', items: [
+    'A small round map now sits in the top-right corner: the streets, buildings, walls and water around you, with north at the top. The arrow is you, pointing the way the camera looks.',
+    'Your hut, your houses and your businesses are marked in gold. Below it is the name of the town you are in, or "On the road".',
+    'Tap the minimap to open the full map. You can hide it in Settings.'
+  ] },
   { v: '0.28', date: '4 November', title: 'Crownmere, the capital', items: [
     'The roads to the capital are open: north from Oakbridge, and north-east from Greenhaven. Crownmere stands on the shore of Crown Lake, beneath the mountains.',
     'About 1,150 people live in its seven wards: Castle Hill, the Court Quarter of the great houses, the Great Market, the Guild Ward, the Lakeside quays, the crowded Old Town, and the South Ward inside the King\u2019s Gate.',
