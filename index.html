@@ -1528,6 +1528,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function officeHolder(s, office) { return s.offices[office]; }
   function holderName(s, office) { const h = s.offices[office]; return h === 'player' ? s.name : h && s.people[h] ? s.people[h].name : 'nobody'; }
+  // women and men: known from their names (and their titles), so old saves need nothing new
+  const FEMALE = new Set(['Alda', 'Alys', 'Avice', 'Beatrix', 'Cecily', 'Constance', 'Dulcie', 'Eda', 'Edda', 'Edith', 'Elsie', 'Faye', 'Freya', 'Gerd', 'Gisela', 'Hawise', 'Helewise', 'Hilda', 'Ida', 'Imogen', 'Isabel', 'Isolde', 'Joan', 'Jocelyn', 'Katrin', 'Lettice', 'Linnet', 'Mabyn', 'Maren', 'Maud', 'Meriel', 'Merrin', 'Muriel', 'Nell', 'Nesta', 'Orabel', 'Ottilie', 'Petra', 'Philippa', 'Quenby', 'Rohese', 'Rosamund', 'Sabine', 'Sela', 'Sibyl', 'Tamsin', 'Tibby', 'Tiffany', 'Tilly', 'Una', 'Wynn', 'Yseult', 'Alys', 'Mother', 'Goodwife', 'Widow', 'Lady']);
+  const firstName = n => { const w = String(n || '').split(' '); return ['Old', 'Young', 'Elder', 'Steward', 'Lord', 'Mayor', 'Reeve'].includes(w[0]) && w[1] ? w[1] : w[0]; };
+  function sexOf(p) { if (!p) return 'm'; if (p.sex) return p.sex; const w = String(p.name || '').split(' ')[0]; return FEMALE.has(w) || FEMALE.has(firstName(p.name)) ? 'f' : 'm'; }
   function newPerson(s, o) {
     const id = 'p' + (s.nextPid++);
     const p = Object.assign({ id, name: 'Someone', age: 30, purse: 20, skill: 0.6 + rand(s) * 0.6, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: [], palette: Math.floor(rand(s) * 10), ate: 0, retired: false }, o);
@@ -1863,11 +1867,22 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const sa = side(a.x, a.z);
     if (sa !== st) { const mine = sa < 0 ? W : E, other = sa < 0 ? E : W; return Math.hypot(a.x - mine.x, a.z - mine.z) < 2 ? other : mine; }
     // along the bank: keep out of the water where the river bends toward the path
+    // (a spot at the water's edge, such as the wharf or the washing steps, is walked straight to once close)
+    const dT = Math.hypot(tgt.x - a.x, tgt.z - a.z);
+    if (dT < 9) return tgt;
     for (const f of [0.15, 0.35, 0.55, 0.75, 0.95]) {
       const px = a.x + (tgt.x - a.x) * f, pz = a.z + (tgt.z - a.z) * f;
+      if (dT * (1 - f) < 6) break;
       if (OAK.riverDist(px, pz) < 7.6) { const w = { x: OAK.riverX(pz) + sa * 10.5, z: pz }; return Math.hypot(a.x - w.x, a.z - w.z) < 1 ? tgt : w; }
     }
     return tgt;
+  }
+  // standing at home in the daytime: by the front door, each in their own place, not all on one spot
+  function homeYard(s, p, id) {
+    const h = p.home && p.home.startsWith('o') ? OAK.houses[+p.home.slice(1)] : null, home = homePoint(s, p);
+    if (!home) return null;
+    if (h) { const k = h01(id, 1, 83) - 0.5, d = 4 + h01(id, 1, 84) * 1.6; return { x: h.x + Math.sin(h.face) * d + Math.cos(h.face) * k * 4, z: h.z + Math.cos(h.face) * d - Math.sin(h.face) * k * 4, look: { x: h.x, z: h.z } }; }
+    return ringSpot(home.x, home.z, 0.3, 1.8, id, 1, 85);
   }
   /* people walk through their own day */
   function personRoutine(s, a, dt) {
@@ -1890,13 +1905,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       else { tgt = MANOR_HOME; doing = 'At the manor'; }
     }
     if (!tgt && p.kid) {
-      if (h < 8 || h >= 19) { tgt = home || P.plaza; doing = 'At home with the family'; }
+      if (h < 8 || h >= 19) { tgt = night ? home : homeYard(s, p, a.id) || P.plaza; doing = 'At home with the family'; }
       else if (p.age >= 10 && h < 12) { tgt = home ? { x: home.x + 2.2, z: home.z + 2.4 } : P.plaza; doing = 'Helping with chores at home'; working = true; }
       else if (ts) { const q = pickPlaza(a.id, s.day, 61); tgt = plazaSpot(q, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in ' + q.name; }
       else { const pz = P.plaza; tgt = ringSpot(pz.x, pz.z + 1, 0.5, 4.5, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in the square'; }
     }
     if (!tgt) {
-      if (h >= 17 && ts && home && h01(a.id, s.day, 51) < 0.4) { tgt = home; doing = 'Home for the evening'; }
+      if (h >= 17 && ts && home && h01(a.id, s.day, 51) < 0.4) { tgt = homeYard(s, p, a.id); doing = 'Home for the evening'; }
       else if (h >= 17) { tgt = chatSpot(s, a.id, town); doing = ts ? 'Chatting with neighbours' : 'Chatting in the square'; }
       else if (!j && !p.retired && !p.kid && (!ts || h01(a.id, s.day * 24 + Math.floor(h), 71) < 0.3)) { const bd = ts ? ts.board : { x: -4.5, z: -2.5 }; tgt = ts ? ringSpot(bd.x, bd.z, 2, 6.5, a.id, s.day, 17) : ringSpot(bd.x, bd.z + 1.5, 1.2, 3, a.id, s.day, 17); tgt.look = bd; doing = 'At the notice board, looking for work'; }
       else { tgt = wellSpot(s, a.id, 21, town); doing = ts ? 'Passing the time in town' : 'Passing the time by the well'; }
@@ -2372,7 +2387,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       houses.push({ x, z, face: Math.atan2(n.x - x, n.z - z), tall: r() < 0.3 }); taken.push({ x, z, r: rad + 0.6 });
     }
     const spots = {
-      docks: { x: quayX(-470) + 4, z: -470, rx: 1.5, rz: 22 }, carting: { x: biz[14].x - 9, z: biz[14].z, rx: 3, rz: 4 }, watch: { x: gate.x + u.x * 9, z: gate.z + u.z * 9, rx: 3, rz: 2 },
+      docks: { x: quayX(-470) + 3, z: -470, rx: 1, rz: 22 }, carting: { x: biz[14].x - 9, z: biz[14].z, rx: 3, rz: 4 }, watch: { x: gate.x + u.x * 9, z: gate.z + u.z * 9, rx: 3, rz: 2 },
       washing: { x: quayX(S.z + 38) + 3, z: S.z + 38, rx: 1.5, rz: 4 }, oakfields: { x: 330, z: -300, rx: 12, rz: 8 }, labour: { x: keep.x - 16, z: keep.z + 6, rx: 5, rz: 4 }
     };
     // where townsfolk gather: never all in one place
@@ -2411,13 +2426,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.towns && s.towns.oakbridge) return;
     let sd = 90210; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
     const used = new Set(Object.values(s.people).map(p => p.name));
-    const nameFor = (fam) => { for (let k = 0; k < 40; k++) { const n = FIRST[Math.floor(r() * FIRST.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsfolk ' + used.size; used.add(n); return n; };
+    const FIRST_F = FIRST.filter(n => FEMALE.has(n)), FIRST_M = FIRST.filter(n => !FEMALE.has(n));
+    const nameFor = (fam, sex) => { const L = sex === 'f' ? FIRST_F : sex === 'm' ? FIRST_M : FIRST; for (let k = 0; k < 40; k++) { const n = L[Math.floor(r() * L.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsfolk ' + used.size; used.add(n); return n; };
     const oh = OAK.houses.map((h, i) => ({ id: 'o' + i, name: (h.tall ? 'Townhouse, ' : 'Cottage, ') + (h.x < OAK.riverX(h.z) ? 'west bank' : 'east bank'), x: h.x, z: h.z, owner: 'town:oakbridge', rent: h.tall ? 4 : 3, cap: h.tall ? 6 : 4, tenants: [], town: 'oakbridge' }));
     s.houses.push(...oh);
     const P0 = (o, h) => { const p = newPerson(s, Object.assign({ town: 'oakbridge', purse: 20 + Math.floor(r() * 25), palette: Math.floor(r() * 10) }, o)); if (h) moveIn(s, p, h); p.log = [{ day: s.day, text: 'Lives in Oakbridge.' }]; p.rep = 20; return p; };
     let hi = 0; const nextHouse = () => oh[hi++ % oh.length];
     const family = (head, h, fam, kids) => {
-      const sp = r() < 0.75 ? P0({ name: nameFor(fam), age: Math.max(18, head.age - 4 + Math.floor(r() * 8)) }, h) : null;
+      const sp = r() < 0.75 ? P0({ name: nameFor(fam, sexOf(head) === 'f' ? 'm' : 'f'), age: Math.max(18, head.age - 4 + Math.floor(r() * 8)) }, h) : null;
       if (sp) { head.spouse = sp.id; sp.spouse = head.id; sp.hh = head.id; }
       for (let k = 0; k < kids; k++) { const c = P0({ name: nameFor(fam), age: 2 + Math.floor(r() * 12), purse: 0 }, h); c.kid = true; c.parents = [head.id].concat(sp ? [sp.id] : []); c.hh = head.id; }
       return sp;
@@ -2428,7 +2444,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const own = P0({ name: b.boss.includes(' ') ? b.boss : b.boss + ' ' + fam, age: 35 + Math.floor(r() * 25), purse: 110 + Math.floor(r() * 90), job: { type: 'biz', biz: b.id, role: 'owner' }, home: 'biz:' + b.id });
       used.add(own.name);
       s.biz[b.id] = { id: b.id, trade: b.trade, owner: own.id, staff: [], profits: [9, 9, 9], closed: false, opened: 0, lastProfit: 0, lastRevenue: 0, town: 'oakbridge' };
-      const sp = r() < 0.6 ? P0({ name: nameFor(fam), age: own.age - 3, home: 'biz:' + b.id }) : null;
+      const sp = r() < 0.6 ? P0({ name: nameFor(fam, sexOf(own) === 'f' ? 'm' : 'f'), age: own.age - 3, home: 'biz:' + b.id }) : null;
       if (sp) { own.spouse = sp.id; sp.spouse = own.id; sp.hh = own.id; }
       const nh = 1 + Math.floor(r() * 2);
       for (let k = 0; k < nh; k++) {
@@ -3120,7 +3136,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    sexOf, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -4163,9 +4179,42 @@ const SKIN = ['#e3b78f', '#c99470', '#f0c9a2', '#a8714d', '#d9a77d'];
 const TUNIC = ['#7b5a3a', '#5f6f3e', '#8a4b32', '#4e5f6e', '#6d5a78', '#7d7458', '#5a4a3a', '#6b6b5a', '#4a4a5a', '#7a5a4a'];
 const APRON = { bakery: '#f3efe4', smithy: '#4a3a2c', tavern: '#d8c69a', joinery: '#8a6a44' };
 const pickables = [];
+// bodies: men in a belted tunic with hose and shoes, women in a long dress to the ground; each built once per colour
+const BODY_CACHE = new Map(), HAIR_CACHE = new Map();
+const shade = (c, k) => { const o = new THREE.Color(c); o.multiplyScalar(k); return '#' + o.getHexString(); };
+function bodyGeo(fem, tunic) {
+  const key = (fem ? 'f' : 'm') + tunic; let g = BODY_CACHE.get(key); if (g) return g;
+  const P = (geo, color, x, y, z, sx, sy, sz) => ({ geo, color, m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(sx || 1, sy || 1, sz || 1)) });
+  g = mergeColored(fem ? [
+    P(new THREE.CylinderGeometry(0.19, 0.42, 0.74, 9), tunic, 0, 0.01, 0),
+    P(new THREE.CylinderGeometry(0.215, 0.225, 0.06, 9), shade(tunic, 1.35), 0, 0.2, 0),
+    P(new THREE.CylinderGeometry(0.425, 0.43, 0.08, 9), shade(tunic, 0.6), 0, -0.32, 0)
+  ] : [
+    P(new THREE.CylinderGeometry(0.24, 0.3, 0.5, 7), tunic, 0, 0.12, 0),
+    P(new THREE.CylinderGeometry(0.305, 0.305, 0.06, 7), '#3b2a1c', 0, 0.02, 0),
+    P(new THREE.BoxGeometry(0.13, 0.3, 0.15), '#4a3f33', -0.1, -0.2, 0), P(new THREE.BoxGeometry(0.13, 0.3, 0.15), '#4a3f33', 0.1, -0.2, 0),
+    P(new THREE.BoxGeometry(0.15, 0.07, 0.22), '#2a1f16', -0.1, -0.33, 0.03), P(new THREE.BoxGeometry(0.15, 0.07, 0.22), '#2a1f16', 0.1, -0.33, 0.03)
+  ]);
+  BODY_CACHE.set(key, g); return g;
+}
+// hair sits on the head and moves with it: one mesh, whatever the style
+function hairGeo(style, color) {
+  const key = style + color; if (HAIR_CACHE.has(key)) return HAIR_CACHE.get(key);
+  const P = (geo, c, x, y, z, sx, sy, sz, rx) => ({ geo, color: c, m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, 0, 0)), new THREE.Vector3(sx || 1, sy || 1, sz || 1)) });
+  const parts = [], [base, extra] = style.split('+');
+  if (base === 'coif') { parts.push(P(CG.cap, '#efe8d8', 0, 0.04, -0.01, 1.12, 1.14, 1.14), P(new THREE.BoxGeometry(0.4, 0.3, 0.08), '#efe8d8', 0, -0.08, -0.2), P(new THREE.BoxGeometry(0.34, 0.06, 0.04), color, 0, 0.08, 0.2)); }
+  else if (base !== 'bald') parts.push(P(CG.cap, color, 0, 0.06, -0.01, 1.04, base === 'cropped' ? 0.7 : 1.05, 1.06));
+  if (base === 'long') parts.push(P(new THREE.BoxGeometry(0.42, 0.56, 0.12), color, 0, -0.14, -0.17));
+  if (base === 'braid') parts.push(P(CG.braid, color, 0, -0.22, -0.23, 1.2, 1.25, 1.2, 0.2), P(CG.knot, color, 0, 0.04, -0.2, 0.7, 0.7, 0.7));
+  if (base === 'bun') parts.push(P(CG.knot, color, 0, 0.16, -0.18, 1.1, 1.1, 1.1));
+  if (base === 'bald') parts.push(P(new THREE.TorusGeometry(0.2, 0.05, 4, 10, Math.PI), color, 0, -0.02, -0.02, 1, 1, 1, Math.PI));
+  if (extra === 'beard') parts.push(P(CG.knot, color, 0, -0.12, 0.14, 1.6, 1.3, 0.9));
+  const g = parts.length ? mergeColored(parts) : null; HAIR_CACHE.set(key, g); return g;
+}
 function makeChar(opt) {
   const g = new THREE.Group();
-  const body = mesh(opt.fem ? CG.bodyF : CG.body, opt.tunic, 0, 0.36, 0, g), head = mesh(CG.head, opt.skin, 0, 0.92, 0, g);
+  const body = new THREE.Mesh(bodyGeo(!!opt.fem, opt.tunic), vc); body.position.set(0, 0.36, 0); g.add(body);
+  const head = mesh(CG.head, opt.skin, 0, 0.92, 0, g);
   const hl = mesh(CG.hand, opt.skin, -0.33, 0.42, 0, g), hr = mesh(CG.hand, opt.skin, 0.33, 0.42, 0, g);
   const sh = new THREE.Mesh(CG.shadow, shadowMat); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; g.add(sh);
   const hit = new THREE.Mesh(CG.hit, hitMat); hit.position.y = 0.9; g.add(hit);
@@ -4178,18 +4227,11 @@ function makeChar(opt) {
   if (opt.apron) mesh(CG.apron, opt.apron, 0, 0.42, 0.29, g);
   if (opt.chef) mesh(CG.chef, '#f3efe4', 0, 1.2, 0, g);
   if (opt.player) { const r = new THREE.Mesh(CG.ring, mat('#e8b84a')); r.rotation.x = Math.PI / 2; r.position.y = 0.05; g.add(r); }
-  if (opt.hair) {
-    const c = opt.hairColor || '#5a3a22', hs = opt.hair;
-    if (hs !== 'bald') { const cap = mesh(CG.cap, c, 0, 0.98, -0.01, g); cap.scale.set(1.04, hs === 'cropped' ? 0.7 : 1.05, 1.06); }
-    if (hs === 'long') mesh(CG.hairBack, c, 0, 0.82, -0.17, g);
-    if (hs === 'braid') { const b = mesh(CG.braid, c, 0, 0.72, -0.22, g); b.rotation.x = 0.25; mesh(CG.knot, c, 0, 0.96, -0.2, g).scale.setScalar(0.7); }
-    if (hs === 'bun') mesh(CG.knot, c, 0, 1.08, -0.18, g);
-    if (hs === 'beard') { const bd = mesh(CG.knot, c, 0, 0.8, 0.13, g); bd.scale.set(1.5, 1.2, 0.9); }
-  }
+  if (opt.hair) { const hg = hairGeo(opt.hair === 'beard' ? 'short+beard' : opt.hair, opt.hairColor || '#5a3a22'); if (hg) head.add(new THREE.Mesh(hg, vc)); }
   const pack = mesh(CG.pack, '#c7b07c', 0, 0.62, -0.32, g); pack.visible = false;
   const sel = new THREE.Mesh(CG.ring, mat('#f3efe4')); sel.rotation.x = Math.PI / 2; sel.position.y = 0.06; sel.scale.setScalar(1.25); sel.visible = false; g.add(sel);
   g.userData = { body, head, hl, hr, icon, pack, sel, pick: opt.pick, phase: Math.random() * 6 };
-  g.scale.setScalar(1.08);
+  g.scale.setScalar(opt.fem ? 1.02 : 1.1);
   hit.userData.owner = g; pickables.push(hit);
   scene.add(g); return g;
 }
@@ -4232,7 +4274,7 @@ function syncChars(s, t) {
     const w = shop.worker; if (!w) continue;
     const key = shop.id + ':' + w.name; seenW.add(key);
     let g = workerMeshes.get(key);
-    if (!g) { g = makeChar({ tunic: '#b8a079', skin: SKIN[w.name.length % SKIN.length], apron: APRON[shop.trade], chef: shop.trade === 'bakery', pick: 'w:' + shop.id }); workerMeshes.set(key, g); }
+    if (!g) { const fem = Sim.sexOf({ name: w.name }) === 'f'; g = makeChar({ tunic: '#b8a079', skin: SKIN[w.name.length % SKIN.length], apron: APRON[shop.trade], chef: shop.trade === 'bakery', pick: 'w:' + shop.id, fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[w.name.length % 5] }); workerMeshes.set(key, g); }
     placeChar(g, w, t, { moving: w.moving, working: w.task === 'craft' && !w.moving, pack: w.carry ? 1 : 0, hidden: w.indoors, selected: UI.sel === 'w:' + shop.id });
   }
   for (const [k, g] of workerMeshes) if (!seenW.has(k)) { dropChar(g); workerMeshes.delete(k); }
@@ -4250,7 +4292,22 @@ function syncChars(s, t) {
   for (const [id, g] of agentMeshes) if (!seen.has(id)) { dropChar(g); agentMeshes.delete(id); if (UI.sel === id) UI.sel = null; }
 }
 
+// every townsman and woman has their own hair, from their age and a little chance
+function personLook(p) {
+  if (!p) return { key: '', hair: 'short', hairColor: '#3e2a1a' };
+  const fem = Sim.sexOf(p) === 'f', n = parseInt(String(p.id).slice(1), 10) || p.name.length, h = (n * 2654435761) >>> 0, age = p.age || 30;
+  const hairColor = age >= 58 ? (h % 2 ? '#9a958c' : '#c9c4b8') : LOOKS.hairColor[h % 5];
+  let hair;
+  if (fem) hair = p.kid ? ['long', 'braid'][h % 2] : (age >= 45 || (p.spouse && h % 3 === 0)) && h % 4 ? 'coif' : ['long', 'braid', 'bun'][h % 3];
+  else { hair = p.kid ? 'short' : age >= 48 && h % 3 === 0 ? 'bald' : ['short', 'cropped', 'short'][(h >> 3) % 3]; if (!p.kid && age >= 20 && (h >> 5) % 5 < 2) hair += '+beard'; }
+  return { key: (fem ? 'f' : 'm') + hair + hairColor, fem, hair, hairColor };
+}
 function lookOf(s, a) {
+  const L = lookOf0(s, a), pl = personLook(a.pid && s.people[a.pid]);
+  for (const k in L) if (L[k] === undefined) delete L[k];
+  return Object.assign(L, { key: L.key + pl.key, fem: pl.fem, hair: L.hat ? null : pl.hair, hairColor: pl.hairColor });
+}
+function lookOf0(s, a) {
   if (a.kind === 'traveler') return { key: 'trav', hat: 'hood', capColor: '#5b4936' };
   if (a.kind === 'taxman') return { key: 'tax', hat: 'cap', capColor: LORD_GOLD, tunic: LORD_BLUE };
   const p = a.pid && s.people[a.pid], j = p && p.job;
@@ -5866,8 +5923,16 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.0851';
+const BUILD = '2026.11.04.0911';
 const NOTES = [
+  { v: '0.20', date: '4 November', title: 'Men and women', items: [
+    'Women now wear long dresses to the ground, with long hair, braids, buns or a white coif. Men wear belted tunics with hose and shoes, short or cropped hair, and many have beards.',
+    'Everyone has their own hair and hair colour, and the old go grey.',
+    'Married couples in Oakbridge are now always a man and a woman.',
+    'Fixed townsfolk walking in place on the docks and at the washing steps: they no longer get caught between the path and the water\u2019s edge.',
+    'Fixed families crowding onto one spot at their front door and shuffling there. Each now stands in their own place.',
+    'Fixed many townsfolk showing up in plain white clothes instead of their own colours.'
+  ] },
   { v: '0.19', date: '4 November', title: 'A larger Oakbridge', items: [
     'Oakbridge is rebuilt at twice the size: wider streets, room between every building, and a market square 44 metres across with a fountain and eight stalls.',
     'The walls now follow the lie of the land instead of a perfect circle, with towers at every bend and a proper gatehouse where the road from Hearthmoor arrives.',

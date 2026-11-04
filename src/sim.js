@@ -1061,6 +1061,10 @@
   }
   function officeHolder(s, office) { return s.offices[office]; }
   function holderName(s, office) { const h = s.offices[office]; return h === 'player' ? s.name : h && s.people[h] ? s.people[h].name : 'nobody'; }
+  // women and men: known from their names (and their titles), so old saves need nothing new
+  const FEMALE = new Set(['Alda', 'Alys', 'Avice', 'Beatrix', 'Cecily', 'Constance', 'Dulcie', 'Eda', 'Edda', 'Edith', 'Elsie', 'Faye', 'Freya', 'Gerd', 'Gisela', 'Hawise', 'Helewise', 'Hilda', 'Ida', 'Imogen', 'Isabel', 'Isolde', 'Joan', 'Jocelyn', 'Katrin', 'Lettice', 'Linnet', 'Mabyn', 'Maren', 'Maud', 'Meriel', 'Merrin', 'Muriel', 'Nell', 'Nesta', 'Orabel', 'Ottilie', 'Petra', 'Philippa', 'Quenby', 'Rohese', 'Rosamund', 'Sabine', 'Sela', 'Sibyl', 'Tamsin', 'Tibby', 'Tiffany', 'Tilly', 'Una', 'Wynn', 'Yseult', 'Alys', 'Mother', 'Goodwife', 'Widow', 'Lady']);
+  const firstName = n => { const w = String(n || '').split(' '); return ['Old', 'Young', 'Elder', 'Steward', 'Lord', 'Mayor', 'Reeve'].includes(w[0]) && w[1] ? w[1] : w[0]; };
+  function sexOf(p) { if (!p) return 'm'; if (p.sex) return p.sex; const w = String(p.name || '').split(' ')[0]; return FEMALE.has(w) || FEMALE.has(firstName(p.name)) ? 'f' : 'm'; }
   function newPerson(s, o) {
     const id = 'p' + (s.nextPid++);
     const p = Object.assign({ id, name: 'Someone', age: 30, purse: 20, skill: 0.6 + rand(s) * 0.6, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: [], palette: Math.floor(rand(s) * 10), ate: 0, retired: false }, o);
@@ -1396,11 +1400,22 @@
     const sa = side(a.x, a.z);
     if (sa !== st) { const mine = sa < 0 ? W : E, other = sa < 0 ? E : W; return Math.hypot(a.x - mine.x, a.z - mine.z) < 2 ? other : mine; }
     // along the bank: keep out of the water where the river bends toward the path
+    // (a spot at the water's edge, such as the wharf or the washing steps, is walked straight to once close)
+    const dT = Math.hypot(tgt.x - a.x, tgt.z - a.z);
+    if (dT < 9) return tgt;
     for (const f of [0.15, 0.35, 0.55, 0.75, 0.95]) {
       const px = a.x + (tgt.x - a.x) * f, pz = a.z + (tgt.z - a.z) * f;
+      if (dT * (1 - f) < 6) break;
       if (OAK.riverDist(px, pz) < 7.6) { const w = { x: OAK.riverX(pz) + sa * 10.5, z: pz }; return Math.hypot(a.x - w.x, a.z - w.z) < 1 ? tgt : w; }
     }
     return tgt;
+  }
+  // standing at home in the daytime: by the front door, each in their own place, not all on one spot
+  function homeYard(s, p, id) {
+    const h = p.home && p.home.startsWith('o') ? OAK.houses[+p.home.slice(1)] : null, home = homePoint(s, p);
+    if (!home) return null;
+    if (h) { const k = h01(id, 1, 83) - 0.5, d = 4 + h01(id, 1, 84) * 1.6; return { x: h.x + Math.sin(h.face) * d + Math.cos(h.face) * k * 4, z: h.z + Math.cos(h.face) * d - Math.sin(h.face) * k * 4, look: { x: h.x, z: h.z } }; }
+    return ringSpot(home.x, home.z, 0.3, 1.8, id, 1, 85);
   }
   /* people walk through their own day */
   function personRoutine(s, a, dt) {
@@ -1423,13 +1438,13 @@
       else { tgt = MANOR_HOME; doing = 'At the manor'; }
     }
     if (!tgt && p.kid) {
-      if (h < 8 || h >= 19) { tgt = home || P.plaza; doing = 'At home with the family'; }
+      if (h < 8 || h >= 19) { tgt = night ? home : homeYard(s, p, a.id) || P.plaza; doing = 'At home with the family'; }
       else if (p.age >= 10 && h < 12) { tgt = home ? { x: home.x + 2.2, z: home.z + 2.4 } : P.plaza; doing = 'Helping with chores at home'; working = true; }
       else if (ts) { const q = pickPlaza(a.id, s.day, 61); tgt = plazaSpot(q, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in ' + q.name; }
       else { const pz = P.plaza; tgt = ringSpot(pz.x, pz.z + 1, 0.5, 4.5, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in the square'; }
     }
     if (!tgt) {
-      if (h >= 17 && ts && home && h01(a.id, s.day, 51) < 0.4) { tgt = home; doing = 'Home for the evening'; }
+      if (h >= 17 && ts && home && h01(a.id, s.day, 51) < 0.4) { tgt = homeYard(s, p, a.id); doing = 'Home for the evening'; }
       else if (h >= 17) { tgt = chatSpot(s, a.id, town); doing = ts ? 'Chatting with neighbours' : 'Chatting in the square'; }
       else if (!j && !p.retired && !p.kid && (!ts || h01(a.id, s.day * 24 + Math.floor(h), 71) < 0.3)) { const bd = ts ? ts.board : { x: -4.5, z: -2.5 }; tgt = ts ? ringSpot(bd.x, bd.z, 2, 6.5, a.id, s.day, 17) : ringSpot(bd.x, bd.z + 1.5, 1.2, 3, a.id, s.day, 17); tgt.look = bd; doing = 'At the notice board, looking for work'; }
       else { tgt = wellSpot(s, a.id, 21, town); doing = ts ? 'Passing the time in town' : 'Passing the time by the well'; }
@@ -1905,7 +1920,7 @@
       houses.push({ x, z, face: Math.atan2(n.x - x, n.z - z), tall: r() < 0.3 }); taken.push({ x, z, r: rad + 0.6 });
     }
     const spots = {
-      docks: { x: quayX(-470) + 4, z: -470, rx: 1.5, rz: 22 }, carting: { x: biz[14].x - 9, z: biz[14].z, rx: 3, rz: 4 }, watch: { x: gate.x + u.x * 9, z: gate.z + u.z * 9, rx: 3, rz: 2 },
+      docks: { x: quayX(-470) + 3, z: -470, rx: 1, rz: 22 }, carting: { x: biz[14].x - 9, z: biz[14].z, rx: 3, rz: 4 }, watch: { x: gate.x + u.x * 9, z: gate.z + u.z * 9, rx: 3, rz: 2 },
       washing: { x: quayX(S.z + 38) + 3, z: S.z + 38, rx: 1.5, rz: 4 }, oakfields: { x: 330, z: -300, rx: 12, rz: 8 }, labour: { x: keep.x - 16, z: keep.z + 6, rx: 5, rz: 4 }
     };
     // where townsfolk gather: never all in one place
@@ -1944,13 +1959,14 @@
     if (s.towns && s.towns.oakbridge) return;
     let sd = 90210; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
     const used = new Set(Object.values(s.people).map(p => p.name));
-    const nameFor = (fam) => { for (let k = 0; k < 40; k++) { const n = FIRST[Math.floor(r() * FIRST.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsfolk ' + used.size; used.add(n); return n; };
+    const FIRST_F = FIRST.filter(n => FEMALE.has(n)), FIRST_M = FIRST.filter(n => !FEMALE.has(n));
+    const nameFor = (fam, sex) => { const L = sex === 'f' ? FIRST_F : sex === 'm' ? FIRST_M : FIRST; for (let k = 0; k < 40; k++) { const n = L[Math.floor(r() * L.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsfolk ' + used.size; used.add(n); return n; };
     const oh = OAK.houses.map((h, i) => ({ id: 'o' + i, name: (h.tall ? 'Townhouse, ' : 'Cottage, ') + (h.x < OAK.riverX(h.z) ? 'west bank' : 'east bank'), x: h.x, z: h.z, owner: 'town:oakbridge', rent: h.tall ? 4 : 3, cap: h.tall ? 6 : 4, tenants: [], town: 'oakbridge' }));
     s.houses.push(...oh);
     const P0 = (o, h) => { const p = newPerson(s, Object.assign({ town: 'oakbridge', purse: 20 + Math.floor(r() * 25), palette: Math.floor(r() * 10) }, o)); if (h) moveIn(s, p, h); p.log = [{ day: s.day, text: 'Lives in Oakbridge.' }]; p.rep = 20; return p; };
     let hi = 0; const nextHouse = () => oh[hi++ % oh.length];
     const family = (head, h, fam, kids) => {
-      const sp = r() < 0.75 ? P0({ name: nameFor(fam), age: Math.max(18, head.age - 4 + Math.floor(r() * 8)) }, h) : null;
+      const sp = r() < 0.75 ? P0({ name: nameFor(fam, sexOf(head) === 'f' ? 'm' : 'f'), age: Math.max(18, head.age - 4 + Math.floor(r() * 8)) }, h) : null;
       if (sp) { head.spouse = sp.id; sp.spouse = head.id; sp.hh = head.id; }
       for (let k = 0; k < kids; k++) { const c = P0({ name: nameFor(fam), age: 2 + Math.floor(r() * 12), purse: 0 }, h); c.kid = true; c.parents = [head.id].concat(sp ? [sp.id] : []); c.hh = head.id; }
       return sp;
@@ -1961,7 +1977,7 @@
       const own = P0({ name: b.boss.includes(' ') ? b.boss : b.boss + ' ' + fam, age: 35 + Math.floor(r() * 25), purse: 110 + Math.floor(r() * 90), job: { type: 'biz', biz: b.id, role: 'owner' }, home: 'biz:' + b.id });
       used.add(own.name);
       s.biz[b.id] = { id: b.id, trade: b.trade, owner: own.id, staff: [], profits: [9, 9, 9], closed: false, opened: 0, lastProfit: 0, lastRevenue: 0, town: 'oakbridge' };
-      const sp = r() < 0.6 ? P0({ name: nameFor(fam), age: own.age - 3, home: 'biz:' + b.id }) : null;
+      const sp = r() < 0.6 ? P0({ name: nameFor(fam, sexOf(own) === 'f' ? 'm' : 'f'), age: own.age - 3, home: 'biz:' + b.id }) : null;
       if (sp) { own.spouse = sp.id; sp.spouse = own.id; sp.hh = own.id; }
       const nh = 1 + Math.floor(r() * 2);
       for (let k = 0; k < nh; k++) {
@@ -2653,7 +2669,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    sexOf, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
