@@ -237,6 +237,7 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   check(v.dispute != null, 'a dispute arrives for the council');
   Sim.cmd(s, 'talk'); runIdle(s);
   const who = Sim.DISPUTES[v.dispute].a;
+  if (v.chest < 5) Sim.cmd(s, 'giveChest', 10);
   Sim.cmd(s, 'settle', 2);
   check(v.dispute == null && s.rec.disputesSettled === 1, 'settled the dispute');
   Sim.step(s, 1);
@@ -552,6 +553,32 @@ console.log('18. Managers: someone you trust runs the place while you are away')
   if (d0) { const c0 = s.coins; check(Sim.cmd(s, 'decide', d0.id, 'pay').ok && !s.biz.o_bell.disrepair && s.coins === c0 - d0.cost, 'paying for it puts The Bell right'); }
   check(Sim.cmd(s, 'fireManager', 'shop', sh.id).ok && !sh.manager && s.people[cs[0].pid].job === null, 'you can let a manager go');
   const back = Sim.deserialize(Sim.serialize(s)); check(back.biz.o_bell.manager && back.biz.o_bell.manager.name === cb[0].name, 'managers survive saving and loading');
+}
+
+console.log('19. The Elder\u2019s powers: the village works, officers, and the open land');
+{
+  const s = Sim.newGame(104); s.coins = 500; const v = s.village;
+  Sim.electElder ? null : null;
+  s.offices.elder = 'player'; v.council = true; v.chest = 200; s.gov.relief = 'none';
+  check(!Sim.cmd(s, 'openLand', 'cottages').ok, 'the land is opened in person, at the hall or on the land');
+  s.player.x = Sim.LOCS.hall.x; s.player.z = Sim.LOCS.hall.z;
+  const pop0 = Sim.villagers(s).length;
+  check(Sim.cmd(s, 'openLand', 'cottages').ok && v.land.state === 'building', 'as Elder you open the common land for cottages');
+  Sim.advance(s, 1440 * 5);
+  check(v.land.state === 'done' && Sim.villagers(s).length >= pop0 + 9 && s.houses.some(h => h.id === 'hn0'), 'the cottages are finished and three families move in (' + pop0 + ' to ' + Sim.villagers(s).length + ' villagers)');
+  const c = Sim.officerCandidates(s)[0];
+  check(Sim.cmd(s, 'appoint', 'keeper', c.id).ok && s.offices.keeper === c.id && Sim.occupation(s, c) === 'Granary Keeper', 'you appoint ' + c.name + ' Granary Keeper');
+  const ch = v.chest; Sim.advance(s, 1440); check(v.chest < ch, 'officers are paid from the chest');
+  // starve the works and things fall apart
+  v.projects.well = 1; v.projects.lanterns = 1; Sim.cmd(s, 'works', 0); const a0 = s.gov.approval.elder;
+  for (let d = 0; d < 6 && !(v.broken && Object.keys(v.broken).length); d++) Sim.advance(s, 1440);
+  check(v.broken && Object.keys(v.broken).length && s.gov.approval.elder < a0, 'neglect the village works and ' + Object.keys(v.broken || {}).join(', ') + ' falls into disrepair, and approval falls');
+  const k = Object.keys(v.broken)[0], before = v.chest; Sim.cmd(s, 'works', s.gov.worksNeed + 1);
+  check(Sim.cmd(s, 'project', k).ok && v.projects[k] && v.chest === before - Math.round(Sim.PROJECTS[k].cost / 2), 'mending it costs half the price of building it');
+  check(Sim.cmd(s, 'dismiss', 'keeper').ok && !s.offices.keeper && !c.job, 'you can dismiss an officer');
+  // an elder who is not you uses the same powers
+  const n = Sim.newGame(105); n.village.chest = 160; let opened = false; for (let d = 0; d < 40 && !opened; d++) { Sim.advance(n, 1440); opened = !!n.village.land; }
+  check(opened, 'Elder ' + Sim.holderName(n, 'elder') + ' opens the common land on their own when the chest allows');
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

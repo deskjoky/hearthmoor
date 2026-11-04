@@ -644,6 +644,7 @@ function standH(x, z) {
 
 /* static scenery is merged into a few big meshes, so the whole village costs only a handful of draw calls */
 const PARTS = { solid: [], win: [] };
+const LANDV = {};   // the open land's possible futures, shown by syncVillage
 const RX = new THREE.Euler();
 function partM(f, x, y, z, ry, rx, rz, sx, sy, sz) {
   const local = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(RX.set(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx || 1, sy || 1, sz || 1));
@@ -1015,8 +1016,21 @@ function hut(x, z, opts) {
   box(s1, BEAMS, 0, 1.2, 0, 0.16, 2.4, 0.16); box(s1, '#d8c69a', 0.7, 1.9, 0, 1.5, 0.35, 0.06); box(s1, '#d8c69a', 0.5, 1.4, 0, 1.2, 0.3, 0.06);
   const s2 = fr(3.2, 50, 0);
   box(s2, BEAMS, 0, 1, 0, 0.14, 2, 0.14); box(s2, '#d8c69a', 0, 1.6, 0.05, 1.3, 0.6, 0.05);
+  flushBuild();
   // stakes marking out the common land for future homes
   for (let i = 0; i < 16; i++) { const x = -18 + (i % 4) * 12, z = 50 + Math.floor(i / 4) * 7; if (Math.abs(x) < 2) continue; const g = fr(x, z); box(g, '#8a6d48', 0, 0.4, 0, 0.1, 0.8, 0.1); box(g, '#c2412d', 0, 0.78, 0, 0.12, 0.1, 0.12); }
+  LANDV.stakes = new THREE.Mesh(mergeColored(PARTS.solid), vc); scene.add(LANDV.stakes); PARTS.solid = [];
+  // what the Elder may make of the land: three cottages, or a fenced common pasture; and the works while it is built
+  const grp = arr => { const m = new THREE.Mesh(mergeColored(arr), vc); scene.add(m); m.visible = false; return m; };
+  Sim.NEW_COTTAGES.forEach((c, i) => cottage(fr(c.x, c.z, facing(c.x, c.z, 0, 41)), { w: 5.2, d: 4.2, h: 2.4, wall: WALLS[(i + 1) % 4], roof: THATCH[(i + 2) % 4], door: '#3b2a1c' }));
+  LANDV.newCottages = grp(PARTS.solid); PARTS.solid = []; PARTS.win = [];
+  Sim.NEW_COTTAGES.forEach(c => { const g = fr(c.x, c.z); [[-2.5, -2], [2.5, -2], [-2.5, 2], [2.5, 2]].forEach(([u, w0]) => box(g, BEAMS, u, 1.5, w0, 0.14, 3, 0.14)); box(g, BEAMS, 0, 3, -2, 5.2, 0.14, 0.14); box(g, BEAMS, 0, 3, 2, 5.2, 0.14, 0.14); for (let k = 0; k < 5; k++) box(g, '#b98a54', 3.6, 0.15 + k * 0.22, 0, 0.3, 0.2, 3); });
+  LANDV.landWork = grp(PARTS.solid); PARTS.solid = [];
+  for (let x = -16; x <= 16; x += 2) [46, 66].forEach(z => box(null, '#8a6d48', x, groundH(x, z) + 0.5, z, 0.12, 1, 0.12));
+  for (let z = 46; z <= 66; z += 2) [-16, 16].forEach(x => box(null, '#8a6d48', x, groundH(x, z) + 0.5, z, 0.12, 1, 0.12));
+  [0.75, 0.4].forEach(y => { [46, 66].forEach(z => box(null, '#8a6d48', 0, groundH(0, z) + y, z, 32, 0.07, 0.05)); [-16, 16].forEach(x => box(null, '#8a6d48', x, groundH(x, 56) + y, 56, 0.05, 0.07, 20)); });
+  for (let k = 0; k < 10; k++) { const x = -12 + (k * 7.3) % 24, z = 49 + (k * 4.7) % 14; part(fr(x, z, k), GEO.sack, '#ece6d6', 0, 0.55, 0, 0, 0, 0, 1.5, 1.3, 2); box(fr(x, z, k), '#2a2420', 0, 0.62, 0.48, 0.24, 0.26, 0.3); }
+  LANDV.pastureLand = grp(PARTS.solid); PARTS.solid = [];
 })();
 
 /* ----- the realm: Village Hall, granary, watchtower, manor, mill, barn, cottage ----- */
@@ -1456,6 +1470,8 @@ function syncVillage(s) {
   V.towerRuin.visible = !v.towerBuilt; V.towerBuilt.visible = v.towerBuilt;
   V.cottageOld.visible = v.cottage === 'forsale' || v.cottage === 'owned'; V.cottageNew.visible = !V.cottageOld.visible; V.forSaleSign.visible = v.cottage === 'forsale';
   V.paving.visible = !!v.projects.pave; V.lanterns.visible = !!v.projects.lanterns;
+  const land = v.land; LANDV.stakes.visible = !land; LANDV.landWork.visible = !!land && land.state === 'building' && land.use === 'cottages';
+  LANDV.newCottages.visible = !!land && land.state === 'done' && land.use === 'cottages'; LANDV.pastureLand.visible = !!land && land.use === 'pasture' && land.state === 'done';
   V.gate.position.x = v.step >= 8 ? 1.6 : 0;
 }
 // chimneys that smoke in the morning and evening, when the hearths are lit
@@ -1938,6 +1954,7 @@ function solidsNow(s) {
   if (Math.hypot(s.player.x - TOWNS.oakbridge.x, s.player.z - TOWNS.oakbridge.z) < TOWNS.oakbridge.r + 40) out.push(...OAK_SOLIDS, ...OAK_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
   if (s.village.towerBuilt) out.push({ c: 1, x: L.tower.x, z: L.tower.z, r: 2 });
+  if (s.village.land && s.village.land.use === 'cottages') Sim.NEW_COTTAGES.forEach(c => out.push({ c: 1, x: c.x, z: c.z, r: 2.8 }));
   if (s.village.step < 8) out.push({ x: L.manor.x, z: Sim.P.gate.z - 1.4, hx: 1.3, hz: 0.35 });
   return out;
 }
@@ -2070,7 +2087,7 @@ function walkPlayer(s, dt) {
   const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
   const vx = rx * mx + fx * -my, vz = rz * mx + fz * -my;
   const speed = (p.riding && p.horse ? 15 : 6.5) * dt, ox = p.x, oz = p.z;
-  const key = s.shops.map(x => x.plot + ':' + x.tier).join() + s.village.towerBuilt + (s.village.step >= 8) + ':' + tileVersion + ':' + Math.floor(s.player.x / TILE) + ',' + Math.floor(s.player.z / TILE);
+  const key = s.shops.map(x => x.plot + ':' + x.tier).join() + (s.village.land ? s.village.land.use : '') + s.village.towerBuilt + (s.village.step >= 8) + ':' + tileVersion + ':' + Math.floor(s.player.x / TILE) + ',' + Math.floor(s.player.z / TILE);
   if (key !== solidKey) { solidCache = solidsNow(s); solidKey = key; }
   // small steps so a slow frame can never carry you through a wall
   const n = Math.max(1, Math.ceil(speed / 0.15));
@@ -2273,7 +2290,7 @@ function cardHTML(s) {
   if (here === 'oakguild') return `<h2>The Guildhall</h2><div class="sub">Where the masters of the Guild Quarter meet: smiths, joiners, coopers, wheelwrights, weavers and potters. A trade learned in Hearthmoor counts here too, and the guild masters sit on the town council.</div>${walking}`;
   if (here === 'oakkeep') return `<h2>Oakbridge Keep</h2><div class="sub">The old keep on the east bank, held by the town watch for ${esc(Sim.REALM.lordShort)}. Its towers watch the river and the coast road.</div>${walking}`;
   if (here === 'oakbridge') return `<h2>The Oak Bridge</h2><div class="sub">A stone bridge on two great piers over the river Alder, built where an oak ferry once crossed. The town pays for its upkeep out of the market fees.</div>${walking}`;
-  if (here === 'lots') return `<h2>The Open Land</h2><div class="sub">Common land south of the village, staked out for the homes and lots Hearthmoor will need as it grows. Opening it is a decision for the Elder and the council.</div>${walking}`;
+  if (here === 'lots') return landCard(s, walking);
   if (here === 'home') return `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
   return '';
@@ -2299,9 +2316,10 @@ function hallCard(s, walking) {
       info += `<div class="why"><b>Before the council:</b> ${esc(d.text)}</div>`;
       d.opts.forEach((o, i) => acts.push(B_(esc(o.label) + (o.chest ? `<small>chest ${o.chest}c</small>` : ''), ['settle', i], 'alt', !atHall || (o.chest && v.chest + o.chest < floor))));
     }
-    Object.keys(Sim.PROJECTS).forEach(k => { const pr = Sim.PROJECTS[k]; if (!v.projects[k]) acts.push(B_(`${esc(pr.name)} · ${pr.cost}c<small>${esc(pr.text)}</small>`, ['project', k], 'alt', !atHall || v.chest - pr.cost < floor)); });
+    Object.keys(Sim.PROJECTS).forEach(k => { const pr = Sim.PROJECTS[k], br = v.broken && v.broken[k], cost = br ? Math.round(pr.cost / 2) : pr.cost; if (!v.projects[k]) acts.push(B_(`${br ? 'Mend: ' : ''}${esc(pr.name)} · ${cost}c<small>${esc(br ? 'Fallen into disrepair for want of upkeep.' : pr.text)}</small>`, ['project', k], 'alt', !atHall || v.chest - cost < floor)); });
+    if (isElder && !v.land) Object.keys(Sim.LAND_USES).forEach(k => { const U = Sim.LAND_USES[k]; acts.push(B_(`Open the common land: ${esc(U.name.toLowerCase())} · ${U.cost}c<small>${esc(U.text)}</small>`, ['openLand', k], 'alt', !atHall || v.chest - U.cost < floor)); });
     acts.push(B_('Give 10c to the chest', ['giveChest', 10], 'alt', s.coins < 10));
-    acts.push(B_('Village page', ['page', 'village'], 'alt'));
+    acts.push(B_(isElder ? 'Elder\u2019s business' : 'Village page', ['page', 'village'], 'alt'));
   }
   return info + `<div class="acts">${acts.join('')}</div>`;
 }
@@ -2589,6 +2607,27 @@ function pageProperty(s) {
   html += `<h4>${TOWN_NAMES[town]} businesses</h4><div class="grid2">${bizIn(town).map(b => bizBox(s, b)).join('')}</div>`;
   return html;
 }
+function elderBusiness(s) {
+  const v = s.village, g = s.gov, need = g.worksNeed || 1, works = g.works != null ? g.works : need;
+  let h = `<div class="box"><h5>The village works</h5><p>Mending lanes, fences, the hall and everything the village has built. It needs about <b>${need}c a day</b>. Spend less and things fall into disrepair and people grumble; spend more and the village looks after itself and thinks well of you.</p>
+    <div class="stepper"><button type="button" data-c='${JSON.stringify(['works', works - 1])}' aria-label="Spend less">&minus;</button><output class="num">${works}c</output><button type="button" data-c='${JSON.stringify(['works', works + 1])}' aria-label="Spend more">+</button></div>
+    <p>${works < need ? '<b>Below what is needed.</b> Something will break soon.' : works > need ? 'More than is needed: the village is well kept.' : 'Just enough to keep things as they are.'}${(g.neglect || 0) > 0 ? ' Neglect so far: ' + g.neglect + ' of 8.' : ''}</p></div>`;
+  h += `<div class="box"><h5>Officers of the village</h5><p>Paid 3c a day each from the chest.</p>`;
+  for (const [off, what] of [['keeper', 'Keeps the granary full: lean weeks become rare.'], ['watch', 'Keeps the east road safe: more travelers stop at every shop.']]) {
+    const id = s.offices[off], q = id && s.people[id], title = off === 'keeper' ? 'Granary Keeper' : 'Village Watchman';
+    h += `<p><b>${title}:</b> ${q ? esc(q.name) : 'nobody'}. ${what}</p>`;
+    if (q) h += `<div class="acts">${B_('Dismiss ' + esc(q.name), ['dismiss', off], 'alt')}</div>`;
+    else h += `<div class="acts">${Sim.officerCandidates(s).slice(0, 3).map(c => B_('Appoint ' + esc(c.name) + '<small>respect ' + Math.round(c.rep || 0) + ' · now ' + esc(Sim.occupation(s, c).toLowerCase()) + '</small>', ['appoint', off, c.id], 'alt')).join('')}</div>`;
+  }
+  h += `</div><div class="box"><h5>The open land</h5><p>${v.land ? (v.land.state === 'done' ? esc(Sim.LAND_USES[v.land.use].name) + ', finished.' : esc(Sim.LAND_USES[v.land.use].name) + ', being built: done on day ' + v.land.doneDay + '.') : 'Still common land, staked out. Open it at the Village Hall or on the land itself: three cottages for new families (90c), or a common pasture (30c).'}</p></div>`;
+  return h;
+}
+function landCard(s, walking) {
+  const v = s.village, land = v.land, isElder = s.offices.elder === 'player';
+  if (land) { const U = Sim.LAND_USES[land.use]; return `<h2>${land.use === 'cottages' ? (land.state === 'done' ? 'The New Cottages' : 'Cottages Going Up') : 'The Common Pasture'}</h2><div class="sub">${land.state === 'done' ? esc(U.text) : 'Builders are at work. Finished on day ' + land.doneDay + '.'}</div>${walking}`; }
+  const acts = isElder ? Object.keys(Sim.LAND_USES).map(k => { const U = Sim.LAND_USES[k]; return B_(`${esc(U.name)} · ${U.cost}c from the chest<small>${esc(U.text)}</small>`, ['openLand', k], 'alt', v.chest - U.cost < Sim.CHEST_FLOOR); }) : [];
+  return `<h2>The Open Land</h2><div class="sub">Common land south of the village, staked out for whatever Hearthmoor needs as it grows. ${isElder ? 'As Elder, the choice is yours. It is paid from the village chest (' + v.chest + 'c).' : 'What becomes of it is the Elder\u2019s decision.'}</div>${walking}<div class="acts">${acts.join('')}</div>`;
+}
 function stageCard(s, id, walking) {
   const p = s.player, h = Sim.hourOf(s), running = h >= 6 && h < 19, acts = [];
   for (const to of ['hearthmoor', 'oakbridge', 'greenhaven']) if (to !== id) { const f = Sim.fare(id, to), mins = Math.round(Sim.roadDist(id, to) / Sim.COACH_MPM); acts.push(B_(`Coach to ${TOWN_NAMES[to]} · ${f}c<small>about ${mins} min${running ? '' : ' · first coach at 6:00'}</small>`, ['coach', to], '', !running || s.coins < f)); }
@@ -2642,6 +2681,7 @@ function pageVillage(s) {
     <h4>The elder’s tasks</h4><ul class="goals">${Sim.STEPS.map((t, i) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : i + 1}</span><span>${esc(t)}</span></li>`).join('')}</ul>`;
   if (v.council || s.offices.elder === 'player') {
     html += `<h4>Your powers</h4><p>Chest: <b class="${v.chest < 0 ? 'neg' : ''}">${v.chest}c</b>. Projects and rulings are made in person at the Village Hall.</p>
+      ${s.offices.elder === 'player' ? elderBusiness(s) : ''}
       ${s.offices.elder === 'player' ? `<div class="setting"><span>Help for the poor</span>${seg2('relief', s.gov.relief, [['none', 'None'], ['some', 'A little'], ['all', 'Everyone in need']])}<p>Each morning the chest feeds the hungry and the homeless. A little: up to three people, 2c each, only while the chest has coin. Everyone: 3c each, borrowing if need be. The village notices either way.</p></div>` : ''}
       <div class="setting"><span>Toll on travelers</span>${seg2('toll', v.toll, Object.keys(Sim.TOLLS).map(k => [k, Sim.TOLLS[k].name]))}<p>A toll fills the chest from every traveler who stops, but fewer travelers come. None: all of them; low: about 85%; high: about 60%.</p></div>
       <div class="grid2">${Object.keys(Sim.PROJECTS).map(k => { const pr = Sim.PROJECTS[k]; return `<div class="box"><h5>${esc(pr.name)}</h5><p>${esc(pr.text)}</p><p>${v.projects[k] ? '<span class="pill yes">done on day ' + v.projects[k] + '</span>' : pr.cost + 'c from the chest'}</p></div>`; }).join('')}</div>
@@ -3456,6 +3496,13 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.24', date: '4 November', title: 'The Elder\u2019s powers', items: [
+    'As Elder you now decide what becomes of the open land south of the village: three new cottages for incoming families, or a common pasture that pays field hands more and brings grazing fees.',
+    'Set the budget for the village works. Spend too little and the well, the lanterns or the paving fall into disrepair and people grumble; spend more and they think well of you. Mending costs half the price of building.',
+    'Appoint a Granary Keeper (lean weeks become rare) and a Village Watchman (more travelers stop at every shop), each paid 3c a day from the chest.',
+    'An Elder who isn\u2019t you uses the same powers: they open the land, appoint officers and keep the works going in their own way.',
+    'All of it lives under Elder\u2019s business on the Village page, and at the Village Hall.'
+  ] },
   { v: '0.23', date: '4 November', title: 'Managers', items: [
     'Hire a manager for any shop or business you own, from the people of the town it stands in. See them on the Staff page.',
     'Managers keep a worker on, pay fair wages, take on staff, order supplies and set prices to what sells, all within a daily budget you choose.',

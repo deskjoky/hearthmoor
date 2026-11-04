@@ -186,8 +186,16 @@
     steward: { title: 'Steward', salary: 10, home: 'manor' },
     elder: { title: 'Village Elder', salary: 5, home: null },
     taxman: { title: 'Tax collector', salary: 6, home: 'manor' },
-    guard: { title: 'Manor guard', salary: 6, home: 'manor' }
+    guard: { title: 'Manor guard', salary: 6, home: 'manor' },
+    keeper: { title: 'Granary Keeper', salary: 0, chestPay: 3, home: null },     // appointed by the Elder, paid from the village chest
+    watch: { title: 'Village Watchman', salary: 0, chestPay: 3, home: null }
   };
+  // the open land south of the village: the Elder decides what it becomes
+  const LAND_USES = {
+    cottages: { name: 'New cottages', cost: 90, days: 4, text: 'Three cottages on the open land. New families move in: more hands, more customers, more voices at the moot.' },
+    pasture: { name: 'A common pasture', cost: 30, days: 2, text: 'Grazing for everyone\u2019s animals. Field hands earn a little more, and the chest takes small grazing fees.' }
+  };
+  const NEW_COTTAGES = [{ x: -8, z: 53, name: 'Commons Cottage' }, { x: 8, z: 53, name: 'Stile Cottage' }, { x: 0, z: 63, name: 'Far Croft' }];
   const FOOD = 3, ODD_JOBS = 3, COMMONS_PAY = 7, EVICT_AFTER = 3, LEAVE_AFTER = 4;
   const INTEREST = 0.02, SEIZE_AT = -150, SEIZE_DAYS = 3, CHEST_FLOOR = -150, LORD_FALL = -300, COUNCIL_SEATS = 3;
   const VILLAGERS = [
@@ -355,7 +363,7 @@
     const base = s.t - minuteOfDay(s.t);
     const sched = [];
     const v = s.village;
-    if (v.council && v.step >= 6 && !v.projects.granary && !v.shortage && rand(s) < 0.12) {
+    if (v.council && v.step >= 6 && !v.projects.granary && !v.shortage && rand(s) < (s.offices && s.offices.keeper ? 0.03 : 0.12)) {
       v.shortage = true; v.granary = 0; v.granaryNeed = 12;
       event(s, 'A lean week: the granary is running low again. Villagers will buy less until it is refilled (12 grain), or enlarged by the council.', 'bad');
     }
@@ -365,7 +373,7 @@
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
       const vr = T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0);
       villagers(s).filter(p => p.purse >= shop.price && !p.kid && !(p.job && ['guard', 'lord', 'steward', 'taxman'].includes(p.job.office))).forEach(p => { if (rand(s) < vr) sched.push({ at: when(), pid: p.id, shop: shop.id }); });
-      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers));
+      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
       for (let i = 0; i < n; i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
@@ -1172,11 +1180,11 @@
   function income(s, p) {
     const j = p.job;
     if (!j) return p.retired || p.kid ? 0 : ODD_JOBS;
-    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0);
+    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0) + (j.what === 'field' && s.village.land && s.village.land.use === 'pasture' && s.village.land.state === 'done' ? 1 : 0);
     if (j.type === 'biz') { const b = s.biz[j.biz]; if (j.role === 'owner') return Math.max(0, Math.round(avg(b.profits))); const st = b.staff.find(x => x.pid === p.id); return st ? st.wage : 0; }
     if (j.type === 'shop') { const sh = shopById(s, j.shop); return sh && sh.worker ? sh.worker.wage : 0; }
     if (j.type === 'manage') { const m = managerOf(s, j.kind, j.ref); return m ? m.wage : 0; }
-    if (j.type === 'office') return OFFICES[j.office].salary;
+    if (j.type === 'office') return OFFICES[j.office].salary || OFFICES[j.office].chestPay || 0;
     return 0;
   }
   const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
@@ -1508,6 +1516,9 @@
     } else if (j && j.type === 'office') {
       if (j.office === 'elder' && h >= 8 && h < 18) { tgt = P.elderDesk; doing = 'Keeping the Village Hall'; }
       else if (j.office === 'guard') { tgt = P.guardPost; doing = 'Guarding the manor gate'; }
+      else if (j.office === 'keeper' && h >= 8 && h < 17) { tgt = ringSpot(LOCS.granary.x, LOCS.granary.z + 3, 0.5, 2, a.id, s.day, 49); doing = 'Keeping the granary'; working = true; }
+      else if (j.office === 'watch' && h >= 7 && h < 20) { tgt = ringSpot(LOCS.bridge.x, LOCS.bridge.z, 1, 3, a.id, s.day, 51); doing = 'Keeping watch on the east road'; working = true; }
+      else if (j.office === 'keeper' || j.office === 'watch') { tgt = null; }
       else { tgt = MANOR_HOME; doing = 'At the manor'; }
     }
     if (!tgt && p.kid) {
@@ -1599,7 +1610,20 @@
   function govMorning(s) {
     const g = s.gov, v = s.village;
     const toll = TOLLS[v.toll].coin * 3; v.chest += toll;
-    const up = 1 + (v.towerBuilt ? 1 : 0) + Math.floor(Object.keys(v.projects).length / 2); v.chest -= up;
+    const need = 1 + (v.towerBuilt ? 1 : 0) + Math.floor(Object.keys(v.projects).length / 2) + (v.land && v.land.state === 'done' ? 1 : 0);
+    // the village works: the Elder decides how much goes on upkeep; too little and things fall apart, more and the village thrives
+    const pe = s.offices.elder === 'player', works = pe && g.works != null ? g.works : need;
+    v.chest -= works; g.worksNeed = need; g.worksToday = works;
+    if (works < need) {
+      g.neglect = (g.neglect || 0) + (need - works); approve(s, 'elder', -Math.min(1.5, (need - works) * 0.4));
+      const built = Object.keys(v.projects);
+      if (g.neglect >= 8 && built.length) { const k = built[Math.floor(rand(s) * built.length)]; delete v.projects[k]; v.broken = v.broken || {}; v.broken[k] = true; g.neglect = 0; govLog(s, PROJECTS[k].name + ' has fallen into disrepair for want of upkeep. Mending it costs half what it took to build.', 'bad'); }
+    } else { g.neglect = Math.max(0, (g.neglect || 0) - 1); if (works > need) approve(s, 'elder', Math.min(1.2, (works - need) * 0.25)); }
+    // the officers the Elder appoints are paid from the chest
+    for (const off of ['keeper', 'watch']) { const id = s.offices[off]; if (!id) continue; const q = s.people[id]; if (!q || q.status !== 'here' || !q.job || q.job.office !== off) { s.offices[off] = null; continue; } v.chest -= OFFICES[off].chestPay; q.purse += OFFICES[off].chestPay; }
+    if (v.land && v.land.state === 'done' && v.land.use === 'pasture') v.chest += 2;
+    if (v.land && v.land.state === 'building' && s.day >= v.land.doneDay) finishLand(s);
+    const up = works;
     g.chestIn = toll + v.chestDaily; g.chestUp = up;
     if (v.chest < 0) { const i = Math.max(1, Math.ceil(-v.chest * INTEREST)); v.chest -= i; g.chestUp += i; }
     let eid = s.offices.elder;
@@ -1626,6 +1650,11 @@
         govLog(s, 'Elder ' + e.name + ' pays for ' + pr.name.toLowerCase() + (v.chest < 0 ? ', borrowing to do it. The village chest is now ' + (-v.chest) + 'c in debt.' : ' from the village chest.'), v.chest < 0 ? 'bad' : 'good');
       }
     }
+    // the open land: a growing village wants homes
+    if (!v.land && s.day >= 12 && v.chest >= LAND_USES.cottages.cost + 25 && rand(s) < 0.15) { startLand(s, 'cottages'); approve(s, 'elder', 4); govLog(s, 'Elder ' + e.name + ' opens the common land for three new cottages, paid from the chest.', 'good'); }
+    // officers: a keeper when the granary runs short, a watchman when the chest can bear it
+    if (!s.offices.keeper && v.shortage && v.chest > 20) { const c = officerCandidates(s)[0]; if (c) { appointOfficer(s, 'keeper', c); govLog(s, 'Elder ' + e.name + ' appoints ' + c.name + ' Granary Keeper.', 'info'); } }
+    if (!s.offices.watch && v.chest > 70 && rand(s) < 0.1) { const c = officerCandidates(s)[0]; if (c) { appointOfficer(s, 'watch', c); govLog(s, 'Elder ' + e.name + ' appoints ' + c.name + ' Village Watchman.', 'info'); } }
     // the toll: raised when the chest is in trouble, dropped when it is full
     if (s.day - g.tollSetDay >= 7) {
       const want = v.chest < -20 ? 'high' : v.chest < 25 ? 'low' : v.chest > 90 ? 'none' : v.toll;
@@ -1645,6 +1674,32 @@
         govLog(s, 'Elder ' + e.name + ' hears ' + d.a + ' and ' + d.b + '’s quarrel and rules: ' + (/^(The|Let|Draw) /.test(o.label) ? o.label.charAt(0).toLowerCase() + o.label.slice(1) : o.label) + '.', 'info');
       }
     }
+  }
+  function officerCandidates(s) {
+    return villagers(s).filter(p => !p.kid && !p.retired && p.age >= 20 && p.age <= 60 && !isHousehold(p) && (!p.job || p.job.type === 'commons') && p.status === 'here')
+      .sort((a, b) => (b.rep || 0) - (a.rep || 0)).slice(0, 4);
+  }
+  function appointOfficer(s, off, p) {
+    const old = s.offices[off] && s.people[s.offices[off]]; if (old && old.job && old.job.office === off) { old.job = null; plog(s, old, 'Replaced as ' + OFFICES[off].title + '.'); }
+    p.job = { type: 'office', office: off }; s.offices[off] = p.id; p.opinion = clamp((p.opinion || 0) + (s.offices.elder === 'player' ? 15 : 0), -100, 100);
+    plog(s, p, 'Appointed ' + OFFICES[off].title + ' by ' + elderTitle(s) + '.');
+  }
+  function startLand(s, use) { const U = LAND_USES[use]; s.village.chest -= U.cost; s.village.land = { use, state: 'building', doneDay: s.day + U.days, started: s.day }; }
+  function finishLand(s) {
+    const v = s.village, L = v.land; L.state = 'done';
+    if (L.use === 'cottages') {
+      const fams = ['Ashdown', 'Pryor', 'Tilney'], firsts = [['Gilbert', 'Avice'], ['Hamo', 'Rohese'], ['Simon', 'Nesta']];
+      NEW_COTTAGES.forEach((c, i) => {
+        const h = { id: 'hn' + i, name: c.name, x: c.x, z: c.z, owner: 'office:lord', rent: 3, cap: 4, tenants: [] }; s.houses.push(h);
+        const a = newPerson(s, { name: firsts[i][0] + ' ' + fams[i], age: 26 + i * 6, purse: 30, palette: i + 2, job: { type: 'commons', what: ['field', 'forest', 'pit'][i] } }); moveIn(s, a, h);
+        const b = newPerson(s, { name: firsts[i][1] + ' ' + fams[i], age: 24 + i * 6, purse: 20, palette: i + 5, job: i === 1 ? null : { type: 'commons', what: 'field' } }); moveIn(s, b, h);
+        a.spouse = b.id; b.spouse = a.id; b.hh = a.id;
+        const k = newPerson(s, { name: ['Wat', 'Tibby', 'Kit'][i] + ' ' + fams[i], age: 4 + i * 2, purse: 0, palette: i }); k.kid = true; k.parents = [a.id, b.id]; k.hh = a.id; moveIn(s, k, h);
+        [a, b, k].forEach(p => { p.log = [{ day: s.day, text: 'Moved into ' + c.name + ' on the new common land.' }]; p.rep = 15; if (s.bodiesIn === 'hearthmoor' || !s.bodiesIn) addBody(s, p); });
+      });
+      govLog(s, 'The new cottages on the common land are finished. Three families move in: the Ashdowns, the Pryors and the Tilneys.', 'good');
+    } else govLog(s, 'The common pasture is fenced and open. Field hands earn a little more, and grazing fees go to the chest.', 'good');
+    approve(s, 'elder', 5);
   }
   function relief(s) {
     const g = s.gov, v = s.village, eid = s.offices.elder;
@@ -2549,8 +2604,9 @@
         if (!v.council && !elder) return fail('Only the council can spend the village chest.');
         if (!atLoc(s, 'hall')) return fail('Council business is done at the Village Hall.');
         if (!pr || v.projects[a]) return fail('That project is already done.');
-        if (elder ? v.chest - pr.cost < CHEST_FLOOR : v.chest < pr.cost) return fail(elder ? 'Even borrowing, the chest cannot go below ' + CHEST_FLOOR + 'c.' : 'The chest holds ' + v.chest + 'c; this needs ' + pr.cost + 'c. You can add your own coin, or the Elder can borrow.');
-        v.chest -= pr.cost; v.projects[a] = s.day; s.rec.projectsFunded++;
+        const cost0 = v.broken && v.broken[a] ? Math.round(pr.cost / 2) : pr.cost;
+        if (elder ? v.chest - cost0 < CHEST_FLOOR : v.chest < cost0) return fail(elder ? 'Even borrowing, the chest cannot go below ' + CHEST_FLOOR + 'c.' : 'The chest holds ' + v.chest + 'c; this needs ' + pr.cost + 'c. You can add your own coin, or the Elder can borrow.');
+        v.chest -= cost0; v.projects[a] = s.day; s.rec.projectsFunded++; if (v.broken) delete v.broken[a];
         approveHolder(s, 'player', 6);
         if (v.chest < 0) govLog(s, s.name + ' borrows to pay for ' + pr.name.toLowerCase() + '. The village chest is ' + (-v.chest) + 'c in debt.', 'bad');
         if (a === 'granary' && v.shortage) { v.shortage = false; }
@@ -2584,6 +2640,31 @@
         v.dispute = null; v.disputeDay = s.day + 3; s.rec.disputesSettled++;
         addStanding(s, o.standing, 'the council rules: ' + o.label.toLowerCase() + '.');
         return ok();
+      }
+      case 'works': {
+        if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder sets the village works.');
+        s.gov.works = clamp(Math.round(a), 0, 15); return ok();
+      }
+      case 'openLand': {
+        const v = s.village, U = LAND_USES[a];
+        if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder can open the common land.');
+        if (!atLoc(s, 'hall') && !atLoc(s, 'lots')) return fail('Open the land in person, at the Village Hall or on the land itself.');
+        if (!U || v.land) return fail('The common land is already spoken for.');
+        if (v.chest - U.cost < CHEST_FLOOR) return fail('The chest cannot stretch to ' + U.cost + 'c.');
+        startLand(s, a); approveHolder(s, 'player', 5); addStanding(s, 6, 'you opened the common land.');
+        govLog(s, s.name + ', as Elder, opens the common land for ' + U.name.toLowerCase() + '. Work begins tomorrow, paid from the chest.', 'good');
+        return ok();
+      }
+      case 'appoint': {
+        if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder appoints the village officers.');
+        if (!OFFICES[a] || !OFFICES[a].chestPay) return fail('No such office.');
+        const q = officerCandidates(s).find(p => p.id === b); if (!q) return fail('They cannot take the post.');
+        appointOfficer(s, a, q); govLog(s, s.name + ' appoints ' + q.name + ' ' + OFFICES[a].title + '.', 'info'); return ok();
+      }
+      case 'dismiss': {
+        if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder can dismiss an officer.');
+        const q = s.offices[a] && s.people[s.offices[a]]; if (!q) return fail('Nobody holds that post.');
+        q.job = null; q.opinion = clamp((q.opinion || 0) - 15, -100, 100); plog(s, q, 'Dismissed as ' + OFFICES[a].title + '.'); s.offices[a] = null; return ok();
       }
       case 'relief': {
         if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder decides on help for the poor.');
@@ -3005,7 +3086,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
