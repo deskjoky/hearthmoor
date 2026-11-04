@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 4;
+  const VERSION = 5;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -103,7 +103,9 @@
   const PROJECTS = {
     pave: { name: 'Pave the square', cost: 60, text: 'Stone on the square. Every shop draws one more traveler a day.' },
     lanterns: { name: 'Lanterns on the square', cost: 40, text: 'Lamps for the evenings. Villagers shop a little more often.' },
-    granary: { name: 'Enlarge the granary', cost: 50, text: 'A bigger store. No more grain shortages.' }
+    granary: { name: 'Enlarge the granary', cost: 50, text: 'A bigger store. No more grain shortages.' },
+    well: { name: 'Dig a second well', cost: 35, text: 'Less hauling of water. Villagers are a little happier.' },
+    road: { name: 'Mend the Ashford road', cost: 70, text: 'Carts come easier. One more traveler to every shop a day.' }
   };
   const TOLLS = { none: { name: 'No toll', coin: 0, travelers: 1 }, low: { name: 'Low toll (2c)', coin: 2, travelers: 0.85 }, high: { name: 'High toll (5c)', coin: 5, travelers: 0.6 } };
   const DISPUTES = [
@@ -149,6 +151,7 @@
     guard: { title: 'Manor guard', salary: 6, home: 'manor' }
   };
   const FOOD = 3, ODD_JOBS = 3, COMMONS_PAY = 7, EVICT_AFTER = 3, LEAVE_AFTER = 4;
+  const INTEREST = 0.02, SEIZE_AT = -150, SEIZE_DAYS = 3, CHEST_FLOOR = -150, LORD_FALL = -300, COUNCIL_SEATS = 3;
   const VILLAGERS = [
     { name: 'Aldric', job: 'field' }, { name: 'Maren', job: 'field' }, { name: 'Tobin', job: 'forest' },
     { name: 'Edda', job: 'pit' }, { name: 'Wynn', job: 'market' }, { name: 'Old Sela', job: 'well' }
@@ -217,6 +220,7 @@
   function tradeSpeed(s, trade) { return 1 + Math.min(0.3, s.trades[trade] * 0.03); }
   function skillPct(s, trade) { return Math.round(Math.min(0.3, s.trades[trade] * 0.03) * 100); }
   function addStanding(s, n, why) {
+    if (n && s.gov) approveHolder(s, 'player', n * 0.5);
     const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) s.rec.standingEarned += n;
     if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
   }
@@ -236,7 +240,7 @@
     };
   }
   function freshStats(s) {
-    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, owned: 0, salaries: 0, notes: [] };
+    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, owned: 0, salaries: 0, interest: 0, seized: 0, notes: [] };
     s.shops.forEach(x => { st.shops[x.id] = freshShopStats(x); });
     return st;
   }
@@ -252,7 +256,8 @@
       peakCoins: 0, days: 0,
       standingEarned: 0, elderTasks: 0, councilSince: null, projectsFunded: 0, disputesSettled: 0, grainDonated: 0, chestGiven: 0,
       taxesPaid: 0, contractsDone: 0, contractsMissed: 0, housesOwned: 0, rentCollected: 0, shopsSold: 0,
-      evictions: 0, peopleLeft: 0, bizBought: 0, staffFired: 0, offices: 0, rentRaises: 0
+      evictions: 0, peopleLeft: 0, bizBought: 0, staffFired: 0, offices: 0, rentRaises: 0,
+      maxDebt: 0, interestPaid: 0, seizures: 0, votesWon: 0, votesLost: 0, timesElected: 0
     };
   }
   function freshVillage() {
@@ -272,8 +277,9 @@
       agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null, village: freshVillage()
     };
     setupPeople(s);
+    initGov(s);
     openDay(s);
-    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + REALM.lord + ', with 5 coins. The four shops across the square are hiring.', 'story');
+    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. The four shops across the square are hiring.', 'story');
     return s;
   }
 
@@ -305,7 +311,7 @@
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
       const vr = T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0);
       s.agents.filter(a => a.kind === 'person' && a.pid && s.people[a.pid] && s.people[a.pid].purse >= shop.price && !(s.people[a.pid].job && s.people[a.pid].job.office === 'guard')).forEach(a => { if (rand(s) < vr) sched.push({ at: when(), id: a.id, shop: shop.id }); });
-      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers));
+      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers));
       for (let i = 0; i < n; i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
@@ -328,9 +334,10 @@
       if (v.usedDisputes.length >= DISPUTES.length) v.usedDisputes = [];
       event(s, DISPUTES[pick].a + ' and ' + DISPUTES[pick].b + ' bring a quarrel to the council. Settle it at the Moot Hall.', 'story');
     }
-    if (v.council) { v.chest += v.chestDaily; }
+    v.chest += v.chestDaily;
     if (v.cottage === 'repaired') { v.cottage = 'let'; event(s, 'A family from Ashford rents your cottage for 5c a day, paid at closing.', 'good'); }
     if (s.day > 1) event(s, 'Day ' + s.day + ' begins.', 'story');
+    if (s.gov) govMorning(s);
   }
 
   function makeApplicants(s) {
@@ -353,12 +360,13 @@
     const st = s.stats;
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
     if (s.people) { bizDay(s); peopleEvening(s); }
-    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, notes: st.notes.slice() };
+    if (s.gov) govEvening(s);
+    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
       if (w) {
-        const paid = Math.min(s.coins, w.wage);
+        const paid = w.wage; // wages are owed in full, even if it puts you in debt
         spend(s, paid); ss.wages += paid; s.rec.wagesPaid += paid;
         if (w.pid && s.people[w.pid]) s.people[w.pid].purse += paid;
         const full = paid >= w.wage;
@@ -367,15 +375,16 @@
         w.mood = clamp(w.mood, 0, 100);
         ss.workerPaid = full; ss.workerName = w.name; ss.workerMood = Math.round(w.mood);
       }
-      const up = Math.min(s.coins, Ti.upkeep);
-      spend(s, up); ss.upkeep = up; ss.upkeepUnpaid = Ti.upkeep - up;
+      const up = Ti.upkeep;
+      spend(s, up); ss.upkeep = up; ss.upkeepUnpaid = 0;
       const e = Object.assign({}, ss, { label: shopLabel(shop), tierName: Ti.name });
       e.costs = e.supplies + e.wages + e.upkeep; e.profit = e.revenue - e.costs;
       e.notes = explainShop(s, shop, e);
       entry.shops.push(e);
     }
-    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned);
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries;
+    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized;
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest;
+    if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of 2% a day is added every evening' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
@@ -560,16 +569,17 @@
   function taxTake(s) {
     const due = s.shops.reduce((a, x) => a + 2 * (x.tier + 1), 0) + (s.village.cottage === 'let' ? 2 : 0) + (s.people ? Object.values(s.biz).filter(b => b.owner === 'player' && !b.closed).length * 4 : 0);
     const lord = s.offices && s.offices.lord, lordP = lord && lord !== 'player' && s.people[lord];
-    if (s.people) for (const b of Object.values(s.biz)) if (!b.closed && b.owner !== 'player') { const o = s.people[b.owner], t = Math.min(4, o.purse); o.purse -= t; if (lordP) lordP.purse += t; else if (lord === 'player') earn(s, t); }
+    const mul = s.gov ? s.gov.taxMul : 1;
+    if (s.people) for (const b of Object.values(s.biz)) if (!b.closed && b.owner !== 'player') { const o = s.people[b.owner], t = Math.max(0, Math.min(Math.round(4 * mul), o.purse)); o.purse -= t; if (lordP) lordP.purse += t; else if (lord === 'player') earn(s, t); }
     if (lord === 'player') { event(s, 'Your tax collector brings in the week\u2019s taxes from the village businesses.', 'coin'); return; }
-    const paid = Math.min(s.coins, due);
+    const paid = Math.round(due * mul); // taxes are owed in full
     spend(s, paid); s.stats.tax += paid; s.rec.taxesPaid += paid; if (lordP) lordP.purse += paid;
-    let msg = 'The tax collector takes ' + paid + 'c for ' + REALM.lordShort + (due ? ' (2c for each level of every shop you own' + (s.village.cottage === 'let' ? ', 2c for the cottage' : '') + ').' : '. You own nothing taxable yet.');
-    if (s.village.council) { s.village.chest += 20; msg += ' He leaves 20c in the council chest from the lord\u2019s purse.'; }
+    let msg = 'The tax collector takes ' + paid + 'c for the lord' + (due ? ' (2c for each level of every shop you own' + (s.village.cottage === 'let' ? ', 2c for the cottage' : '') + (mul > 1 ? ', times ' + mul + ' since the lord raised taxes' : '') + ').' : '. You own nothing taxable yet.');
+    if (paid > 0 && s.coins < 0) msg += ' You are now ' + (-s.coins) + 'c in debt.';
     event(s, msg, due ? 'bad' : 'info');
   }
   function taxmanRoutine(s, a, dt) {
-    if (a.phase === 'in') { a.doing = 'Collecting ' + REALM.lordShort + '\u2019s taxes'; if (moveTo(a, P.hall.x + 1.5, P.hall.z + 1, 1.0 * dt)) { a.phase = 'wait'; a.wait = 40; taxTake(s); } }
+    if (a.phase === 'in') { a.doing = 'Collecting ' + lordTitle(s, true) + '\u2019s taxes'; if (moveTo(a, P.hall.x + 1.5, P.hall.z + 1, 1.0 * dt)) { a.phase = 'wait'; a.wait = 40; taxTake(s); } }
     else if (a.phase === 'wait') { a.doing = 'Writing in his tax roll'; a.working = true; a.wait -= dt; if (a.wait <= 0) { a.phase = 'out'; a.working = false; } }
     else { a.doing = 'Returning to the manor'; if (moveTo(a, P.manorRoad.x, P.manorRoad.z - 4, 1.0 * dt)) a.gone = true; }
   }
@@ -871,13 +881,13 @@
   /* ---------- the village and its elder ---------- */
   function startShortage(s) {
     const v = s.village; v.step = 2; v.shortage = true; v.granary = 0; v.granaryNeed = 20;
-    event(s, REALM.elder + ': "The harvest was thin and the granary is near empty. Folk are skipping meals and spending less. Bring 20 grain to the granary and they will remember it."', 'story');
+    event(s, elderTitle(s) + ': "The harvest was thin and the granary is near empty. Folk are skipping meals and spending less. Bring 20 grain to the granary and they will remember it."', 'story');
   }
   function startJobs(s) {
     const v = s.village; v.step = 3;
     const idle = living(s).filter(p => !p.job && !p.retired).sort((a, b) => (JOBLESS.includes(b.name) ? 1 : 0) - (JOBLESS.includes(a.name) ? 1 : 0)).slice(0, 2);
     v.jobless = idle.map(p => p.name);
-    event(s, REALM.elder + ': "' + (v.jobless.length ? v.jobless.join(' and ') + ' sit in the square every day with no work. Give them work, and their families eat.' : 'Everyone has work, thanks to you.') + '"', 'story');
+    event(s, elderTitle(s) + ': "' + (v.jobless.length ? v.jobless.join(' and ') + ' sit in the square every day with no work. Give them work, and their families eat.' : 'Everyone has work, thanks to you.') + '"', 'story');
     makeApplicants(s);
   }
   function checkVillage(s) {
@@ -888,18 +898,18 @@
       v.step = 4; s.rec.elderTasks++;
       const given = v.jobsGiven || 0;
       addStanding(s, given >= 2 ? 20 : given ? 12 : 4, given ? 'the idle have work, and the square knows who gave it.' : 'the idle found work on their own; the elder is glad, though it was not your doing.');
-      event(s, REALM.elder + ': "One more thing. The old watchtower on the east road fell in last winter. Bandits are on the Ashford road. Rebuild it: 80c and 20 wood."', 'story');
+      event(s, elderTitle(s) + ': "One more thing. The old watchtower on the east road fell in last winter. Bandits are on the Ashford road. Rebuild it: 80c and 20 wood."', 'story');
     }
     if (v.step === 6 && s.rec.projectsFunded >= 1 && s.rec.disputesSettled >= 1) {
       v.step = 7; v.letter = true;
-      event(s, 'A rider brings a letter sealed in blue wax: "' + REALM.steward + ' would speak with the new councillor of Hearthmoor. Present yourself at the manor gate." — ' + REALM.lord, 'story');
+      event(s, 'A rider brings a letter sealed in blue wax: "Steward ' + holderName(s, 'steward') + ' would speak with the new councillor of Hearthmoor. Present yourself at the manor gate." — ' + REALM.lord, 'story');
     }
   }
   function elderSuccession(s) {
     const v = s.village;
     if (v.step === 8 && v.standing >= 80 && s.offices.elder !== 'player') {
       const old = s.offices.elder && s.people[s.offices.elder];
-      appoint(s, 'elder', 'player'); v.step = 9;
+      appoint(s, 'elder', 'player'); v.step = 9; if (s.gov) { s.gov.approval.elder = Math.max(60, s.gov.approval.you); s.rec.timesElected++; }
       if (old) { old.retired = true; plog(s, old, 'Stepped down as Elder in favour of ' + s.name + '.'); }
       event(s, (old ? old.name : 'The old elder') + ' stands before the moot: "I am old, and the village needs younger hands." The moot names you Elder of Hearthmoor. You draw the elder\u2019s 5c a day, and ' + (old ? old.name + ' is just a villager now.' : 'the hall is yours.'), 'story');
     }
@@ -908,7 +918,7 @@
     const v = s.village;
     if (v.step === 0) {
       v.step = 1;
-      event(s, REALM.elder + ': "Hearthmoor belongs to ' + REALM.lord + ', who holds it for ' + REALM.king + ' in ' + REALM.capital + '. His steward taxes us; the council of elders runs the rest. A hired hand has no say here. A shopkeeper might."', 'story');
+      event(s, elderTitle(s) + ': "Hearthmoor belongs to ' + REALM.lord + ', who holds it for ' + REALM.king + ' in ' + REALM.capital + '. His steward taxes us; the council of elders runs the rest. A hired hand has no say here. A shopkeeper might."', 'story');
       if (s.shops.length) startShortage(s);
       return;
     }
@@ -928,7 +938,7 @@
       8: 'You have done well by us. Keep earning the village\u2019s trust, and one day this hall will need a new elder.',
       9: 'The hall is yours now, Elder.'
     };
-    event(s, REALM.elder + ': "' + (lines[v.step] || 'Good day to you.') + '"', 'info');
+    event(s, elderTitle(s) + ': "' + (lines[v.step] || 'Good day to you.') + '"', 'info');
   }
   function donateGrain(s) {
     const v = s.village, p = s.player;
@@ -946,21 +956,21 @@
   function fundTower(s) {
     const v = s.village, p = s.player;
     if (v.towerBuilt) return;
-    const coin = Math.min(s.coins, 80 - v.towerCoin), wood = Math.min(p.inv.wood, 20 - v.towerWood);
+    const coin = Math.max(0, Math.min(s.coins, 80 - v.towerCoin)), wood = Math.min(p.inv.wood, 20 - v.towerWood);
     if (coin <= 0 && wood <= 0) { event(s, 'The masons need coin and wood. You have neither on you.', 'bad'); return; }
     spend(s, coin); s.stats.given += coin; s.rec.chestGiven += coin; p.inv.wood -= wood;
     v.towerCoin += coin; v.towerWood += wood;
     event(s, 'You give ' + [coin ? coin + 'c' : null, wood ? wood + ' wood' : null].filter(Boolean).join(' and ') + ' to the watchtower (' + v.towerCoin + '/80c, ' + v.towerWood + '/20 wood).', 'good');
     if (v.towerCoin >= 80 && v.towerWood >= 20) {
       v.towerBuilt = true;
-      if (v.step === 4) { v.step = 5; s.rec.elderTasks++; addStanding(s, 20, 'the watchtower stands again over the Ashford road.'); event(s, REALM.elder + ' sends word: the village will hold a moot. Come to the Moot Hall.', 'story'); }
+      if (v.step === 4) { v.step = 5; s.rec.elderTasks++; addStanding(s, 20, 'the watchtower stands again over the Ashford road.'); event(s, elderTitle(s) + ' sends word: the village will hold a moot. Come to the Moot Hall.', 'story'); }
     }
   }
   function gateTalk(s) {
     const v = s.village;
     if (v.step === 7) {
       v.step = 8; v.metSteward = true;
-      event(s, REALM.steward + ' meets you at the gate: "His lordship hears Hearthmoor has a councillor worth knowing. Lords have need of such people. We will send for you." (Chapter Three, The Lord\u2019s Favor, comes in a later update.)', 'story');
+      event(s, 'Steward ' + holderName(s, 'steward') + ' meets you at the gate: "His lordship hears Hearthmoor has a councillor worth knowing. Lords have need of such people. We will send for you." (Chapter Three, The Lord\u2019s Favor, comes in a later update.)', 'story');
     } else if (v.step >= 8) event(s, 'The guard nods you through to the gatehouse, but the steward is away on the lord\u2019s business.', 'info');
     else event(s, 'The gate is barred. A guard in blue and gold: "His lordship receives no one without the steward\u2019s leave."', 'info');
   }
@@ -1042,7 +1052,7 @@
     if (j.type === 'biz') { const b = s.biz[j.biz]; b.staff = b.staff.filter(x => x.pid !== p.id); }
     if (j.type === 'shop') { const sh = shopById(s, j.shop); if (sh && sh.worker && sh.worker.pid === p.id) sh.worker = null; }
     if (j.type === 'office' && s.offices[j.office] === p.id) s.offices[j.office] = null;
-    p.job = null; p.mood = clamp(p.mood - 20, 0, 100);
+    p.job = null; p.tenure = 0; p.mood = clamp(p.mood - 20, 0, 100);
     plog(s, p, why || 'Lost their job.');
   }
 
@@ -1097,8 +1107,7 @@
       let wages = 0;
       for (const st of b.staff) {
         const w = person(s, st.pid);
-        const payer = b.owner === 'player' ? s.coins : own.purse;
-        const paid = Math.min(st.wage, Math.max(0, payer));
+        const paid = b.owner === 'player' ? st.wage : Math.min(st.wage, Math.max(0, own.purse));
         if (b.owner === 'player') spend(s, paid); else own.purse -= paid;
         w.purse += paid; wages += paid;
         if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
@@ -1108,7 +1117,7 @@
       b.profits.push(profit); if (b.profits.length > 5) b.profits.shift();
       if (b.owner === 'player') {
         const net = revenue - supplies - 3;
-        if (net >= 0) earn(s, net); else spend(s, Math.min(s.coins, -net));
+        if (net >= 0) earn(s, net); else spend(s, -net);
         s.stats.owned = (s.stats.owned || 0) + profit;
         continue;
       }
@@ -1139,7 +1148,7 @@
   function peopleEvening(s) {
     const lordHolder = s.offices.lord;
     if (lordHolder && lordHolder !== 'player' && s.people[lordHolder]) s.people[lordHolder].purse += 18; // the lord's farms and woods beyond the village
-    if (s.offices.elder === 'player') { const L = lordHolder && lordHolder !== 'player' && s.people[lordHolder]; const sal = OFFICES.elder.salary; if (L && L.purse >= sal) { L.purse -= sal; earn(s, sal); s.stats.jobPay += sal; } }
+    if (s.offices.elder === 'player') { const L = lordHolder && lordHolder !== 'player' && s.people[lordHolder]; const sal = OFFICES.elder.salary; if (L) { L.purse -= sal; earn(s, sal); s.stats.jobPay += sal; } }
     for (const p of living(s)) {
       const j = p.job;
       // incomes that are not paid by a business or by you
@@ -1147,11 +1156,11 @@
       else if (j.type === 'commons') p.purse += income(s, p);
       else if (j.type === 'office' && OFFICES[j.office].salary) {
         const sal = OFFICES[j.office].salary;
-        if (lordHolder === 'player') { const paid = Math.min(s.coins, sal); spend(s, paid); s.stats.salaries = (s.stats.salaries || 0) + paid; p.purse += paid; }
-        else if (lordHolder && s.people[lordHolder]) { const L = s.people[lordHolder], paid = Math.min(Math.max(0, L.purse), sal); L.purse -= paid; p.purse += paid; }
+        if (lordHolder === 'player') { spend(s, sal); s.stats.salaries = (s.stats.salaries || 0) + sal; p.purse += sal; }
+        else if (lordHolder && s.people[lordHolder] && lordHolder !== p.id) { const L = s.people[lordHolder]; L.purse -= sal; p.purse += sal; } // the lord pays his household even on borrowed coin
       }
       // food: what they bought at your shops today counts toward it
-      const food = Math.max(0, FOOD - p.ate); const paidFood = Math.min(p.purse, food); p.purse -= paidFood;
+      const food = Math.max(0, FOOD - p.ate); const paidFood = Math.min(Math.max(0, p.purse), food); p.purse -= paidFood;
       if (paidFood < food) { p.mood = clamp(p.mood - 10, 0, 100); if (!p.hungry) plog(s, p, 'Went to bed hungry.'); p.hungry = true; } else p.hungry = false;
       p.ate = 0;
       // rent
@@ -1159,7 +1168,7 @@
       if (h && h.owner !== p.id && h.rent > 0) {
         // rent owed piles up: paying today does not clear what was missed before
         p.owed = (p.owed || 0) + h.rent;
-        const pay = Math.min(p.purse, p.owed);
+        const pay = Math.min(Math.max(0, p.purse), p.owed);
         if (pay > 0) {
           p.purse -= pay; p.owed -= pay;
           if (h.owner === 'player') { earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay; }
@@ -1174,14 +1183,19 @@
             p.owed = 0;
             moveOut(s, p, 'Evicted from ' + h.name + ' after ' + EVICT_AFTER + ' days of unpaid rent.');
             s.rec.evictions++;
+            if (h.owner === 'office:lord' && s.gov) approve(s, 'lord', -2);
+            if (h.owner === 'player') approveHolder(s, 'player', -2);
             event(s, p.name + ' has been evicted from ' + h.name + (h.owner === 'player' ? ' (your house)' : '') + '.', 'bad');
           }
         }
       }
       // mood drifts with circumstances
-      const target = (p.job ? 60 : 30) + (p.home ? 15 : -20) + (p.purse > 30 ? 10 : p.purse < 5 ? -10 : 0);
+      const target = (p.job ? 60 : 30) + (p.home ? 15 : -20) + (p.purse > 30 ? 10 : p.purse < 5 ? -10 : 0) + (s.village.projects.well ? 5 : 0);
       p.mood = clamp(p.mood + (target - p.mood) * 0.3, 0, 100);
-      p.purse = Math.max(0, Math.round(p.purse));
+      // debts grow: the Ashford moneylender takes 2% a day
+      if (p.purse < 0) p.purse -= Math.max(1, Math.ceil(-p.purse * INTEREST));
+      p.purse = Math.round(p.purse);
+      if (j && j.type === 'biz' && j.role === 'hand') p.tenure = (p.tenure || 0) + 1;
     }
   }
 
@@ -1199,6 +1213,15 @@
         if (h && h.owner !== p.id && h.rent > income(s, p) - 1 && p.purse < h.rent * 4) {
           const cheaper = vacancy(s, Math.max(1, income(s, p) - FOOD));
           if (cheaper && cheaper.rent < h.rent) { moveOut(s, p, 'Moved out of ' + h.name + ': the rent of ' + h.rent + 'c was more than they could pay.'); moveIn(s, p, cheaper); }
+        }
+      }
+      if (p.job && p.job.type === 'biz' && p.job.role === 'hand' && (p.tenure || 0) >= 12 && p.purse >= 70 && (p.rep || 0) >= 25) {
+        const shut = Object.values(s.biz).find(b => b.closed && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(b => b.closed);
+        if (shut) {
+          loseJob(s, p, 'Left to run a shop of their own.');
+          p.purse -= 60; shut.owner = p.id; shut.closed = false; shut.profits = [4, 4, 4]; shut.staff = []; p.job = { type: 'biz', biz: shut.id, role: 'owner' };
+          plog(s, p, 'Reopened ' + empById(shut.id).name + ' with 60c of savings, after ' + 'years as a hired hand.');
+          event(s, p.name + ' has saved enough to reopen ' + empById(shut.id).name + ' as its owner.', 'story');
         }
       }
       if (!p.job && !p.retired) {
@@ -1252,6 +1275,347 @@
     a.working = arrived && working;
     a.indoors = arrived && night && !!home;
     if (arrived && a.faceTo != null && working) a.face = a.faceTo;
+  }
+
+  /* ---------- who rules, and how they fall: debt, respect, approval and the moot ----------
+     Everyone climbs the same ladder: hired hand, shop owner, council seat, Elder, Steward, Lord.
+     Seats go to the most respected, respect comes from position, conduct and staying out of debt,
+     and the moot can vote any leader out, you included. */
+  const HOUSEHOLD = ['lord', 'steward', 'taxman', 'guard'];
+  function isHousehold(p) { return !!(p && p.job && p.job.type === 'office' && HOUSEHOLD.includes(p.job.office)); }
+  function thriftOf(p) { if (p.thrift != null) return p.thrift; const n = parseInt(String(p.id).slice(1), 10) || 1; return ((n * 2654435761) % 997) / 997; }
+  function purseOf(s, who) { return who === 'player' ? s.coins : who && s.people[who] ? s.people[who].purse : 0; }
+  function nameOf(s, who) { return who === 'player' ? s.name : who && s.people[who] ? s.people[who].name : 'nobody'; }
+  function elderTitle(s) { const e = s.offices && s.offices.elder; if (!s.people) return REALM.elder; return e === 'player' ? 'Elder ' + s.name : e && s.people[e] ? 'Elder ' + s.people[e].name : 'The council'; }
+  function lordTitle(s, short) {
+    const l = s.offices && s.offices.lord; if (!s.people) return short ? REALM.lordShort : REALM.lord;
+    const n = l === 'player' ? s.name : l && s.people[l] ? s.people[l].name : null;
+    if (!n) return 'the lord';
+    return 'Lord ' + (short ? n.split(' ').slice(-1)[0] : n);
+  }
+  function govLog(s, text, kind) { const g = s.gov; g.log.unshift({ day: s.day, text }); if (g.log.length > 24) g.log.length = 24; event(s, text, kind || 'info'); }
+  function approve(s, key, n) { const g = s.gov; if (!g || !n) return; g.approval[key] = Math.round(clamp((g.approval[key] == null ? 50 : g.approval[key]) + n, 0, 100) * 10) / 10; }
+  function approveHolder(s, who, n) {
+    if (!s.gov || !n) return;
+    if (who === 'player' && s.village.council && s.offices.elder !== 'player') approve(s, 'you', n);
+    if (s.offices.elder === who) approve(s, 'elder', n);
+    if (s.offices.lord === who) approve(s, 'lord', n);
+  }
+  function councilNames(s) { return s.gov.council.map(id => s.people[id] && s.people[id].name).filter(Boolean); }
+  // respect: what the village thinks someone has earned
+  function repTarget(s, p) {
+    const j = p.job; let r;
+    if (!j) r = p.retired ? 25 : 5;
+    else if (j.type === 'commons') r = 20;
+    else if (j.type === 'shop') r = 24;
+    else if (j.type === 'biz') { const b = s.biz[j.biz]; r = j.role === 'owner' ? 42 + clamp(avg(b.profits), -12, 16) : 22 + Math.min(10, (p.tenure || 0) / 3); }
+    else r = { elder: 70, steward: 72, lord: 85, taxman: 35, guard: 30 }[j.office] || 30;
+    if (s.gov && s.gov.council.includes(p.id)) r += 8;
+    r += p.purse >= 0 ? Math.min(10, p.purse / 20) : Math.max(-30, p.purse / 6);
+    if (!p.home) r -= 10;
+    return clamp(r, 0, 100);
+  }
+  function initGov(s) {
+    const v = s.village;
+    if (!v.chest) v.chest = 40;
+    s.gov = { approval: { elder: 62, lord: 55, you: 55 }, council: [], nextMoot: s.day + 5, relief: 'some', taxMul: 1, debtDays: 0, lordDebtDays: 0, petitions: 0,
+      tollSetDay: -99, warned: false, log: [], lastMoot: null, lostSeatDay: null, reliefToday: 0, chestIn: 0, chestUp: 0 };
+    for (const p of Object.values(s.people)) if (p.thrift == null) p.thrift = Math.round(thriftOf(p) * 100) / 100;
+    const elder = s.offices.elder && s.people[s.offices.elder]; if (elder && elder.name === 'Brannoch') elder.thrift = 0.75;
+    const lord = s.offices.lord && s.people[s.offices.lord]; if (lord && lord.name === 'Edric Varrow') lord.thrift = 0.55;
+    for (const p of Object.values(s.people)) p.rep = Math.round(repTarget(s, p));
+    fillCouncil(s, true);
+    for (const p of Object.values(s.people)) p.rep = Math.round(repTarget(s, p));
+  }
+  function fillCouncil(s, quiet) {
+    const g = s.gov, added = [];
+    while (g.council.length < COUNCIL_SEATS) {
+      const pick = living(s).filter(p => !g.council.includes(p.id) && s.offices.elder !== p.id && !isHousehold(p) && !p.retired && p.job && (p.job.role === 'owner' || p.job.type === 'office') && (p.rep || 0) >= 40)
+        .sort((a, b) => (b.rep || 0) - (a.rep || 0))[0];
+      if (!pick) break;
+      g.council.push(pick.id); added.push(pick); plog(s, pick, 'Given a seat on the village council by the moot.');
+      if (!quiet) govLog(s, 'The moot gives ' + pick.name + ' a seat on the council: ' + occupation(s, pick).toLowerCase() + ', and respected for it.', 'info');
+    }
+    return added;
+  }
+
+  /* each morning the chest takes in tolls and pays upkeep, and the leaders make their choices */
+  function govMorning(s) {
+    const g = s.gov, v = s.village;
+    const toll = TOLLS[v.toll].coin * 3; v.chest += toll;
+    const up = 1 + (v.towerBuilt ? 1 : 0) + Math.floor(Object.keys(v.projects).length / 2); v.chest -= up;
+    g.chestIn = toll + v.chestDaily; g.chestUp = up;
+    if (v.chest < 0) { const i = Math.max(1, Math.ceil(-v.chest * INTEREST)); v.chest -= i; g.chestUp += i; }
+    let eid = s.offices.elder;
+    if (eid && eid !== 'player' && (!s.people[eid] || s.people[eid].status !== 'here' || !s.people[eid].job || s.people[eid].job.office !== 'elder')) { s.offices.elder = null; eid = null; }
+    if (!eid) electElder(s, null, 'The Elder’s chair stands empty, so the moot meets to fill it. ');
+    eid = s.offices.elder;
+    if (eid && eid !== 'player') elderDecides(s, s.people[eid]);
+    relief(s);
+    if (s.day % 7 === 1) lordDecides(s);
+    if (s.day === g.nextMoot - 1) mootWarning(s);
+    if (s.day >= g.nextMoot) { holdMoot(s); g.nextMoot = s.day + 7; }
+  }
+  function elderDecides(s, e) {
+    const g = s.gov, v = s.village, t = thriftOf(e);
+    // projects: a careful elder waits for the coin, a free-spending one borrows
+    const open = Object.keys(PROJECTS).filter(k => !v.projects[k] && !(k === 'granary' && v.step < 4)); // the granary is the village's own task for a newcomer first
+    const keep = v.step <= 6 ? 1 : 0; // leave something for a new councillor to do
+    if (open.length > keep && rand(s) < 0.25) {
+      const k = open.sort((a, b) => PROJECTS[a].cost - PROJECTS[b].cost)[0], pr = PROJECTS[k];
+      const floor = t >= 0.5 ? 10 : -30 - Math.round((0.5 - t) * 200);
+      if (v.chest - pr.cost >= Math.max(CHEST_FLOOR, floor)) {
+        v.chest -= pr.cost; v.projects[k] = s.day; if (k === 'granary') v.shortage = false;
+        approve(s, 'elder', 8); plog(s, e, 'As Elder, paid for ' + pr.name.toLowerCase() + '.');
+        govLog(s, 'Elder ' + e.name + ' pays for ' + pr.name.toLowerCase() + (v.chest < 0 ? ', borrowing to do it. The village chest is now ' + (-v.chest) + 'c in debt.' : ' from the village chest.'), v.chest < 0 ? 'bad' : 'good');
+      }
+    }
+    // the toll: raised when the chest is in trouble, dropped when it is full
+    if (s.day - g.tollSetDay >= 7) {
+      const want = v.chest < -20 ? 'high' : v.chest < 25 ? 'low' : v.chest > 90 ? 'none' : v.toll;
+      if (want !== v.toll) {
+        v.toll = want; g.tollSetDay = s.day; approve(s, 'elder', want === 'high' ? -3 : want === 'none' ? 2 : 0);
+        govLog(s, 'Elder ' + e.name + ' sets the travelers’ toll: ' + TOLLS[want].name + (want === 'high' ? ', to pay down what the chest owes.' : want === 'low' ? ', to keep the chest from running dry.' : ', now the chest is full.'), 'info');
+      }
+    }
+    // quarrels the elder hears alone, when you are not on the council
+    if (!v.council && s.day % 5 === 2) {
+      const d = DISPUTES[Math.floor(rand(s) * DISPUTES.length)];
+      const opts = d.opts.filter(o => !o.chest || v.chest + o.chest >= (t < 0.45 ? CHEST_FLOOR : 0)).filter(o => !o.chestDaily || v.chestDaily < 2);
+      const o = (t < 0.45 ? opts.find(x => x.chest) : opts.filter(x => !x.chest).sort((a, b) => b.standing - a.standing)[0]) || opts[0];
+      if (o) {
+        v.chest += o.chest || 0; v.chestDaily += o.chestDaily || 0;
+        approve(s, 'elder', o.standing - 3);
+        govLog(s, 'Elder ' + e.name + ' hears ' + d.a + ' and ' + d.b + '’s quarrel and rules: ' + (/^(The|Let|Draw) /.test(o.label) ? o.label.charAt(0).toLowerCase() + o.label.slice(1) : o.label) + '.', 'info');
+      }
+    }
+  }
+  function relief(s) {
+    const g = s.gov, v = s.village, eid = s.offices.elder;
+    const e = eid && eid !== 'player' ? s.people[eid] : null;
+    const level = eid === 'player' ? g.relief : e ? (thriftOf(e) < 0.4 ? 'all' : thriftOf(e) < 0.8 ? 'some' : 'none') : 'none';
+    g.reliefToday = 0; g.reliefLevel = level;
+    if (level === 'none') return;
+    const needy = living(s).filter(p => (p.hungry || !p.home) && !isHousehold(p) && p.purse < 6);
+    const list = level === 'all' ? needy : needy.slice(0, 3), each = level === 'all' ? 3 : 2;
+    for (const p of list) {
+      if (level === 'some' ? v.chest < each : v.chest - each < CHEST_FLOOR) break;
+      v.chest -= each; p.purse += each; g.reliefToday += each;
+      if (eid === 'player') p.opinion = clamp(p.opinion + 2, -100, 100);
+    }
+    if (g.reliefToday) approve(s, 'elder', Math.min(3, g.reliefToday / 3));
+  }
+  function lordDecides(s) {
+    const g = s.gov, v = s.village, lid = s.offices.lord;
+    if (!lid) return;
+    if (lid === 'player') { spend(s, 20); v.chest += 20; s.stats.given += 20; return; }
+    const L = s.people[lid]; if (!L) return;
+    const grant = L.purse < 0 ? 10 : 20; L.purse -= grant; v.chest += grant;
+    if (grant < 20) { approve(s, 'lord', -3); govLog(s, lordTitle(s) + ', short of coin, sends only ' + grant + 'c to the village chest this week.', 'bad'); }
+    if (L.purse < 40 && g.taxMul < 2) {
+      g.taxMul = Math.round((g.taxMul + 0.5) * 10) / 10;
+      let raised = 0;
+      s.houses.filter(h => h.owner === 'office:lord' && h.rent < 4).forEach(h => { h.rent++; raised++; h.tenants.forEach(id => { const t = s.people[id]; if (t) { t.mood = clamp(t.mood - 5, 0, 100); plog(s, t, 'The lord raised the rent on ' + h.name + ' to ' + h.rent + 'c a day.'); } }); });
+      approve(s, 'lord', -8);
+      govLog(s, lordTitle(s) + ' is ' + (L.purse < 0 ? (-L.purse) + 'c in debt' : 'short of coin') + '. He raises taxes to ' + g.taxMul + ' times the old rate' + (raised ? ' and the rent on ' + raised + ' of his houses by 1c' : '') + '.', 'bad');
+    } else if (L.purse > 350 && g.taxMul > 1) {
+      g.taxMul = Math.round((g.taxMul - 0.5) * 10) / 10; approve(s, 'lord', 5);
+      govLog(s, lordTitle(s) + '’s coffers are full again. He lowers taxes to ' + (g.taxMul === 1 ? 'the old rate' : g.taxMul + ' times the old rate') + '.', 'good');
+    }
+  }
+
+  /* the moot: once a week the village meets in the hall */
+  function mootAgenda(s) {
+    const g = s.gov, e = s.offices.elder, items = [];
+    if (e && g.approval.elder < 45) items.push('a vote of confidence in ' + (e === 'player' ? 'you as Elder' : 'Elder ' + nameOf(s, e)));
+    if (s.village.council && e !== 'player' && g.approval.you < 40) items.push('whether you keep your council seat');
+    if (s.offices.lord && s.offices.lord !== 'player' && g.approval.lord < 25) items.push('a petition to the King against ' + lordTitle(s));
+    return items;
+  }
+  function mootWarning(s) {
+    const items = mootAgenda(s);
+    s.gov.warned = true;
+    govLog(s, 'The moot meets tomorrow morning at the hall. ' + (items.length ? 'On the table: ' + items.join(', and ') + '.' : 'No one has called for a vote.'), items.length ? 'bad' : 'info');
+  }
+  function vote(s, who, a) {
+    let yes = 0, no = 0;
+    for (const p of living(s)) {
+      if (isHousehold(p) || p.id === who || p.age < 16) continue;
+      const personal = who === 'player' ? p.opinion * 0.4 : 0;
+      const score = a + (p.mood - 50) * 0.25 + personal + (rand(s) - 0.5) * 24;
+      if (score >= 45) yes++; else no++;
+    }
+    if (who === 'player') yes++;
+    return { yes, no, keep: yes >= no };
+  }
+  function holdMoot(s) {
+    const g = s.gov, v = s.village, notes = [], after = [];
+    g.warned = false;
+    // seats are kept by those who still have the village's respect
+    g.council = g.council.filter(id => {
+      const p = s.people[id];
+      const keep = p && p.status === 'here' && (p.rep || 0) >= 30 && s.offices.elder !== id && !isHousehold(p);
+      if (!keep && p) { plog(s, p, 'Lost their council seat.'); notes.push(p.name + ' loses their council seat' + (p.status !== 'here' ? ', having left the village.' : (p.rep || 0) < 30 ? ': the village no longer trusts their judgement.' : '.')); }
+      return keep;
+    });
+    fillCouncil(s, true).forEach(p => notes.push(p.name + ' (' + occupation(s, p).toLowerCase() + ') is given a council seat.'));
+    // your own seat
+    if (v.council && s.offices.elder !== 'player' && g.approval.you < 40) {
+      const r = vote(s, 'player', g.approval.you);
+      if (r.keep) { s.rec.votesWon++; approve(s, 'you', 5); notes.push('You keep your council seat, ' + r.yes + ' votes to ' + r.no + '.'); }
+      else { s.rec.votesLost++; v.council = false; g.lostSeatDay = s.day; addStanding(s, -10, null); notes.push('The moot votes you off the council, ' + r.no + ' to ' + r.yes + '. You no longer hold a key to the chest or a say over the toll. Win back the village and they may ask you back.'); }
+    } else if (!v.council && g.lostSeatDay != null && g.approval.you >= 60) { v.council = true; g.lostSeatDay = null; notes.push('The moot asks you back onto the council.'); }
+    // confidence in the Elder
+    const eid = s.offices.elder;
+    if (eid && g.approval.elder < 45) {
+      const r = vote(s, eid, g.approval.elder), nm = eid === 'player' ? 'you' : 'Elder ' + nameOf(s, eid);
+      if (r.keep) { notes.push('By ' + r.yes + ' votes to ' + r.no + ', the moot keeps ' + nm + ' in the chair.'); if (eid === 'player') s.rec.votesWon++; approve(s, 'elder', 6); }
+      else {
+        notes.push('By ' + r.no + ' votes to ' + r.yes + ', the moot votes ' + nm + ' out of the Elder’s chair.');
+        if (eid === 'player') s.rec.votesLost++;
+        after.push(() => { removeElder(s, eid); electElder(s, eid, ''); });
+      }
+    }
+    // the lord answers to the King, but the moot may petition him
+    const lid = s.offices.lord;
+    if (lid && lid !== 'player' && g.approval.lord < 25) {
+      g.petitions++;
+      if (g.petitions >= 2) { notes.push('A second petition against ' + lordTitle(s) + ' goes to King Aldwin in Highcrown.'); after.push(() => replaceLord(s, 'the village petitioned the King against him twice')); }
+      else notes.push('The moot sends a petition to King Aldwin against ' + lordTitle(s) + '. If nothing changes, a second will follow.');
+    } else if (g.approval.lord >= 35) g.petitions = 0;
+    g.lastMoot = { day: s.day, notes: notes.slice() };
+    govLog(s, 'The moot meets. ' + (notes.length ? notes.join(' ') : 'No one calls for a vote, and the business is soon done.'), notes.length ? 'story' : 'info');
+    after.forEach(f => f());
+  }
+  function removeElder(s, eid) {
+    const g = s.gov;
+    if (eid === 'player') { s.offices.elder = null; addStanding(s, -15, null); g.approval.you = Math.min(g.approval.you, 45); return; }
+    const p = s.people[eid]; if (!p) { s.offices.elder = null; return; }
+    appoint(s, 'elder', null);
+    p.rep = Math.max(0, (p.rep || 0) - 25);
+    const own = Object.values(s.biz).find(b => b.owner === p.id && !b.closed);
+    if (own && !p.retired) { p.job = { type: 'biz', biz: own.id, role: 'owner' }; plog(s, p, 'Went back to running ' + empById(own.id).name + '.'); }
+  }
+  function electElder(s, exclude, prefix) {
+    const g = s.gov, v = s.village;
+    const cands = g.council.map(id => s.people[id]).filter(p => p && p.status === 'here' && p.id !== exclude && !isHousehold(p));
+    const youRun = v.council && v.step >= 8 && exclude !== 'player' && s.offices.elder !== 'player' && g.approval.you >= 55;
+    if (!cands.length) {
+      // no one on the council: the most respected owner stands
+      const alt = living(s).filter(p => p.id !== exclude && !isHousehold(p) && !p.retired && p.job && p.job.role === 'owner' && (p.rep || 0) >= 30).sort((a, b) => (b.rep || 0) - (a.rep || 0))[0];
+      if (alt) cands.push(alt);
+    }
+    if (!cands.length && !youRun) { govLog(s, prefix + 'No one with the standing to lead puts their name forward. The Elder’s chair stays empty until someone earns it.', 'bad'); return null; }
+    const tally = new Map(); cands.forEach(c => tally.set(c.id, 0)); if (youRun) tally.set('player', 1);
+    let total = youRun ? 1 : 0;
+    for (const p of living(s)) {
+      if (isHousehold(p) || p.age < 16) continue;
+      let best = null, bs = -1e9;
+      if (tally.has(p.id)) best = p.id; // candidates vote for themselves
+      else {
+        for (const c of cands) { const sc = (c.rep || 0) + (p.job && c.job && p.job.biz && c.job.biz === p.job.biz ? 8 : 0) + (rand(s) - 0.5) * 16; if (sc > bs) { bs = sc; best = c.id; } }
+        if (youRun) { const sc = g.approval.you * 0.9 + p.opinion * 0.3 + (rand(s) - 0.5) * 16; if (sc > bs) best = 'player'; }
+      }
+      tally.set(best, tally.get(best) + 1); total++;
+    }
+    const win = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const was = win === 'player' ? null : occupation(s, s.people[win]).toLowerCase();
+    g.council = g.council.filter(id => id !== win);
+    appoint(s, 'elder', win);
+    g.approval.elder = 60;
+    if (win === 'player') {
+      s.rec.timesElected++; if (v.step === 8) v.step = 9;
+      govLog(s, prefix + 'The moot elects you Elder of Hearthmoor, with ' + tally.get('player') + ' of ' + total + ' votes. You draw the elder’s 5c a day and run the village chest.', 'story');
+    } else {
+      const w = s.people[win]; plog(s, w, 'Elected Elder of Hearthmoor by the moot.');
+      govLog(s, prefix + 'The moot elects ' + w.name + ', ' + was + ' and a councillor, as Elder of Hearthmoor (' + tally.get(win) + ' of ' + total + ' votes).', 'story');
+    }
+    fillCouncil(s, false);
+    return win;
+  }
+  function replaceLord(s, why) {
+    const g = s.gov, oldId = s.offices.lord, old = oldId && oldId !== 'player' ? s.people[oldId] : null;
+    const stw = s.offices.steward && s.offices.steward !== 'player' ? s.people[s.offices.steward] : null;
+    let heir;
+    if (stw && stw.status === 'here' && (stw.rep || 0) >= 40) heir = stw;
+    else { heir = newPerson(s, { name: ['Aldous Penrith', 'Hamon Grey', 'Bertram Ashe'][Math.floor(rand(s) * 3)], age: 40 + Math.floor(rand(s) * 12), purse: 300, palette: 2 }); heir.log.push({ day: s.day, text: 'Sent from Highcrown by King Aldwin to hold Hearthmoor.' }); }
+    const oldName = old ? old.name : 'the lord';
+    appoint(s, 'lord', heir.id);
+    if (old) { old.rep = Math.max(0, (old.rep || 0) - 40); plog(s, old, 'Stripped of Hearthmoor by the King: ' + why + '.'); if (!old.home && old.status === 'here') { const h = vacancy(s, 99); if (h) moveIn(s, old, h); } }
+    g.approval.lord = 55; g.petitions = 0; g.lordDebtDays = 0;
+    let msg = 'King Aldwin strips ' + oldName + ' of Hearthmoor: ' + why + '. ' + heir.name + (heir === stw ? ', the steward who ran his estate,' : ', a knight from Highcrown,') + ' is the new Lord.';
+    if (heir === stw) {
+      // the new lord names a steward on merit: the Elder or a councillor
+      const pick = [s.offices.elder].concat(g.council).map(id => id && id !== 'player' ? s.people[id] : null).filter(p => p && p.status === 'here').sort((a, b) => (b.rep || 0) - (a.rep || 0))[0];
+      if (pick) {
+        const wasElder = s.offices.elder === pick.id;
+        g.council = g.council.filter(id => id !== pick.id);
+        appoint(s, 'steward', pick.id); plog(s, pick, 'Named Steward of Hearthmoor by ' + lordTitle(s) + '.');
+        govLog(s, msg + ' He names ' + pick.name + (wasElder ? ', the Elder,' : ', of the council,') + ' as his steward.', 'story');
+        if (wasElder) electElder(s, pick.id, 'With the Elder gone to the manor, the moot must choose again. ');
+        fillCouncil(s, false);
+        return;
+      }
+    }
+    govLog(s, msg, 'story');
+  }
+
+  /* each evening: interest, the leaders' own spending, respect and approval */
+  function govEvening(s) {
+    const g = s.gov, v = s.village, st = s.stats;
+    if (s.coins < 0) {
+      const i = Math.max(1, Math.ceil(-s.coins * INTEREST)); spend(s, i); st.interest = (st.interest || 0) + i; s.rec.interestPaid += i;
+      g.debtDays = s.coins <= SEIZE_AT ? g.debtDays + 1 : 0;
+      if (g.debtDays >= SEIZE_DAYS) seize(s);
+      else if (g.debtDays) event(s, 'You owe the Ashford moneylender ' + (-s.coins) + 'c. ' + (SEIZE_DAYS - g.debtDays) + ' more day' + (SEIZE_DAYS - g.debtDays === 1 ? '' : 's') + ' this deep in debt and your creditors will seize what you own.', 'bad');
+    } else g.debtDays = 0;
+    if (s.coins < 0 && -s.coins > s.rec.maxDebt) s.rec.maxDebt = -s.coins;
+    // leaders live as they choose to
+    const eid = s.offices.elder, E = eid && eid !== 'player' ? s.people[eid] : null;
+    if (E) E.purse -= Math.round((1 - thriftOf(E)) * 5);
+    const lid = s.offices.lord, L = lid && lid !== 'player' ? s.people[lid] : null;
+    if (L) { L.purse -= Math.round(6 + (1 - thriftOf(L)) * 14); g.lordDebtDays = L.purse <= LORD_FALL ? g.lordDebtDays + 1 : 0; }
+    // respect follows position, money and conduct, slowly
+    for (const p of living(s)) { const t = repTarget(s, p), r = p.rep == null ? t : p.rep; p.rep = Math.round((r + (t - r) * 0.12) * 10) / 10; }
+    // approval of those who lead
+    const pen = d => d < 0 ? Math.min(4, 1 + -d / 60) : 0;
+    const pop = living(s).filter(p => !isHousehold(p));
+    const hungry = pop.filter(p => p.hungry).length, homeless = pop.filter(p => !p.home).length;
+    const A = g.approval;
+    if (eid) A.elder += (55 - A.elder) * 0.08 - pen(v.chest) - pen(purseOf(s, eid)) - Math.min(3, hungry * 0.4 + homeless * 0.5) - (v.shortage ? 1 : 0);
+    A.lord += (50 - A.lord) * 0.08 - (L ? pen(L.purse) : 0) - (g.taxMul - 1) * 2;
+    if (v.council || g.lostSeatDay != null) A.you += (45 + Math.min(25, v.standing / 4) - A.you) * 0.08 - pen(s.coins);
+    for (const k in A) A[k] = Math.round(clamp(A[k], 0, 100) * 10) / 10;
+    if (L && g.lordDebtDays >= 3) replaceLord(s, 'he is ' + (-L.purse) + 'c in debt and cannot pay his own household');
+  }
+  // creditors take property until the debt is covered
+  function seize(s) {
+    const g = s.gov, v = s.village, taken = [];
+    const before = s.coins;
+    for (const h of s.houses.filter(x => x.owner === 'player')) {
+      if (s.coins >= 0) break;
+      const n = Math.round(housePrice(s, h) * 0.6); h.owner = 'office:lord'; earn(s, n); taken.push(h.name + ' (' + n + 'c)');
+      h.tenants.forEach(id => plog(s, s.people[id], 'Now rents from the lord: ' + s.name + '’s creditors seized ' + h.name + '.'));
+    }
+    if (s.coins < 0 && ['owned', 'repaired', 'let'].includes(v.cottage)) { v.cottage = 'forsale'; earn(s, 50); taken.push('Old Ama’s cottage (50c)'); }
+    for (const b of Object.values(s.biz).filter(x => x.owner === 'player')) {
+      if (s.coins >= 0) break;
+      const n = Math.round(bizPrice(s, b.id) * 0.5);
+      const mgr = b.staff.map(x => s.people[x.pid]).find(Boolean);
+      if (mgr) { b.staff = b.staff.filter(x => x.pid !== mgr.id); b.owner = mgr.id; mgr.job = { type: 'biz', biz: b.id, role: 'owner' }; plog(s, mgr, 'Took over ' + empById(b.id).name + ' when ' + s.name + '’s creditors seized it.'); }
+      else if (s.offices.lord && s.offices.lord !== 'player') { b.owner = s.offices.lord; b.closed = true; }
+      else continue;
+      earn(s, n); taken.push(empById(b.id).name + ' (' + n + 'c)');
+    }
+    for (const sh of s.shops.slice()) {
+      if (s.coins >= 0) break;
+      const c0 = s.coins; cmd(s, 'sellShop', sh.id); taken.push('your ' + TRADES[sh.trade].name.toLowerCase() + ' (' + (s.coins - c0) + 'c)');
+    }
+    s.stats.seized = (s.stats.seized || 0) + (s.coins - before);
+    s.rec.coinsEarned -= 0;
+    s.rec.seizures++; g.debtDays = 0;
+    approveHolder(s, 'player', -8);
+    event(s, taken.length ? 'Your creditors from Ashford seize ' + taken.join(', ') + ' to cover your debts.' + (s.coins < 0 ? ' You still owe ' + (-s.coins) + 'c.' : '') : 'Your creditors find nothing left to seize. You still owe ' + (-s.coins) + 'c, and the interest keeps growing.', 'bad');
   }
 
   /* buying, renting and firing */
@@ -1417,7 +1781,7 @@
       case 'setWage': if (shop && shop.worker) shop.worker.wage = clamp(Math.round(b), 1, 40); return ok();
       case 'fire': {
         if (!shop || !shop.worker) return fail('No worker to let go.');
-        const w = shop.worker; shop.worker = null; s.rec.workersLetGo++; s.rec.staffFired++;
+        const w = shop.worker; shop.worker = null; s.rec.workersLetGo++; s.rec.staffFired++; approveHolder(s, 'player', -3);
         if (w.pid && s.people && s.people[w.pid]) { const wp = s.people[w.pid]; wp.job = null; wp.opinion = clamp(wp.opinion - 30, -100, 100); wp.mood = clamp(wp.mood - 20, 0, 100); plog(s, wp, 'Let go by ' + s.name + '.'); addBody(s, wp, { x: w.x, z: w.z }); }
         event(s, 'You let ' + w.name + ' go.' + (w.pid ? ' They will need to find other work to keep up with their rent.' : ''), 'info');
         return ok();
@@ -1438,18 +1802,21 @@
       case 'gate': if (atLoc(s, 'manor')) { gateTalk(s); return ok(); } walkTo(s, P.gate, { type: 'gate' }); return ok();
       case 'project': {
         const v = s.village, pr = PROJECTS[a];
-        if (!v.council) return fail('Only the council can spend the village chest.');
+        const elder = s.offices && s.offices.elder === 'player';
+        if (!v.council && !elder) return fail('Only the council can spend the village chest.');
         if (!atLoc(s, 'hall')) return fail('Council business is done at the Moot Hall.');
         if (!pr || v.projects[a]) return fail('That project is already done.');
-        if (v.chest < pr.cost) return fail('The chest holds ' + v.chest + 'c; this needs ' + pr.cost + 'c. You can add your own coin.');
+        if (elder ? v.chest - pr.cost < CHEST_FLOOR : v.chest < pr.cost) return fail(elder ? 'Even borrowing, the chest cannot go below ' + CHEST_FLOOR + 'c.' : 'The chest holds ' + v.chest + 'c; this needs ' + pr.cost + 'c. You can add your own coin, or the Elder can borrow.');
         v.chest -= pr.cost; v.projects[a] = s.day; s.rec.projectsFunded++;
+        approveHolder(s, 'player', 6);
+        if (v.chest < 0) govLog(s, s.name + ' borrows to pay for ' + pr.name.toLowerCase() + '. The village chest is ' + (-v.chest) + 'c in debt.', 'bad');
         if (a === 'granary' && v.shortage) { v.shortage = false; }
         addStanding(s, 10, pr.name.toLowerCase() + ' is done.');
         return ok();
       }
       case 'giveChest': {
         const v = s.village, n = Math.min(s.coins, a | 0);
-        if (!v.council) return fail('You do not hold a key to the chest.');
+        if (!v.council && !(s.offices && s.offices.elder === 'player')) return fail('You do not hold a key to the chest.');
         if (n <= 0) return fail('You have no coin to give.');
         spend(s, n); v.chest += n; s.stats.given += n; s.rec.chestGiven += n;
         if (n >= 10) addStanding(s, Math.floor(n / 10), 'you put your own coin into the village chest.');
@@ -1458,7 +1825,7 @@
       case 'toll': {
         if (!s.village.council) return fail('Only the council sets the toll.');
         if (!TOLLS[a]) return fail('Unknown toll');
-        s.village.toll = a;
+        s.village.toll = a; if (s.gov) s.gov.tollSetDay = s.day;
         event(s, 'The council sets the travelers\u2019 toll: ' + TOLLS[a].name + '. It takes effect tomorrow.', 'info');
         return ok();
       }
@@ -1468,12 +1835,17 @@
         if (!atLoc(s, 'hall')) return fail('Disputes are heard at the Moot Hall.');
         const d = DISPUTES[v.dispute], o = d.opts[a];
         if (!o) return fail('Pick a ruling.');
-        if (o.chest && v.chest + o.chest < 0) return fail('The chest cannot cover that.');
+        if (o.chest && v.chest + o.chest < (s.offices && s.offices.elder === 'player' ? CHEST_FLOOR : 0)) return fail('The chest cannot cover that.');
         v.chest += o.chest || 0; v.chestDaily += o.chestDaily || 0;
         for (const n in o.favor) v.favor[n] = clamp((v.favor[n] || 0) + o.favor[n], -2, 2);
         v.dispute = null; v.disputeDay = s.day + 3; s.rec.disputesSettled++;
         addStanding(s, o.standing, 'the council rules: ' + o.label.toLowerCase() + '.');
         return ok();
+      }
+      case 'relief': {
+        if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder decides on help for the poor.');
+        if (!['none', 'some', 'all'].includes(a)) return fail('Unknown level');
+        s.gov.relief = a; return ok();
       }
       case 'deliver': {
         const v = s.village, c0 = v.contract;
@@ -1539,7 +1911,7 @@
         const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
         const w = s.people[b]; if (!w) return fail('No such person.');
         loseJob(s, w, 'Let go by ' + s.name + ' from ' + empById(a).name + '.');
-        w.opinion = clamp(w.opinion - 30, -100, 100); s.rec.staffFired++;
+        w.opinion = clamp(w.opinion - 30, -100, 100); s.rec.staffFired++; approveHolder(s, 'player', -3);
         event(s, 'You let ' + w.name + ' go from ' + empById(a).name + '.', 'info');
         return ok();
       }
@@ -1577,7 +1949,7 @@
       case 'setRent': {
         const h = s.houses && houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
         const n = clamp(Math.round(b), 0, 20);
-        if (n > h.rent) { s.rec.rentRaises++; h.tenants.forEach(id => { const t = s.people[id]; t.opinion = clamp(t.opinion - 10 * (n - h.rent), -100, 100); plog(s, t, 'Rent raised to ' + n + 'c a day by ' + s.name + '.'); }); }
+        if (n > h.rent) { s.rec.rentRaises++; approveHolder(s, 'player', -2 * (n - h.rent)); h.tenants.forEach(id => { const t = s.people[id]; t.opinion = clamp(t.opinion - 10 * (n - h.rent), -100, 100); plog(s, t, 'Rent raised to ' + n + 'c a day by ' + s.name + '.'); }); }
         if (n < h.rent) h.tenants.forEach(id => { const t = s.people[id]; t.opinion = clamp(t.opinion + 5, -100, 100); plog(s, t, 'Rent lowered to ' + n + 'c a day.'); });
         h.rent = n; return ok();
       }
@@ -1585,7 +1957,7 @@
         const h = s.houses && houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
         const t = s.people[b]; if (!t || !h.tenants.includes(b)) return fail('They do not live there.');
         moveOut(s, t, 'Evicted from ' + h.name + ' by ' + s.name + '.'); t.opinion = clamp(t.opinion - 50, -100, 100); s.rec.evictions++;
-        addStanding(s, -5, 'the village talks about the eviction.');
+        addStanding(s, -5, 'the village talks about the eviction.'); approveHolder(s, 'player', -4);
         return ok();
       }
       case 'shiftTip': {
@@ -1622,6 +1994,7 @@
     checkVillage(s);
     if (s.people && s.village.step === 8) elderSuccession(s);
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
+    if (s.coins < 0 && -s.coins > (s.rec.maxDebt || 0)) s.rec.maxDebt = -s.coins;
   }
   function advance(s, minutes) { let left = minutes; while (left > 1e-9) { const d = Math.min(1, left); step(s, d); left -= d; } }
 
@@ -1664,7 +2037,7 @@
       s.v = 3; s.village = freshVillage();
       const fr = freshRecords(); for (const k in fr) if (s.rec[k] === undefined) s.rec[k] = fr[k];
       for (const k of ['rent', 'tax', 'contract', 'given', 'property']) if (s.stats[k] === undefined) s.stats[k] = 0;
-      event(s, 'Hearthmoor has a Moot Hall now, and ' + REALM.elder + ' would like a word with you.', 'story');
+      event(s, 'Hearthmoor has a Moot Hall now, and ' + elderTitle(s) + ' would like a word with you.', 'story');
     }
     if (s.v === 3) {
       s.v = 4;
@@ -1682,17 +2055,24 @@
       if (s.village.step === 3) s.village.jobless = living(s).filter(p => !p.job && !p.retired).slice(0, 2).map(p => p.name);
       event(s, 'Everyone in Hearthmoor now has a purse, a job and a home of their own. Tap anyone to see their life.', 'story');
     }
+    if (s.v === 4) {
+      s.v = 5;
+      const fr = freshRecords(); for (const k in fr) if (s.rec[k] === undefined) s.rec[k] = fr[k];
+      initGov(s);
+      event(s, 'The moot now votes on its leaders, and anyone, the lord included, can sink into debt.', 'story');
+    }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    person, living, occupation, homeText, income, houseById, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
-    netWorth, propertyValue, summary, workerHours, canPay
+    netWorth, propertyValue, summary, workerHours, canPay,
+    initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;

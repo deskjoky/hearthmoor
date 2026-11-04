@@ -7,7 +7,7 @@ function untilHour(s, h) { let g = 0; while (Math.abs(Sim.hourOf(s) - h) > 0.01 
 function invariants(s) {
   const nums = [s.coins, s.player.x, s.player.z].concat(s.shops.flatMap(x => [x.goods, x.stock.grain, x.stock.wood, x.stock.ore]));
   if (nums.some(n => !Number.isFinite(n))) return 'non-finite number';
-  if (s.coins < 0) return 'negative coin';
+  if (s.coins < -400) return 'runaway debt';
   for (const x of s.shops) {
     if (x.goods < 0 || x.stock.grain < 0 || x.stock.wood < 0 || x.stock.ore < 0) return 'negative stock in ' + x.trade;
     if (x.goods > Sim.tierOf(x).cap) return 'goods over capacity';
@@ -206,8 +206,8 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   Sim.cmd(s, 'gather', 'grain'); runIdle(s);
   check(s.player.inv.grain >= 20, 'gathered grain for the village');
   Sim.cmd(s, 'donate'); runIdle(s);
-  check(!v.shortage && v.step === 3 && v.standing >= 20, 'the shortage ends and standing rises (' + v.standing + ')');
-  check(v.jobless.length >= 1 && v.jobless.every(n => s.applicants.some(a => a.local && a.name === n)), 'jobless villagers (' + v.jobless.join(', ') + ') wait in the square and appear as applicants');
+  check(!v.shortage && v.step >= 3 && v.standing >= 20, 'the shortage ends and standing rises (' + v.standing + ')');
+  if (v.step === 3) check(v.jobless.length >= 1 && v.jobless.every(n => s.applicants.some(a => a.local && a.name === n)), 'jobless villagers (' + v.jobless.join(', ') + ') wait in the square and appear as applicants');
   Sim.advance(s, 1440 * 4);
   const fed = s.ledger.slice(-3).reduce((a, d) => a + d.shops[0].served, 0) / 3;
   check(fed > lean, 'customers come back once people are fed (' + lean.toFixed(1) + ' -> ' + fed.toFixed(1) + ' a day)');
@@ -227,10 +227,12 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   check(v.council && v.landGranted && v.chest >= 30 && v.step === 6, 'seated on the council with a chest and a land grant');
   check(Sim.cmd(s, 'open', 3, 'joinery').ok === false && (s.trades.joinery = 2) && Sim.cmd(s, 'open', 3, 'joinery').ok, 'the Hall lot can now be built on');
   // council powers change the game
-  check(!Sim.cmd(s, 'project', 'pave').ok, 'the chest alone cannot pave the square yet');
-  Sim.cmd(s, 'giveChest', 40);
-  const r1 = Sim.cmd(s, 'project', 'pave');
-  check(r1.ok && v.projects.pave, 'paved the square from the chest');
+  const pk = Object.keys(Sim.PROJECTS).filter(k => !v.projects[k]).sort((a, b) => Sim.PROJECTS[b].cost - Sim.PROJECTS[a].cost)[0];
+  console.log('   (the elder has already paid for: ' + (Object.keys(v.projects).join(', ') || 'nothing') + ')');
+  if (v.chest < Sim.PROJECTS[pk].cost) check(!Sim.cmd(s, 'project', pk).ok, 'a councillor cannot overspend the chest');
+  Sim.cmd(s, 'giveChest', Math.max(0, Sim.PROJECTS[pk].cost - v.chest));
+  const r1 = Sim.cmd(s, 'project', pk);
+  check(r1.ok && v.projects[pk], 'funded ' + Sim.PROJECTS[pk].name.toLowerCase() + ' from the chest');
   Sim.advance(s, 1440 * 2);
   check(v.dispute != null, 'a dispute arrives for the council');
   Sim.cmd(s, 'talk'); runIdle(s);
@@ -338,6 +340,77 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   check(br.retired && !br.job && br.home, 'Brannoch is a retired villager in his own house now');
   const back = Sim.deserialize(Sim.serialize(b)); Sim.advance(b, 1500); Sim.advance(back, 1500);
   check(Sim.serialize(b) === Sim.serialize(back), 'people, houses and offices save and restore exactly');
+}
+
+console.log('13. Debt, respect, votes: anyone in power can fall, and only the deserving rise');
+{
+  // your own debts
+  const s = Sim.newGame(77); s.coins = 200; s.trades.bakery = 2;
+  Sim.cmd(s, 'open', 1, 'bakery'); Sim.cmd(s, 'hire', s.shops[0].id, 0, 30);
+  s.coins = -60;
+  Sim.advance(s, 1440);
+  const led = s.ledger[s.ledger.length - 1];
+  check(s.coins < -60 && led.interest > 0, 'wages and upkeep are still paid, and debt charges interest (' + s.coins + 'c, ' + led.interest + 'c interest)');
+  check(led.notes.some(n => /moneylender/.test(n.text)), 'the ledger explains the debt');
+  const h = s.houses.find(x => x.owner === 'office:lord' && x.tenants.length); s.coins = 2000; Sim.cmd(s, 'buyHouse', h.id);
+  s.coins = -400; s.shops[0].worker.wage = 1;
+  let d = 0; while (s.rec.seizures === 0 && d < 6) { Sim.advance(s, 1440); d++; }
+  check(s.rec.seizures >= 1 && h.owner !== 'player', 'deep in debt for ' + d + ' days, creditors seize your property (' + s.coins + 'c left)');
+  check(s.rec.maxDebt >= 400 && s.rec.interestPaid > 0, 'records keep the worst debt (' + s.rec.maxDebt + 'c) and interest paid (' + s.rec.interestPaid + 'c)');
+}
+{
+  // a spendthrift elder borrows, the village turns on him, and a councillor who earned it takes the chair
+  const s = Sim.newGame(5);
+  const g = s.gov, old = s.people[s.offices.elder];
+  const council0 = g.council.map(id => s.people[id].name);
+  check(council0.length === 3 && g.council.every(id => s.people[id].job.role === 'owner'), 'the council starts with the respected shop owners (' + council0.join(', ') + ')');
+  old.thrift = 0.02; old.purse = -40; s.village.chest = -120; g.approval.elder = 30;
+  let days = 0; while (s.offices.elder === old.id && days < 30) { Sim.advance(s, 1440); days++; }
+  const nu = s.people[s.offices.elder];
+  check(s.offices.elder !== old.id && nu, old.name + ', in debt with an empty chest, is voted out within ' + days + ' days');
+  check(nu && council0.includes(nu.name) && nu.rep >= 40, 'the new Elder, ' + (nu && nu.name) + ', was a councillor who earned it (respect ' + (nu && Math.round(nu.rep)) + ')');
+  check(!old.job || old.job.office !== 'elder', old.name + ' is an ordinary villager again (' + Sim.occupation(s, old) + ')');
+  check(g.council.length === 3 && !g.council.includes(nu.id), 'the empty council seat is filled again (' + Sim.councilNames(s).join(', ') + ')');
+  check(s.gov.log.some(l => /moot/.test(l.text)), 'the leaders’ decisions are written down');
+}
+{
+  // the lord sinks into debt; the King raises the steward, who names a steward on merit
+  const s = Sim.newGame(9);
+  const lordId = s.offices.lord, stwId = s.offices.steward;
+  s.people[lordId].purse = -420;
+  let days = 0; while (s.offices.lord === lordId && days < 8) { Sim.advance(s, 1440); days++; }
+  check(s.offices.lord === stwId, 'a lord ' + 420 + 'c in debt is stripped of Hearthmoor, and his steward Merrin rises (' + days + ' days)');
+  const ns = s.people[s.offices.steward];
+  check(ns && ns.id !== lordId && ns.rep >= 40, 'the new steward is ' + (ns && ns.name) + ', chosen from the elder and the council');
+  check(s.offices.elder && s.people[s.offices.elder] && s.people[s.offices.elder].status === 'here', 'the Elder’s chair is filled (' + Sim.holderName(s, 'elder') + ')');
+  const fallen = s.people[lordId];
+  check(fallen.home !== 'manor' && !fallen.job, 'Edric Varrow, still in debt, is an ordinary villager (' + fallen.purse + 'c)');
+}
+{
+  // you as Elder: overspend and the moot removes you
+  const s = Sim.newGame(12); s.village.council = true; s.village.step = 9; Sim.appoint(s, 'elder', 'player');
+  s.coins = 10; s.player.x = Sim.LOCS.hall.x; s.player.z = Sim.LOCS.hall.z;
+  s.village.chest = 0;
+  const r = Sim.cmd(s, 'project', 'road');
+  check(r.ok && s.village.chest < 0, 'as Elder you can borrow to pay for a project (chest ' + s.village.chest + 'c)');
+  check(!Sim.cmd(s, 'project', 'pave').ok || s.village.chest >= Sim.CHEST_FLOOR, 'but not past ' + Sim.CHEST_FLOOR + 'c');
+  Sim.cmd(s, 'relief', 'all');
+  s.coins = -200; s.gov.approval.elder = 20;
+  let days = 0; while (s.offices.elder === 'player' && days < 10) { Sim.advance(s, 1440); days++; }
+  check(s.offices.elder !== 'player' && s.rec.votesLost >= 1, 'in debt with the chest empty, the moot votes you out (' + days + ' days; new Elder ' + Sim.holderName(s, 'elder') + ')');
+}
+{
+  // left alone for 60 days, the village governs itself without falling apart
+  const s = Sim.newGame(404);
+  Sim.advance(s, 1440 * 60);
+  const here = Sim.living(s);
+  check(s.offices.elder && s.offices.lord && here.length >= 18, 'after 60 days there is still an Elder, a Lord and ' + here.length + ' villagers');
+  check(here.every(p => Number.isFinite(p.purse) && Number.isFinite(p.rep)), 'every purse and every reputation is a real number');
+  check(Number.isFinite(s.village.chest) && s.village.chest > Sim.CHEST_FLOOR - 50, 'the chest stays within bounds (' + s.village.chest + 'c)');
+  console.log('   leaders: Elder ' + Sim.holderName(s, 'elder') + ', ' + Sim.lordTitle(s) + ', council ' + Sim.councilNames(s).join(', ') + '; approval ' + JSON.stringify(s.gov.approval) + '; toll ' + s.village.toll + '; projects ' + Object.keys(s.village.projects).join(', '));
+  console.log('   recent decisions: ' + s.gov.log.slice(0, 5).map(l => 'D' + l.day + ' ' + l.text).join(' | '));
+  const back = Sim.deserialize(Sim.serialize(s));
+  check(Sim.serialize(back) === Sim.serialize(s), 'government saves and restores exactly');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
