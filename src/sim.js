@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 12;
+  const VERSION = 13;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -340,7 +340,7 @@
     initGov(s);
     setupOakbridge(s);
     setupGreenhaven(s);
-    setupCrownmere(s);
+    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s);
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
@@ -354,7 +354,7 @@
     if (job === 'forest') return { x: LOCS.forest.x + 3 + j() * 5, z: LOCS.forest.z + 2 + j() * 5 };
     if (job === 'pit') return { x: LOCS.pit.x + j() * 4, z: LOCS.pit.z + j() * 3 };
     if (job === 'market') return { x: LOCS.market.x + 1.6, z: LOCS.market.z - 0.6 };
-    const sp = OAK.spots[job] || GH.spots[job] || CM.spots[job]; if (sp) return { x: sp.x + j() * 2 * sp.rx, z: sp.z + j() * 2 * sp.rz };
+    const sp = OAK.spots[job] || GH.spots[job] || CM.spots[job] || IC.spots[job] || EW.spots[job]; if (sp) return { x: sp.x + j() * 2 * sp.rx, z: sp.z + j() * 2 * sp.rz };
     return { x: P.well.x + 1.2, z: P.well.z + 0.4 };
   }
 
@@ -430,6 +430,8 @@
     if (s.people) { bizDay(s); peopleEvening(s); }
     if (s.gov) govEvening(s);
     if (s.towns) townEvening(s);
+    if (s.people) propertyDay(s);
+    if (s.realm) realmDay(s);
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
@@ -1186,12 +1188,20 @@
   function homePoint(s, p) {
     if (!p.home) return null;
     if (p.home === 'manor') return MANOR_HOME;
+    if (p.home.startsWith('seat:')) { const st = SEATS()[p.home.slice(5)]; return st ? { x: st.x, z: st.z } : null; }
     if (p.home === 'you') { const H = yourHouse(s); return H ? { x: H.x + 1.5, z: H.z + 1.5 } : { x: P.home.x + 1.5, z: P.home.z + 1.5 }; }
     if (p.home.startsWith('biz:')) { const e = empById(p.home.slice(4)); return { x: e.x, z: e.z }; }
     const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
   }
   function occupation(s, p) {
     const j = p.job;
+    if (s.realm && p.status !== 'dead') {
+      const R = s.realm, f = sexOf(p) === 'f';
+      if (p.id === R.king && R.crown === 'king') return f ? 'Queen of Alderwyn' : 'King of Alderwyn';
+      if (p.id === R.prince) return f ? 'Princess of Alderwyn' : 'Prince of Alderwyn';
+      for (const k in COUNCIL) if (R.council[k] === p.id) return COUNCIL[k];
+      for (const id in R.regions) if (R.regions[id].lord === p.id) return (f ? 'Lady of ' : 'Lord of ') + REGIONS[id];
+    }
     if (!j) return p.kid ? (p.age >= 10 ? 'Child, helps at home' : 'Child') : p.retired ? 'Retired' : p.status === 'left' ? 'Gone from Hearthmoor' : 'Out of work';
     if (j.type === 'commons') return COMMON_JOBS[j.what] ? COMMON_JOBS[j.what][0] : { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader at the post', well: 'Water-carrier' }[j.what];
     if (j.type === 'biz') { const e = empById(j.biz), b = s.biz[j.biz]; return (j.role === 'owner' ? 'Owner of ' : (b.owner === 'player' ? 'Works for you at ' : 'Works at ')) + e.name; }
@@ -1202,6 +1212,7 @@
     return 'Working';
   }
   function homeText(s, p) {
+    if (p.home && p.home.startsWith('seat:')) return 'Lives at the seat of ' + REGIONS[p.home.slice(5)];
     if (!p.home) return p.status === 'left' ? 'Left the village' : 'Homeless, sleeping in the square';
     if (p.home === 'manor') return 'Lives at Varrow Manor';
     if (p.home === 'you') return 'Lives with you';
@@ -1213,7 +1224,7 @@
   function income(s, p) {
     const j = p.job;
     if (!j) return p.retired || p.kid ? 0 : ODD_JOBS;
-    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'crownmere' ? COMMONS_PAY + 2 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0) + (j.what === 'field' && s.village.land && s.village.land.use === 'pasture' && s.village.land.state === 'done' ? 1 : 0);
+    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'crownmere' ? COMMONS_PAY + 2 : townOf(p) === 'ironcrest' ? COMMONS_PAY + 2 : townOf(p) === 'eastwatch' ? COMMONS_PAY + 1 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0) + (j.what === 'field' && s.village.land && s.village.land.use === 'pasture' && s.village.land.state === 'done' ? 1 : 0);
     if (j.type === 'biz') { const b = s.biz[j.biz]; if (j.role === 'owner') return Math.max(0, Math.round(avg(b.profits))); const st = b.staff.find(x => x.pid === p.id); return st ? st.wage : 0; }
     if (j.type === 'shop') { const sh = shopById(s, j.shop); return sh && sh.worker ? sh.worker.wage : 0; }
     if (j.type === 'manage') { const m = managerOf(s, j.kind, j.ref); return m ? m.wage : 0; }
@@ -1377,7 +1388,8 @@
     for (const id in s.biz) {
       const b = s.biz[id];
       if (b.closed) { b.lastProfit = 0; continue; }
-      const own = b.owner === 'player' ? null : person(s, b.owner);
+      const lessee = b.owner === 'player' && b.lease ? person(s, b.lease.pid) : null, mine = b.owner === 'player' && !lessee;
+      const own = lessee || (b.owner === 'player' ? null : person(s, b.owner));
       const workers = b.staff.length + (own ? 1 : 0);
       const rivals = Object.values(s.biz).filter(x => x !== b && !x.closed && x.trade === b.trade && (x.town || 'hearthmoor') === (b.town || 'hearthmoor')).length;
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
@@ -1385,21 +1397,22 @@
       let wages = 0;
       for (const st of b.staff) {
         const w = person(s, st.pid);
-        const paid = b.owner === 'player' ? st.wage : Math.min(st.wage, Math.max(0, own.purse));
-        if (b.owner === 'player') spend(s, paid); else own.purse -= paid;
+        const paid = mine ? st.wage : Math.min(st.wage, Math.max(0, own.purse));
+        if (mine) spend(s, paid); else own.purse -= paid;
         w.purse += paid; wages += paid;
         if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
       }
       const supplies = Math.round(revenue * 0.35), profit = revenue - supplies - wages - 3;
       b.lastRevenue = revenue; b.lastProfit = profit; b.lastWages = wages;
       b.profits.push(profit); if (b.profits.length > 5) b.profits.shift();
-      if (b.owner === 'player') {
+      if (mine) {
         const net = revenue - supplies - 3;
         if (net >= 0) earn(s, net); else spend(s, -net);
         s.stats.owned = (s.stats.owned || 0) + profit;
         continue;
       }
       own.purse += revenue - supplies - 3;
+      if (lessee) continue;
       // owners hire when doing well and let people go when not
       const recent = avg(b.profits.slice(-3));
       if (recent < -1 && b.staff.length) {
@@ -1668,6 +1681,14 @@
     if (s.offices.elder === 'player') { s.offices.elder = null; govLog(s, 'The Elder\u2019s chair stands empty. The moot will choose.', 'story'); }
     if (wasLord) { if ((h.parents || []).includes(Y.pid) && !h.kid) { /* kept below */ } else { s.offices.lord = null; replaceLord(s, 'the old lord is gone and no child of the blood can take the title'); } }
     if (s.offices.steward === 'player') s.offices.steward = null;
+    // the realm: lordships and the crown pass to a grown child of the blood, with the crown's recognition; council seats are given, not inherited
+    if (s.realm) {
+      const R = s.realm, blood = (h.parents || []).includes(Y.pid) && !h.kid;
+      for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' after ' + s.name + ' died.' }).id;
+      for (const id in R.regions) if (R.regions[id].lord === 'player') { if (blood && (R.favour >= 20 || isRuler(s))) realmLog(s, h.name + ' inherits ' + REGIONS[id] + ', and the crown recognises the claim.', 'story'); else { R.regions[id].lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' returns to the crown: ' + (blood ? 'the court does not recognise the heir' : 'no child of the blood can take it') + '.', 'story'); } }
+      if (isRuler(s) && !blood) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without a child of the blood'); }
+      else if (isRuler(s)) realmLog(s, h.name + ' is crowned ruler of Alderwyn in the Great Hall of the Realm.', 'story');
+    }
     // the heir steps into your shoes: your coin and property, their own purse, part of your standing, and the town's memory of your family
     const b = bodyOf(s, h); if (b) { s.player.x = b.x; s.player.z = b.z; s.agents = s.agents.filter(x => x !== b); }
     if (h.job) loseJob(s, h, 'Gave up their work to take on the family\u2019s affairs.');
@@ -1692,6 +1713,7 @@
     old.name = s.name; old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
     if (s.offices.elder === 'player') s.offices.elder = null;
     if (s.offices.lord === 'player') { s.offices.lord = null; replaceLord(s, 'the old lord died without an heir'); }
+    if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; }
     s.houses.filter(h => h.owner === 'player').forEach(h => { h.owner = 'office:lord'; });
     Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => { b.closed = true; b.manager = null; });
     s.shops.slice().forEach(sh => { if (sh.worker && sh.worker.pid && s.people[sh.worker.pid]) s.people[sh.worker.pid].job = null; });
@@ -2684,26 +2706,142 @@
   LOCS.cmgatew = { x: CM.gateW.x + Math.sin(CM.gateW.face) * 5, z: CM.gateW.z + Math.cos(CM.gateW.face) * 5, r: 12, name: 'The West Gate', town: 'crownmere' };
   CM.biz.forEach(b0 => { LOCS['cb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'crownmere' }; });
   CM.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  /* ---------- Stage IV: Ironcrest, the mining town on its mountain shelf, and Eastwatch, the port ----------
+     Both are laid out the same way: streets first, then shops along them, then houses in rows behind. */
+  function makeTown(cfg) {
+    const C = cfg.C; let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    const segD = (x, z, pts) => { let best = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); best = Math.min(best, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return best; };
+    const streets = cfg.streets, plazas = cfg.plazas;
+    const streetDist = (x, z) => Math.min(...streets.map(st => segD(x, z, st.pts) - st.w / 2));
+    const onStreet = (si, t, side) => {
+      const st = streets[si], pts = st.pts; let L = 0; const ls = []; for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); ls.push(l); L += l; }
+      let d = t * L, i = 0; while (i < ls.length - 1 && d > ls[i]) { d -= ls[i]; i++; }
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1], f = d / ls[i], nx = -(bz - az) / ls[i], nz = (bx - ax) / ls[i], off = st.w / 2 + 5;
+      return { x: ax + (bx - ax) * f + nx * off * side, z: az + (bz - az) * f + nz * off * side, face: Math.atan2(-nx * side, -nz * side) };
+    };
+    const biz = cfg.biz.map(([id, trade, name, boss, si, t, side, district]) => { const at = onStreet(si, t, side); return { id, trade, name, boss, x: at.x, z: at.z, face: at.face, district, town: cfg.id, noJob: true, oak: true, shift: [6, 16], wage: 7 }; });
+    const marks = cfg.marks || [];
+    const taken = biz.map(b => ({ x: b.x, z: b.z, r: 5.2 })).concat(marks.map(m => ({ x: m.x, z: m.z, r: m.r })));
+    const free = (x, z, rad) => taken.every(t => Math.hypot(x - t.x, z - t.z) > t.r + rad + 1.2);
+    const fits = (x, z, rad) => streetDist(x, z) > rad - 1.0 && plazas.every(q => Math.hypot(x - q.x, z - q.z) > q.r1 + rad + 1.5) && Math.hypot(x - C.x, z - C.z) < cfg.R && !(cfg.avoid && cfg.avoid(x, z, rad));
+    const houses = [];
+    for (const row of [0, 1, 2]) for (const st of streets) {
+      if (st.noHouses) continue;
+      for (let i = 0; i < st.pts.length - 1; i++) {
+        const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+        for (let d = 3; d < len - 2; d += 2) for (const side of [-1, 1]) {
+          const off = st.w / 2 + 4 + row * 10.5, x = ax + (bx - ax) * d / len + nx * off * side, z = az + (bz - az) * d / len + nz * off * side, rad = 3.6;
+          if (houses.length >= cfg.maxHouses || !fits(x, z, rad) || !free(x, z, rad)) continue;
+          houses.push({ x, z, face: Math.atan2(-nx * side, -nz * side), tall: r() < cfg.tall * (row ? 0.6 : 1) }); taken.push({ x, z, r: rad });
+        }
+      }
+    }
+    return Object.assign({ C, streets, biz, houses, plazas, spots: cfg.spots, riverDist: () => 1e9, riverX: () => 1e9, inside: cfg.inside || (() => true), bridge: null, avoid: 0, push: 0, board: cfg.board, entry: cfg.entry }, cfg.extra || {});
+  }
+  const IC = makeTown({
+    id: 'ironcrest', C: { x: 700, z: -1270 }, seed: 7741, R: 92, maxHouses: 46, tall: 0.25,
+    streets: [
+      { name: 'Gate Street', w: 4.6, pts: [[700, -1176], [702, -1215], [700, -1258]] },
+      { name: 'Mine Road', w: 4.2, pts: [[700, -1258], [698, -1310], [704, -1346]], noHouses: false },
+      { name: 'Smelter Row', w: 4.0, pts: [[700, -1258], [742, -1256], [778, -1250]] },
+      { name: 'West Lane', w: 3.4, pts: [[700, -1258], [664, -1262], [632, -1275]] },
+      { name: 'Upper Row', w: 3.2, pts: [[698, -1305], [735, -1312], [758, -1320]] },
+      { name: 'Lower Lane', w: 3.0, pts: [[702, -1215], [664, -1212], [648, -1222]] }
+    ],
+    plazas: [{ id: 'square', name: 'Ironcrest Square', x: 700, z: -1258, r0: 3, r1: 12, w: 4 }, { id: 'mineyard', name: 'the mine yard', x: 706, z: -1350, r0: 2, r1: 9, w: 2 }],
+    marks: [{ x: 640, z: -1300, r: 14 }, { x: 792, z: -1256, r: 15 }, { x: 806, z: -1294, r: 12 }, { x: 690, z: -1372, r: 7 }, { x: 728, z: -1368, r: 7 }],
+    biz: [
+      ['i_tavern', 'tavern', 'The Pick and Lantern', 'Bertrand Coale', 0, 0.78, 1, 'square'], ['i_forge', 'smithy', 'Stane Forge', 'Oswin Stane', 2, 0.35, 1, 'smelters'],
+      ['i_hammer', 'smithy', 'Hammerfall Smithy', 'Gilda Hammond', 2, 0.6, -1, 'smelters'], ['i_bake', 'bakery', 'Ironcrest Ovens', 'Mabel Crane', 0, 0.45, -1, 'gate'],
+      ['i_butcher', 'butcher', 'Highfold Butchers', 'Rufus Highfold', 3, 0.4, 1, 'west'], ['i_carter', 'carter', 'Ore Carters', 'Dunstan Wray', 1, 0.55, 1, 'mine'],
+      ['i_mason', 'mason', 'Quarrymasters', 'Hilde Quarry', 1, 0.3, -1, 'mine'], ['i_chand', 'chandler', 'Lamp and Wick', 'Eda Lampton', 3, 0.7, -1, 'west'],
+      ['i_apoth', 'apothecary', 'Miners’ Remedies', 'Silas Fenwick', 4, 0.5, 1, 'upper'], ['i_cooper', 'cooper', 'Crag Coopers', 'Ned Cragg', 5, 0.5, 1, 'gate']
+    ],
+    spots: { ic_mine: { x: 708, z: -1360, rx: 14, rz: 5 }, ic_smelt: { x: 790, z: -1262, rx: 8, rz: 6 }, ic_char: { x: 812, z: -1300, rx: 9, rz: 6 }, ic_haul: { x: 712, z: -1330, rx: 5, rz: 10 }, ic_watch: { x: 700, z: -1182, rx: 6, rz: 3 } },
+    board: { x: 708, z: -1250 }, entry: { x: 700, z: -1176 },
+    extra: { keep: { x: 640, z: -1300, face: Math.atan2(700 - 640, -1258 + 1300) }, smelters: [{ x: 784, z: -1250 }, { x: 796, z: -1262 }, { x: 790, z: -1240 }], adits: [{ x: 690, z: -1372 }, { x: 728, z: -1368 }], slag: { x: 806, z: -1294 } }
+  });
+  const EW = (function () {
+    const C = { x: 1060, z: -300 }, R = 125;
+    const wall = []; for (let a = 70; a <= 290.1; a += 8) { const t = a * Math.PI / 180; wall.push([C.x + Math.cos(t) * R * (1 + 0.05 * Math.sin(a * 0.11)), C.z + Math.sin(t) * R]); }
+    wall.unshift([1138, wall[0][1]]); wall.push([1138, wall[wall.length - 1][1]]);
+    const gi = wall.findIndex(([x, z]) => Math.abs(z - C.z) < 5), gate = { x: wall[gi][0], z: wall[gi][1], face: -Math.PI / 2, i: gi };
+    const inside = (x, z) => Math.hypot(x - C.x, z - C.z) < R - 3 && x < 1136;
+    const T = makeTown({
+      id: 'eastwatch', C, seed: 9133, R: R - 6, maxHouses: 112, tall: 0.55,
+      inside, avoid: (x, z, rad) => x > 1110 - rad || (x > 1080 && z < -380) || Math.hypot(x - 1096, z - 190 - -370) < 0,
+      streets: [
+        { name: 'High Street', w: 5, pts: [[gate.x + 6, gate.z], [1000, -300], [1062, -300]] },
+        { name: 'Quay Street', w: 5.4, pts: [[1112, -405], [1112, -300], [1112, -200]], noHouses: true },
+        { name: 'Harbour Way', w: 4.6, pts: [[1062, -300], [1106, -300]] },
+        { name: 'North Street', w: 3.6, pts: [[1000, -300], [1006, -350], [1040, -392]] },
+        { name: 'South Street', w: 3.6, pts: [[1000, -300], [1006, -250], [1040, -208]] },
+        { name: 'Rope Walk', w: 3.4, pts: [[1062, -300], [1062, -345], [1100, -360]] },
+        { name: 'Fish Lane', w: 3.4, pts: [[1062, -300], [1062, -255], [1100, -238]] },
+        { name: 'Chapel Row', w: 3.0, pts: [[1006, -350], [968, -360], [958, -330]] },
+        { name: 'Tanner’s Row', w: 3.0, pts: [[1006, -250], [968, -240], [958, -268]] }
+      ],
+      plazas: [{ id: 'harbour', name: 'Harbour Square', x: 1076, z: -300, r0: 4, r1: 13, w: 4 }, { id: 'cross', name: 'the market cross', x: 1000, z: -300, r0: 3, r1: 9, w: 3 }, { id: 'fish', name: 'the fish market', x: 1098, z: -236, r0: 2, r1: 7, w: 2 }],
+      marks: [{ x: 1094, z: -186, r: 16 }, { x: 1094, z: -408, r: 14 }, { x: 1030, z: -340, r: 2 }],
+      biz: [
+        ['e_anchor', 'tavern', 'The Salt Anchor', 'Hester Brine', 2, 0.5, -1, 'harbour'], ['e_mermaid', 'tavern', 'The Mermaid', 'Jory Penhale', 0, 0.75, 1, 'high'], ['e_lantern', 'tavern', 'The Lantern', 'Wenna Trask', 6, 0.6, 1, 'fish'],
+        ['e_bake1', 'bakery', 'Quayside Bakery', 'Tomas Bunn', 0, 0.55, -1, 'high'], ['e_bake2', 'bakery', 'Seagate Ovens', 'Agatha Rowe', 4, 0.4, 1, 'south'],
+        ['e_forge', 'smithy', 'Harbour Forge', 'Cador Smith', 5, 0.45, 1, 'rope'], ['e_fish', 'butcher', 'The Fishmongers', 'Morwenna Hook', 6, 0.3, -1, 'fish'], ['e_butcher', 'butcher', 'Penrose Butchers', 'Alan Penrose', 3, 0.45, -1, 'north'],
+        ['e_ship1', 'boatwright', 'Eastwatch Shipwrights', 'Gideon Keel', 5, 0.8, -1, 'rope'], ['e_ship2', 'boatwright', 'Slipway Boatwrights', 'Bran Tolley', 6, 0.85, 1, 'fish'],
+        ['e_coop1', 'cooper', 'Harbour Coopers', 'Ned Staves', 3, 0.75, 1, 'north'], ['e_coop2', 'cooper', 'Saltbarrel Coopers', 'Ivo Pell', 4, 0.75, -1, 'south'],
+        ['e_chand', 'chandler', 'Ship Chandlers', 'Lowen Tallow', 2, 0.3, 1, 'harbour'], ['e_rope', 'weaver', 'The Rope Walk', 'Senara Cord', 5, 0.2, -1, 'rope'], ['e_sail', 'tailor', 'Sailmakers', 'Petroc Canvas', 1, 0.15, -1, 'quay'],
+        ['e_exch', 'goldsmith', 'The Merchant Exchange', 'Julian Marchant', 0, 0.9, -1, 'high'], ['e_apoth', 'apothecary', 'Harbour Apothecary', 'Kerra Salve', 7, 0.5, 1, 'chapel'],
+        ['e_cart1', 'carter', 'Quay Carters', 'Gwen Barrow', 1, 0.85, -1, 'quay'], ['e_cart2', 'carter', 'Customs Carters', 'Hal Wainer', 3, 0.2, 1, 'north'],
+        ['e_mason', 'mason', 'Seawall Masons', 'Eli Stonard', 8, 0.5, -1, 'tanners'], ['e_potter', 'potter', 'Clay Lane Pottery', 'Nessa Kiln', 7, 0.2, -1, 'chapel'], ['e_tanner', 'tanner', 'Eastwatch Tannery', 'Ruan Hyde', 8, 0.8, 1, 'tanners']
+      ],
+      spots: { ew_dock: { x: 1118, z: -300, rx: 3, rz: 70 }, ew_fish: { x: 1124, z: -240, rx: 2, rz: 14 }, ew_net: { x: 1100, z: -222, rx: 6, rz: 3 }, ew_sail: { x: 1120, z: -350, rx: 3, rz: 20 }, ew_yard: { x: 1100, z: -400, rx: 8, rz: 6 }, ew_watch: { x: gate.x + 9, z: gate.z, rx: 3, rz: 6 } },
+      board: { x: 1068, z: -288 }, entry: { x: gate.x - 8, z: gate.z },
+      extra: { wall, gate, keep: { x: 1094, z: -186, face: Math.PI }, lighthouse: { x: 1168, z: -440 }, shipyard: { x: 1094, z: -408 }, quayX: 1132, shoreX: 1136 }
+    });
+    return T;
+  })();
+  const IC_JOBS = { ic_mine: ['Miner', 'Cutting ore in the mine'], ic_smelt: ['Smelter hand', 'Tending the smelters'], ic_char: ['Charcoal burner', 'Burning charcoal'], ic_haul: ['Ore hauler', 'Hauling ore carts'], ic_watch: ['Watchman', 'Keeping the road gate'] };
+  const EW_JOBS = { ew_dock: ['Docker', 'Unloading ships at the quay'], ew_fish: ['Fisher', 'Fishing from the boats'], ew_net: ['Net mender', 'Mending nets on the strand'], ew_sail: ['Sailor', 'Crewing a coaster'], ew_yard: ['Shipwright’s hand', 'Building a ship on the slip'], ew_watch: ['Harbour watchman', 'Watching the harbour gate'] };
+  IC.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  EW.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  ROADS.iron = [[CM.gate.x + Math.sin(CM.gate.face) * 30, CM.gate.z + Math.cos(CM.gate.face) * 30], [330, -806], [430, -812], [512, -830], [575, -880], [632, -975], [676, -1080], [698, -1150], [IC.entry.x, IC.entry.z]];
+  ROADS.coast = [[OAK.gate.x + Math.sin(OAK.gate.face) * 6, OAK.gate.z + Math.cos(OAK.gate.face) * 6], [400, -296], [440, -287], [500, -282], [580, -276], [700, -288], [820, -300], [EW.gate.x - 30, EW.gate.z], [EW.gate.x - 6, EW.gate.z], [EW.gate.x, EW.gate.z]];
+  TOWNS.ironcrest = { name: 'Ironcrest', x: IC.C.x, z: IC.C.z, r: 96, open: true };
+  TOWNS.eastwatch = { name: 'Eastwatch', x: EW.C.x, z: EW.C.z, r: 128, open: true };
+  LOCS.icsquare = { x: 700, z: -1258, r: 10, name: 'Ironcrest Square', town: 'ironcrest' };
+  LOCS.icmine = { x: 708, z: -1352, r: 9, name: 'The Ironcrest Mines', town: 'ironcrest' };
+  LOCS.icsmelt = { x: 788, z: -1268, r: 9, name: 'The Smelters', town: 'ironcrest' };
+  LOCS.ickeep = { x: IC.keep.x + Math.sin(IC.keep.face) * 12, z: IC.keep.z + Math.cos(IC.keep.face) * 12, r: 6, name: 'Stane Keep', town: 'ironcrest' };
+  LOCS.ewharbour = { x: 1076, z: -300, r: 11, name: 'Harbour Square', town: 'eastwatch' };
+  LOCS.ewquay = { x: 1118, z: -330, r: 9, name: 'The Quays', town: 'eastwatch' };
+  LOCS.ewyard = { x: 1094, z: -396, r: 9, name: 'The Shipyard', town: 'eastwatch' };
+  LOCS.ewkeep = { x: EW.keep.x, z: EW.keep.z - 14, r: 6, name: 'Eastwatch Castle', town: 'eastwatch' };
+  LOCS.ewgate = { x: EW.gate.x - 6, z: EW.gate.z, r: 6, name: 'The Land Gate', town: 'eastwatch' };
+  LOCS.ewlight = { x: 1160, z: -432, r: 6, name: 'The Lighthouse', town: 'eastwatch' };
+  IC.biz.forEach(b0 => { LOCS['ib:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'ironcrest' }; });
+  EW.biz.forEach(b0 => { LOCS['eb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'eastwatch' }; });
   const CM_JOBS = { cm_fish: ['Fisher', 'Fishing from the quay'], cm_watch: ['City watchman', 'Keeping the King\u2019s Gate'], cm_castle: ['Castle servant', 'Serving at the castle'], cm_porter: ['Market porter', 'Carrying in the Great Market'], cm_mason: ['Mason', 'Working on the Great Hall'], cm_carter: ['Carter', 'Loading carts in the South Ward'], cm_wash: ['Washer', 'Washing linen at the lake'], cm_labour: ['Labourer', 'Labouring in the Old Town'] };
-  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM };
-  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS);
+  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW };
+  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS);
   /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
   const STAGE = {
     hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
     oakbridge: { x: OAK.square.x - 10, z: OAK.square.z + 24, face: 0, name: 'Oakbridge Stage Post' },
     greenhaven: { x: GH.entry.x - 6, z: GH.entry.z - 9, face: 0, name: 'Greenhaven Stage Post' },
-    crownmere: { x: CM.southSq.x, z: CM.southSq.z, face: 0, name: 'Crownmere Stage Post' }
+    crownmere: { x: CM.southSq.x, z: CM.southSq.z, face: 0, name: 'Crownmere Stage Post' },
+    ironcrest: { x: 712, z: -1196, face: 0, name: 'Ironcrest Stage Post' },
+    eastwatch: { x: EW.gate.x + 20, z: EW.gate.z + 14, face: 0, name: 'Eastwatch Stage Post' }
   };
   // in the towns, the stage post takes the nearest clear ground to where the road comes in, facing the nearest street
   const segDist0 = (x, z, pts) => { let b = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); b = Math.min(b, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return b; };
-  for (const [id, L, from] of [['oakbridge', OAK, OAK.gate], ['greenhaven', GH, GH.entry], ['crownmere', CM, CM.gate]]) {
+  for (const [id, L, from] of [['oakbridge', OAK, OAK.gate], ['greenhaven', GH, GH.entry], ['crownmere', CM, CM.gate], ['ironcrest', IC, IC.entry], ['eastwatch', EW, EW.gate]]) {
     const blds = L.houses.map(h => [h.x, h.z]).concat(L.biz.map(b => [b.x, b.z])), st = STAGE[id];
     let best = null;
     for (let r0 = 10; r0 < 70 && !best; r0 += 2) for (let k = 0; k < 36 && !best; k++) {
       const a0 = k / 36 * Math.PI * 2, x = from.x + Math.cos(a0) * r0, z = from.z + Math.sin(a0) * r0;
       if ((L.inside && !L.inside(x, z)) || (L.wall && segDist0(x, z, L.wall) < 12) || L.riverDist(x, z) < 16) continue;
       if (blds.some(([bx, bz]) => Math.hypot(bx - x, bz - z) < 11.5)) continue;
-      if (L.streets.some(q => segDist0(x, z, q.pts) < q.w / 2 + 6) || L.plazas.some(q => Math.hypot(q.x - x, q.z - z) < (q.r1 || 4) + 8)) continue;
+      if (Object.values(ROADS).some(rd => segDist0(x, z, rd) < 8) || L.streets.some(q => segDist0(x, z, q.pts) < q.w / 2 + 6) || L.plazas.some(q => Math.hypot(q.x - x, q.z - z) < (q.r1 || 4) + 8)) continue;
       if (L.fields && L.fields.concat(L.pastures, [L.orchard]).some(f => Math.abs(x - f.x) < f.w / 2 + 6 && Math.abs(z - f.z) < f.d / 2 + 6)) continue;
       best = { x, z };
     }
@@ -2716,7 +2854,7 @@
   // distances by road: the east road to the fork at the waystation, then on east to Oakbridge or north to Greenhaven
   const forkAt = ROADS.east.findIndex(p => p[0] === 240);
   const LEG = { hearthmoor: polyLen(ROADS.east.slice(0, forkAt + 1)) + 75, oakbridge: polyLen(ROADS.east.slice(forkAt)) + 30, greenhaven: polyLen(ROADS.north) + 20 };
-  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60]];
+  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40]];
   const roadDist = (a, b) => { if (a === b) return 0; const D = { [a]: 0 }, Q = [a]; while (Q.length) { Q.sort((x, y) => D[x] - D[y]); const u = Q.shift(); for (const [x, y, w] of EDGES) { const v = x === u ? y : y === u ? x : null; if (v && (D[v] == null || D[u] + w < D[v])) { D[v] = D[u] + w; Q.push(v); } } } return D[b] || 0; };
   const COACH_MPM = 15, WALK_MPM = 7.8, RIDE_MPM = 18;   // metres per game minute (walking is 6.5 m a second, and a game minute is 1.2 seconds)
   const fare = (a, b) => Math.max(4, Math.round(roadDist(a, b) / 110));
@@ -2857,6 +2995,50 @@
     plog(s, reeve, 'Chosen as Reeve of Greenhaven by the moot.');
   }
   // Crownmere: about 1,150 people. The great merchant houses own much of the city; a Lord Mayor and the guild masters run it
+  // Ironcrest and Eastwatch: families, businesses, common work and a town council, as in the other towns
+  function setupNewTown(s, id) {
+    if (!s.towns || s.towns[id]) return;
+    const L = LAYOUT[id], cfg = id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
+      : { seed: 616161, pop: 480, jobs: ['ew_dock', 'ew_dock', 'ew_dock', 'ew_fish', 'ew_fish', 'ew_net', 'ew_sail', 'ew_sail', 'ew_yard', 'ew_watch'], title: 'Harbourmaster', chest: 700, rent: [5, 3], pre: 'e', fam: ['Penhale', 'Trask', 'Brine', 'Keel', 'Tolley', 'Hook', 'Marchant', 'Rowe', 'Polgrean', 'Nance', 'Tremayne', 'Kitto', 'Jago', 'Pascoe', 'Rescorla'] };
+    let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    const used = new Set(Object.values(s.people).map(p => p.name));
+    const FIRST_F = FIRST.filter(n => FEMALE.has(n)), FIRST_M = FIRST.filter(n => !FEMALE.has(n)), FAM = cfg.fam.concat(FAMILY);
+    const nameFor = (fam, sex) => { const Ls = sex === 'f' ? FIRST_F : sex === 'm' ? FIRST_M : FIRST; for (let k = 0; k < 60; k++) { const n = Ls[Math.floor(r() * Ls.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsman ' + used.size; used.add(n); return n; };
+    const hs = L.houses.map((h, i) => ({ id: cfg.pre + i, name: (h.tall ? 'Townhouse, ' : 'Cottage, ') + TOWNS[id].name, x: h.x, z: h.z, owner: 'town:' + id, rent: h.tall ? cfg.rent[0] : cfg.rent[1], cap: h.tall ? 6 : 4, tenants: [], town: id }));
+    s.houses.push(...hs);
+    const P0 = (o, h) => { const p = newPerson(s, Object.assign({ town: id, purse: 20 + Math.floor(r() * 30), palette: Math.floor(r() * 10) }, o)); if (h) moveIn(s, p, h); p.log = [{ day: s.day, text: 'Lives in ' + TOWNS[id].name + '.' }]; p.rep = 20; return p; };
+    let hi = 0; const nextHouse = () => hs[(hi++ * 7) % hs.length];
+    const family = (head, h, fam, kids) => {
+      const sp = r() < 0.75 ? P0({ name: nameFor(fam, sexOf(head) === 'f' ? 'm' : 'f'), age: Math.max(18, head.age - 4 + Math.floor(r() * 8)), maiden: undefined }, h) : null;
+      if (sp) { head.spouse = sp.id; sp.spouse = head.id; sp.hh = head.id; }
+      for (let k = 0; k < kids; k++) { const c = P0({ name: nameFor(fam), age: 2 + Math.floor(r() * 13), purse: 0 }, h); c.kid = true; c.parents = [head.id].concat(sp ? [sp.id] : []); c.hh = head.id; }
+      return sp;
+    };
+    for (const b of L.biz) {
+      const fam = b.boss.split(' ').slice(-1)[0];
+      const own = P0({ name: b.boss, age: 32 + Math.floor(r() * 24), purse: 130 + Math.floor(r() * 110), job: { type: 'biz', biz: b.id, role: 'owner' }, home: 'biz:' + b.id }); used.add(own.name);
+      s.biz[b.id] = { id: b.id, trade: b.trade, owner: own.id, staff: [], profits: [10, 10, 10], closed: false, opened: 0, lastProfit: 0, lastRevenue: 0, town: id };
+      const sp = r() < 0.65 ? P0({ name: nameFor(fam, sexOf(own) === 'f' ? 'm' : 'f'), age: own.age - 3, home: 'biz:' + b.id }) : null;
+      if (sp) { own.spouse = sp.id; sp.spouse = own.id; sp.hh = own.id; }
+      const nk = Math.floor(r() * 3); for (let k = 0; k < nk; k++) { const c = P0({ name: nameFor(fam), age: 3 + Math.floor(r() * 12), purse: 0, home: 'biz:' + b.id }); c.kid = true; c.parents = [own.id].concat(sp ? [sp.id] : []); c.hh = own.id; }
+      const nh = 1 + Math.floor(r() * 2);
+      for (let k = 0; k < nh; k++) { const hf = FAM[Math.floor(r() * FAM.length)], h = nextHouse(); const hand = P0({ name: nameFor(hf), age: 18 + Math.floor(r() * 25), job: { type: 'biz', biz: b.id, role: 'hand' } }, h); s.biz[b.id].staff.push({ pid: hand.id, wage: 8 + Math.floor(r() * 3) }); if (r() < 0.5) family(hand, h, hf, Math.floor(r() * 3)); }
+    }
+    let n = Object.values(s.people).filter(p => p.town === id).length;
+    while (n < cfg.pop) {
+      const fam = FAM[Math.floor(r() * FAM.length)], h = nextHouse();
+      const head = P0({ name: nameFor(fam), age: 20 + Math.floor(r() * 42), job: r() < 0.9 ? { type: 'commons', what: cfg.jobs[Math.floor(r() * cfg.jobs.length)] } : null }, h);
+      const sp = family(head, h, fam, Math.floor(r() * 4));
+      if (sp && r() < 0.5) sp.job = { type: 'commons', what: cfg.jobs[Math.floor(r() * cfg.jobs.length)] };
+      n = Object.values(s.people).filter(p => p.town === id).length;
+    }
+    const landlords = Object.values(s.people).filter(p => p.town === id && p.job && p.job.role === 'owner');
+    hs.forEach(h => { if (r() < 0.5) { const l = landlords[Math.floor(r() * landlords.length)]; if (!h.tenants.includes(l.id)) h.owner = l.id; } });
+    for (const p of Object.values(s.people)) if (p.town === id) p.rep = Math.round(repTarget(s, p));
+    const masters = landlords.slice().sort((a, b) => b.rep - a.rep || b.purse - a.purse), mayor = masters[0];
+    s.towns[id] = { title: cfg.title, chest: cfg.chest, fee: 'normal', approval: 60, council: masters.slice(1, 5).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
+    plog(s, mayor, 'Chosen ' + cfg.title + ' of ' + TOWNS[id].name + '.');
+  }
   function setupCrownmere(s) {
     if (!s.towns || s.towns.crownmere) return;
     let sd = 424242; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
@@ -2907,7 +3089,7 @@
     s.towns.crownmere = { title: 'Lord Mayor', chest: 1500, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen Lord Mayor of Crownmere by the guilds.');
   }
-  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520 };
+  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
   function townFolk(s, id) { return living(s).filter(p => p.town === id); }
@@ -2988,9 +3170,227 @@
     s.schedule = s.schedule.filter(e => !e.id || s.agents.some(a => a.id === e.id));
   }
 
+  /* ================= the kingdom of Alderwyn: lords, court, council, crown, and the bandits on its roads =================
+     Six regions, each held by a lord under the crown. Your standing with the lords, the guilds, the court and the
+     towns is your support; with enough of it, and a lordship and a council seat, the crown itself can be yours. */
+  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch' };
+  const COUNCIL = { treasury: 'Lord Treasurer', trade: 'Master of Trade', war: 'Marshal', law: 'Lord Justice' };
+  const LAWS = {
+    marketPeace: { name: 'The Market Peace', say: 'Watchmen in every market. Towns feel safe; it costs the treasury 6c a day.' },
+    forestLaw: { name: 'Forest Law', say: 'The royal forests are closed to commoners. +10c a day to the treasury; the towns resent it.' },
+    guildCharters: { name: 'Guild Charters', say: 'The guilds set their own prices. The guilds love it; the lords do not.' },
+    harshJustice: { name: 'Harsh Justice', say: 'Hangings at the crossroads. Bandits stay away; the towns are uneasy.' }
+  };
+  const SEATS = () => ({ crownmere: { x: CM.castle.x, z: CM.castle.z + 10 }, oakbridge: { x: OAK.keep.x, z: OAK.keep.z + 9 }, greenhaven: { x: GH.estate.x + 9, z: GH.estate.z }, ironcrest: { x: IC.keep.x + 8, z: IC.keep.z + 6 }, eastwatch: { x: EW.keep.x, z: EW.keep.z - 12 }, hearthmoor: MANOR_HOME });
+  function noble(s, o) { const p = newPerson(s, Object.assign({ purse: 600, palette: 4, retired: true, rep: 70, mood: 70 }, o)); p.log = [{ day: s.day, text: o.why || 'Of noble blood.' }]; return p; }
+  function setupRealm(s) {
+    if (s.realm) return;
+    const king = noble(s, { name: 'Aldwin Ardane', age: 66, town: 'crownmere', home: 'seat:crownmere', why: 'King of Alderwyn.' });
+    const prince = noble(s, { name: 'Edmund Ardane', age: 19, town: 'crownmere', home: 'seat:crownmere', why: 'Prince of Alderwyn, the King’s only son.' }); prince.parents = [king.id];
+    const lord = (name, age, town, why) => noble(s, { name, age, town, home: 'seat:' + town, why });
+    const est = s.biz.g_estate && s.people[s.biz.g_estate.owner];
+    const regions = {
+      hearthmoor: { lord: 'office', tax: 1, patrol: 1, garrison: 0, roads: 1 },
+      greenhaven: { lord: est ? est.id : lord(s, 'Mathis Ashcombe', 52, 'greenhaven', 'Lord of Greenhaven, of Ashcombe Hall.').id, tax: 1, patrol: 1, garrison: 0, roads: 1 },
+      oakbridge: { lord: lord('Isolde Marlowe', 47, 'oakbridge', 'Lady of Oakbridge, who holds the keep.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 },
+      crownmere: { lord: 'crown', tax: 1, patrol: 2, garrison: 2, roads: 2 },
+      ironcrest: { lord: lord('Gareth Stane', 58, 'ironcrest', 'Lord of Ironcrest and its mines.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 },
+      eastwatch: { lord: lord('Rowena Tarrant', 44, 'eastwatch', 'Lady of Eastwatch, Warden of the Coast.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 }
+    };
+    for (const id in regions) { const r = regions[id]; if (r.lord && r.lord !== 'office' && r.lord !== 'crown' && s.people[r.lord]) { s.people[r.lord].noble = id; s.people[r.lord].opinion = 0; } }
+    const courtier = (name, age, why) => noble(s, { name, age, town: 'crownmere', home: 'seat:crownmere', why });
+    const council = { treasury: courtier('Hugo Wendle', 61, 'Lord Treasurer of Alderwyn.').id, trade: courtier('Margery Cole', 50, 'Master of Trade.').id, war: courtier('Ralph Durrant', 55, 'Marshal of Alderwyn.').id, law: courtier('Ambrose Fell', 63, 'Lord Justice.').id };
+    s.realm = { king: king.id, prince: prince.id, crown: 'king', regions, council, favour: 0, kingSupport: 60, treasury: 1500, taxRate: 1, tariff: 1, laws: { marketPeace: true, forestLaw: false, guildCharters: false, harshJustice: false }, levies: 120, support: { lords: 40, guilds: 40, court: 0, towns: 40 }, rival: null, exile: null, lowDays: 0, debtDays: 0, log: [], offer: null, crowned: null };
+    s.bandits = { oakbridge: 20, greenhaven: 15, hearthmoor: 10, crownmere: 10, ironcrest: 30, eastwatch: 25, lastRaid: null };
+  }
+  function realmLog(s, text, kind) { const R = s.realm; R.log.unshift({ day: s.day, text }); if (R.log.length > 30) R.log.length = 30; event(s, text, kind || 'info'); }
+  const isRuler = s => !!(s.realm && s.realm.crown === 'player');
+  const yourLordships = s => s.realm ? Object.keys(s.realm.regions).filter(id => regionLord(s, id) === 'player') : [];
+  const yourSeats = s => s.realm ? Object.keys(COUNCIL).filter(k => s.realm.council[k] === 'player') : [];
+  function regionLord(s, id) { const r = s.realm.regions[id]; if (r.lord === 'office') return s.offices.lord; if (r.lord === 'crown') return s.realm.crown === 'player' ? 'player' : s.realm.king; return r.lord; }
+  function lordName(s, id) { const l = regionLord(s, id); return l === 'player' ? s.name : l && s.people[l] ? s.people[l].name : 'no one'; }
+  const op01 = p => p ? clamp(50 + (p.opinion || 0) / 2, 0, 100) : 50;
+  function computeSupport(s) {
+    const R = s.realm, S = R.support;
+    const lords = Object.keys(R.regions).map(id => { const l = regionLord(s, id); return l === 'player' ? 100 : l && s.people[l] ? op01(s.people[l]) : 50; });
+    const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').map(b => s.people[b.owner]).filter(Boolean);
+    const mine = Object.values(s.biz).filter(b => b.owner === 'player').length;
+    let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
+    const tw = Object.keys(TOWNS).map(t => { const f = living(s).filter(p => townOf(p) === t && !p.kid); return f.length ? avg(f.slice(0, 120).map(op01)) : 50; });
+    let towns = avg(tw) * 0.75 + (s.village ? s.village.standing : 0) * 0.15 + 10 - (isRuler(s) ? (R.taxRate - 1) * 35 + (R.laws.forestLaw ? 8 : 0) + (R.laws.harshJustice ? 6 : 0) - (R.laws.marketPeace ? 6 : 0) : 0);
+    let court = R.favour + yourSeats(s).length * 6 + yourLordships(s).length * 4;
+    let lordAvg = avg(lords) - (isRuler(s) && R.laws.guildCharters ? 10 : 0) - (isRuler(s) && R.debtDays > 5 ? 15 : 0);
+    S.lords = Math.round(clamp(lordAvg, 0, 100)); S.guilds = Math.round(clamp(guilds, 0, 100)); S.court = Math.round(clamp(court, 0, 100)); S.towns = Math.round(clamp(towns, 0, 100));
+    return Math.round((S.lords + S.guilds + S.court + S.towns) / 4);
+  }
+  const supportOf = s => s.realm ? Math.round((s.realm.support.lords + s.realm.support.guilds + s.realm.support.court + s.realm.support.towns) / 4) : 0;
+  // bandits gather on the roads; patrols, garrisons, watchmen and the army keep them down
+  function banditDay(s) {
+    const B = s.bandits, R = s.realm; if (!B || !R) return;
+    for (const id in R.regions) {
+      const g = R.regions[id], army = R.levies / 150, watch = id === 'hearthmoor' ? Object.values(s.offices || {}).filter(x => x).length * 0.1 : 0;
+      const down = g.patrol * 1.3 + g.garrison * 0.6 + army + watch + (R.laws.harshJustice ? 1.2 : 0) + (yourSeats(s).includes('war') ? 0.5 : 0);
+      B[id] = clamp((B[id] || 0) + 1.6 + rand(s) * 1.6 - down, 0, 100);
+      if (B[id] > 45 && rand(s) < (B[id] - 45) / 140) banditRaid(s, id);
+    }
+  }
+  function banditRaid(s, id) {
+    const B = s.bandits, g = s.realm.regions[id], guard = g.garrison * 0.25, name = REGIONS[id];
+    let took = 0, what = [];
+    const T = s.towns && s.towns[id];
+    if (T) { const t = Math.round(Math.max(0, T.chest) * (0.12 - guard * 0.03)); T.chest -= t; took += t; if (t) what.push(t + 'c from the town chest'); T.approval = clamp(T.approval - 4, 0, 100); }
+    if (id === 'hearthmoor' && s.gov) { const t = Math.min(s.village.granary || 0, 6); s.village.granary -= t; if (t) what.push(t + ' grain from the granary'); }
+    const mine = Object.values(s.biz).filter(b => (b.town || 'hearthmoor') === id && b.owner === 'player' && !b.closed);
+    if (mine.length) { const t = Math.round(12 * (1 - guard)); spend(s, t); took += t; what.push(t + 'c of your stock'); }
+    if (id === 'hearthmoor') for (const sh of s.shops) { const t = Math.min(sh.goods, 3); sh.goods -= t; if (t) what.push(t + ' goods from your ' + TRADES[sh.trade].name.toLowerCase()); }
+    const folk = living(s).filter(p => townOf(p) === id && !p.kid && p.purse > 10);
+    for (let k = 0; k < 3 && folk.length; k++) { const p = folk[Math.floor(rand(s) * folk.length)], t = Math.round(p.purse * 0.3); p.purse -= t; p.mood = clamp(p.mood - 12, 0, 100); plog(s, p, 'Robbed by bandits.'); }
+    if (rand(s) < 0.12 - guard * 0.1 && folk.length) { const p = folk[Math.floor(rand(s) * folk.length)]; dies(s, p, 'killed by bandits'); what.push(p.name + ' was killed'); }
+    B[id] = Math.max(0, B[id] - 30); B.lastRaid = { town: id, day: s.day };
+    if (s.realm.regions[id] && regionLord(s, id) !== 'player') { const l = regionLord(s, id); if (l && s.people[l] && l !== s.realm.king) s.people[l].rep = Math.max(0, (s.people[l].rep || 0) - 3); }
+    realmLog(s, 'Bandits raid ' + name + (what.length ? ': ' + what.join(', ') + '.' : '.') + ' More patrols on the roads would keep them away.', 'bad');
+  }
+  // the roads between towns are the bandits' hunting ground, worst at night
+  function roadAmbush(s, a, b, mins) {
+    if (!s.bandits) return null;
+    const lvl = Math.max(s.bandits[a] || 0, s.bandits[b] || 0), h = hourOf(s), night = h >= 20 || h < 5;
+    const chance = clamp((lvl - 20) / 300 * (night ? 2 : 1) * (s.player.riding ? 0.5 : 1) * Math.min(2, mins / 60), 0, 0.5);
+    if (rand(s) >= chance) return null;
+    const lost = Math.round(Math.min(Math.max(0, s.coins) * 0.15, 80)), inv = s.player.inv; spend(s, lost);
+    const goods = Object.keys(inv).filter(g => inv[g]).map(g => { const n = Math.ceil(inv[g] / 2); inv[g] -= n; return n + ' ' + g; });
+    const text = 'Bandits waylay you on the road' + (night ? ' in the dark' : '') + ' and take ' + lost + 'c' + (goods.length ? ' and ' + goods.join(', ') : '') + '.';
+    event(s, text, 'bad'); return text;
+  }
+  // a day at court
+  function realmDay(s) {
+    const R = s.realm; if (!R) return;
+    banditDay(s);
+    // the old king's standing drifts; hard times and raids wear it down
+    R.kingSupport = clamp(R.kingSupport + (58 - R.kingSupport) * 0.03 + (rand(s) - 0.55) * 3 - (s.bandits && s.bandits.lastRaid && s.bandits.lastRaid.day === s.day ? 1.5 : 0), 5, 95);
+    R.favour = clamp(R.favour - 0.15, 0, 100);
+    // NPC lords: lands pass to a grown child with the crown's recognition, or back to the crown
+    for (const id in R.regions) {
+      const g = R.regions[id]; if (g.lord === 'office' || g.lord === 'crown' || g.lord === 'player') continue;
+      const L0 = s.people[g.lord]; if (L0 && L0.status !== 'dead' && L0.status !== 'left') continue;
+      const heir = L0 && living(s).find(c => (c.parents || []).includes(L0.id) && !c.kid && c.age >= 16);
+      if (heir) { g.lord = heir.id; heir.noble = id; heir.home = 'seat:' + id; heir.retired = true; if (heir.job) loseJob(s, heir, 'Inherited the lordship of ' + REGIONS[id] + '.'); realmLog(s, heir.name + ' inherits ' + REGIONS[id] + ', and the crown recognises the claim.', 'story'); }
+      else { g.lord = null; vacantSeat(s, id); }
+    }
+    for (const id in R.regions) if (R.regions[id].lord === null) vacantSeat(s, id);
+    // the council: dead councillors are replaced by the crown
+    for (const k in COUNCIL) { const c = R.council[k]; if (c !== 'player' && (!s.people[c] || s.people[c].status === 'dead')) { R.council[k] = noble(s, { name: nameForNoble(s), age: 45 + Math.floor(rand(s) * 15), town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; realmLog(s, 'A new ' + COUNCIL[k] + ' is named at court.', 'info'); } }
+    // the old king dies, or the realm needs a new ruler
+    const K = s.people[R.king];
+    if (R.crown === 'king' && (!K || K.status === 'dead')) succession(s, 'King ' + (K ? K.name.split(' ')[0] : 'Aldwin') + ' has died');
+    // your offices pay
+    for (const k of yourSeats(s)) { earn(s, 8); s.stats.salaries = (s.stats.salaries || 0) - 8; }
+    for (const id of yourLordships(s)) if (id !== 'hearthmoor' && id !== 'crownmere') { const g = R.regions[id], inc = Math.round(18 * g.tax * marketOf(s, id)) - g.patrol * 4 - g.garrison * 6 - g.roads * 3; if (inc >= 0) earn(s, inc); else spend(s, -inc); }
+    // ruling: the treasury, the army, and the realm's mood
+    if (isRuler(s)) {
+      const inc = Math.round(Object.keys(R.regions).reduce((t, id) => t + 16 * R.taxRate * marketOf(s, id), 0) + 20 * R.tariff + (R.laws.forestLaw ? 10 : 0));
+      const out = Math.round(R.levies * 0.25 + 60 + (R.laws.marketPeace ? 6 : 0) + Object.keys(COUNCIL).length * 8);
+      R.treasury += inc - out; R.lastIncome = inc; R.lastSpend = out;
+      R.debtDays = R.treasury < 0 ? R.debtDays + 1 : 0;
+      if (R.debtDays === 5) realmLog(s, 'The treasury is in debt. The lords grumble, and the army goes unpaid.', 'bad');
+      if (R.debtDays > 5) R.levies = Math.max(0, R.levies - 10);
+    }
+    const sup = computeSupport(s);
+    // a rival claimant rises against a weak ruler
+    if (isRuler(s)) {
+      R.lowDays = sup < 30 ? R.lowDays + 1 : 0;
+      if (!R.rival && sup < 42 && rand(s) < 0.08) { R.rival = { name: R.prince && s.people[R.prince] && s.people[R.prince].status === 'here' ? s.people[R.prince].name : nameForNoble(s), strength: 60, since: s.day }; realmLog(s, R.rival.name + ' claims the crown of Alderwyn and gathers men. Raise your levies, win back support, or pay them off.', 'bad'); }
+      if (R.rival) { R.rival.strength = clamp(R.rival.strength + (50 - sup) / 10 + 1, 0, 400); if (R.rival.strength < 10) { realmLog(s, R.rival.name + '’s claim collapses; their men drift home.', 'good'); R.rival = null; } }
+      if (R.rival && R.rival.strength > R.levies + sup * 2) fallFromThrone(s, R.rival.name + '’s army takes Crownmere');
+      else if (R.lowDays >= 6) fallFromThrone(s, 'the lords and the court abandon you');
+    }
+    if (R.exile && !R.exile.done && s.day - R.exile.since >= 30) { R.exile.done = true; realmLog(s, 'Time has passed since your fall. Old friends write to you: if you can win the realm back to your side, the crown may yet be yours again.', 'story'); }
+  }
+  function nameForNoble(s) { const F = ['Hugh', 'Walter', 'Cecily', 'Geoffrey', 'Matilda', 'Roger', 'Eleanor', 'Baldwin', 'Joan', 'Simon'], L = ['Vane', 'Ashworth', 'Grayle', 'Monfort', 'Thorne', 'Beaumont', 'Corbet', 'Lacy']; return F[Math.floor(rand(s) * F.length)] + ' ' + L[Math.floor(rand(s) * L.length)]; }
+  function vacantSeat(s, id) {
+    const R = s.realm, g = R.regions[id]; if (g.lord) return;
+    if (R.favour >= 50 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: 150 }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
+    if (R.offer && R.offer.region === id && s.day - R.offer.day < 5) return;
+    const n = noble(s, { name: nameForNoble(s), age: 40 + Math.floor(rand(s) * 15), town: id === 'hearthmoor' ? undefined : id, home: 'seat:' + id, why: 'Granted ' + REGIONS[id] + ' by the crown.' });
+    n.noble = id; g.lord = n.id; if (R.offer && R.offer.region === id) R.offer = null;
+    realmLog(s, 'The crown grants ' + REGIONS[id] + ' to ' + n.name + '.', 'info');
+  }
+  function succession(s, why) {
+    const R = s.realm, sup = computeSupport(s), canYou = yourLordships(s).length > 0 && yourSeats(s).length > 0 && !R.exile;
+    const pr = R.prince && s.people[R.prince];
+    if (canYou && sup >= 55) return crownYou(s, why + ', and the council chooses you to succeed him');
+    if (pr && pr.status === 'here') { R.king = pr.id; R.crown = 'king'; R.kingSupport = 50; R.prince = null; realmLog(s, why + '. ' + pr.name + ' is crowned King of Alderwyn.', 'story'); return; }
+    const n = noble(s, { name: nameForNoble(s), age: 45, town: 'crownmere', home: 'seat:crownmere', why: 'Crowned by the council.' }); R.king = n.id; R.kingSupport = 45; realmLog(s, why + '. The council crowns ' + n.name + '.', 'story');
+  }
+  function crownYou(s, why) {
+    const R = s.realm, K = s.people[R.king];
+    if (K && K.status === 'here') { K.retired = true; plog(s, K, 'Gave up the crown to ' + s.name + '.'); }
+    R.crown = 'player'; R.rival = null; R.lowDays = 0; R.debtDays = 0; R.crowned = s.day; R.exile = null; s.rec.crowned = (s.rec.crowned || 0) + 1;
+    realmLog(s, why + '. You are crowned ' + (you(s).sex === 'f' ? 'Queen' : 'King') + ' of Alderwyn in the Great Hall of the Realm. The treasury, the laws and the army are yours to command.', 'story');
+  }
+  function fallFromThrone(s, why) {
+    const R = s.realm;
+    R.crown = 'king'; const pr = R.prince && s.people[R.prince];
+    if (R.rival && R.rival.name) { const n = (pr && pr.name === R.rival.name) ? pr : noble(s, { name: R.rival.name, age: 40, town: 'crownmere', home: 'seat:crownmere', why: 'Took the crown of Alderwyn.' }); R.king = n.id; if (n === pr) R.prince = null; }
+    else if (pr && pr.status === 'here') { R.king = pr.id; R.prince = null; }
+    else R.king = noble(s, { name: nameForNoble(s), age: 45, town: 'crownmere', home: 'seat:crownmere', why: 'Crowned after the fall.' }).id;
+    R.kingSupport = 55; R.rival = null; R.lowDays = 0;
+    // exile: stripped of lordships and seats, part of your wealth seized
+    for (const id of yourLordships(s)) { if (R.regions[id].lord === 'office') { s.offices.lord = null; replaceLord(s, 'the old ruler fell'); } else if (R.regions[id].lord === 'player') { R.regions[id].lord = null; } }
+    for (const k of yourSeats(s)) R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' by the new king.' }).id;
+    const seized = Math.round(Math.max(0, s.coins) * 0.5); spend(s, seized);
+    R.favour = 0; R.exile = { since: s.day, why, seized };
+    realmLog(s, 'You have lost the crown: ' + why + '. You flee into exile, stripped of your lordships and council seats, and ' + seized + 'c is seized. You are free, and you can rebuild. In time the realm may take you back.', 'bad');
+  }
   /* buying, renting and firing */
-  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1)); }
-  function housePrice(s, h) { return 40 + h.rent * 45; }
+  /* ----- property: what it is worth, keeping it up, letting it, and selling it ----- */
+  const COMFORT = [{ name: 'Bare', cost: 0 }, { name: 'Homely', cost: 80 }, { name: 'Comfortable', cost: 180 }, { name: 'Fine', cost: 360 }];
+  // each town's property market drifts with its fortunes
+  function marketOf(s, town) { s.market = s.market || {}; return s.market[town || 'hearthmoor'] || 1; }
+  function propertyMarket(s) {
+    s.market = s.market || {};
+    for (const t of ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere', 'ironcrest', 'eastwatch']) {
+      const T = t === 'hearthmoor' ? null : s.towns && s.towns[t], pull = T ? (T.approval - 55) / 600 + (T.chest > 300 ? 0.004 : T.chest < 0 ? -0.006 : 0) : s.gov ? (s.gov.approval.elder - 55) / 700 : 0;
+      const raid = s.bandits && s.bandits.lastRaid && s.bandits.lastRaid.town === t && s.day - s.bandits.lastRaid.day < 3 ? -0.02 : 0;
+      const m = s.market[t] || 1; s.market[t] = Math.round(clamp(m + pull + raid + (rand(s) - 0.5) * 0.02 + (1 - m) * 0.03, 0.7, 1.45) * 1000) / 1000;
+    }
+  }
+  function houseValue(s, h) { return Math.round((40 + h.rent * 45) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
+  function propertyDay(s) {
+    propertyMarket(s);
+    for (const h of s.houses) if (h.owner === 'player') h.wear = Math.min(100, (h.wear || 0) + 0.4);
+    // let businesses: the tenant pays you each day, or falls behind
+    for (const id in s.biz) {
+      const b = s.biz[id]; if (!b.lease) continue;
+      const q = s.people[b.lease.pid];
+      if (!q || q.status !== 'here' || b.owner !== 'player') { endLease(s, b, 'The lease on ' + empById(id).name + ' has ended.'); continue; }
+      const pay = Math.max(0, Math.min(b.lease.rent, q.purse));
+      q.purse -= pay; earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay;
+      if (pay < b.lease.rent) { b.lease.behind = (b.lease.behind || 0) + 1; if (b.lease.behind >= 4) endLease(s, b, q.name + ' could not keep up the rent on ' + empById(id).name + ' and has handed back the keys.'); } else b.lease.behind = 0;
+    }
+    // buyers come looking at what you have put up for sale
+    s.offers = (s.offers || []).filter(o => s.day - o.day < 4);
+    const listed = s.houses.filter(h => h.owner === 'player' && h.forSale).map(h => ({ kind: 'house', id: h.id, ask: h.forSale, town: h.town || 'hearthmoor', name: h.name }))
+      .concat(Object.values(s.biz).filter(b => b.owner === 'player' && b.forSale).map(b => ({ kind: 'biz', id: b.id, ask: b.forSale, town: b.town || 'hearthmoor', name: empById(b.id).name })));
+    for (const L of listed) {
+      if (s.offers.some(o => o.kind === L.kind && o.id === L.id && s.day - o.day < 2)) continue;
+      const fair = L.kind === 'house' ? houseValue(s, houseById(s, L.id)) : bizPrice(s, L.id), greed = L.ask / Math.max(1, fair);
+      if (rand(s) > clamp(1.25 - greed * 0.75, 0.05, 0.8)) continue;
+      const buyers = living(s).filter(p => !p.kid && p.age >= 20 && townOf(p) === L.town && p.purse >= fair * 0.7 + 30 && (p.opinion || 0) > -40 && !(p.job && p.job.type === 'office'));
+      const any = buyers.length ? buyers : living(s).filter(p => !p.kid && p.purse >= fair * 0.7 + 30 && (p.opinion || 0) > -40 && !(p.job && p.job.type === 'office'));
+      if (!any.length) continue;
+      const q = any[Math.floor(rand(s) * any.length)], amount = Math.round(Math.min(q.purse - 30, L.ask, fair * (0.82 + rand(s) * 0.26))); if (amount < fair * 0.6) continue;
+      s.offers.push({ n: (s.offerN = (s.offerN || 0) + 1), kind: L.kind, id: L.id, pid: q.id, amount, day: s.day });
+      event(s, q.name + ' offers ' + amount + 'c for ' + L.name + ' (you asked ' + L.ask + 'c). See the Property page.', 'coin');
+    }
+  }
+  function endLease(s, b, why) { const q = b.lease && s.people[b.lease.pid]; if (q && q.job && q.job.type === 'biz' && q.job.biz === b.id) { q.job = null; plog(s, q, why); } b.lease = null; event(s, why, 'info'); }
+  function leaseCandidates(s, id) {
+    const b = s.biz[id], town = b.town || 'hearthmoor';
+    return living(s).filter(p => !p.kid && p.age >= 20 && townOf(p) === town && p.purse >= 20 && !(p.job && (p.job.type === 'office' || p.job.type === 'manage' || (p.job.type === 'biz' && p.job.role === 'owner'))) && p.home !== 'you')
+      .map(p => ({ pid: p.id, name: p.name, offer: Math.max(4, Math.round(BIZ_BASE[b.trade] * 0.3 * (0.8 + (p.skill || 1) * 0.3))), skill: p.skill || 1 })).sort((a, c) => c.offer - a.offer).slice(0, 4);
+  }
+  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1) * marketOf(s, b.town) * (b.disrepair ? 0.85 : 1)); }
+  function housePrice(s, h) { return houseValue(s, h); }
   function sellerWilling(s, ownerPid) { const o = s.people[ownerPid]; return !o || o.opinion > -40; }
 
   /* offices change hands */
@@ -3393,6 +3793,168 @@
         event(s, 'You move back to your hut in Hearthmoor.' + (h ? ' ' + h.name + ' stands empty: a tenant may take it.' : ''), 'info');
         return ok();
       }
+      case 'improveHome': {
+        const h = a === 'hut' ? null : houseById(s, a);
+        if (a !== 'hut' && (!h || h.owner !== 'player')) return fail('That is not your house.');
+        const lv = a === 'hut' ? (s.player.hutComfort || 0) : (h.comfort || 0); if (lv >= 3) return fail('It is as fine as it can be.');
+        const c = COMFORT[lv + 1].cost; if (s.coins < c) return fail('That costs ' + c + 'c.');
+        spend(s, c); s.rec.invested += c; if (h) { h.comfort = lv + 1; h.wear = 0; } else s.player.hutComfort = lv + 1;
+        for (const p of living(s)) if (p.home === 'you') p.mood = clamp((p.mood || 50) + 8, 0, 100);
+        event(s, (h ? h.name : 'Your hut') + ' is now ' + COMFORT[lv + 1].name.toLowerCase() + ': ' + ['', 'a rug, a settle and curtains', 'proper beds, a dresser and glass in the windows', 'a tapestry, a carved chair and a great bed'][lv + 1] + '.', 'good');
+        return ok();
+      }
+      case 'repairHouse': {
+        const h = houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
+        const c = Math.round((h.wear || 0) * 0.5); if (c < 2) return fail('It is in good repair.'); if (s.coins < c) return fail('Repairs cost ' + c + 'c.');
+        spend(s, c); h.wear = 0; event(s, h.name + ' is repaired for ' + c + 'c.', 'info'); return ok();
+      }
+      case 'listForSale': {
+        // a: 'house' or 'biz', b: id, c: asking price (0 to take it off the market)
+        const o = a === 'house' ? houseById(s, b) : s.biz[b];
+        if (!o || o.owner !== 'player') return fail('That is not yours to sell.');
+        if (a === 'house' && s.player.house === b) return fail('You live there. Move out first.');
+        o.forSale = c > 0 ? Math.round(c) : null; if (!o.forSale) s.offers = (s.offers || []).filter(x => !(x.kind === a && x.id === b));
+        event(s, o.forSale ? (a === 'house' ? o.name : empById(b).name) + ' is up for sale at ' + o.forSale + 'c. Buyers will come to you.' : 'Taken off the market.', 'info');
+        return ok();
+      }
+      case 'acceptOffer': case 'declineOffer': {
+        const i = (s.offers || []).findIndex(o => o.n === a); if (i < 0) return fail('That offer has gone.');
+        const o = s.offers[i], q = s.people[o.pid]; s.offers.splice(i, 1);
+        if (name === 'declineOffer') { if (q) q.opinion = clamp((q.opinion || 0) - 3, -100, 100); return ok(); }
+        if (!q || q.purse < o.amount) { if (q && q.purse >= o.amount * 0.8) o.amount = q.purse; else return fail('They no longer have the money.'); }
+        q.purse -= o.amount; earn(s, o.amount); s.rec.coinsEarned += 0;
+        if (o.kind === 'house') { const h = houseById(s, o.id); h.owner = q.id; h.forSale = null; plog(s, q, 'Bought ' + h.name + ' from ' + s.name + ' for ' + o.amount + 'c.'); event(s, 'You sold ' + h.name + ' to ' + q.name + ' for ' + o.amount + 'c.', 'coin'); }
+        else {
+          const b = s.biz[o.id]; if (b.manager) releaseManager(s, b.manager, 'The business was sold.'); b.manager = null; if (b.lease) endLease(s, b, 'The business was sold.');
+          if (q.job) loseJob(s, q, 'Left to run their new business.');
+          b.owner = q.id; b.forSale = null; q.job = { type: 'biz', biz: o.id, role: 'owner' }; b.staff = b.staff.filter(x => x.pid !== q.id);
+          plog(s, q, 'Bought ' + empById(o.id).name + ' from ' + s.name + ' for ' + o.amount + 'c.'); event(s, 'You sold ' + empById(o.id).name + ' to ' + q.name + ' for ' + o.amount + 'c.', 'coin');
+        }
+        s.offers = s.offers.filter(x => !(x.kind === o.kind && x.id === o.id));
+        return ok();
+      }
+      case 'leaseBiz': {
+        const b = s.biz[a]; if (!b || b.owner !== 'player') return fail('That is not your business.');
+        if (b.lease) return fail('It is already let.');
+        const c0 = leaseCandidates(s, a).find(x => x.pid === c); if (!c0) return fail('They cannot take it on.');
+        const q = s.people[c0.pid];
+        if (b.manager) { releaseManager(s, b.manager, 'The business was let to ' + q.name + '.'); b.manager = null; }
+        if (q.job) loseJob(s, q, 'Left to run ' + empById(a).name + ' on a lease.');
+        q.job = { type: 'biz', biz: a, role: 'owner' }; b.staff = b.staff.filter(x => x.pid !== q.id);
+        b.lease = { pid: q.id, rent: c0.offer, since: s.day }; plog(s, q, 'Took a lease on ' + empById(a).name + ' from ' + s.name + ' at ' + c0.offer + 'c a day.');
+        event(s, q.name + ' takes ' + empById(a).name + ' on a lease and will pay you ' + c0.offer + 'c a day. They keep whatever it earns above that.', 'good');
+        return ok();
+      }
+      case 'endLease': { const b = s.biz[a]; if (!b || !b.lease) return fail('It is not let.'); endLease(s, b, 'You take ' + empById(a).name + ' back from ' + (s.people[b.lease.pid] || {}).name + '.'); return ok(); }
+      case 'giftCrown': {
+        const R = s.realm; if (!R || isRuler(s)) return fail('There is no one to give it to.');
+        const n = Math.round(a); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
+        spend(s, n); R.favour = clamp(R.favour + n / 15, 0, 100); s.rec.given = (s.rec.given || 0) + n;
+        event(s, 'You give ' + n + 'c to the King\u2019s treasury. Your favour at court rises to ' + Math.round(R.favour) + '.', 'good'); return ok();
+      }
+      case 'attendCourt': {
+        const R = s.realm; if (!R || isRuler(s)) return fail('You are the court.');
+        if (R.lastCourt === s.day) return fail('You have already attended court today.');
+        if (townAt(p.x, p.z) !== 'crownmere') return fail('The court sits in Crownmere castle.');
+        R.lastCourt = s.day; const g = 2 + Math.min(4, (s.village ? s.village.standing : 0) / 25) + yourLordships(s).length;
+        R.favour = clamp(R.favour + g, 0, 100); event(s, 'You attend the King\u2019s court and are seen by the right people. Favour ' + Math.round(R.favour) + '.', 'info'); return ok();
+      }
+      case 'acceptLordship': case 'refuseLordship': {
+        const R = s.realm; const o = R && R.offer; if (!o) return fail('No lordship is on offer.');
+        const g = R.regions[o.region]; R.offer = null;
+        if (name === 'refuseLordship') { vacantSeat(s, o.region); return ok(); }
+        if (s.coins < o.fee) { vacantSeat(s, o.region); return fail('You could not pay the fee; the King gives it to another.'); }
+        spend(s, o.fee); g.lord = 'player'; R.favour = clamp(R.favour + 5, 0, 100);
+        realmLog(s, 'You swear your oath to the King and are made ' + (you(s).sex === 'f' ? 'Lady' : 'Lord') + ' of ' + REGIONS[o.region] + '. Its taxes are yours, and so are its roads, patrols and garrison.', 'story'); return ok();
+      }
+      case 'seekLordship': {
+        // a: region. The crown grants a weak lord's lands, or Hearthmoor if you hold the village's trust
+        const R = s.realm; if (!R || R.exile) return fail(R && R.exile ? 'No lord will give up lands to an exile.' : 'Not yet.');
+        const g = R.regions[a]; if (!g || g.lord === 'crown') return fail('Those are the Crown Lands.');
+        if (regionLord(s, a) === 'player') return fail('It is already yours.');
+        if (R.favour < 55) return fail('You need more favour at court (55; you have ' + Math.round(R.favour) + ').');
+        const fee = 400; if (s.coins < fee) return fail('The fee for a lordship is ' + fee + 'c.');
+        const cur = regionLord(s, a), L0 = cur && s.people[cur], weak = !L0 || L0.status !== 'here' || (L0.rep || 0) < 45 || L0.purse < 50 || (a === 'hearthmoor' && s.gov && s.gov.approval.lord < 45);
+        if (!weak) return fail(L0.name + ' holds ' + REGIONS[a] + ' firmly. A lord who is failing, or in debt, can be replaced.');
+        spend(s, fee); R.favour = clamp(R.favour - 10, 0, 100);
+        if (g.lord === 'office') { if (L0) { loseJob(s, L0, 'Stripped of Hearthmoor by the King, who gave it to ' + s.name + '.'); } s.offices.lord = 'player'; }
+        else { if (L0) { L0.noble = null; L0.retired = true; plog(s, L0, 'Lost ' + REGIONS[a] + ' to ' + s.name + ' by the King\u2019s order.'); L0.opinion = clamp((L0.opinion || 0) - 50, -100, 100); } g.lord = 'player'; }
+        realmLog(s, 'The King grants you ' + REGIONS[a] + ' in place of ' + (L0 ? L0.name : 'its absent lord') + '. You are ' + (you(s).sex === 'f' ? 'Lady' : 'Lord') + ' of ' + REGIONS[a] + '.', 'story'); return ok();
+      }
+      case 'regionSet': {
+        // a: region, b: patrol | garrison | roads | tax, c: level
+        const R = s.realm; if (!R || regionLord(s, a) !== 'player') return fail('Those are not your lands.');
+        const g = R.regions[a], lim = b === 'tax' ? [0.5, 2] : [0, 3]; g[b] = clamp(b === 'tax' ? Math.round(c * 4) / 4 : Math.round(c), lim[0], lim[1]); return ok();
+      }
+      case 'fundPatrol': {
+        const B = s.bandits; if (!B || B[a] == null) return fail('Nowhere to patrol.');
+        const n = Math.round(b); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
+        spend(s, n); B[a] = Math.max(0, B[a] - n / 3);
+        for (const q of living(s)) if (townOf(q) === a && rand(s) < 0.2) q.opinion = clamp((q.opinion || 0) + 2, -100, 100);
+        event(s, 'You pay for armed men to ride the roads around ' + REGIONS[a] + '. The bandits pull back.', 'good'); return ok();
+      }
+      case 'seekSeat': {
+        const R = s.realm; if (!R || R.exile) return fail('Not now.');
+        if (!COUNCIL[a]) return fail('No such office.'); if (R.council[a] === 'player') return fail('You already hold it.');
+        if (!yourLordships(s).length) return fail('Only a lord sits on the royal council.');
+        if (R.favour < 65) return fail('You need more favour at court (65; you have ' + Math.round(R.favour) + ').');
+        const old = s.people[R.council[a]]; if (old) { old.opinion = clamp((old.opinion || 0) - 30, -100, 100); plog(s, old, 'Replaced as ' + COUNCIL[a] + ' by ' + s.name + '.'); }
+        R.council[a] = 'player'; R.favour = clamp(R.favour - 5, 0, 100);
+        realmLog(s, 'The King names you ' + COUNCIL[a] + ' of Alderwyn. You sit on the royal council.', 'story'); return ok();
+      }
+      case 'undermineKing': {
+        const R = s.realm; if (!R || isRuler(s)) return fail('Not now.'); if (!yourSeats(s).length) return fail('Only a councillor can sway the court against the King.');
+        if (R.lastPlot === s.day) return fail('Once a day is enough; any more would be noticed.');
+        R.lastPlot = s.day;
+        if (rand(s) < 0.12) { R.favour = clamp(R.favour - 25, 0, 100); realmLog(s, 'Your whispers against the King are overheard. Your favour at court falls sharply.', 'bad'); return ok(); }
+        R.kingSupport = clamp(R.kingSupport - 4 - rand(s) * 3, 5, 95); event(s, 'You quietly turn a few courtiers against the King. His standing at court is ' + Math.round(R.kingSupport) + '.', 'info'); return ok();
+      }
+      case 'patronage': {
+        // a: 'lords' (gifts to every lord), 'guilds' (a guild feast in Crownmere), or 'town' with b: which town (a feast for its people)
+        const R = s.realm; if (!R) return fail('Not yet.');
+        if (a === 'lords') {
+          const ls = Object.keys(R.regions).map(id => regionLord(s, id)).filter(l => l && l !== 'player' && s.people[l] && l !== R.king);
+          const c = ls.length * 120; if (s.coins < c) return fail('Gifts fit for ' + ls.length + ' lords cost ' + c + 'c.');
+          spend(s, c); ls.forEach(l => { const q = s.people[l]; q.opinion = clamp((q.opinion || 0) + 14, -100, 100); plog(s, q, 'Received a fine gift from ' + s.name + '.'); });
+          event(s, 'You send gifts to ' + ls.length + ' lords of the realm: horses, plate and wine. They think better of you.', 'good');
+        } else if (a === 'guilds') {
+          const c = 300; if (s.coins < c) return fail('A guild feast costs ' + c + 'c.');
+          spend(s, c); Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').forEach(b => { const q = s.people[b.owner]; if (q) q.opinion = clamp((q.opinion || 0) + 7, -100, 100); });
+          event(s, 'You hold a feast for the guild masters of every town in the Guildhall of Crownmere. The guilds speak well of you.', 'good');
+        } else if (a === 'town') {
+          const folk = living(s).filter(q => townOf(q) === b && !q.kid); const c = Math.max(40, Math.round(folk.length * 0.6));
+          if (!folk.length) return fail('No such town.'); if (s.coins < c) return fail('A feast for ' + TOWNS[b].name + ' costs ' + c + 'c.');
+          spend(s, c); folk.forEach(q => { q.opinion = clamp((q.opinion || 0) + 12, -100, 100); q.mood = clamp(q.mood + 6, 0, 100); });
+          if (s.towns && s.towns[b]) s.towns[b].approval = clamp(s.towns[b].approval + 2, 0, 100);
+          event(s, 'You lay on a feast for the people of ' + TOWNS[b].name + ': roast meat, bread and ale in the square. They will remember it.', 'good');
+        } else return fail('No such thing.');
+        computeSupport(s); return ok();
+      }
+      case 'claimCrown': {
+        const R = s.realm; if (!R) return fail('Not yet.'); if (isRuler(s)) return fail('The crown is already yours.');
+        const sup = computeSupport(s);
+        if (!R.exile && !yourLordships(s).length) return fail('You must hold a lordship first.');
+        if (!R.exile && !yourSeats(s).length) return fail('You must sit on the royal council first.');
+        if (R.exile && !R.exile.done) return fail('It is too soon after your fall. Rebuild your support first.');
+        const need = 65;
+        if (sup < need) return fail('Your support is ' + sup + '. You need ' + need + ' to claim the crown.');
+        const K = s.people[R.king];
+        if (K && K.status === 'here' && R.kingSupport >= (R.exile ? 60 : 45)) { R.favour = clamp(R.favour - 30, 0, 100); realmLog(s, 'You claim the crown, but the court stands by King ' + K.name.split(' ')[0] + '. The claim fails, and your favour falls.', 'bad'); return ok(); }
+        crownYou(s, R.exile ? 'You return from exile with the realm behind you' : 'The lords, the guilds and the court turn to you, and the old King gives way'); return ok();
+      }
+      case 'rule': {
+        // a: what to set, b: its value
+        const R = s.realm; if (!isRuler(s)) return fail('Only the ruler can do that.');
+        if (a === 'tax') R.taxRate = clamp(Math.round(b * 4) / 4, 0.5, 2);
+        else if (a === 'tariff') R.tariff = clamp(Math.round(b * 4) / 4, 0, 3);
+        else if (a === 'levies') R.levies = clamp(Math.round(b / 10) * 10, 0, 600);
+        else if (a === 'law' && LAWS[b]) R.laws[b] = !R.laws[b];
+        else if (a === 'draw') { const n = Math.min(Math.round(b), Math.max(0, R.treasury)); R.treasury -= n; earn(s, n); R.favour = clamp(R.favour - n / 40, 0, 100); event(s, 'You take ' + n + 'c from the treasury for your own use. The court notices.', 'info'); }
+        else if (a === 'give') { const n = Math.min(Math.round(b), Math.max(0, s.coins)); spend(s, n); R.treasury += n; event(s, 'You put ' + n + 'c of your own into the treasury.', 'good'); }
+        else if (a === 'payRival' && R.rival) { const n = Math.round(R.rival.strength * 6); if (R.treasury < n) return fail('Buying off ' + R.rival.name + ' would cost ' + n + 'c from the treasury.'); R.treasury -= n; realmLog(s, 'You pay ' + R.rival.name + ' ' + n + 'c to give up the claim and leave the realm.', 'info'); R.rival = null; }
+        else return fail('Nothing to set.');
+        computeSupport(s); return ok();
+      }
       case 'setRent': {
         const h = s.houses && houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
         const n = clamp(Math.round(b), 0, 20);
@@ -3442,8 +4004,9 @@
       case 'journey': {
         // walk or ride the roads to another town
         if (!TOWNS[a] || !TOWNS[a].open) return fail('That road is not open yet.');
-        const how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
-        return { ok: true, mins, how };
+        const from = townAt(p.x, p.z) || 'hearthmoor', how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
+        const ambush = roadAmbush(s, from, a, mins);
+        return { ok: true, mins, how, ambush };
       }
       case 'buyHorse': {
         if (!Object.keys(STAGE).some(id => atLoc(s, 'stage:' + id))) return fail('Horses are sold at the stage posts.');
@@ -3711,6 +4274,7 @@
     if (s.v === 9) { s.v = 10; s.ageRate = 4; event(s, 'Time now passes for everyone: people age a year every four days, marry, have children, grow old and die. Change the pace in Settings.', 'story'); }
     if (s.v === 10) { s.v = 11; setupCrownmere(s); event(s, 'The roads to the capital are open: north from Oakbridge, and north-east from Greenhaven, to Crownmere on its lake.', 'story'); }
     if (s.v === 11) { s.v = 12; giveSurnames(s); generateAncestry(s); for (const a of s.agents) if (a.pid && s.people[a.pid]) a.name = s.people[a.pid].name; event(s, 'Every family now has a surname, and a married woman\u2019s maiden name is kept, so family trees show where everyone came from.', 'info'); }
+    if (s.v === 12) { s.v = 13; setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s); event(s, 'Two more roads are open: east from Oakbridge to the port of Eastwatch, and from Crownmere up into the mountains to Ironcrest. The kingdom of Alderwyn has lords, a court and a crown, and bandits on its roads.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
@@ -3722,7 +4286,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;

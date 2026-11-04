@@ -171,6 +171,7 @@ table.acct tr.sh td { color: var(--ink-soft); font-size: 14px; }
 .grid2 .box { margin-top: 0; }
 .box h5 { margin: 0 0 4px; font-family: var(--f-display); font-weight: 400; font-size: 20px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; font-variant-numeric: tabular-nums; margin: 0; }
+.kvbar { display: grid; grid-template-columns: 90px 1fr 32px; gap: 10px; align-items: center; margin: 4px 0; font-size: 14px; } .kvbar .bar { margin: 0; } .kvbar b { text-align: right; }
 .kv dt { color: var(--ink-soft); } .kv dd { margin: 0; text-align: right; }
 .kv .later { color: rgba(42,31,22,.42); }
 .stepper { display: inline-flex; align-items: center; gap: 6px; }
@@ -488,7 +489,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 (function (root) {
   'use strict';
 
-  const VERSION = 12;
+  const VERSION = 13;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -824,7 +825,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     initGov(s);
     setupOakbridge(s);
     setupGreenhaven(s);
-    setupCrownmere(s);
+    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s);
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
@@ -838,7 +839,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (job === 'forest') return { x: LOCS.forest.x + 3 + j() * 5, z: LOCS.forest.z + 2 + j() * 5 };
     if (job === 'pit') return { x: LOCS.pit.x + j() * 4, z: LOCS.pit.z + j() * 3 };
     if (job === 'market') return { x: LOCS.market.x + 1.6, z: LOCS.market.z - 0.6 };
-    const sp = OAK.spots[job] || GH.spots[job] || CM.spots[job]; if (sp) return { x: sp.x + j() * 2 * sp.rx, z: sp.z + j() * 2 * sp.rz };
+    const sp = OAK.spots[job] || GH.spots[job] || CM.spots[job] || IC.spots[job] || EW.spots[job]; if (sp) return { x: sp.x + j() * 2 * sp.rx, z: sp.z + j() * 2 * sp.rz };
     return { x: P.well.x + 1.2, z: P.well.z + 0.4 };
   }
 
@@ -914,6 +915,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.people) { bizDay(s); peopleEvening(s); }
     if (s.gov) govEvening(s);
     if (s.towns) townEvening(s);
+    if (s.people) propertyDay(s);
+    if (s.realm) realmDay(s);
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
@@ -1670,12 +1673,20 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function homePoint(s, p) {
     if (!p.home) return null;
     if (p.home === 'manor') return MANOR_HOME;
+    if (p.home.startsWith('seat:')) { const st = SEATS()[p.home.slice(5)]; return st ? { x: st.x, z: st.z } : null; }
     if (p.home === 'you') { const H = yourHouse(s); return H ? { x: H.x + 1.5, z: H.z + 1.5 } : { x: P.home.x + 1.5, z: P.home.z + 1.5 }; }
     if (p.home.startsWith('biz:')) { const e = empById(p.home.slice(4)); return { x: e.x, z: e.z }; }
     const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
   }
   function occupation(s, p) {
     const j = p.job;
+    if (s.realm && p.status !== 'dead') {
+      const R = s.realm, f = sexOf(p) === 'f';
+      if (p.id === R.king && R.crown === 'king') return f ? 'Queen of Alderwyn' : 'King of Alderwyn';
+      if (p.id === R.prince) return f ? 'Princess of Alderwyn' : 'Prince of Alderwyn';
+      for (const k in COUNCIL) if (R.council[k] === p.id) return COUNCIL[k];
+      for (const id in R.regions) if (R.regions[id].lord === p.id) return (f ? 'Lady of ' : 'Lord of ') + REGIONS[id];
+    }
     if (!j) return p.kid ? (p.age >= 10 ? 'Child, helps at home' : 'Child') : p.retired ? 'Retired' : p.status === 'left' ? 'Gone from Hearthmoor' : 'Out of work';
     if (j.type === 'commons') return COMMON_JOBS[j.what] ? COMMON_JOBS[j.what][0] : { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader at the post', well: 'Water-carrier' }[j.what];
     if (j.type === 'biz') { const e = empById(j.biz), b = s.biz[j.biz]; return (j.role === 'owner' ? 'Owner of ' : (b.owner === 'player' ? 'Works for you at ' : 'Works at ')) + e.name; }
@@ -1686,6 +1697,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return 'Working';
   }
   function homeText(s, p) {
+    if (p.home && p.home.startsWith('seat:')) return 'Lives at the seat of ' + REGIONS[p.home.slice(5)];
     if (!p.home) return p.status === 'left' ? 'Left the village' : 'Homeless, sleeping in the square';
     if (p.home === 'manor') return 'Lives at Varrow Manor';
     if (p.home === 'you') return 'Lives with you';
@@ -1697,7 +1709,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function income(s, p) {
     const j = p.job;
     if (!j) return p.retired || p.kid ? 0 : ODD_JOBS;
-    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'crownmere' ? COMMONS_PAY + 2 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0) + (j.what === 'field' && s.village.land && s.village.land.use === 'pasture' && s.village.land.state === 'done' ? 1 : 0);
+    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'crownmere' ? COMMONS_PAY + 2 : townOf(p) === 'ironcrest' ? COMMONS_PAY + 2 : townOf(p) === 'eastwatch' ? COMMONS_PAY + 1 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0) + (j.what === 'field' && s.village.land && s.village.land.use === 'pasture' && s.village.land.state === 'done' ? 1 : 0);
     if (j.type === 'biz') { const b = s.biz[j.biz]; if (j.role === 'owner') return Math.max(0, Math.round(avg(b.profits))); const st = b.staff.find(x => x.pid === p.id); return st ? st.wage : 0; }
     if (j.type === 'shop') { const sh = shopById(s, j.shop); return sh && sh.worker ? sh.worker.wage : 0; }
     if (j.type === 'manage') { const m = managerOf(s, j.kind, j.ref); return m ? m.wage : 0; }
@@ -1861,7 +1873,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     for (const id in s.biz) {
       const b = s.biz[id];
       if (b.closed) { b.lastProfit = 0; continue; }
-      const own = b.owner === 'player' ? null : person(s, b.owner);
+      const lessee = b.owner === 'player' && b.lease ? person(s, b.lease.pid) : null, mine = b.owner === 'player' && !lessee;
+      const own = lessee || (b.owner === 'player' ? null : person(s, b.owner));
       const workers = b.staff.length + (own ? 1 : 0);
       const rivals = Object.values(s.biz).filter(x => x !== b && !x.closed && x.trade === b.trade && (x.town || 'hearthmoor') === (b.town || 'hearthmoor')).length;
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
@@ -1869,21 +1882,22 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       let wages = 0;
       for (const st of b.staff) {
         const w = person(s, st.pid);
-        const paid = b.owner === 'player' ? st.wage : Math.min(st.wage, Math.max(0, own.purse));
-        if (b.owner === 'player') spend(s, paid); else own.purse -= paid;
+        const paid = mine ? st.wage : Math.min(st.wage, Math.max(0, own.purse));
+        if (mine) spend(s, paid); else own.purse -= paid;
         w.purse += paid; wages += paid;
         if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
       }
       const supplies = Math.round(revenue * 0.35), profit = revenue - supplies - wages - 3;
       b.lastRevenue = revenue; b.lastProfit = profit; b.lastWages = wages;
       b.profits.push(profit); if (b.profits.length > 5) b.profits.shift();
-      if (b.owner === 'player') {
+      if (mine) {
         const net = revenue - supplies - 3;
         if (net >= 0) earn(s, net); else spend(s, -net);
         s.stats.owned = (s.stats.owned || 0) + profit;
         continue;
       }
       own.purse += revenue - supplies - 3;
+      if (lessee) continue;
       // owners hire when doing well and let people go when not
       const recent = avg(b.profits.slice(-3));
       if (recent < -1 && b.staff.length) {
@@ -2152,6 +2166,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.offices.elder === 'player') { s.offices.elder = null; govLog(s, 'The Elder\u2019s chair stands empty. The moot will choose.', 'story'); }
     if (wasLord) { if ((h.parents || []).includes(Y.pid) && !h.kid) { /* kept below */ } else { s.offices.lord = null; replaceLord(s, 'the old lord is gone and no child of the blood can take the title'); } }
     if (s.offices.steward === 'player') s.offices.steward = null;
+    // the realm: lordships and the crown pass to a grown child of the blood, with the crown's recognition; council seats are given, not inherited
+    if (s.realm) {
+      const R = s.realm, blood = (h.parents || []).includes(Y.pid) && !h.kid;
+      for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' after ' + s.name + ' died.' }).id;
+      for (const id in R.regions) if (R.regions[id].lord === 'player') { if (blood && (R.favour >= 20 || isRuler(s))) realmLog(s, h.name + ' inherits ' + REGIONS[id] + ', and the crown recognises the claim.', 'story'); else { R.regions[id].lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' returns to the crown: ' + (blood ? 'the court does not recognise the heir' : 'no child of the blood can take it') + '.', 'story'); } }
+      if (isRuler(s) && !blood) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without a child of the blood'); }
+      else if (isRuler(s)) realmLog(s, h.name + ' is crowned ruler of Alderwyn in the Great Hall of the Realm.', 'story');
+    }
     // the heir steps into your shoes: your coin and property, their own purse, part of your standing, and the town's memory of your family
     const b = bodyOf(s, h); if (b) { s.player.x = b.x; s.player.z = b.z; s.agents = s.agents.filter(x => x !== b); }
     if (h.job) loseJob(s, h, 'Gave up their work to take on the family\u2019s affairs.');
@@ -2176,6 +2198,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     old.name = s.name; old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
     if (s.offices.elder === 'player') s.offices.elder = null;
     if (s.offices.lord === 'player') { s.offices.lord = null; replaceLord(s, 'the old lord died without an heir'); }
+    if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; }
     s.houses.filter(h => h.owner === 'player').forEach(h => { h.owner = 'office:lord'; });
     Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => { b.closed = true; b.manager = null; });
     s.shops.slice().forEach(sh => { if (sh.worker && sh.worker.pid && s.people[sh.worker.pid]) s.people[sh.worker.pid].job = null; });
@@ -3168,26 +3191,142 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   LOCS.cmgatew = { x: CM.gateW.x + Math.sin(CM.gateW.face) * 5, z: CM.gateW.z + Math.cos(CM.gateW.face) * 5, r: 12, name: 'The West Gate', town: 'crownmere' };
   CM.biz.forEach(b0 => { LOCS['cb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'crownmere' }; });
   CM.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  /* ---------- Stage IV: Ironcrest, the mining town on its mountain shelf, and Eastwatch, the port ----------
+     Both are laid out the same way: streets first, then shops along them, then houses in rows behind. */
+  function makeTown(cfg) {
+    const C = cfg.C; let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    const segD = (x, z, pts) => { let best = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); best = Math.min(best, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return best; };
+    const streets = cfg.streets, plazas = cfg.plazas;
+    const streetDist = (x, z) => Math.min(...streets.map(st => segD(x, z, st.pts) - st.w / 2));
+    const onStreet = (si, t, side) => {
+      const st = streets[si], pts = st.pts; let L = 0; const ls = []; for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); ls.push(l); L += l; }
+      let d = t * L, i = 0; while (i < ls.length - 1 && d > ls[i]) { d -= ls[i]; i++; }
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1], f = d / ls[i], nx = -(bz - az) / ls[i], nz = (bx - ax) / ls[i], off = st.w / 2 + 5;
+      return { x: ax + (bx - ax) * f + nx * off * side, z: az + (bz - az) * f + nz * off * side, face: Math.atan2(-nx * side, -nz * side) };
+    };
+    const biz = cfg.biz.map(([id, trade, name, boss, si, t, side, district]) => { const at = onStreet(si, t, side); return { id, trade, name, boss, x: at.x, z: at.z, face: at.face, district, town: cfg.id, noJob: true, oak: true, shift: [6, 16], wage: 7 }; });
+    const marks = cfg.marks || [];
+    const taken = biz.map(b => ({ x: b.x, z: b.z, r: 5.2 })).concat(marks.map(m => ({ x: m.x, z: m.z, r: m.r })));
+    const free = (x, z, rad) => taken.every(t => Math.hypot(x - t.x, z - t.z) > t.r + rad + 1.2);
+    const fits = (x, z, rad) => streetDist(x, z) > rad - 1.0 && plazas.every(q => Math.hypot(x - q.x, z - q.z) > q.r1 + rad + 1.5) && Math.hypot(x - C.x, z - C.z) < cfg.R && !(cfg.avoid && cfg.avoid(x, z, rad));
+    const houses = [];
+    for (const row of [0, 1, 2]) for (const st of streets) {
+      if (st.noHouses) continue;
+      for (let i = 0; i < st.pts.length - 1; i++) {
+        const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+        for (let d = 3; d < len - 2; d += 2) for (const side of [-1, 1]) {
+          const off = st.w / 2 + 4 + row * 10.5, x = ax + (bx - ax) * d / len + nx * off * side, z = az + (bz - az) * d / len + nz * off * side, rad = 3.6;
+          if (houses.length >= cfg.maxHouses || !fits(x, z, rad) || !free(x, z, rad)) continue;
+          houses.push({ x, z, face: Math.atan2(-nx * side, -nz * side), tall: r() < cfg.tall * (row ? 0.6 : 1) }); taken.push({ x, z, r: rad });
+        }
+      }
+    }
+    return Object.assign({ C, streets, biz, houses, plazas, spots: cfg.spots, riverDist: () => 1e9, riverX: () => 1e9, inside: cfg.inside || (() => true), bridge: null, avoid: 0, push: 0, board: cfg.board, entry: cfg.entry }, cfg.extra || {});
+  }
+  const IC = makeTown({
+    id: 'ironcrest', C: { x: 700, z: -1270 }, seed: 7741, R: 92, maxHouses: 46, tall: 0.25,
+    streets: [
+      { name: 'Gate Street', w: 4.6, pts: [[700, -1176], [702, -1215], [700, -1258]] },
+      { name: 'Mine Road', w: 4.2, pts: [[700, -1258], [698, -1310], [704, -1346]], noHouses: false },
+      { name: 'Smelter Row', w: 4.0, pts: [[700, -1258], [742, -1256], [778, -1250]] },
+      { name: 'West Lane', w: 3.4, pts: [[700, -1258], [664, -1262], [632, -1275]] },
+      { name: 'Upper Row', w: 3.2, pts: [[698, -1305], [735, -1312], [758, -1320]] },
+      { name: 'Lower Lane', w: 3.0, pts: [[702, -1215], [664, -1212], [648, -1222]] }
+    ],
+    plazas: [{ id: 'square', name: 'Ironcrest Square', x: 700, z: -1258, r0: 3, r1: 12, w: 4 }, { id: 'mineyard', name: 'the mine yard', x: 706, z: -1350, r0: 2, r1: 9, w: 2 }],
+    marks: [{ x: 640, z: -1300, r: 14 }, { x: 792, z: -1256, r: 15 }, { x: 806, z: -1294, r: 12 }, { x: 690, z: -1372, r: 7 }, { x: 728, z: -1368, r: 7 }],
+    biz: [
+      ['i_tavern', 'tavern', 'The Pick and Lantern', 'Bertrand Coale', 0, 0.78, 1, 'square'], ['i_forge', 'smithy', 'Stane Forge', 'Oswin Stane', 2, 0.35, 1, 'smelters'],
+      ['i_hammer', 'smithy', 'Hammerfall Smithy', 'Gilda Hammond', 2, 0.6, -1, 'smelters'], ['i_bake', 'bakery', 'Ironcrest Ovens', 'Mabel Crane', 0, 0.45, -1, 'gate'],
+      ['i_butcher', 'butcher', 'Highfold Butchers', 'Rufus Highfold', 3, 0.4, 1, 'west'], ['i_carter', 'carter', 'Ore Carters', 'Dunstan Wray', 1, 0.55, 1, 'mine'],
+      ['i_mason', 'mason', 'Quarrymasters', 'Hilde Quarry', 1, 0.3, -1, 'mine'], ['i_chand', 'chandler', 'Lamp and Wick', 'Eda Lampton', 3, 0.7, -1, 'west'],
+      ['i_apoth', 'apothecary', 'Miners’ Remedies', 'Silas Fenwick', 4, 0.5, 1, 'upper'], ['i_cooper', 'cooper', 'Crag Coopers', 'Ned Cragg', 5, 0.5, 1, 'gate']
+    ],
+    spots: { ic_mine: { x: 708, z: -1360, rx: 14, rz: 5 }, ic_smelt: { x: 790, z: -1262, rx: 8, rz: 6 }, ic_char: { x: 812, z: -1300, rx: 9, rz: 6 }, ic_haul: { x: 712, z: -1330, rx: 5, rz: 10 }, ic_watch: { x: 700, z: -1182, rx: 6, rz: 3 } },
+    board: { x: 708, z: -1250 }, entry: { x: 700, z: -1176 },
+    extra: { keep: { x: 640, z: -1300, face: Math.atan2(700 - 640, -1258 + 1300) }, smelters: [{ x: 784, z: -1250 }, { x: 796, z: -1262 }, { x: 790, z: -1240 }], adits: [{ x: 690, z: -1372 }, { x: 728, z: -1368 }], slag: { x: 806, z: -1294 } }
+  });
+  const EW = (function () {
+    const C = { x: 1060, z: -300 }, R = 125;
+    const wall = []; for (let a = 70; a <= 290.1; a += 8) { const t = a * Math.PI / 180; wall.push([C.x + Math.cos(t) * R * (1 + 0.05 * Math.sin(a * 0.11)), C.z + Math.sin(t) * R]); }
+    wall.unshift([1138, wall[0][1]]); wall.push([1138, wall[wall.length - 1][1]]);
+    const gi = wall.findIndex(([x, z]) => Math.abs(z - C.z) < 5), gate = { x: wall[gi][0], z: wall[gi][1], face: -Math.PI / 2, i: gi };
+    const inside = (x, z) => Math.hypot(x - C.x, z - C.z) < R - 3 && x < 1136;
+    const T = makeTown({
+      id: 'eastwatch', C, seed: 9133, R: R - 6, maxHouses: 112, tall: 0.55,
+      inside, avoid: (x, z, rad) => x > 1110 - rad || (x > 1080 && z < -380) || Math.hypot(x - 1096, z - 190 - -370) < 0,
+      streets: [
+        { name: 'High Street', w: 5, pts: [[gate.x + 6, gate.z], [1000, -300], [1062, -300]] },
+        { name: 'Quay Street', w: 5.4, pts: [[1112, -405], [1112, -300], [1112, -200]], noHouses: true },
+        { name: 'Harbour Way', w: 4.6, pts: [[1062, -300], [1106, -300]] },
+        { name: 'North Street', w: 3.6, pts: [[1000, -300], [1006, -350], [1040, -392]] },
+        { name: 'South Street', w: 3.6, pts: [[1000, -300], [1006, -250], [1040, -208]] },
+        { name: 'Rope Walk', w: 3.4, pts: [[1062, -300], [1062, -345], [1100, -360]] },
+        { name: 'Fish Lane', w: 3.4, pts: [[1062, -300], [1062, -255], [1100, -238]] },
+        { name: 'Chapel Row', w: 3.0, pts: [[1006, -350], [968, -360], [958, -330]] },
+        { name: 'Tanner’s Row', w: 3.0, pts: [[1006, -250], [968, -240], [958, -268]] }
+      ],
+      plazas: [{ id: 'harbour', name: 'Harbour Square', x: 1076, z: -300, r0: 4, r1: 13, w: 4 }, { id: 'cross', name: 'the market cross', x: 1000, z: -300, r0: 3, r1: 9, w: 3 }, { id: 'fish', name: 'the fish market', x: 1098, z: -236, r0: 2, r1: 7, w: 2 }],
+      marks: [{ x: 1094, z: -186, r: 16 }, { x: 1094, z: -408, r: 14 }, { x: 1030, z: -340, r: 2 }],
+      biz: [
+        ['e_anchor', 'tavern', 'The Salt Anchor', 'Hester Brine', 2, 0.5, -1, 'harbour'], ['e_mermaid', 'tavern', 'The Mermaid', 'Jory Penhale', 0, 0.75, 1, 'high'], ['e_lantern', 'tavern', 'The Lantern', 'Wenna Trask', 6, 0.6, 1, 'fish'],
+        ['e_bake1', 'bakery', 'Quayside Bakery', 'Tomas Bunn', 0, 0.55, -1, 'high'], ['e_bake2', 'bakery', 'Seagate Ovens', 'Agatha Rowe', 4, 0.4, 1, 'south'],
+        ['e_forge', 'smithy', 'Harbour Forge', 'Cador Smith', 5, 0.45, 1, 'rope'], ['e_fish', 'butcher', 'The Fishmongers', 'Morwenna Hook', 6, 0.3, -1, 'fish'], ['e_butcher', 'butcher', 'Penrose Butchers', 'Alan Penrose', 3, 0.45, -1, 'north'],
+        ['e_ship1', 'boatwright', 'Eastwatch Shipwrights', 'Gideon Keel', 5, 0.8, -1, 'rope'], ['e_ship2', 'boatwright', 'Slipway Boatwrights', 'Bran Tolley', 6, 0.85, 1, 'fish'],
+        ['e_coop1', 'cooper', 'Harbour Coopers', 'Ned Staves', 3, 0.75, 1, 'north'], ['e_coop2', 'cooper', 'Saltbarrel Coopers', 'Ivo Pell', 4, 0.75, -1, 'south'],
+        ['e_chand', 'chandler', 'Ship Chandlers', 'Lowen Tallow', 2, 0.3, 1, 'harbour'], ['e_rope', 'weaver', 'The Rope Walk', 'Senara Cord', 5, 0.2, -1, 'rope'], ['e_sail', 'tailor', 'Sailmakers', 'Petroc Canvas', 1, 0.15, -1, 'quay'],
+        ['e_exch', 'goldsmith', 'The Merchant Exchange', 'Julian Marchant', 0, 0.9, -1, 'high'], ['e_apoth', 'apothecary', 'Harbour Apothecary', 'Kerra Salve', 7, 0.5, 1, 'chapel'],
+        ['e_cart1', 'carter', 'Quay Carters', 'Gwen Barrow', 1, 0.85, -1, 'quay'], ['e_cart2', 'carter', 'Customs Carters', 'Hal Wainer', 3, 0.2, 1, 'north'],
+        ['e_mason', 'mason', 'Seawall Masons', 'Eli Stonard', 8, 0.5, -1, 'tanners'], ['e_potter', 'potter', 'Clay Lane Pottery', 'Nessa Kiln', 7, 0.2, -1, 'chapel'], ['e_tanner', 'tanner', 'Eastwatch Tannery', 'Ruan Hyde', 8, 0.8, 1, 'tanners']
+      ],
+      spots: { ew_dock: { x: 1118, z: -300, rx: 3, rz: 70 }, ew_fish: { x: 1124, z: -240, rx: 2, rz: 14 }, ew_net: { x: 1100, z: -222, rx: 6, rz: 3 }, ew_sail: { x: 1120, z: -350, rx: 3, rz: 20 }, ew_yard: { x: 1100, z: -400, rx: 8, rz: 6 }, ew_watch: { x: gate.x + 9, z: gate.z, rx: 3, rz: 6 } },
+      board: { x: 1068, z: -288 }, entry: { x: gate.x - 8, z: gate.z },
+      extra: { wall, gate, keep: { x: 1094, z: -186, face: Math.PI }, lighthouse: { x: 1168, z: -440 }, shipyard: { x: 1094, z: -408 }, quayX: 1132, shoreX: 1136 }
+    });
+    return T;
+  })();
+  const IC_JOBS = { ic_mine: ['Miner', 'Cutting ore in the mine'], ic_smelt: ['Smelter hand', 'Tending the smelters'], ic_char: ['Charcoal burner', 'Burning charcoal'], ic_haul: ['Ore hauler', 'Hauling ore carts'], ic_watch: ['Watchman', 'Keeping the road gate'] };
+  const EW_JOBS = { ew_dock: ['Docker', 'Unloading ships at the quay'], ew_fish: ['Fisher', 'Fishing from the boats'], ew_net: ['Net mender', 'Mending nets on the strand'], ew_sail: ['Sailor', 'Crewing a coaster'], ew_yard: ['Shipwright’s hand', 'Building a ship on the slip'], ew_watch: ['Harbour watchman', 'Watching the harbour gate'] };
+  IC.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  EW.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  ROADS.iron = [[CM.gate.x + Math.sin(CM.gate.face) * 30, CM.gate.z + Math.cos(CM.gate.face) * 30], [330, -806], [430, -812], [512, -830], [575, -880], [632, -975], [676, -1080], [698, -1150], [IC.entry.x, IC.entry.z]];
+  ROADS.coast = [[OAK.gate.x + Math.sin(OAK.gate.face) * 6, OAK.gate.z + Math.cos(OAK.gate.face) * 6], [400, -296], [440, -287], [500, -282], [580, -276], [700, -288], [820, -300], [EW.gate.x - 30, EW.gate.z], [EW.gate.x - 6, EW.gate.z], [EW.gate.x, EW.gate.z]];
+  TOWNS.ironcrest = { name: 'Ironcrest', x: IC.C.x, z: IC.C.z, r: 96, open: true };
+  TOWNS.eastwatch = { name: 'Eastwatch', x: EW.C.x, z: EW.C.z, r: 128, open: true };
+  LOCS.icsquare = { x: 700, z: -1258, r: 10, name: 'Ironcrest Square', town: 'ironcrest' };
+  LOCS.icmine = { x: 708, z: -1352, r: 9, name: 'The Ironcrest Mines', town: 'ironcrest' };
+  LOCS.icsmelt = { x: 788, z: -1268, r: 9, name: 'The Smelters', town: 'ironcrest' };
+  LOCS.ickeep = { x: IC.keep.x + Math.sin(IC.keep.face) * 12, z: IC.keep.z + Math.cos(IC.keep.face) * 12, r: 6, name: 'Stane Keep', town: 'ironcrest' };
+  LOCS.ewharbour = { x: 1076, z: -300, r: 11, name: 'Harbour Square', town: 'eastwatch' };
+  LOCS.ewquay = { x: 1118, z: -330, r: 9, name: 'The Quays', town: 'eastwatch' };
+  LOCS.ewyard = { x: 1094, z: -396, r: 9, name: 'The Shipyard', town: 'eastwatch' };
+  LOCS.ewkeep = { x: EW.keep.x, z: EW.keep.z - 14, r: 6, name: 'Eastwatch Castle', town: 'eastwatch' };
+  LOCS.ewgate = { x: EW.gate.x - 6, z: EW.gate.z, r: 6, name: 'The Land Gate', town: 'eastwatch' };
+  LOCS.ewlight = { x: 1160, z: -432, r: 6, name: 'The Lighthouse', town: 'eastwatch' };
+  IC.biz.forEach(b0 => { LOCS['ib:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'ironcrest' }; });
+  EW.biz.forEach(b0 => { LOCS['eb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'eastwatch' }; });
   const CM_JOBS = { cm_fish: ['Fisher', 'Fishing from the quay'], cm_watch: ['City watchman', 'Keeping the King\u2019s Gate'], cm_castle: ['Castle servant', 'Serving at the castle'], cm_porter: ['Market porter', 'Carrying in the Great Market'], cm_mason: ['Mason', 'Working on the Great Hall'], cm_carter: ['Carter', 'Loading carts in the South Ward'], cm_wash: ['Washer', 'Washing linen at the lake'], cm_labour: ['Labourer', 'Labouring in the Old Town'] };
-  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM };
-  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS);
+  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW };
+  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS);
   /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
   const STAGE = {
     hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
     oakbridge: { x: OAK.square.x - 10, z: OAK.square.z + 24, face: 0, name: 'Oakbridge Stage Post' },
     greenhaven: { x: GH.entry.x - 6, z: GH.entry.z - 9, face: 0, name: 'Greenhaven Stage Post' },
-    crownmere: { x: CM.southSq.x, z: CM.southSq.z, face: 0, name: 'Crownmere Stage Post' }
+    crownmere: { x: CM.southSq.x, z: CM.southSq.z, face: 0, name: 'Crownmere Stage Post' },
+    ironcrest: { x: 712, z: -1196, face: 0, name: 'Ironcrest Stage Post' },
+    eastwatch: { x: EW.gate.x + 20, z: EW.gate.z + 14, face: 0, name: 'Eastwatch Stage Post' }
   };
   // in the towns, the stage post takes the nearest clear ground to where the road comes in, facing the nearest street
   const segDist0 = (x, z, pts) => { let b = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); b = Math.min(b, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return b; };
-  for (const [id, L, from] of [['oakbridge', OAK, OAK.gate], ['greenhaven', GH, GH.entry], ['crownmere', CM, CM.gate]]) {
+  for (const [id, L, from] of [['oakbridge', OAK, OAK.gate], ['greenhaven', GH, GH.entry], ['crownmere', CM, CM.gate], ['ironcrest', IC, IC.entry], ['eastwatch', EW, EW.gate]]) {
     const blds = L.houses.map(h => [h.x, h.z]).concat(L.biz.map(b => [b.x, b.z])), st = STAGE[id];
     let best = null;
     for (let r0 = 10; r0 < 70 && !best; r0 += 2) for (let k = 0; k < 36 && !best; k++) {
       const a0 = k / 36 * Math.PI * 2, x = from.x + Math.cos(a0) * r0, z = from.z + Math.sin(a0) * r0;
       if ((L.inside && !L.inside(x, z)) || (L.wall && segDist0(x, z, L.wall) < 12) || L.riverDist(x, z) < 16) continue;
       if (blds.some(([bx, bz]) => Math.hypot(bx - x, bz - z) < 11.5)) continue;
-      if (L.streets.some(q => segDist0(x, z, q.pts) < q.w / 2 + 6) || L.plazas.some(q => Math.hypot(q.x - x, q.z - z) < (q.r1 || 4) + 8)) continue;
+      if (Object.values(ROADS).some(rd => segDist0(x, z, rd) < 8) || L.streets.some(q => segDist0(x, z, q.pts) < q.w / 2 + 6) || L.plazas.some(q => Math.hypot(q.x - x, q.z - z) < (q.r1 || 4) + 8)) continue;
       if (L.fields && L.fields.concat(L.pastures, [L.orchard]).some(f => Math.abs(x - f.x) < f.w / 2 + 6 && Math.abs(z - f.z) < f.d / 2 + 6)) continue;
       best = { x, z };
     }
@@ -3200,7 +3339,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   // distances by road: the east road to the fork at the waystation, then on east to Oakbridge or north to Greenhaven
   const forkAt = ROADS.east.findIndex(p => p[0] === 240);
   const LEG = { hearthmoor: polyLen(ROADS.east.slice(0, forkAt + 1)) + 75, oakbridge: polyLen(ROADS.east.slice(forkAt)) + 30, greenhaven: polyLen(ROADS.north) + 20 };
-  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60]];
+  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40]];
   const roadDist = (a, b) => { if (a === b) return 0; const D = { [a]: 0 }, Q = [a]; while (Q.length) { Q.sort((x, y) => D[x] - D[y]); const u = Q.shift(); for (const [x, y, w] of EDGES) { const v = x === u ? y : y === u ? x : null; if (v && (D[v] == null || D[u] + w < D[v])) { D[v] = D[u] + w; Q.push(v); } } } return D[b] || 0; };
   const COACH_MPM = 15, WALK_MPM = 7.8, RIDE_MPM = 18;   // metres per game minute (walking is 6.5 m a second, and a game minute is 1.2 seconds)
   const fare = (a, b) => Math.max(4, Math.round(roadDist(a, b) / 110));
@@ -3341,6 +3480,50 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     plog(s, reeve, 'Chosen as Reeve of Greenhaven by the moot.');
   }
   // Crownmere: about 1,150 people. The great merchant houses own much of the city; a Lord Mayor and the guild masters run it
+  // Ironcrest and Eastwatch: families, businesses, common work and a town council, as in the other towns
+  function setupNewTown(s, id) {
+    if (!s.towns || s.towns[id]) return;
+    const L = LAYOUT[id], cfg = id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
+      : { seed: 616161, pop: 480, jobs: ['ew_dock', 'ew_dock', 'ew_dock', 'ew_fish', 'ew_fish', 'ew_net', 'ew_sail', 'ew_sail', 'ew_yard', 'ew_watch'], title: 'Harbourmaster', chest: 700, rent: [5, 3], pre: 'e', fam: ['Penhale', 'Trask', 'Brine', 'Keel', 'Tolley', 'Hook', 'Marchant', 'Rowe', 'Polgrean', 'Nance', 'Tremayne', 'Kitto', 'Jago', 'Pascoe', 'Rescorla'] };
+    let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    const used = new Set(Object.values(s.people).map(p => p.name));
+    const FIRST_F = FIRST.filter(n => FEMALE.has(n)), FIRST_M = FIRST.filter(n => !FEMALE.has(n)), FAM = cfg.fam.concat(FAMILY);
+    const nameFor = (fam, sex) => { const Ls = sex === 'f' ? FIRST_F : sex === 'm' ? FIRST_M : FIRST; for (let k = 0; k < 60; k++) { const n = Ls[Math.floor(r() * Ls.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsman ' + used.size; used.add(n); return n; };
+    const hs = L.houses.map((h, i) => ({ id: cfg.pre + i, name: (h.tall ? 'Townhouse, ' : 'Cottage, ') + TOWNS[id].name, x: h.x, z: h.z, owner: 'town:' + id, rent: h.tall ? cfg.rent[0] : cfg.rent[1], cap: h.tall ? 6 : 4, tenants: [], town: id }));
+    s.houses.push(...hs);
+    const P0 = (o, h) => { const p = newPerson(s, Object.assign({ town: id, purse: 20 + Math.floor(r() * 30), palette: Math.floor(r() * 10) }, o)); if (h) moveIn(s, p, h); p.log = [{ day: s.day, text: 'Lives in ' + TOWNS[id].name + '.' }]; p.rep = 20; return p; };
+    let hi = 0; const nextHouse = () => hs[(hi++ * 7) % hs.length];
+    const family = (head, h, fam, kids) => {
+      const sp = r() < 0.75 ? P0({ name: nameFor(fam, sexOf(head) === 'f' ? 'm' : 'f'), age: Math.max(18, head.age - 4 + Math.floor(r() * 8)), maiden: undefined }, h) : null;
+      if (sp) { head.spouse = sp.id; sp.spouse = head.id; sp.hh = head.id; }
+      for (let k = 0; k < kids; k++) { const c = P0({ name: nameFor(fam), age: 2 + Math.floor(r() * 13), purse: 0 }, h); c.kid = true; c.parents = [head.id].concat(sp ? [sp.id] : []); c.hh = head.id; }
+      return sp;
+    };
+    for (const b of L.biz) {
+      const fam = b.boss.split(' ').slice(-1)[0];
+      const own = P0({ name: b.boss, age: 32 + Math.floor(r() * 24), purse: 130 + Math.floor(r() * 110), job: { type: 'biz', biz: b.id, role: 'owner' }, home: 'biz:' + b.id }); used.add(own.name);
+      s.biz[b.id] = { id: b.id, trade: b.trade, owner: own.id, staff: [], profits: [10, 10, 10], closed: false, opened: 0, lastProfit: 0, lastRevenue: 0, town: id };
+      const sp = r() < 0.65 ? P0({ name: nameFor(fam, sexOf(own) === 'f' ? 'm' : 'f'), age: own.age - 3, home: 'biz:' + b.id }) : null;
+      if (sp) { own.spouse = sp.id; sp.spouse = own.id; sp.hh = own.id; }
+      const nk = Math.floor(r() * 3); for (let k = 0; k < nk; k++) { const c = P0({ name: nameFor(fam), age: 3 + Math.floor(r() * 12), purse: 0, home: 'biz:' + b.id }); c.kid = true; c.parents = [own.id].concat(sp ? [sp.id] : []); c.hh = own.id; }
+      const nh = 1 + Math.floor(r() * 2);
+      for (let k = 0; k < nh; k++) { const hf = FAM[Math.floor(r() * FAM.length)], h = nextHouse(); const hand = P0({ name: nameFor(hf), age: 18 + Math.floor(r() * 25), job: { type: 'biz', biz: b.id, role: 'hand' } }, h); s.biz[b.id].staff.push({ pid: hand.id, wage: 8 + Math.floor(r() * 3) }); if (r() < 0.5) family(hand, h, hf, Math.floor(r() * 3)); }
+    }
+    let n = Object.values(s.people).filter(p => p.town === id).length;
+    while (n < cfg.pop) {
+      const fam = FAM[Math.floor(r() * FAM.length)], h = nextHouse();
+      const head = P0({ name: nameFor(fam), age: 20 + Math.floor(r() * 42), job: r() < 0.9 ? { type: 'commons', what: cfg.jobs[Math.floor(r() * cfg.jobs.length)] } : null }, h);
+      const sp = family(head, h, fam, Math.floor(r() * 4));
+      if (sp && r() < 0.5) sp.job = { type: 'commons', what: cfg.jobs[Math.floor(r() * cfg.jobs.length)] };
+      n = Object.values(s.people).filter(p => p.town === id).length;
+    }
+    const landlords = Object.values(s.people).filter(p => p.town === id && p.job && p.job.role === 'owner');
+    hs.forEach(h => { if (r() < 0.5) { const l = landlords[Math.floor(r() * landlords.length)]; if (!h.tenants.includes(l.id)) h.owner = l.id; } });
+    for (const p of Object.values(s.people)) if (p.town === id) p.rep = Math.round(repTarget(s, p));
+    const masters = landlords.slice().sort((a, b) => b.rep - a.rep || b.purse - a.purse), mayor = masters[0];
+    s.towns[id] = { title: cfg.title, chest: cfg.chest, fee: 'normal', approval: 60, council: masters.slice(1, 5).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
+    plog(s, mayor, 'Chosen ' + cfg.title + ' of ' + TOWNS[id].name + '.');
+  }
   function setupCrownmere(s) {
     if (!s.towns || s.towns.crownmere) return;
     let sd = 424242; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
@@ -3391,7 +3574,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     s.towns.crownmere = { title: 'Lord Mayor', chest: 1500, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen Lord Mayor of Crownmere by the guilds.');
   }
-  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520 };
+  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
   function townFolk(s, id) { return living(s).filter(p => p.town === id); }
@@ -3472,9 +3655,227 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     s.schedule = s.schedule.filter(e => !e.id || s.agents.some(a => a.id === e.id));
   }
 
+  /* ================= the kingdom of Alderwyn: lords, court, council, crown, and the bandits on its roads =================
+     Six regions, each held by a lord under the crown. Your standing with the lords, the guilds, the court and the
+     towns is your support; with enough of it, and a lordship and a council seat, the crown itself can be yours. */
+  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch' };
+  const COUNCIL = { treasury: 'Lord Treasurer', trade: 'Master of Trade', war: 'Marshal', law: 'Lord Justice' };
+  const LAWS = {
+    marketPeace: { name: 'The Market Peace', say: 'Watchmen in every market. Towns feel safe; it costs the treasury 6c a day.' },
+    forestLaw: { name: 'Forest Law', say: 'The royal forests are closed to commoners. +10c a day to the treasury; the towns resent it.' },
+    guildCharters: { name: 'Guild Charters', say: 'The guilds set their own prices. The guilds love it; the lords do not.' },
+    harshJustice: { name: 'Harsh Justice', say: 'Hangings at the crossroads. Bandits stay away; the towns are uneasy.' }
+  };
+  const SEATS = () => ({ crownmere: { x: CM.castle.x, z: CM.castle.z + 10 }, oakbridge: { x: OAK.keep.x, z: OAK.keep.z + 9 }, greenhaven: { x: GH.estate.x + 9, z: GH.estate.z }, ironcrest: { x: IC.keep.x + 8, z: IC.keep.z + 6 }, eastwatch: { x: EW.keep.x, z: EW.keep.z - 12 }, hearthmoor: MANOR_HOME });
+  function noble(s, o) { const p = newPerson(s, Object.assign({ purse: 600, palette: 4, retired: true, rep: 70, mood: 70 }, o)); p.log = [{ day: s.day, text: o.why || 'Of noble blood.' }]; return p; }
+  function setupRealm(s) {
+    if (s.realm) return;
+    const king = noble(s, { name: 'Aldwin Ardane', age: 66, town: 'crownmere', home: 'seat:crownmere', why: 'King of Alderwyn.' });
+    const prince = noble(s, { name: 'Edmund Ardane', age: 19, town: 'crownmere', home: 'seat:crownmere', why: 'Prince of Alderwyn, the King’s only son.' }); prince.parents = [king.id];
+    const lord = (name, age, town, why) => noble(s, { name, age, town, home: 'seat:' + town, why });
+    const est = s.biz.g_estate && s.people[s.biz.g_estate.owner];
+    const regions = {
+      hearthmoor: { lord: 'office', tax: 1, patrol: 1, garrison: 0, roads: 1 },
+      greenhaven: { lord: est ? est.id : lord(s, 'Mathis Ashcombe', 52, 'greenhaven', 'Lord of Greenhaven, of Ashcombe Hall.').id, tax: 1, patrol: 1, garrison: 0, roads: 1 },
+      oakbridge: { lord: lord('Isolde Marlowe', 47, 'oakbridge', 'Lady of Oakbridge, who holds the keep.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 },
+      crownmere: { lord: 'crown', tax: 1, patrol: 2, garrison: 2, roads: 2 },
+      ironcrest: { lord: lord('Gareth Stane', 58, 'ironcrest', 'Lord of Ironcrest and its mines.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 },
+      eastwatch: { lord: lord('Rowena Tarrant', 44, 'eastwatch', 'Lady of Eastwatch, Warden of the Coast.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 }
+    };
+    for (const id in regions) { const r = regions[id]; if (r.lord && r.lord !== 'office' && r.lord !== 'crown' && s.people[r.lord]) { s.people[r.lord].noble = id; s.people[r.lord].opinion = 0; } }
+    const courtier = (name, age, why) => noble(s, { name, age, town: 'crownmere', home: 'seat:crownmere', why });
+    const council = { treasury: courtier('Hugo Wendle', 61, 'Lord Treasurer of Alderwyn.').id, trade: courtier('Margery Cole', 50, 'Master of Trade.').id, war: courtier('Ralph Durrant', 55, 'Marshal of Alderwyn.').id, law: courtier('Ambrose Fell', 63, 'Lord Justice.').id };
+    s.realm = { king: king.id, prince: prince.id, crown: 'king', regions, council, favour: 0, kingSupport: 60, treasury: 1500, taxRate: 1, tariff: 1, laws: { marketPeace: true, forestLaw: false, guildCharters: false, harshJustice: false }, levies: 120, support: { lords: 40, guilds: 40, court: 0, towns: 40 }, rival: null, exile: null, lowDays: 0, debtDays: 0, log: [], offer: null, crowned: null };
+    s.bandits = { oakbridge: 20, greenhaven: 15, hearthmoor: 10, crownmere: 10, ironcrest: 30, eastwatch: 25, lastRaid: null };
+  }
+  function realmLog(s, text, kind) { const R = s.realm; R.log.unshift({ day: s.day, text }); if (R.log.length > 30) R.log.length = 30; event(s, text, kind || 'info'); }
+  const isRuler = s => !!(s.realm && s.realm.crown === 'player');
+  const yourLordships = s => s.realm ? Object.keys(s.realm.regions).filter(id => regionLord(s, id) === 'player') : [];
+  const yourSeats = s => s.realm ? Object.keys(COUNCIL).filter(k => s.realm.council[k] === 'player') : [];
+  function regionLord(s, id) { const r = s.realm.regions[id]; if (r.lord === 'office') return s.offices.lord; if (r.lord === 'crown') return s.realm.crown === 'player' ? 'player' : s.realm.king; return r.lord; }
+  function lordName(s, id) { const l = regionLord(s, id); return l === 'player' ? s.name : l && s.people[l] ? s.people[l].name : 'no one'; }
+  const op01 = p => p ? clamp(50 + (p.opinion || 0) / 2, 0, 100) : 50;
+  function computeSupport(s) {
+    const R = s.realm, S = R.support;
+    const lords = Object.keys(R.regions).map(id => { const l = regionLord(s, id); return l === 'player' ? 100 : l && s.people[l] ? op01(s.people[l]) : 50; });
+    const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').map(b => s.people[b.owner]).filter(Boolean);
+    const mine = Object.values(s.biz).filter(b => b.owner === 'player').length;
+    let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
+    const tw = Object.keys(TOWNS).map(t => { const f = living(s).filter(p => townOf(p) === t && !p.kid); return f.length ? avg(f.slice(0, 120).map(op01)) : 50; });
+    let towns = avg(tw) * 0.75 + (s.village ? s.village.standing : 0) * 0.15 + 10 - (isRuler(s) ? (R.taxRate - 1) * 35 + (R.laws.forestLaw ? 8 : 0) + (R.laws.harshJustice ? 6 : 0) - (R.laws.marketPeace ? 6 : 0) : 0);
+    let court = R.favour + yourSeats(s).length * 6 + yourLordships(s).length * 4;
+    let lordAvg = avg(lords) - (isRuler(s) && R.laws.guildCharters ? 10 : 0) - (isRuler(s) && R.debtDays > 5 ? 15 : 0);
+    S.lords = Math.round(clamp(lordAvg, 0, 100)); S.guilds = Math.round(clamp(guilds, 0, 100)); S.court = Math.round(clamp(court, 0, 100)); S.towns = Math.round(clamp(towns, 0, 100));
+    return Math.round((S.lords + S.guilds + S.court + S.towns) / 4);
+  }
+  const supportOf = s => s.realm ? Math.round((s.realm.support.lords + s.realm.support.guilds + s.realm.support.court + s.realm.support.towns) / 4) : 0;
+  // bandits gather on the roads; patrols, garrisons, watchmen and the army keep them down
+  function banditDay(s) {
+    const B = s.bandits, R = s.realm; if (!B || !R) return;
+    for (const id in R.regions) {
+      const g = R.regions[id], army = R.levies / 150, watch = id === 'hearthmoor' ? Object.values(s.offices || {}).filter(x => x).length * 0.1 : 0;
+      const down = g.patrol * 1.3 + g.garrison * 0.6 + army + watch + (R.laws.harshJustice ? 1.2 : 0) + (yourSeats(s).includes('war') ? 0.5 : 0);
+      B[id] = clamp((B[id] || 0) + 1.6 + rand(s) * 1.6 - down, 0, 100);
+      if (B[id] > 45 && rand(s) < (B[id] - 45) / 140) banditRaid(s, id);
+    }
+  }
+  function banditRaid(s, id) {
+    const B = s.bandits, g = s.realm.regions[id], guard = g.garrison * 0.25, name = REGIONS[id];
+    let took = 0, what = [];
+    const T = s.towns && s.towns[id];
+    if (T) { const t = Math.round(Math.max(0, T.chest) * (0.12 - guard * 0.03)); T.chest -= t; took += t; if (t) what.push(t + 'c from the town chest'); T.approval = clamp(T.approval - 4, 0, 100); }
+    if (id === 'hearthmoor' && s.gov) { const t = Math.min(s.village.granary || 0, 6); s.village.granary -= t; if (t) what.push(t + ' grain from the granary'); }
+    const mine = Object.values(s.biz).filter(b => (b.town || 'hearthmoor') === id && b.owner === 'player' && !b.closed);
+    if (mine.length) { const t = Math.round(12 * (1 - guard)); spend(s, t); took += t; what.push(t + 'c of your stock'); }
+    if (id === 'hearthmoor') for (const sh of s.shops) { const t = Math.min(sh.goods, 3); sh.goods -= t; if (t) what.push(t + ' goods from your ' + TRADES[sh.trade].name.toLowerCase()); }
+    const folk = living(s).filter(p => townOf(p) === id && !p.kid && p.purse > 10);
+    for (let k = 0; k < 3 && folk.length; k++) { const p = folk[Math.floor(rand(s) * folk.length)], t = Math.round(p.purse * 0.3); p.purse -= t; p.mood = clamp(p.mood - 12, 0, 100); plog(s, p, 'Robbed by bandits.'); }
+    if (rand(s) < 0.12 - guard * 0.1 && folk.length) { const p = folk[Math.floor(rand(s) * folk.length)]; dies(s, p, 'killed by bandits'); what.push(p.name + ' was killed'); }
+    B[id] = Math.max(0, B[id] - 30); B.lastRaid = { town: id, day: s.day };
+    if (s.realm.regions[id] && regionLord(s, id) !== 'player') { const l = regionLord(s, id); if (l && s.people[l] && l !== s.realm.king) s.people[l].rep = Math.max(0, (s.people[l].rep || 0) - 3); }
+    realmLog(s, 'Bandits raid ' + name + (what.length ? ': ' + what.join(', ') + '.' : '.') + ' More patrols on the roads would keep them away.', 'bad');
+  }
+  // the roads between towns are the bandits' hunting ground, worst at night
+  function roadAmbush(s, a, b, mins) {
+    if (!s.bandits) return null;
+    const lvl = Math.max(s.bandits[a] || 0, s.bandits[b] || 0), h = hourOf(s), night = h >= 20 || h < 5;
+    const chance = clamp((lvl - 20) / 300 * (night ? 2 : 1) * (s.player.riding ? 0.5 : 1) * Math.min(2, mins / 60), 0, 0.5);
+    if (rand(s) >= chance) return null;
+    const lost = Math.round(Math.min(Math.max(0, s.coins) * 0.15, 80)), inv = s.player.inv; spend(s, lost);
+    const goods = Object.keys(inv).filter(g => inv[g]).map(g => { const n = Math.ceil(inv[g] / 2); inv[g] -= n; return n + ' ' + g; });
+    const text = 'Bandits waylay you on the road' + (night ? ' in the dark' : '') + ' and take ' + lost + 'c' + (goods.length ? ' and ' + goods.join(', ') : '') + '.';
+    event(s, text, 'bad'); return text;
+  }
+  // a day at court
+  function realmDay(s) {
+    const R = s.realm; if (!R) return;
+    banditDay(s);
+    // the old king's standing drifts; hard times and raids wear it down
+    R.kingSupport = clamp(R.kingSupport + (58 - R.kingSupport) * 0.03 + (rand(s) - 0.55) * 3 - (s.bandits && s.bandits.lastRaid && s.bandits.lastRaid.day === s.day ? 1.5 : 0), 5, 95);
+    R.favour = clamp(R.favour - 0.15, 0, 100);
+    // NPC lords: lands pass to a grown child with the crown's recognition, or back to the crown
+    for (const id in R.regions) {
+      const g = R.regions[id]; if (g.lord === 'office' || g.lord === 'crown' || g.lord === 'player') continue;
+      const L0 = s.people[g.lord]; if (L0 && L0.status !== 'dead' && L0.status !== 'left') continue;
+      const heir = L0 && living(s).find(c => (c.parents || []).includes(L0.id) && !c.kid && c.age >= 16);
+      if (heir) { g.lord = heir.id; heir.noble = id; heir.home = 'seat:' + id; heir.retired = true; if (heir.job) loseJob(s, heir, 'Inherited the lordship of ' + REGIONS[id] + '.'); realmLog(s, heir.name + ' inherits ' + REGIONS[id] + ', and the crown recognises the claim.', 'story'); }
+      else { g.lord = null; vacantSeat(s, id); }
+    }
+    for (const id in R.regions) if (R.regions[id].lord === null) vacantSeat(s, id);
+    // the council: dead councillors are replaced by the crown
+    for (const k in COUNCIL) { const c = R.council[k]; if (c !== 'player' && (!s.people[c] || s.people[c].status === 'dead')) { R.council[k] = noble(s, { name: nameForNoble(s), age: 45 + Math.floor(rand(s) * 15), town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; realmLog(s, 'A new ' + COUNCIL[k] + ' is named at court.', 'info'); } }
+    // the old king dies, or the realm needs a new ruler
+    const K = s.people[R.king];
+    if (R.crown === 'king' && (!K || K.status === 'dead')) succession(s, 'King ' + (K ? K.name.split(' ')[0] : 'Aldwin') + ' has died');
+    // your offices pay
+    for (const k of yourSeats(s)) { earn(s, 8); s.stats.salaries = (s.stats.salaries || 0) - 8; }
+    for (const id of yourLordships(s)) if (id !== 'hearthmoor' && id !== 'crownmere') { const g = R.regions[id], inc = Math.round(18 * g.tax * marketOf(s, id)) - g.patrol * 4 - g.garrison * 6 - g.roads * 3; if (inc >= 0) earn(s, inc); else spend(s, -inc); }
+    // ruling: the treasury, the army, and the realm's mood
+    if (isRuler(s)) {
+      const inc = Math.round(Object.keys(R.regions).reduce((t, id) => t + 16 * R.taxRate * marketOf(s, id), 0) + 20 * R.tariff + (R.laws.forestLaw ? 10 : 0));
+      const out = Math.round(R.levies * 0.25 + 60 + (R.laws.marketPeace ? 6 : 0) + Object.keys(COUNCIL).length * 8);
+      R.treasury += inc - out; R.lastIncome = inc; R.lastSpend = out;
+      R.debtDays = R.treasury < 0 ? R.debtDays + 1 : 0;
+      if (R.debtDays === 5) realmLog(s, 'The treasury is in debt. The lords grumble, and the army goes unpaid.', 'bad');
+      if (R.debtDays > 5) R.levies = Math.max(0, R.levies - 10);
+    }
+    const sup = computeSupport(s);
+    // a rival claimant rises against a weak ruler
+    if (isRuler(s)) {
+      R.lowDays = sup < 30 ? R.lowDays + 1 : 0;
+      if (!R.rival && sup < 42 && rand(s) < 0.08) { R.rival = { name: R.prince && s.people[R.prince] && s.people[R.prince].status === 'here' ? s.people[R.prince].name : nameForNoble(s), strength: 60, since: s.day }; realmLog(s, R.rival.name + ' claims the crown of Alderwyn and gathers men. Raise your levies, win back support, or pay them off.', 'bad'); }
+      if (R.rival) { R.rival.strength = clamp(R.rival.strength + (50 - sup) / 10 + 1, 0, 400); if (R.rival.strength < 10) { realmLog(s, R.rival.name + '’s claim collapses; their men drift home.', 'good'); R.rival = null; } }
+      if (R.rival && R.rival.strength > R.levies + sup * 2) fallFromThrone(s, R.rival.name + '’s army takes Crownmere');
+      else if (R.lowDays >= 6) fallFromThrone(s, 'the lords and the court abandon you');
+    }
+    if (R.exile && !R.exile.done && s.day - R.exile.since >= 30) { R.exile.done = true; realmLog(s, 'Time has passed since your fall. Old friends write to you: if you can win the realm back to your side, the crown may yet be yours again.', 'story'); }
+  }
+  function nameForNoble(s) { const F = ['Hugh', 'Walter', 'Cecily', 'Geoffrey', 'Matilda', 'Roger', 'Eleanor', 'Baldwin', 'Joan', 'Simon'], L = ['Vane', 'Ashworth', 'Grayle', 'Monfort', 'Thorne', 'Beaumont', 'Corbet', 'Lacy']; return F[Math.floor(rand(s) * F.length)] + ' ' + L[Math.floor(rand(s) * L.length)]; }
+  function vacantSeat(s, id) {
+    const R = s.realm, g = R.regions[id]; if (g.lord) return;
+    if (R.favour >= 50 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: 150 }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
+    if (R.offer && R.offer.region === id && s.day - R.offer.day < 5) return;
+    const n = noble(s, { name: nameForNoble(s), age: 40 + Math.floor(rand(s) * 15), town: id === 'hearthmoor' ? undefined : id, home: 'seat:' + id, why: 'Granted ' + REGIONS[id] + ' by the crown.' });
+    n.noble = id; g.lord = n.id; if (R.offer && R.offer.region === id) R.offer = null;
+    realmLog(s, 'The crown grants ' + REGIONS[id] + ' to ' + n.name + '.', 'info');
+  }
+  function succession(s, why) {
+    const R = s.realm, sup = computeSupport(s), canYou = yourLordships(s).length > 0 && yourSeats(s).length > 0 && !R.exile;
+    const pr = R.prince && s.people[R.prince];
+    if (canYou && sup >= 55) return crownYou(s, why + ', and the council chooses you to succeed him');
+    if (pr && pr.status === 'here') { R.king = pr.id; R.crown = 'king'; R.kingSupport = 50; R.prince = null; realmLog(s, why + '. ' + pr.name + ' is crowned King of Alderwyn.', 'story'); return; }
+    const n = noble(s, { name: nameForNoble(s), age: 45, town: 'crownmere', home: 'seat:crownmere', why: 'Crowned by the council.' }); R.king = n.id; R.kingSupport = 45; realmLog(s, why + '. The council crowns ' + n.name + '.', 'story');
+  }
+  function crownYou(s, why) {
+    const R = s.realm, K = s.people[R.king];
+    if (K && K.status === 'here') { K.retired = true; plog(s, K, 'Gave up the crown to ' + s.name + '.'); }
+    R.crown = 'player'; R.rival = null; R.lowDays = 0; R.debtDays = 0; R.crowned = s.day; R.exile = null; s.rec.crowned = (s.rec.crowned || 0) + 1;
+    realmLog(s, why + '. You are crowned ' + (you(s).sex === 'f' ? 'Queen' : 'King') + ' of Alderwyn in the Great Hall of the Realm. The treasury, the laws and the army are yours to command.', 'story');
+  }
+  function fallFromThrone(s, why) {
+    const R = s.realm;
+    R.crown = 'king'; const pr = R.prince && s.people[R.prince];
+    if (R.rival && R.rival.name) { const n = (pr && pr.name === R.rival.name) ? pr : noble(s, { name: R.rival.name, age: 40, town: 'crownmere', home: 'seat:crownmere', why: 'Took the crown of Alderwyn.' }); R.king = n.id; if (n === pr) R.prince = null; }
+    else if (pr && pr.status === 'here') { R.king = pr.id; R.prince = null; }
+    else R.king = noble(s, { name: nameForNoble(s), age: 45, town: 'crownmere', home: 'seat:crownmere', why: 'Crowned after the fall.' }).id;
+    R.kingSupport = 55; R.rival = null; R.lowDays = 0;
+    // exile: stripped of lordships and seats, part of your wealth seized
+    for (const id of yourLordships(s)) { if (R.regions[id].lord === 'office') { s.offices.lord = null; replaceLord(s, 'the old ruler fell'); } else if (R.regions[id].lord === 'player') { R.regions[id].lord = null; } }
+    for (const k of yourSeats(s)) R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' by the new king.' }).id;
+    const seized = Math.round(Math.max(0, s.coins) * 0.5); spend(s, seized);
+    R.favour = 0; R.exile = { since: s.day, why, seized };
+    realmLog(s, 'You have lost the crown: ' + why + '. You flee into exile, stripped of your lordships and council seats, and ' + seized + 'c is seized. You are free, and you can rebuild. In time the realm may take you back.', 'bad');
+  }
   /* buying, renting and firing */
-  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1)); }
-  function housePrice(s, h) { return 40 + h.rent * 45; }
+  /* ----- property: what it is worth, keeping it up, letting it, and selling it ----- */
+  const COMFORT = [{ name: 'Bare', cost: 0 }, { name: 'Homely', cost: 80 }, { name: 'Comfortable', cost: 180 }, { name: 'Fine', cost: 360 }];
+  // each town's property market drifts with its fortunes
+  function marketOf(s, town) { s.market = s.market || {}; return s.market[town || 'hearthmoor'] || 1; }
+  function propertyMarket(s) {
+    s.market = s.market || {};
+    for (const t of ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere', 'ironcrest', 'eastwatch']) {
+      const T = t === 'hearthmoor' ? null : s.towns && s.towns[t], pull = T ? (T.approval - 55) / 600 + (T.chest > 300 ? 0.004 : T.chest < 0 ? -0.006 : 0) : s.gov ? (s.gov.approval.elder - 55) / 700 : 0;
+      const raid = s.bandits && s.bandits.lastRaid && s.bandits.lastRaid.town === t && s.day - s.bandits.lastRaid.day < 3 ? -0.02 : 0;
+      const m = s.market[t] || 1; s.market[t] = Math.round(clamp(m + pull + raid + (rand(s) - 0.5) * 0.02 + (1 - m) * 0.03, 0.7, 1.45) * 1000) / 1000;
+    }
+  }
+  function houseValue(s, h) { return Math.round((40 + h.rent * 45) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
+  function propertyDay(s) {
+    propertyMarket(s);
+    for (const h of s.houses) if (h.owner === 'player') h.wear = Math.min(100, (h.wear || 0) + 0.4);
+    // let businesses: the tenant pays you each day, or falls behind
+    for (const id in s.biz) {
+      const b = s.biz[id]; if (!b.lease) continue;
+      const q = s.people[b.lease.pid];
+      if (!q || q.status !== 'here' || b.owner !== 'player') { endLease(s, b, 'The lease on ' + empById(id).name + ' has ended.'); continue; }
+      const pay = Math.max(0, Math.min(b.lease.rent, q.purse));
+      q.purse -= pay; earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay;
+      if (pay < b.lease.rent) { b.lease.behind = (b.lease.behind || 0) + 1; if (b.lease.behind >= 4) endLease(s, b, q.name + ' could not keep up the rent on ' + empById(id).name + ' and has handed back the keys.'); } else b.lease.behind = 0;
+    }
+    // buyers come looking at what you have put up for sale
+    s.offers = (s.offers || []).filter(o => s.day - o.day < 4);
+    const listed = s.houses.filter(h => h.owner === 'player' && h.forSale).map(h => ({ kind: 'house', id: h.id, ask: h.forSale, town: h.town || 'hearthmoor', name: h.name }))
+      .concat(Object.values(s.biz).filter(b => b.owner === 'player' && b.forSale).map(b => ({ kind: 'biz', id: b.id, ask: b.forSale, town: b.town || 'hearthmoor', name: empById(b.id).name })));
+    for (const L of listed) {
+      if (s.offers.some(o => o.kind === L.kind && o.id === L.id && s.day - o.day < 2)) continue;
+      const fair = L.kind === 'house' ? houseValue(s, houseById(s, L.id)) : bizPrice(s, L.id), greed = L.ask / Math.max(1, fair);
+      if (rand(s) > clamp(1.25 - greed * 0.75, 0.05, 0.8)) continue;
+      const buyers = living(s).filter(p => !p.kid && p.age >= 20 && townOf(p) === L.town && p.purse >= fair * 0.7 + 30 && (p.opinion || 0) > -40 && !(p.job && p.job.type === 'office'));
+      const any = buyers.length ? buyers : living(s).filter(p => !p.kid && p.purse >= fair * 0.7 + 30 && (p.opinion || 0) > -40 && !(p.job && p.job.type === 'office'));
+      if (!any.length) continue;
+      const q = any[Math.floor(rand(s) * any.length)], amount = Math.round(Math.min(q.purse - 30, L.ask, fair * (0.82 + rand(s) * 0.26))); if (amount < fair * 0.6) continue;
+      s.offers.push({ n: (s.offerN = (s.offerN || 0) + 1), kind: L.kind, id: L.id, pid: q.id, amount, day: s.day });
+      event(s, q.name + ' offers ' + amount + 'c for ' + L.name + ' (you asked ' + L.ask + 'c). See the Property page.', 'coin');
+    }
+  }
+  function endLease(s, b, why) { const q = b.lease && s.people[b.lease.pid]; if (q && q.job && q.job.type === 'biz' && q.job.biz === b.id) { q.job = null; plog(s, q, why); } b.lease = null; event(s, why, 'info'); }
+  function leaseCandidates(s, id) {
+    const b = s.biz[id], town = b.town || 'hearthmoor';
+    return living(s).filter(p => !p.kid && p.age >= 20 && townOf(p) === town && p.purse >= 20 && !(p.job && (p.job.type === 'office' || p.job.type === 'manage' || (p.job.type === 'biz' && p.job.role === 'owner'))) && p.home !== 'you')
+      .map(p => ({ pid: p.id, name: p.name, offer: Math.max(4, Math.round(BIZ_BASE[b.trade] * 0.3 * (0.8 + (p.skill || 1) * 0.3))), skill: p.skill || 1 })).sort((a, c) => c.offer - a.offer).slice(0, 4);
+  }
+  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1) * marketOf(s, b.town) * (b.disrepair ? 0.85 : 1)); }
+  function housePrice(s, h) { return houseValue(s, h); }
   function sellerWilling(s, ownerPid) { const o = s.people[ownerPid]; return !o || o.opinion > -40; }
 
   /* offices change hands */
@@ -3877,6 +4278,168 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         event(s, 'You move back to your hut in Hearthmoor.' + (h ? ' ' + h.name + ' stands empty: a tenant may take it.' : ''), 'info');
         return ok();
       }
+      case 'improveHome': {
+        const h = a === 'hut' ? null : houseById(s, a);
+        if (a !== 'hut' && (!h || h.owner !== 'player')) return fail('That is not your house.');
+        const lv = a === 'hut' ? (s.player.hutComfort || 0) : (h.comfort || 0); if (lv >= 3) return fail('It is as fine as it can be.');
+        const c = COMFORT[lv + 1].cost; if (s.coins < c) return fail('That costs ' + c + 'c.');
+        spend(s, c); s.rec.invested += c; if (h) { h.comfort = lv + 1; h.wear = 0; } else s.player.hutComfort = lv + 1;
+        for (const p of living(s)) if (p.home === 'you') p.mood = clamp((p.mood || 50) + 8, 0, 100);
+        event(s, (h ? h.name : 'Your hut') + ' is now ' + COMFORT[lv + 1].name.toLowerCase() + ': ' + ['', 'a rug, a settle and curtains', 'proper beds, a dresser and glass in the windows', 'a tapestry, a carved chair and a great bed'][lv + 1] + '.', 'good');
+        return ok();
+      }
+      case 'repairHouse': {
+        const h = houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
+        const c = Math.round((h.wear || 0) * 0.5); if (c < 2) return fail('It is in good repair.'); if (s.coins < c) return fail('Repairs cost ' + c + 'c.');
+        spend(s, c); h.wear = 0; event(s, h.name + ' is repaired for ' + c + 'c.', 'info'); return ok();
+      }
+      case 'listForSale': {
+        // a: 'house' or 'biz', b: id, c: asking price (0 to take it off the market)
+        const o = a === 'house' ? houseById(s, b) : s.biz[b];
+        if (!o || o.owner !== 'player') return fail('That is not yours to sell.');
+        if (a === 'house' && s.player.house === b) return fail('You live there. Move out first.');
+        o.forSale = c > 0 ? Math.round(c) : null; if (!o.forSale) s.offers = (s.offers || []).filter(x => !(x.kind === a && x.id === b));
+        event(s, o.forSale ? (a === 'house' ? o.name : empById(b).name) + ' is up for sale at ' + o.forSale + 'c. Buyers will come to you.' : 'Taken off the market.', 'info');
+        return ok();
+      }
+      case 'acceptOffer': case 'declineOffer': {
+        const i = (s.offers || []).findIndex(o => o.n === a); if (i < 0) return fail('That offer has gone.');
+        const o = s.offers[i], q = s.people[o.pid]; s.offers.splice(i, 1);
+        if (name === 'declineOffer') { if (q) q.opinion = clamp((q.opinion || 0) - 3, -100, 100); return ok(); }
+        if (!q || q.purse < o.amount) { if (q && q.purse >= o.amount * 0.8) o.amount = q.purse; else return fail('They no longer have the money.'); }
+        q.purse -= o.amount; earn(s, o.amount); s.rec.coinsEarned += 0;
+        if (o.kind === 'house') { const h = houseById(s, o.id); h.owner = q.id; h.forSale = null; plog(s, q, 'Bought ' + h.name + ' from ' + s.name + ' for ' + o.amount + 'c.'); event(s, 'You sold ' + h.name + ' to ' + q.name + ' for ' + o.amount + 'c.', 'coin'); }
+        else {
+          const b = s.biz[o.id]; if (b.manager) releaseManager(s, b.manager, 'The business was sold.'); b.manager = null; if (b.lease) endLease(s, b, 'The business was sold.');
+          if (q.job) loseJob(s, q, 'Left to run their new business.');
+          b.owner = q.id; b.forSale = null; q.job = { type: 'biz', biz: o.id, role: 'owner' }; b.staff = b.staff.filter(x => x.pid !== q.id);
+          plog(s, q, 'Bought ' + empById(o.id).name + ' from ' + s.name + ' for ' + o.amount + 'c.'); event(s, 'You sold ' + empById(o.id).name + ' to ' + q.name + ' for ' + o.amount + 'c.', 'coin');
+        }
+        s.offers = s.offers.filter(x => !(x.kind === o.kind && x.id === o.id));
+        return ok();
+      }
+      case 'leaseBiz': {
+        const b = s.biz[a]; if (!b || b.owner !== 'player') return fail('That is not your business.');
+        if (b.lease) return fail('It is already let.');
+        const c0 = leaseCandidates(s, a).find(x => x.pid === c); if (!c0) return fail('They cannot take it on.');
+        const q = s.people[c0.pid];
+        if (b.manager) { releaseManager(s, b.manager, 'The business was let to ' + q.name + '.'); b.manager = null; }
+        if (q.job) loseJob(s, q, 'Left to run ' + empById(a).name + ' on a lease.');
+        q.job = { type: 'biz', biz: a, role: 'owner' }; b.staff = b.staff.filter(x => x.pid !== q.id);
+        b.lease = { pid: q.id, rent: c0.offer, since: s.day }; plog(s, q, 'Took a lease on ' + empById(a).name + ' from ' + s.name + ' at ' + c0.offer + 'c a day.');
+        event(s, q.name + ' takes ' + empById(a).name + ' on a lease and will pay you ' + c0.offer + 'c a day. They keep whatever it earns above that.', 'good');
+        return ok();
+      }
+      case 'endLease': { const b = s.biz[a]; if (!b || !b.lease) return fail('It is not let.'); endLease(s, b, 'You take ' + empById(a).name + ' back from ' + (s.people[b.lease.pid] || {}).name + '.'); return ok(); }
+      case 'giftCrown': {
+        const R = s.realm; if (!R || isRuler(s)) return fail('There is no one to give it to.');
+        const n = Math.round(a); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
+        spend(s, n); R.favour = clamp(R.favour + n / 15, 0, 100); s.rec.given = (s.rec.given || 0) + n;
+        event(s, 'You give ' + n + 'c to the King\u2019s treasury. Your favour at court rises to ' + Math.round(R.favour) + '.', 'good'); return ok();
+      }
+      case 'attendCourt': {
+        const R = s.realm; if (!R || isRuler(s)) return fail('You are the court.');
+        if (R.lastCourt === s.day) return fail('You have already attended court today.');
+        if (townAt(p.x, p.z) !== 'crownmere') return fail('The court sits in Crownmere castle.');
+        R.lastCourt = s.day; const g = 2 + Math.min(4, (s.village ? s.village.standing : 0) / 25) + yourLordships(s).length;
+        R.favour = clamp(R.favour + g, 0, 100); event(s, 'You attend the King\u2019s court and are seen by the right people. Favour ' + Math.round(R.favour) + '.', 'info'); return ok();
+      }
+      case 'acceptLordship': case 'refuseLordship': {
+        const R = s.realm; const o = R && R.offer; if (!o) return fail('No lordship is on offer.');
+        const g = R.regions[o.region]; R.offer = null;
+        if (name === 'refuseLordship') { vacantSeat(s, o.region); return ok(); }
+        if (s.coins < o.fee) { vacantSeat(s, o.region); return fail('You could not pay the fee; the King gives it to another.'); }
+        spend(s, o.fee); g.lord = 'player'; R.favour = clamp(R.favour + 5, 0, 100);
+        realmLog(s, 'You swear your oath to the King and are made ' + (you(s).sex === 'f' ? 'Lady' : 'Lord') + ' of ' + REGIONS[o.region] + '. Its taxes are yours, and so are its roads, patrols and garrison.', 'story'); return ok();
+      }
+      case 'seekLordship': {
+        // a: region. The crown grants a weak lord's lands, or Hearthmoor if you hold the village's trust
+        const R = s.realm; if (!R || R.exile) return fail(R && R.exile ? 'No lord will give up lands to an exile.' : 'Not yet.');
+        const g = R.regions[a]; if (!g || g.lord === 'crown') return fail('Those are the Crown Lands.');
+        if (regionLord(s, a) === 'player') return fail('It is already yours.');
+        if (R.favour < 55) return fail('You need more favour at court (55; you have ' + Math.round(R.favour) + ').');
+        const fee = 400; if (s.coins < fee) return fail('The fee for a lordship is ' + fee + 'c.');
+        const cur = regionLord(s, a), L0 = cur && s.people[cur], weak = !L0 || L0.status !== 'here' || (L0.rep || 0) < 45 || L0.purse < 50 || (a === 'hearthmoor' && s.gov && s.gov.approval.lord < 45);
+        if (!weak) return fail(L0.name + ' holds ' + REGIONS[a] + ' firmly. A lord who is failing, or in debt, can be replaced.');
+        spend(s, fee); R.favour = clamp(R.favour - 10, 0, 100);
+        if (g.lord === 'office') { if (L0) { loseJob(s, L0, 'Stripped of Hearthmoor by the King, who gave it to ' + s.name + '.'); } s.offices.lord = 'player'; }
+        else { if (L0) { L0.noble = null; L0.retired = true; plog(s, L0, 'Lost ' + REGIONS[a] + ' to ' + s.name + ' by the King\u2019s order.'); L0.opinion = clamp((L0.opinion || 0) - 50, -100, 100); } g.lord = 'player'; }
+        realmLog(s, 'The King grants you ' + REGIONS[a] + ' in place of ' + (L0 ? L0.name : 'its absent lord') + '. You are ' + (you(s).sex === 'f' ? 'Lady' : 'Lord') + ' of ' + REGIONS[a] + '.', 'story'); return ok();
+      }
+      case 'regionSet': {
+        // a: region, b: patrol | garrison | roads | tax, c: level
+        const R = s.realm; if (!R || regionLord(s, a) !== 'player') return fail('Those are not your lands.');
+        const g = R.regions[a], lim = b === 'tax' ? [0.5, 2] : [0, 3]; g[b] = clamp(b === 'tax' ? Math.round(c * 4) / 4 : Math.round(c), lim[0], lim[1]); return ok();
+      }
+      case 'fundPatrol': {
+        const B = s.bandits; if (!B || B[a] == null) return fail('Nowhere to patrol.');
+        const n = Math.round(b); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
+        spend(s, n); B[a] = Math.max(0, B[a] - n / 3);
+        for (const q of living(s)) if (townOf(q) === a && rand(s) < 0.2) q.opinion = clamp((q.opinion || 0) + 2, -100, 100);
+        event(s, 'You pay for armed men to ride the roads around ' + REGIONS[a] + '. The bandits pull back.', 'good'); return ok();
+      }
+      case 'seekSeat': {
+        const R = s.realm; if (!R || R.exile) return fail('Not now.');
+        if (!COUNCIL[a]) return fail('No such office.'); if (R.council[a] === 'player') return fail('You already hold it.');
+        if (!yourLordships(s).length) return fail('Only a lord sits on the royal council.');
+        if (R.favour < 65) return fail('You need more favour at court (65; you have ' + Math.round(R.favour) + ').');
+        const old = s.people[R.council[a]]; if (old) { old.opinion = clamp((old.opinion || 0) - 30, -100, 100); plog(s, old, 'Replaced as ' + COUNCIL[a] + ' by ' + s.name + '.'); }
+        R.council[a] = 'player'; R.favour = clamp(R.favour - 5, 0, 100);
+        realmLog(s, 'The King names you ' + COUNCIL[a] + ' of Alderwyn. You sit on the royal council.', 'story'); return ok();
+      }
+      case 'undermineKing': {
+        const R = s.realm; if (!R || isRuler(s)) return fail('Not now.'); if (!yourSeats(s).length) return fail('Only a councillor can sway the court against the King.');
+        if (R.lastPlot === s.day) return fail('Once a day is enough; any more would be noticed.');
+        R.lastPlot = s.day;
+        if (rand(s) < 0.12) { R.favour = clamp(R.favour - 25, 0, 100); realmLog(s, 'Your whispers against the King are overheard. Your favour at court falls sharply.', 'bad'); return ok(); }
+        R.kingSupport = clamp(R.kingSupport - 4 - rand(s) * 3, 5, 95); event(s, 'You quietly turn a few courtiers against the King. His standing at court is ' + Math.round(R.kingSupport) + '.', 'info'); return ok();
+      }
+      case 'patronage': {
+        // a: 'lords' (gifts to every lord), 'guilds' (a guild feast in Crownmere), or 'town' with b: which town (a feast for its people)
+        const R = s.realm; if (!R) return fail('Not yet.');
+        if (a === 'lords') {
+          const ls = Object.keys(R.regions).map(id => regionLord(s, id)).filter(l => l && l !== 'player' && s.people[l] && l !== R.king);
+          const c = ls.length * 120; if (s.coins < c) return fail('Gifts fit for ' + ls.length + ' lords cost ' + c + 'c.');
+          spend(s, c); ls.forEach(l => { const q = s.people[l]; q.opinion = clamp((q.opinion || 0) + 14, -100, 100); plog(s, q, 'Received a fine gift from ' + s.name + '.'); });
+          event(s, 'You send gifts to ' + ls.length + ' lords of the realm: horses, plate and wine. They think better of you.', 'good');
+        } else if (a === 'guilds') {
+          const c = 300; if (s.coins < c) return fail('A guild feast costs ' + c + 'c.');
+          spend(s, c); Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').forEach(b => { const q = s.people[b.owner]; if (q) q.opinion = clamp((q.opinion || 0) + 7, -100, 100); });
+          event(s, 'You hold a feast for the guild masters of every town in the Guildhall of Crownmere. The guilds speak well of you.', 'good');
+        } else if (a === 'town') {
+          const folk = living(s).filter(q => townOf(q) === b && !q.kid); const c = Math.max(40, Math.round(folk.length * 0.6));
+          if (!folk.length) return fail('No such town.'); if (s.coins < c) return fail('A feast for ' + TOWNS[b].name + ' costs ' + c + 'c.');
+          spend(s, c); folk.forEach(q => { q.opinion = clamp((q.opinion || 0) + 12, -100, 100); q.mood = clamp(q.mood + 6, 0, 100); });
+          if (s.towns && s.towns[b]) s.towns[b].approval = clamp(s.towns[b].approval + 2, 0, 100);
+          event(s, 'You lay on a feast for the people of ' + TOWNS[b].name + ': roast meat, bread and ale in the square. They will remember it.', 'good');
+        } else return fail('No such thing.');
+        computeSupport(s); return ok();
+      }
+      case 'claimCrown': {
+        const R = s.realm; if (!R) return fail('Not yet.'); if (isRuler(s)) return fail('The crown is already yours.');
+        const sup = computeSupport(s);
+        if (!R.exile && !yourLordships(s).length) return fail('You must hold a lordship first.');
+        if (!R.exile && !yourSeats(s).length) return fail('You must sit on the royal council first.');
+        if (R.exile && !R.exile.done) return fail('It is too soon after your fall. Rebuild your support first.');
+        const need = 65;
+        if (sup < need) return fail('Your support is ' + sup + '. You need ' + need + ' to claim the crown.');
+        const K = s.people[R.king];
+        if (K && K.status === 'here' && R.kingSupport >= (R.exile ? 60 : 45)) { R.favour = clamp(R.favour - 30, 0, 100); realmLog(s, 'You claim the crown, but the court stands by King ' + K.name.split(' ')[0] + '. The claim fails, and your favour falls.', 'bad'); return ok(); }
+        crownYou(s, R.exile ? 'You return from exile with the realm behind you' : 'The lords, the guilds and the court turn to you, and the old King gives way'); return ok();
+      }
+      case 'rule': {
+        // a: what to set, b: its value
+        const R = s.realm; if (!isRuler(s)) return fail('Only the ruler can do that.');
+        if (a === 'tax') R.taxRate = clamp(Math.round(b * 4) / 4, 0.5, 2);
+        else if (a === 'tariff') R.tariff = clamp(Math.round(b * 4) / 4, 0, 3);
+        else if (a === 'levies') R.levies = clamp(Math.round(b / 10) * 10, 0, 600);
+        else if (a === 'law' && LAWS[b]) R.laws[b] = !R.laws[b];
+        else if (a === 'draw') { const n = Math.min(Math.round(b), Math.max(0, R.treasury)); R.treasury -= n; earn(s, n); R.favour = clamp(R.favour - n / 40, 0, 100); event(s, 'You take ' + n + 'c from the treasury for your own use. The court notices.', 'info'); }
+        else if (a === 'give') { const n = Math.min(Math.round(b), Math.max(0, s.coins)); spend(s, n); R.treasury += n; event(s, 'You put ' + n + 'c of your own into the treasury.', 'good'); }
+        else if (a === 'payRival' && R.rival) { const n = Math.round(R.rival.strength * 6); if (R.treasury < n) return fail('Buying off ' + R.rival.name + ' would cost ' + n + 'c from the treasury.'); R.treasury -= n; realmLog(s, 'You pay ' + R.rival.name + ' ' + n + 'c to give up the claim and leave the realm.', 'info'); R.rival = null; }
+        else return fail('Nothing to set.');
+        computeSupport(s); return ok();
+      }
       case 'setRent': {
         const h = s.houses && houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
         const n = clamp(Math.round(b), 0, 20);
@@ -3926,8 +4489,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       case 'journey': {
         // walk or ride the roads to another town
         if (!TOWNS[a] || !TOWNS[a].open) return fail('That road is not open yet.');
-        const how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
-        return { ok: true, mins, how };
+        const from = townAt(p.x, p.z) || 'hearthmoor', how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
+        const ambush = roadAmbush(s, from, a, mins);
+        return { ok: true, mins, how, ambush };
       }
       case 'buyHorse': {
         if (!Object.keys(STAGE).some(id => atLoc(s, 'stage:' + id))) return fail('Horses are sold at the stage posts.');
@@ -4195,6 +4759,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.v === 9) { s.v = 10; s.ageRate = 4; event(s, 'Time now passes for everyone: people age a year every four days, marry, have children, grow old and die. Change the pace in Settings.', 'story'); }
     if (s.v === 10) { s.v = 11; setupCrownmere(s); event(s, 'The roads to the capital are open: north from Oakbridge, and north-east from Greenhaven, to Crownmere on its lake.', 'story'); }
     if (s.v === 11) { s.v = 12; giveSurnames(s); generateAncestry(s); for (const a of s.agents) if (a.pid && s.people[a.pid]) a.name = s.people[a.pid].name; event(s, 'Every family now has a surname, and a married woman\u2019s maiden name is kept, so family trees show where everyone came from.', 'info'); }
+    if (s.v === 12) { s.v = 13; setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s); event(s, 'Two more roads are open: east from Oakbridge to the port of Eastwatch, and from Crownmere up into the mountains to Ironcrest. The kingdom of Alderwyn has lords, a court and a crown, and bandits on its roads.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
@@ -4206,7 +4771,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -4390,6 +4955,7 @@ function groundH(x, z) {
     h += 1.6 * Math.exp(-((x + 318) ** 2 + (z + 850) ** 2) / 500);                  // the rise under Ashcombe Hall
     const dg = segDist(x, z, GREEN); if (dg < 8) h -= (1 - dg / 8) * 2.4;            // the river Green
   }
+  if (x > 1060) { const sx = 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31), inTown = Math.abs(z - -300) < 135 && x < 1137, edge = inTown ? 1137 : sx; if (x > edge - 10) { const sy = worldH(1060, -300) - 1.3; h = Math.min(h, h * (1 - smooth01((x - edge + 10) / 14)) + (sy - 3.5) * smooth01((x - edge + 10) / 14)); } }
   const ds = segDist(x, z, STREAM); if (ds < 5) h -= (1 - ds / 5) * 1.7;
   const dr = Math.min(segDist(x, z, RACE), segDist(x, z, TAIL)); if (dr < 2.2) h -= (1 - dr / 2.2) * 0.85;
   const dp = Math.hypot(x - POND.x, z - POND.z); if (dp < POND.r + 2) h -= (1 - dp / (POND.r + 2)) * 1.1;
@@ -4443,6 +5009,7 @@ function wildClear(x, z) {
   if (inVillage(x, z)) return false;
   if (segDist(x, z, ROAD_E) < 7 || segDist(x, z, STREAM) < 4.5 || segDist(x, z, ROAD_N) < 6 || segDist(x, z, Sim.ROADS.crown) < 6 || segDist(x, z, Sim.ROADS.westcm) < 6) return false;
   if (((x - Sim.LAKE.x) / (Sim.LAKE.rx + 12)) ** 2 + ((z - Sim.LAKE.z) / (Sim.LAKE.rz + 12)) ** 2 < 1) return false;
+  if (segDist(x, z, Sim.ROADS.iron) < 6 || segDist(x, z, Sim.ROADS.coast) < 6 || x > 1120 + 16 * Math.sin(z / 95)) return false;
   if (x < -100 && z < -300 && segDist(x, z, GREEN) < 10) return false;
   if (Math.abs(x - 470) < 300 && z > -1600 && z < 400 && segDist(x, z, RIVER) < 14) return false;
   for (const id in TOWNS) { const T = TOWNS[id]; if (Math.hypot(x - T.x, z - T.z) < T.r * 1.9) return false; }
@@ -5473,6 +6040,142 @@ const CM_Y = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), CM_TREES = [];
   for (const [, fns] of jobs) { fns.forEach(fn => fn()); flushBuild(); }
 })();
 
+/* ----- Stage IV: the roads up to Ironcrest and east to Eastwatch, their bridges, and the sea ----- */
+const SHORE_X = z => 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31);
+const IC_Y = worldH(TOWNS.ironcrest.x, TOWNS.ironcrest.z), EW_Y = worldH(TOWNS.eastwatch.x, TOWNS.eastwatch.z), SEA_Y = EW_Y - 1.3;
+const IC_TREES = [], EW_TREES = [];
+const ALDERWYN = ['#2f6b3a', '#efe9d8'];   // the realm's colours: green and white
+function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; box(f, BEAMS, x, y + h / 2 + 0.5, z, 0.1, h + 1, 0.1); box(f, ALDERWYN[0], x + 0.5, y + h, z, 0.9, 1.3, 0.04, ry); box(f, ALDERWYN[1], x + 0.5, y + h, z + 0.03, 0.9, 0.36, 0.02, ry); }
+(function buildRoadsEast() {
+  const M4 = (x, y, z, ry) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry || 0, 0)), new THREE.Vector3(1, 1, 1));
+  const parts = [];
+  for (const key of ['iron', 'coast']) {
+    const R = Sim.ROADS[key];
+    // where the road meets the river Alder, a timber bridge on stone piers
+    let cross = null;
+    for (let i = 0; i < R.length - 1 && !cross; i++) { const [ax, az] = R[i], [bx, bz] = R[i + 1], L0 = Math.hypot(bx - ax, bz - az); for (let t = 0; t <= L0; t += 1) { const x = ax + (bx - ax) * t / L0, z = az + (bz - az) * t / L0; if (segDist(x, z, RIVER) < 2) { cross = { x, z, ry: Math.atan2(bx - ax, bz - az) }; break; } } }
+    const deckY = cross ? Math.max(groundH(cross.x + Math.sin(cross.ry) * 16, cross.z + Math.cos(cross.ry) * 16), groundH(cross.x - Math.sin(cross.ry) * 16, cross.z - Math.cos(cross.ry) * 16)) + 0.35 : 0;
+    const yOf = (x, z) => cross && Math.hypot(x - cross.x, z - cross.z) < 17 ? deckY + 0.08 : groundH(x, z) + 0.09;
+    parts.push({ geo: ribbon(R, i => 3.8 + 0.4 * Math.sin(i * 0.9), yOf, 2), color: dirt });
+    if (cross) {
+      const f = M4(cross.x, deckY, cross.z, cross.ry);
+      box(f, '#6b4a2e', 0, 0, 0, 5.6, 0.35, 34); [-2.7, 2.7].forEach(x => { box(f, BEAMS, x, 0.75, 0, 0.14, 0.14, 34); for (let z = -16; z <= 16; z += 2.7) box(f, BEAMS, x, 0.4, z, 0.14, 0.8, 0.14); });
+      for (const z of [-9, 0, 9]) box(f, '#8b877c', 0, -2.2, z, 4.6, 4.2, 1.6);
+    }
+  }
+  scene.add(new THREE.Mesh(mergeColored(parts), vc));
+  // the sea, east of Eastwatch, out to the edge of the world
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(900, 2600), waterMat); sea.rotation.x = -Math.PI / 2; sea.position.set(1140 + 450, SEA_Y, -300); scene.add(sea);
+  // a pebble strand along the shore
+  const strand = []; for (let z = -1400; z < 900; z += 6) strand.push([SHORE_X(z) - 2, z]);
+  scene.add(new THREE.Mesh(ribbon(strand, 7, (x, z) => Math.max(SEA_Y + 0.05, groundH(x, z) + 0.06), 2), mat('#bfb391')));
+  flushBuild();
+})();
+
+/* ----- Ironcrest: grey stone and slate on a mountain shelf, mines in the crags above, smelters smoking ----- */
+(function buildIroncrest() {
+  const O = Sim.IC, Y = IC_Y, rr = tileRand(57, 3), at = (x, z, ry) => fr(x, z, ry);
+  const STONE = '#8f8a80', STONE2 = '#7a766d', SLATE = '#3a434f';
+  O.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#857d70', m: new THREE.Matrix4() }));
+  O.plazas.forEach(q => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), '#8a8478', 0, 0.06, 0));
+  // the square: a well and a market cross
+  { const c = fr(700, -1258); part(c, new THREE.CylinderGeometry(1.4, 1.5, 1, 10), STONE2, 0, 0.5, 0); box(c, BEAMS, -1.1, 1.6, 0, 0.14, 2.2, 0.14); box(c, BEAMS, 1.1, 1.6, 0, 0.14, 2.2, 0.14); part(c, roofG(1.6, 2.8, 0.7), SLATE, 0, 2.7, 0, Math.PI / 2); }
+  O.houses.forEach((h, i) => townHouse(at(h.x, h.z, h.face), h, i + 3, { stone: STONE, stone2: STONE2, slate: SLATE, tile: '#6b4a2e', stoneTown: true, roofs: [SLATE, SLATE, '#5e4a2c'], walls: ['#a89a80', '#9a948a', '#b9a47a', '#8b877c'] }));
+  const SIGN = { bakery: '#c48a3f', tavern: '#3f6b3a', smithy: '#4a4744', butcher: '#8e2b22', chandler: '#e8d36a', cooper: '#6b4a2e', carter: '#5b4029', apothecary: '#4f6b3a', mason: '#8b877c' };
+  O.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 2, { stone: STONE, stone2: STONE2, slate: SLATE, roofs: [SLATE, '#5e4a2c'], sign: SIGN[b.trade] }));
+  // Stane Keep: a square tower and its hall, flying the realm's banner
+  { const k = O.keep, f = at(k.x, k.z, k.face);
+    box(f, STONE, 0, 6, -2, 9, 12, 9); box(f, STONE2, 0, 12.4, -2, 9.8, 0.8, 9.8); for (let a = -4; a <= 4; a += 2) { box(f, STONE2, a, 13.2, 2.8, 0.9, 0.8, 0.4); box(f, STONE2, a, 13.2, -6.8, 0.9, 0.8, 0.4); }
+    box(f, STONE, 0, 3, 5, 12, 6, 6); part(f, roofG(6.8, 12.4, 3), SLATE, 0, 6, 5); box(f, '#2a1f16', 0, 1.6, 8.02, 2, 3, 0.1); [-3.6, 3.6].forEach(x => win(f, x, 3.4, 8.02, 0.8, 1.2, 0.06));
+    realmBanner(f, 0, 13.6, -2, 0, 3); }
+  // the gate into the town, where the road comes up
+  { const f = at(O.entry.x, O.entry.z, 0); [-5, 5].forEach(x => { box(f, STONE, x, 3, 0, 3, 6, 3); box(f, STONE2, x, 6.3, 0, 3.4, 0.6, 3.4); }); box(f, STONE, 0, 5.4, 0, 7, 1.4, 2); realmBanner(f, -5, 6.6, 0, 0, 2); realmBanner(f, 5, 6.6, 0, 0, 2); }
+  // the smelters: tall stone furnaces with fire at their mouths, and the slag heap behind
+  O.smelters.forEach((m, i) => { const f = at(m.x, m.z, i); part(f, G_KILN, '#6c675e', 0, 4, 0, 0, 0, 0, 2.6, 8, 2.6); part(f, G_CYL, '#55504a', 0, 8.6, 0, 0, 0, 0, 1.1, 1.4, 1.1); box(f, '#2a1f16', 0, 1, 2.3, 1.4, 1.6, 0.4); box(f, '#e0662a', 0, 0.8, 2.45, 1.0, 0.9, 0.1); box(f, '#4a3424', 2.8, 1.2, 0, 1.4, 2.4, 1.4); });
+  { const f = at(O.slag.x, O.slag.z); part(f, new THREE.ConeGeometry(9, 6, 9), '#3a3632', 0, 3, 0); part(f, new THREE.ConeGeometry(5, 3.5, 7), '#4a4440', 6, 1.6, 4); }
+  // charcoal clamps smouldering in the clearing
+  for (let k = 0; k < 3; k++) { const f = at(812 + k * 5 - 5, -1302 + (k % 2) * 4); part(f, G_HEMI, '#3a3632', 0, 0, 0, 0, 0, 0, 2, 1.4, 2); }
+  // the crag face above the town, and the mines driven into it
+  for (let k = 0; k < 14; k++) { const x = 640 + k * 11, z = -1385 - (k % 3) * 4; const f = at(x, z, rr() * 0.6); box(f, k % 2 ? '#6c675e' : '#77726a', 0, 6, 0, 12, 16 + rr() * 8, 8); }
+  O.adits.forEach(ad => { const f = at(ad.x, ad.z, 0); box(f, '#1a1612', 0, 1.4, -0.2, 2.6, 2.8, 1); box(f, BEAMS, -1.4, 1.5, 0.4, 0.3, 3, 0.3); box(f, BEAMS, 1.4, 1.5, 0.4, 0.3, 3, 0.3); box(f, BEAMS, 0, 3.0, 0.4, 3.4, 0.3, 0.3);
+    [-0.5, 0.5].forEach(x => box(f, '#4a4744', x, 0.06, 6, 0.08, 0.08, 12)); for (let z = 1; z < 12; z += 1.2) box(f, '#5b4029', 0, 0.03, z, 1.4, 0.06, 0.2);
+    box(f, '#5b4029', 0, 0.55, 4, 1.1, 0.6, 1.4); for (let k = 0; k < 4; k++) part(f, GEO.ore, '#4a4744', -0.3 + (k % 2) * 0.5, 0.95, 3.6 + Math.floor(k / 2) * 0.6); });
+  // the headframe over the main shaft, with its wheel
+  { const f = at(716, -1356, 0); [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]].forEach(([x, z]) => box(f, BEAMS, x * 0.6, 4, z * 0.6, 0.3, 8, 0.3, 0, x * 0.05, z * 0.05)); part(f, G_WHEEL, '#4a3424', 0, 8.2, 0, 0, 0, 0, 2, 2, 2); }
+  // pines on the slopes
+  for (let k = 0, n = 0; k < 2000 && n < 110; k++) { const a = rr() * Math.PI * 2, d = 40 + rr() * 110, x = O.C.x + Math.cos(a) * d, z = O.C.z + Math.sin(a) * d; if (O.houses.some(h => Math.hypot(h.x - x, h.z - z) < 7) || O.biz.some(b => Math.hypot(b.x - x, b.z - z) < 8) || O.streets.some(st => segDist(x, z, st.pts) < st.w / 2 + 3) || segDist(x, z, Sim.ROADS.iron) < 6 || Math.hypot(x - O.C.x, z - O.C.z) < 95 && Math.hypot(x - 790, z - -1270) < 30) continue; n++; IC_TREES.push([x, z]); const g = fr(x, z, rr() * 6), sc = 0.9 + rr() * 0.5; box(g, '#4a3424', 0, 1, 0, 0.4 * sc, 2 * sc, 0.4 * sc); part(g, new THREE.ConeGeometry(1.6 * sc, 4.4 * sc, 7), '#2f4a32', 0, 3.6 * sc, 0); part(g, new THREE.ConeGeometry(1.2 * sc, 3 * sc, 7), '#3a5a3a', 0, 5.4 * sc, 0); }
+  flushBuild();
+})();
+
+/* ----- Eastwatch: a walled port on the sea, with quays, ships, a shipyard and a lighthouse ----- */
+(function buildEastwatch() {
+  const O = Sim.EW, T = TOWNS.eastwatch, Y = EW_Y, rr = tileRand(73, 11), at = (x, z, ry) => fr(x, z, ry);
+  const STONE = '#a39d90', STONE2 = '#8b877c', SLATE = '#3f4a5a', TILE = '#8a4a32';
+  const chunkOf = (x, z) => Math.floor((x - T.x + 300) / 90) * 100 + Math.floor((z - T.z + 300) / 90);
+  const jobs = new Map(); const later = (x, z, fn) => { const k = chunkOf(x, z); if (!jobs.has(k)) jobs.set(k, []); jobs.get(k).push(fn); };
+  const between = (x0, z0, x1, z1, y, w, h, color) => box(new THREE.Matrix4().compose(new THREE.Vector3((x0 + x1) / 2, y, (z0 + z1) / 2), new THREE.Quaternion().setFromEuler(RX.set(0, Math.atan2(x1 - x0, z1 - z0), 0)), new THREE.Vector3(1, 1, 1)), color, 0, 0, 0, w, h, Math.hypot(x1 - x0, z1 - z0) + 0.5);
+  // the town wall on the landward side, with towers, and the Land Gate
+  const W = O.wall, n = W.length - 1;
+  for (let i = 0; i < n; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], gate = i === O.gate.i - 1 || i === O.gate.i;
+    later((ax + bx) / 2, (az + bz) / 2, () => {
+      if (!gate) between(ax, az, bx, bz, Y + 2.6, 1.6, 5.2, STONE); else { const far = i === O.gate.i - 1 ? [ax, az] : [bx, bz], L0 = Math.hypot(bx - ax, bz - az), t = Math.max(0, (L0 - 7) / L0); between(far[0], far[1], far[0] + (O.gate.x - far[0]) * t, far[1] + (O.gate.z - far[1]) * t, Y + 2.6, 1.6, 5.2, STONE); }
+      if (i % 3 === 0) { const f = at(ax, az); part(f, new THREE.CylinderGeometry(2, 2.3, 7.6, 10), STONE2, 0, 3.8, 0); part(f, new THREE.ConeGeometry(2.6, 2.6, 10), SLATE, 0, 8.9, 0); }
+    }); }
+  later(O.gate.x, O.gate.z, () => { const f = at(O.gate.x, O.gate.z, Math.PI / 2); [-5.4, 5.4].forEach(x => { box(f, STONE2, x, 4, 0, 3.6, 8, 4); box(f, STONE, x, 8.4, 0, 4, 0.8, 4.4); }); box(f, STONE2, 0, 7, 0, 7.4, 2.2, 3.4); realmBanner(f, -5.4, 8.8, 1.6, 0, 2.4); realmBanner(f, 5.4, 8.8, 1.6, 0, 2.4); });
+  // streets and squares
+  O.streets.forEach(st => later(st.pts[0][0], st.pts[0][1], () => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#9a8f7c', m: new THREE.Matrix4() })));
+  O.plazas.forEach(q => later(q.x, q.z, () => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), '#958e81', 0, 0.06, 0)));
+  later(1000, -300, () => { const c = fr(1000, -300); part(c, new THREE.CylinderGeometry(2, 2.4, 0.6, 8), '#86847a', 0, 0.3, 0); box(c, STONE2, 0, 2.6, 0, 0.6, 4.2, 0.6); box(c, STONE2, 0, 4, 0, 1.8, 0.45, 0.45); });
+  later(1076, -300, () => { const c = fr(1076, -300); part(c, new THREE.CylinderGeometry(3, 3.2, 0.8, 16), '#86847a', 0, 0.4, 0); part(c, new THREE.CylinderGeometry(2.7, 2.7, 0.06, 16), '#4f7d8c', 0, 0.76, 0); box(c, STONE2, 0, 2.2, 0, 0.6, 3.2, 0.6); realmBanner(c, 0, 3.5, 0, 0, 2.4); });
+  // homes and shops
+  O.houses.forEach((h, i) => later(h.x, h.z, () => townHouse(at(h.x, h.z, h.face), h, i + 29, { stone: STONE, stone2: STONE2, slate: SLATE, tile: TILE, roofs: [SLATE, TILE, SLATE, '#5e4a2c'], walls: ['#e6dcc4', '#c9b48a', '#d1bf96', '#b9c4c8'] })));
+  const SIGN = { bakery: '#c48a3f', tavern: '#2f5d7a', smithy: '#4a4744', butcher: '#8e2b22', chandler: '#e8d36a', tailor: '#6d5a78', cooper: '#6b4a2e', weaver: '#2f5d7a', potter: '#a8714d', carter: '#5b4029', boatwright: '#3f5a5a', goldsmith: '#d9b04a', apothecary: '#4f6b3a', mason: '#8b877c', tanner: '#6b4a2e' };
+  O.biz.forEach((b, i) => later(b.x, b.z, () => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 7, { stone: STONE, stone2: STONE2, slate: SLATE, tile: TILE, roofs: [SLATE, TILE], sign: SIGN[b.trade] })));
+  // Eastwatch Castle, the Warden's seat over the harbour
+  later(O.keep.x, O.keep.z, () => { const f = at(O.keep.x, O.keep.z, O.keep.face); box(f, STONE, 0, 7, 0, 11, 14, 11); box(f, STONE2, 0, 14.4, 0, 11.8, 0.8, 11.8); [[-5.5, -5.5], [5.5, -5.5], [-5.5, 5.5], [5.5, 5.5]].forEach(([x, z]) => { part(f, new THREE.CylinderGeometry(2, 2.2, 17, 10), STONE2, x, 8.5, z); part(f, new THREE.ConeGeometry(2.6, 3, 10), SLATE, x, 18.5, z); }); box(f, '#2a1f16', 0, 2, 5.52, 2.4, 3.6, 0.1); realmBanner(f, 0, 14.8, 0, 0, 3.4); });
+  // the quay: a stone wall along the water, piers, and ships alongside
+  later(1134, -300, () => {
+    for (let z = -430; z < -170; z += 10) between(1136, z, 1136, z + 10, SEA_Y + 0.6, 3, 3.2, STONE2);
+    for (const pz of [-350, -300, -250]) { between(1138, pz, 1172, pz, SEA_Y + 0.9, 4, 0.4, '#6b4a2e'); for (let x = 1140; x <= 1172; x += 4) [-1.8, 1.8].forEach(dz => box(fr(x, pz + dz, 0, 0), '#4a3424', 0, SEA_Y - groundH(x, pz + dz) + 0.2, 0, 0.3, 2.4, 0.3)); for (let x = 1142; x < 1172; x += 6) part(fr(x, pz + 1.6, 0, 0), G_CYL, '#3a3128', 0, SEA_Y - groundH(x, pz + 1.6) + 1.3, 0, 0, 0, 0, 0.2, 0.5, 0.2); }
+    for (let z = -400; z < -200; z += 26) { const f = at(1127, z, Math.PI / 2); box(f, '#8a7a5a', 0, 2.2, 0, 11, 4.4, 6.4); part(f, roofG(7, 11.4, 2.2), TILE, 0, 4.4, 0); box(f, '#2a1f16', 0, 1.6, 3.22, 3.2, 3, 0.08); for (let k = 0; k < 4; k++) part(f, G_BARREL, '#6b4a2e', -4 + k * 1.1, 0.35, 4.2); }
+  });
+  // ships at the piers and boats in the harbour
+  const ship = (x, z, ry, big) => { const L0 = big ? 18 : 12, B0 = big ? 4.6 : 3.4, f = new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry, 0)), new THREE.Vector3(1, 1, 1));
+    part(f, G_HEMI, '#5b4029', 0, 0.4, 0, 0, Math.PI, 0, B0 / 2, 1.8, L0 / 2); box(f, '#7a5634', 0, 0.45, 0, B0 - 0.4, 0.12, L0 - 2); box(f, '#5b4029', 0, 1.1, -L0 / 2 + 1.6, B0 - 0.6, 1.2, 2.4); box(f, '#5b4029', 0, 0.9, L0 / 2 - 1.4, B0 - 1.2, 0.8, 1.6);
+    box(f, '#4a3424', 0, 6.5, 1, 0.3, 13, 0.3); box(f, '#4a3424', 0, 10, 1, 7, 0.2, 0.2); box(f, '#e9e1cc', 0, 8.2, 1.15, 6.6, 3.4, 0.06); box(f, ALDERWYN[0], 0, 13.3, 1, 0.06, 0.6, 1.2);
+    if (big) { box(f, '#4a3424', 0, 5, -4.6, 0.26, 10, 0.26); box(f, '#e9e1cc', 0, 6.4, -4.45, 4.6, 2.6, 0.06); } };
+  later(1160, -300, () => { ship(1158, -357, 0, true); ship(1158, -293, Math.PI, true); ship(1162, -243, 0, false); ship(1190, -330, 0.4, true); ship(1205, -260, 2.6, false);
+    for (let k = 0; k < 7; k++) { const x = 1150 + rr() * 60, z = -420 + rr() * 220, f = new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y + 0.05, z), new THREE.Quaternion().setFromEuler(RX.set(0, rr() * 6, 0)), new THREE.Vector3(1, 1, 1)); part(f, G_HEMI, '#6b4a2e', 0, 0.2, 0, 0, Math.PI, 0, 0.8, 0.6, 2.4); box(f, '#7a5634', 0, 0.22, 0, 1.2, 0.06, 4); } });
+  // the shipyard: a hull on the slip, ribs showing, and timber stacked
+  later(O.shipyard.x, O.shipyard.z, () => { const f = at(O.shipyard.x + 8, O.shipyard.z, Math.PI / 2);
+    box(f, '#7d776a', 0, 0.1, 6, 7, 0.3, 26); for (let k = -6; k <= 6; k += 1.5) part(f, G_WHEEL, '#6b4a2e', 0, 2.2, k + 6, Math.PI / 2, 0, 0, 2.4, 2.6, 1); box(f, '#5b4029', 0, 0.5, 6, 0.4, 0.5, 16);
+    for (let k = 0; k < 12; k++) part(f, GEO.log, '#9a7650', -6 + (k % 4) * 0.4, 0.2 + Math.floor(k / 4) * 0.3, 0, 0, Math.PI / 2, 0, 1, 6, 1); [-5, 5].forEach(x => box(f, BEAMS, x, 4, -4, 0.3, 8, 0.3)); box(f, BEAMS, 0, 8, -4, 10.3, 0.3, 0.3); });
+  // the lighthouse on its mole
+  later(1160, -435, () => { between(1136, -430, 1170, -442, SEA_Y + 0.8, 5, 2.4, STONE2); const f = new THREE.Matrix4().compose(new THREE.Vector3(1170, SEA_Y + 1.8, -442), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
+    part(f, new THREE.CylinderGeometry(2.2, 3.2, 18, 12), '#e9e1cc', 0, 9, 0); [5, 11].forEach(y => part(f, new THREE.CylinderGeometry(2.9 - y * 0.04, 3 - y * 0.04, 1.2, 12), '#8e2b22', 0, y, 0)); part(f, new THREE.CylinderGeometry(1.8, 1.8, 2, 10), '#3a3632', 0, 19, 0); box(f, '#ffd36a', 0, 19, 0, 2.2, 1.2, 2.2); part(f, new THREE.ConeGeometry(2.4, 2, 10), '#3a3632', 0, 21, 0); });
+  for (const [, fns] of jobs) { fns.forEach(fn => fn()); flushBuild(); }
+  // trees on the land side
+  for (let k = 0, n = 0; k < 2000 && n < 70; k++) { const a = rr() * Math.PI * 2, d = 130 + rr() * 90, x = T.x + Math.cos(a) * d, z = T.z + Math.sin(a) * d; if (x > SHORE_X(z) - 12 || segDist(x, z, Sim.ROADS.coast) < 7) continue; n++; EW_TREES.push([x, z]); const g = fr(x, z, rr() * 6), sc = 0.8 + rr() * 0.4; box(g, '#5b4029', 0, 1.4 * sc, 0, 0.5 * sc, 2.8 * sc, 0.5 * sc); part(g, GEO.sack, rr() < 0.5 ? '#4f6b3a' : '#5d7a40', 0, 3.8 * sc, 0, 0, 0, 0, 8 * sc, 6.4 * sc, 8 * sc); }
+  flushBuild();
+})();
+
+/* ----- skylines: from far off, each town is a shape on the horizon above the haze ----- */
+const SKYLINES = (function () {
+  const out = [];
+  const add = (id, shapes) => { const parts = shapes.map(([geo, x, y, z, sx, sy, sz, ry]) => ({ geo, color: '#ffffff', m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry || 0, 0)), new THREE.Vector3(sx, sy, sz)) })); const m0 = new THREE.MeshBasicMaterial({ color: 0x6d7a7a, fog: false, transparent: true, opacity: 0.55, depthWrite: false }); const me = new THREE.Mesh(mergeColored(parts), m0); me.visible = false; me.renderOrder = -1; scene.add(me); out.push({ id, me, m0 }); };
+  const BX = G_BOX, CN = new THREE.ConeGeometry(1, 1, 8), CY = new THREE.CylinderGeometry(1, 1, 1, 8);
+  const C = Sim.CM, cy = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), ch = cy + 6;
+  add('crownmere', [[BX, C.castle.x, ch + 14, C.castle.z, 16, 28, 14, C.castle.face], [CY, C.castle.x - 20, ch + 12, C.castle.z - 16, 4, 24, 4], [CY, C.castle.x + 20, ch + 12, C.castle.z + 16, 4, 24, 4], [CN, C.castle.x, ch + 32, C.castle.z, 7, 8, 7], [BX, C.cathedral.x, cy + 10, C.cathedral.z, 26, 20, 12, C.cathedral.face], [BX, C.cathedral.x - 8, cy + 18, C.cathedral.z, 5, 36, 5], [BX, C.cathedral.x + 8, cy + 18, C.cathedral.z, 5, 36, 5], [BX, C.C.x, cy + 6, C.C.z, 300, 12, 260]]);
+  add('cmcastle', [[BX, C.castle.x, ch + 14, C.castle.z, 16, 28, 14, C.castle.face], [CY, C.castle.x - 20, ch + 12, C.castle.z - 16, 4, 24, 4], [CY, C.castle.x + 20, ch + 12, C.castle.z + 16, 4, 24, 4], [CN, C.castle.x, ch + 32, C.castle.z, 7, 8, 7]]);
+  const OK = Sim.OAK, oy = worldH(TOWNS.oakbridge.x, TOWNS.oakbridge.z);
+  add('oakbridge', [[BX, OK.keep.x, oy + 9, OK.keep.z, 12, 18, 12], [BX, OK.C.x, oy + 4, OK.C.z, 130, 8, 130], [BX, OK.hall.x, oy + 10, OK.hall.z, 4, 20, 4]]);
+  add('ironcrest', [[BX, Sim.IC.keep.x, IC_Y + 7, Sim.IC.keep.z, 10, 14, 10], [CY, 784, IC_Y + 5, -1250, 2.6, 10, 2.6], [CY, 796, IC_Y + 5, -1262, 2.6, 10, 2.6], [BX, 700, IC_Y + 3, -1265, 120, 6, 110]]);
+  add('eastwatch', [[CY, 1170, SEA_Y + 11, -442, 3, 22, 3], [BX, Sim.EW.keep.x, EW_Y + 8, Sim.EW.keep.z, 12, 18, 12], [BX, 1060, EW_Y + 4, -300, 220, 8, 240], [BX, 1158, SEA_Y + 7, -357, 0.4, 14, 0.4], [BX, 1158, SEA_Y + 7, -293, 0.4, 14, 0.4]]);
+  return out;
+})();
+function syncSkylines(px, pz) {
+  for (const k of SKYLINES) { const T = TOWNS[k.id === 'cmcastle' ? 'crownmere' : k.id], d = Math.hypot(px - T.x, pz - T.z) - T.r, dc = k.id === 'cmcastle' ? Math.hypot(px - Sim.CM.castle.x, pz - Sim.CM.castle.z) : 0; const vis = k.id === 'cmcastle' ? d <= 120 && dc > 150 : d > 120 && d < 1700; k.me.visible = vis; if (vis) { k.m0.color.copy(scene.fog.color).multiplyScalar(0.72); k.m0.opacity = clamp(0.75 - d / 2600, 0.15, 0.6); } }
+}
 /* ----- the stage posts: an office, a coach waiting, and fresh horses ----- */
 (function stagePosts() {
   const horse = mergeColored([{ geo: new THREE.BoxGeometry(0.62, 0.62, 1.7), color: '#7a4a2a', m: M(0, 1.15, 0) }, { geo: new THREE.BoxGeometry(0.34, 0.8, 0.4), color: '#7a4a2a', m: M(0, 1.55, 0.85) }, { geo: new THREE.BoxGeometry(0.3, 0.32, 0.62), color: '#7a4a2a', m: M(0, 1.92, 1.22) }].concat([[-0.2, 0.62], [0.2, 0.62], [-0.2, -0.62], [0.2, -0.62]].map(([x, z]) => ({ geo: new THREE.BoxGeometry(0.14, 0.86, 0.14), color: '#6b4024', m: M(x, 0.43, z) }))));
@@ -6019,12 +6722,31 @@ const CM_SOLIDS = (function () {
   C(O.market.x, O.market.z, 5);
   return out;
 })();
+const IC_SOLIDS = (function () {
+  const O = Sim.IC, out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
+  O.houses.forEach(h => C(h.x, h.z, h.tall ? 3.3 : 2.8)); O.biz.forEach(b => C(b.x - Math.sin(b.face) * 0.3, b.z - Math.cos(b.face) * 0.3, 3.5));
+  C(O.keep.x - Math.sin(O.keep.face) * 2, O.keep.z - Math.cos(O.keep.face) * 2, 6.2); C(O.keep.x + Math.sin(O.keep.face) * 5, O.keep.z + Math.cos(O.keep.face) * 5, 5);
+  O.smelters.forEach(m => C(m.x, m.z, 2.8)); C(O.slag.x, O.slag.z, 8); [-5, 5].forEach(x => C(O.entry.x + x, O.entry.z, 2)); C(700, -1258, 1.6); C(716, -1356, 1.4);
+  for (let k = 0; k < 14; k++) C(640 + k * 11, -1385 - (k % 3) * 4, 6.5);
+  return out;
+})();
+const EW_SOLIDS = (function () {
+  const O = Sim.EW, out = [], C = (x, z, r) => out.push({ c: 1, x, z, r }), W = O.wall;
+  for (let i = 0; i < W.length - 1; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], L0 = Math.hypot(bx - ax, bz - az); for (let d = 0; d <= L0; d += 1.5) { const x = ax + (bx - ax) * d / L0, z = az + (bz - az) * d / L0; if (Math.hypot(x - O.gate.x, z - O.gate.z) < 6.5) continue; C(x, z, 1.2); } }
+  O.houses.forEach(h => C(h.x, h.z, h.tall ? 3.3 : 2.8)); O.biz.forEach(b => C(b.x - Math.sin(b.face) * 0.3, b.z - Math.cos(b.face) * 0.3, 3.5));
+  C(O.keep.x, O.keep.z, 8); C(1076, -300, 3.4); C(1000, -300, 2.4);
+  for (let z = -400; z < -200; z += 26) [-3.5, 0, 3.5].forEach(dz => C(1127, z + dz, 3.4));
+  for (let z = -440; z < 400; z += 2) { const x = z > -435 && z < -165 ? 1137.5 : 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31) + 1; if (Math.abs(z + 350) < 2.5 || Math.abs(z + 300) < 2.5 || Math.abs(z + 250) < 2.5) continue; C(x, z, 1.4); }
+  return out;
+})();
 const STAGE_SOLIDS = Object.values(Sim.STAGE).flatMap(st => { const ux = Math.cos(st.face), uz = -Math.sin(st.face), vx = Math.sin(st.face), vz = Math.cos(st.face), P = (u, v, r) => ({ c: 1, x: st.x + ux * u + vx * v, z: st.z + uz * u + vz * v, r }); return [P(-5, -2, 2.3), P(-3, -2, 2.3), P(3, 0.5, 1.6), P(3, -0.8, 1.4)]; });
 function solidsNow(s) {
   const out = staticSolids.slice(); out.push(...STAGE_SOLIDS);
   out.push(...tileSolidsNear(s.player.x, s.player.z));
   if (Math.hypot(s.player.x - TOWNS.greenhaven.x, s.player.z - TOWNS.greenhaven.z) < TOWNS.greenhaven.r + 60) out.push(...GH_SOLIDS, ...GH_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.crownmere.x, s.player.z - TOWNS.crownmere.z) < TOWNS.crownmere.r + 40) { const px = s.player.x, pz = s.player.z; out.push(...CM_SOLIDS.filter(o => Math.abs(o.x - px) < 60 && Math.abs(o.z - pz) < 60), ...CM_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
+  if (Math.hypot(s.player.x - TOWNS.ironcrest.x, s.player.z - TOWNS.ironcrest.z) < TOWNS.ironcrest.r + 60) out.push(...IC_SOLIDS, ...IC_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
+  if (Math.hypot(s.player.x - TOWNS.eastwatch.x, s.player.z - TOWNS.eastwatch.z) < TOWNS.eastwatch.r + 120) { const px = s.player.x, pz = s.player.z; out.push(...EW_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70)); }
   if (Math.hypot(s.player.x - TOWNS.oakbridge.x, s.player.z - TOWNS.oakbridge.z) < TOWNS.oakbridge.r + 40) out.push(...OAK_SOLIDS, ...OAK_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
   if (s.village.towerBuilt) out.push({ c: 1, x: L.tower.x, z: L.tower.z, r: 2 });
@@ -6209,6 +6931,8 @@ function toast(text, kind, force) {
   if (kind === 'coin') Snd.play('coin');
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, kind === 'story' ? 6500 : 3800);
 }
+// the place you chose to go to wins over any other place you happen to be standing in
+function nearLoc(p) { const k = UI.loc, Lk = k && L[k]; return Lk && Math.hypot(p.x - Lk.x, p.z - Lk.z) < (Lk.r || 3) + 1.5 ? k : null; }
 function where(s) { const p = s.player; return Object.keys(L).find(k => Math.hypot(p.x - L[k].x, p.z - L[k].z) < L[k].r) || null; }
 function carryText(s) {
   const inv = s.player.inv, parts = Sim.GOODS.filter(g => inv[g]).map(g => inv[g] + ' ' + g);
@@ -6254,7 +6978,7 @@ function cardHTML(s) {
       UI.sel = null;
     }
   }
-  const here = (p.dest && UI.loc) || where(s) || UI.loc;
+  const here = (p.dest && UI.loc) || nearLoc(p) || where(s) || UI.loc;
   const walking = p.dest ? `<div class="sub">Walking&hellip;</div>` : '';
   const Lh = here && L[here];
   // a shop you work at
@@ -6358,8 +7082,10 @@ function cardHTML(s) {
   if (Lh && Lh.town && Lh.biz) return oakBizCard(s, Lh, walking);
   if (here === 'oakhall') return oakHallCard(s, walking);
   if (here === 'cmhall') return oakHallCard(s, walking, 'crownmere');
+  if (here === 'icsquare') return oakHallCard(s, walking, 'ironcrest');
+  if (here === 'ewharbour') return oakHallCard(s, walking, 'eastwatch');
   if (here === 'cmmarket') { const T = s.towns && s.towns.crownmere; return `<h2>The Great Market</h2><div class="sub">The heart of the capital: two rings of stalls round the great fountain, a dozen shops and taverns facing the square, and traders from every town in Alderwyn. Stallholders pay the Lord Mayor ${T ? Sim.FEES[T.fee].coin + 'c' : 'a fee'} a day.</div>${walking}<div class="acts">${B_('The Guildhall', ['goto', 'cmhall'], 'alt')}${B_('Businesses', ['page', 'property'], 'alt')}</div>`; }
-  if (here === 'cmcastle') return `<h2>Crownmere Castle</h2><div class="sub">The royal castle on its hill above Crown Lake: the seat of ${esc(Sim.REALM.king)} and his court. The guards turn away anyone without business here. The court, its offices and the crown itself are coming in the next parts of this stage.</div>${walking}`;
+  if (here === 'cmcastle') { const R = s.realm, K = R && s.people[R.king]; return `<h2>Crownmere Castle</h2><div class="sub">${Sim.isRuler(s) ? 'Your castle, and the seat of your court.' : 'The royal castle on its hill above Crown Lake: the seat of ' + esc(K ? 'King ' + K.name : 'the King') + ' and his court.'}${R ? ' Your favour at court: ' + Math.round(R.favour) + '.' : ''}</div>${walking}<div class="acts">${!Sim.isRuler(s) ? B_('Attend court', ['attendCourt']) : ''}${B_('The Realm', ['page', 'realm'], 'alt')}</div>`; }
   if (here === 'cmgreat') return `<h2>The Great Hall of the Realm</h2><div class="sub">Where the lords of Alderwyn gather when the king calls them, and where laws are read and judgements given. Masons are still at work on its towers.</div>${walking}`;
   if (here === 'cmquay') return `<h2>Crownmere Quayside</h2><div class="sub">Fishing boats and lake barges along the timber quay, and the smell of the morning catch. The river Alder flows in from the mountains and out again to Oakbridge and the sea.</div>${walking}`;
   if (here === 'cmgate' || here === 'cmgatew') return `<h2>${here === 'cmgate' ? 'The King\u2019s Gate' : 'The West Gate'}</h2><div class="sub">${here === 'cmgate' ? 'The great south gate of Crownmere, where the road from Oakbridge comes in under the royal banners.' : 'The west gate, where the road from Greenhaven comes in.'} The city watch keeps it from dawn to dusk.</div>${walking}<div class="acts">${B_('The Great Market', ['goto', 'cmmarket'], 'alt')}</div>`;
@@ -6373,12 +7099,13 @@ function cardHTML(s) {
     return `<h2>Oakbridge Market Square</h2><div class="sub">Stalls around the fountain, and ${open} shops facing the square: bakers, a butcher, a chandler, a tailor and The Bell. Traders pay the town ${T ? Sim.FEES[T.fee].coin + 'c' : 'a fee'} a day to sell here.</div>${walking}<div class="acts">${B_('Town hall', ['goto', 'oakhall'], 'alt')}${B_('Businesses', ['page', 'property'], 'alt')}</div>`;
   }
   if (here === 'oakguild') return `<h2>The Guildhall</h2><div class="sub">Where the masters of the Guild Quarter meet: smiths, joiners, coopers, wheelwrights, weavers and potters. A trade learned in Hearthmoor counts here too, and the guild masters sit on the town council.</div>${walking}`;
-  if (here === 'oakkeep') return `<h2>Oakbridge Keep</h2><div class="sub">The old keep on the east bank, held by the town watch for ${esc(Sim.REALM.lordShort)}. Its towers watch the river and the coast road.</div>${walking}`;
+  if (here === 'oakkeep') return `<h2>Oakbridge Keep</h2><div class="sub">The old keep on the east bank, the seat of ${esc(s.realm ? Sim.lordName(s, 'oakbridge') : Sim.REALM.lordShort)}, Lady of Oakbridge. Its towers watch the river and the coast road.</div>${walking}`;
   if (here === 'oakbridge') return `<h2>The Oak Bridge</h2><div class="sub">A stone bridge on two great piers over the river Alder, built where an oak ferry once crossed. The town pays for its upkeep out of the market fees.</div>${walking}`;
   if (here === 'lots') return landCard(s, walking);
   if (here === 'home') return s.player.house ? `<h2>Your old hut</h2><div class="sub">Still yours. You live in ${esc(Sim.yourHouse(s) ? Sim.yourHouse(s).name : 'a house')} now.</div>${walking}<div class="acts">${B_('Move back in', ['moveToHut'], 'alt')}${B_('Open the map', ['ui', 'map'], 'alt')}</div>` : `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
   if (here === 'myhome') { const h = Sim.yourHouse(s); if (h) { const fam = Object.values(s.people).filter(q => q.home === 'you' && q.status === 'here'); return `<h2>${esc(h.name)}</h2><div class="sub">Your home${fam.length ? ', with ' + esc(fam.map(q => q.name.split(' ')[0]).join(', ')) : ''}.</div>${walking}<div class="acts">${B_('Property', ['page', 'property'], 'alt')}</div>`; } }
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
+  if (Lh && Lh.name) return `<h2>${esc(Lh.name)}</h2><div class="sub">${esc(PLACE_NOTE[here] || '')}</div>${walking}`;
   return '';
 }
 function hallCard(s, walking) {
@@ -6442,7 +7169,7 @@ function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
   let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
   // a place you merely walk past shows only its name; tap the tab to open it
-  const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || where(G) || UI.loc) : null, Lh = here && L[here];
+  const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
   // a door you can go through
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
@@ -6490,7 +7217,7 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['goals', 'Goals']];
+const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['realm', 'Realm'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
@@ -6504,7 +7231,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, goals: pageGoals }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -6693,7 +7420,7 @@ function personDetail(s, pr) {
     <div class="acts">${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
-const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere' };
+const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch' };
 const townHere = () => { const t = Sim.townAt(G.player.x, G.player.z); return t && TOWN_NAMES[t] && (t === 'hearthmoor' || Math.hypot(G.player.x - TOWNS[t].x, G.player.z - TOWNS[t].z) < TOWNS[t].r + 70) ? t : 'hearthmoor'; };
 function townPick(s) {
   const t = UI.ptown || townHere();
@@ -6724,11 +7451,16 @@ function pageProperty(s) {
   for (const h of mine) {
     const ts = h.tenants.map(id => s.people[id]);
     const live = s.player.house === h.id;
-    html += `<div class="box"><h5>${esc(h.name)}${live ? ' \u00b7 your home' : ''}</h5>${live ? `<p>You live here${Object.values(s.people).some(q => q.home === 'you' && q.status === 'here') ? ' with your family' : ''}.</p><div class="acts">${B_('Go home', ['goto', 'myhome'])}${B_('Move back to the hut', ['moveToHut'], 'alt')}</div>` : !ts.length ? `<div class="acts">${B_('Move in<small>make it your home; your family comes too</small>', ['moveIn', h.id])}</div>` : ''}${ts.length ? ts.map(t => `<p>${esc(t.name)} lives here: ${esc(Sim.occupation(s, t))}, earns about ${Sim.income(s, t)}c a day, ${t.purse}c saved${t.arrears ? `, <b>${t.arrears} days behind</b>` : ''}. ${opinionText(t.opinion)}.</p>`).join('') : '<p>Empty. Someone looking for a home may move in.</p>'}
+    const val = Sim.houseValue(s, h), lv = h.comfort || 0;
+    const extra = `<p>Worth about <b>${val}c</b> \u00b7 ${Sim.COMFORT[lv].name}${(h.wear || 0) > 10 ? ' \u00b7 needs repairs' : ''}.</p><div class="acts">${lv < 3 ? B_('Improve to ' + Sim.COMFORT[lv + 1].name.toLowerCase() + '<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', h.id], 'alt', s.coins < Sim.COMFORT[lv + 1].cost) : ''}${(h.wear || 0) > 4 ? B_('Repair · ' + Math.round(h.wear * 0.5) + 'c', ['repairHouse', h.id], 'alt') : ''}${live ? '' : h.forSale ? B_('Take off the market (asking ' + h.forSale + 'c)', ['listForSale', 'house', h.id, 0], 'alt') : B_('Put up for sale at ' + Math.round(val * 1.1) + 'c', ['listForSale', 'house', h.id, Math.round(val * 1.1)], 'alt')}</div>`;
+    html += `<div class="box"><h5>${esc(h.name)}${live ? ' \u00b7 your home' : ''}</h5>${extra}${live ? `<p>You live here${Object.values(s.people).some(q => q.home === 'you' && q.status === 'here') ? ' with your family' : ''}.</p><div class="acts">${B_('Go home', ['goto', 'myhome'])}${B_('Move back to the hut', ['moveToHut'], 'alt')}</div>` : !ts.length ? `<div class="acts">${B_('Move in<small>make it your home; your family comes too</small>', ['moveIn', h.id])}</div>` : ''}${ts.length ? ts.map(t => `<p>${esc(t.name)} lives here: ${esc(Sim.occupation(s, t))}, earns about ${Sim.income(s, t)}c a day, ${t.purse}c saved${t.arrears ? `, <b>${t.arrears} days behind</b>` : ''}. ${opinionText(t.opinion)}.</p>`).join('') : '<p>Empty. Someone looking for a home may move in.</p>'}
       <div class="stepper"><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent - 1])}' aria-label="Lower rent">&minus;</button><output class="num">${h.rent}c</output><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent + 1])}' aria-label="Raise rent">+</button></div>
       <p>Rent per day. Tenants who cannot pay fall behind; after ${3} days they are evicted. Raising rent makes tenants think less of you.</p>
       <div class="acts">${ts.map(t => UI.confirm === 'evict' + t.id ? B_(`Yes, evict ${esc(t.name)}`, ['evict', h.id, t.id], 'warn') + B_('Cancel', ['ui', 'confirm', null], 'alt') : B_(`Evict ${esc(t.name)}&hellip;`, ['ui', 'confirm', 'evict' + t.id], 'alt')).join('')}</div></div>`;
   }
+  const offers = (s.offers || []).filter(o => s.people[o.pid]);
+  if (offers.length) html = html.replace('<h4>Your houses</h4>', `<h4>Offers for your property</h4>${offers.map(o => { const q = s.people[o.pid], nm = o.kind === 'house' ? (s.houses.find(h => h.id === o.id) || {}).name : Sim.empById(o.id).name, ask = o.kind === 'house' ? (s.houses.find(h => h.id === o.id) || {}).forSale : s.biz[o.id].forSale; return `<div class="box"><p><b>${esc(q.name)}</b> (${esc(Sim.occupation(s, q))}) offers <b>${o.amount}c</b> for ${esc(nm)}. You asked ${ask}c.</p><div class="acts">${B_('Accept ' + o.amount + 'c', ['acceptOffer', o.n])}${B_('Turn it down', ['declineOffer', o.n], 'alt')}</div></div>`; }).join('')}<h4>Your houses</h4>`);
+  if (s.player.hutComfort != null || true) { const lv = s.player.hutComfort || 0; html = html.replace('<h4>Your houses</h4>', `<h4>Your houses</h4><div class="box"><h5>Your hut${s.player.house ? '' : ' \u00b7 your home'}</h5><p>${Sim.COMFORT[lv].name}.</p><div class="acts">${lv < 3 ? B_('Improve to ' + Sim.COMFORT[lv + 1].name.toLowerCase() + '<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', 'hut'], 'alt', s.coins < Sim.COMFORT[lv + 1].cost) : ''}</div></div>`); }
   const [town, pick] = townPick(s);
   const sale = s.houses.filter(h => (h.town || 'hearthmoor') === town && h.owner !== 'player' && !(h.owner && h.owner !== 'office:lord' && h.tenants.includes(h.owner)));
   html += `<h4>Houses you could buy</h4>${pick}<p>The lord’s houses are for sale at a price. People who own the house they live in will not sell it.</p><div class="grid2">${sale.map(h => {
@@ -6782,15 +7514,51 @@ function oakBizCard(s, Lh, walking) {
 }
 function oakHallCard(s, walking, id) {
   id = id || 'oakbridge';
-  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : 'Oakbridge Town Hall';
+  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : 'Oakbridge Town Hall';
   if (!T) return `<h2>${HN}</h2>${walking}`;
   const m = s.people[T.mayor], who = id => s.people[id] ? esc(s.people[id].name) : '';
   const mTrade = m && m.job && s.biz[m.job.biz] ? Sim.tradeName(s.biz[m.job.biz].trade).toLowerCase() : 'merchant';
-  const intro = id === 'crownmere' ? 'The Lord Mayor and the masters of the great guilds govern the capital under the king: the market fees, the city watch, the walls and streets, and bread for the poor.' : id === 'greenhaven' ? 'The reeve and council run Greenhaven for the townsfolk: they set the market fee, keep the bridge, the lanes and the common, and help hungry families from the town chest. The Ashcombes of the Hall have a seat, but no more than that.' : 'The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.';
+  const intro = id === 'ironcrest' ? 'The heart of the mining town. The reeve and council of mine-masters set the market fee, keep the gate and the mine road, and help families when a seam fails.' : id === 'eastwatch' ? 'The harbourmaster and the council of merchants run Eastwatch: the market and harbour dues, the walls and the quays, and relief for the families of drowned men.' : id === 'crownmere' ? 'The Lord Mayor and the masters of the great guilds govern the capital under the king: the market fees, the city watch, the walls and streets, and bread for the poor.' : id === 'greenhaven' ? 'The reeve and council run Greenhaven for the townsfolk: they set the market fee, keep the bridge, the lanes and the common, and help hungry families from the town chest. The Ashcombes of the Hall have a seat, but no more than that.' : 'The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.';
   return `<h2>${HN}</h2><div class="sub">${intro}</div>${walking}
   <dl class="kv"><dt>${TT}</dt><dd>${m ? esc(m.name) + ' (' + esc(mTrade) + ')' : 'none'}</dd><dt>Approval</dt><dd>${Math.round(T.approval)}%</dd><dt>Town chest</dt><dd>${Math.round(T.chest)}c</dd><dt>Market fee</dt><dd>${esc(Sim.FEES[T.fee].name)}</dd><dt>Council</dt><dd>${T.council.map(who).filter(Boolean).join(', ') || 'empty'}</dd><dt>Next vote</dt><dd>day ${T.nextVote}</dd></dl>
   ${progressBar(T.approval / 100)}
   ${T.log.length ? `<div class="why">${T.log.slice(0, 3).map(e => `Day ${e.day}: ${esc(e.text)}`).join('<br>')}</div>` : ''}`;
+}
+/* ----- the Realm: the King, the lords, the council, your support, and the crown ----- */
+function pageRealm(s) {
+  const R = s.realm; if (!R) return '<h3>The Realm</h3><p>Not yet.</p>';
+  const sup = Sim.computeSupport(s), S = R.support, ruler = Sim.isRuler(s), K = s.people[R.king];
+  const bar = (n, lab) => `<div class="kvbar"><span>${lab}</span><div class="bar ${n < 35 ? 'low' : ''}"><i style="width:${n}%"></i></div><b class="num">${n}</b></div>`;
+  const mineL = Sim.yourLordships(s), mineS = Sim.yourSeats(s), f = (Sim.you(s).sex === 'f');
+  let h = `<h3>The Kingdom of Alderwyn</h3><p class="lead">${ruler ? 'You rule Alderwyn from Crownmere castle. Keep the treasury out of debt and the realm behind you, or someone will take the crown from you.' : R.exile ? 'You are in exile, stripped of lands and offices. You can rebuild, and in time claim the crown again.' : 'Six regions under one crown. Win the lords, the guilds, the court and the towns, and the crown can be yours.'}</p>`;
+  h += `<div class="box"><dl class="kv"><dt>On the throne</dt><dd>${ruler ? esc(s.name) + ' (you)' : esc(K ? K.name : 'no one')}${!ruler && K ? ', aged ' + K.age : ''}</dd>${!ruler ? `<dt>The King’s standing</dt><dd class="num">${Math.round(R.kingSupport)}</dd>` : ''}<dt>Your favour at court</dt><dd class="num">${Math.round(R.favour)}</dd><dt>Your lordships</dt><dd>${mineL.length ? mineL.map(id => esc(Sim.REGIONS[id])).join(', ') : 'none'}</dd><dt>Your council seats</dt><dd>${mineS.length ? mineS.map(k => Sim.COUNCIL[k]).join(', ') : 'none'}</dd></dl></div>`;
+  h += `<h4>Your support: ${sup}</h4><div class="box">${bar(S.lords, 'The lords')}${bar(S.guilds, 'The guilds')}${bar(S.court, 'The court')}${bar(S.towns, 'The towns')}<p>${ruler ? 'Below 30 for six days and the realm abandons you; below 42 and a rival may claim the crown.' : 'To claim the crown you need a lordship, a seat on the council, support of 65, and a King whose own standing has fallen below 45.'}</p>
+    <div class="acts">${B_('Gifts to the lords<small>120c a lord</small>', ['patronage', 'lords'], 'alt')}${B_('Feast the guilds<small>300c</small>', ['patronage', 'guilds'], 'alt')}${B_('Feast for ' + esc(TOWN_NAMES[townHere()]) + '<small>about ' + Math.max(40, Math.round(Sim.living(s).filter(q => (q.town || 'hearthmoor') === townHere() && !q.kid).length * 0.6)) + 'c</small>', ['patronage', 'town', townHere()], 'alt')}</div></div>`;
+  if (R.offer) h += `<div class="why"><b>The King offers you the lordship of ${esc(Sim.REGIONS[R.offer.region])}</b>, for a fee of ${R.offer.fee}c and your oath.<div class="acts">${B_('Swear the oath · ' + R.offer.fee + 'c', ['acceptLordship'])}${B_('Decline', ['refuseLordship'], 'alt')}</div></div>`;
+  if (!ruler) {
+    h += `<h4>Rising at court</h4><div class="box"><p>Favour at court comes from gifts to the King’s treasury and from attending court in Crownmere castle. It fades slowly if you stay away.</p><div class="acts">${B_('Gift 150c to the crown', ['giftCrown', 150], 'alt', s.coins < 150)}${B_('Gift 500c', ['giftCrown', 500], 'alt', s.coins < 500)}</div>
+      ${mineS.length ? `<p>As a councillor you can quietly turn the court against the King, once a day, at a risk of being overheard.</p><div class="acts">${B_('Whisper against the King', ['undermineKing'], 'alt')}</div>` : ''}
+      <div class="acts">${B_('Claim the crown', ['claimCrown'], 'warn', !(mineL.length && (mineS.length || R.exile)))}</div></div>`;
+  }
+  // the regions
+  h += `<h4>The regions</h4><div class="grid2">${Object.keys(R.regions).map(id => {
+    const g = R.regions[id], mine = Sim.regionLord(s, id) === 'player', bl = Math.round((s.bandits && s.bandits[id]) || 0), danger = bl > 60 ? 'bandits raiding' : bl > 40 ? 'bandits about' : bl > 20 ? 'some thieves' : 'quiet';
+    const step = (k, lab, max) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] - (k === 'tax' ? 0.25 : 1)])}' aria-label="Less">&minus;</button><output class="num">${k === 'tax' ? g[k] + '×' : g[k] + '/' + max}</output><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] + (k === 'tax' ? 0.25 : 1)])}' aria-label="More">+</button></div></div>`;
+    return `<div class="box"><h5>${esc(Sim.REGIONS[id])}</h5><dl class="kv"><dt>Held by</dt><dd>${mine ? 'You' : esc(Sim.lordName(s, id))}</dd><dt>Roads</dt><dd>${danger} (${bl})</dd><dt>Property market</dt><dd class="num">${Math.round(Sim.marketOf(s, id) * 100)}%</dd></dl>
+      ${mine && id !== 'hearthmoor' && id !== 'crownmere' ? step('patrol', 'Patrols, 4c a day each', 3) + step('garrison', 'Garrison, 6c a day each', 3) + step('roads', 'Road mending, 3c a day each', 3) + step('tax', 'Taxes', 2) : ''}
+      <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${!mine && !R.exile && id !== 'crownmere' ? B_('Seek this lordship · 400c', ['seekLordship', id], 'alt') : ''}</div></div>`;
+  }).join('')}</div>`;
+  h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k]; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${c !== 'player' && !ruler && !R.exile ? `<div class="acts">${B_('Seek this seat', ['seekSeat', k], 'alt')}</div>` : ''}</div>`; }).join('')}</div>`;
+  if (ruler) {
+    const st = (k, v, d, lab, fmt) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['rule', k, v - d])}' aria-label="Less">&minus;</button><output class="num">${fmt(v)}</output><button type="button" data-c='${JSON.stringify(['rule', k, v + d])}' aria-label="More">+</button></div></div>`;
+    h += `<h4>Ruling Alderwyn</h4><div class="box"><dl class="kv"><dt>Treasury</dt><dd class="num ${R.treasury < 0 ? 'debt' : ''}">${R.treasury}c</dd><dt>Last day</dt><dd class="num">+${R.lastIncome || 0}c, −${R.lastSpend || 0}c</dd>${R.rival ? `<dt>Rival claimant</dt><dd><b>${esc(R.rival.name)}</b>, ${Math.round(R.rival.strength)} men</dd>` : ''}</dl>
+      ${st('tax', R.taxRate, 0.25, 'Taxes on the regions', v => v + '×')}${st('tariff', R.tariff, 0.25, 'Tariffs on trade', v => v + '×')}${st('levies', R.levies, 20, 'The army (levies, 0.25c a day each)', v => v + ' men')}
+      <p>Higher taxes and tariffs fill the treasury but cost you the guilds and the towns. The army keeps the roads clear and rivals at bay.</p>
+      <h5>Laws</h5>${Object.keys(Sim.LAWS).map(k => `<div class="staffrow"><span><b>${Sim.LAWS[k].name}</b>: ${Sim.LAWS[k].say}</span>${B_(R.laws[k] ? 'In force · repeal' : 'Proclaim', ['rule', 'law', k], R.laws[k] ? '' : 'alt')}</div>`).join('')}
+      <div class="acts">${B_('Take 200c for yourself', ['rule', 'draw', 200], 'alt')}${B_('Give 200c to the treasury', ['rule', 'give', 200], 'alt', s.coins < 200)}${R.rival ? B_('Buy off ' + esc(R.rival.name) + ' · ' + Math.round(R.rival.strength * 6) + 'c', ['rule', 'payRival'], 'warn') : ''}</div></div>`;
+  }
+  h += `<h4>News of the realm</h4><div class="box">${R.log.slice(0, 10).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') || '<p>All is quiet.</p>'}</div>`;
+  return h;
 }
 function bizBox(s, b) {
   const e = Sim.empById(b.id), own = b.owner === 'player', owner = own ? null : s.people[b.owner];
@@ -6798,6 +7566,10 @@ function bizBox(s, b) {
   let html = `<div class="box"><h5>${esc(e.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h5><dl class="kv"><dt>Owner</dt><dd>${own ? 'You' : esc(owner.name)}</dd><dt>Trade</dt><dd>${esc(Sim.tradeName(b.trade))}</dd><dt>Last day</dt><dd>${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit</dd><dt>Staff</dt><dd>${staff.length ? esc(staff.map(x => x.p.name).join(', ')) : 'none'}</dd></dl>`;
   if (!own) { const price = Sim.bizPrice(s, b.id); html += `<div class="acts">${B_('Buy for ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)}</div><p>${esc(owner.name)} stays on as your manager, and the staff work for you.</p>`; }
   else {
+    const val = Sim.bizPrice(s, b.id);
+    if (b.lease) { const q = s.people[b.lease.pid]; html += `<p>Let to <b>${esc(q ? q.name : 'someone')}</b> for ${b.lease.rent}c a day${b.lease.behind ? `, ${b.lease.behind} days behind` : ''}. They run it and keep what it earns above the rent.</p><div class="acts">${B_('End the lease', ['endLease', b.id], 'alt')}</div>`; }
+    else { const lc = Sim.leaseCandidates(s, b.id); html += `<p>Worth about <b>${val}c</b>.${lc.length ? ' Or let it to someone who will run it and pay you rent:' : ''}</p><div class="acts">${lc.slice(0, 2).map(c => B_('Let to ' + esc(c.name) + ' · ' + c.offer + 'c a day', ['leaseBiz', b.id, null, c.pid], 'alt')).join('')}${b.forSale ? B_('Take off the market (asking ' + b.forSale + 'c)', ['listForSale', 'biz', b.id, 0], 'alt') : B_('Put up for sale at ' + Math.round(val * 1.1) + 'c', ['listForSale', 'biz', b.id, Math.round(val * 1.1)], 'alt')}</div>`; }
+    if (b.lease) return html + `</div>`;
     html += staff.map(({ st, p }) => `<div class="staffrow"><span>${esc(p.name)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${st.wage}c</output><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'fs' + p.id ? B_('Yes, let go', ['fireStaff', b.id, p.id], 'warn') : B_('Let go&hellip;', ['ui', 'confirm', 'fs' + p.id], 'alt')}</div>`).join('');
     const seekers = Sim.living(s).filter(p => !p.job && !p.retired && !p.kid && (p.town || 'hearthmoor') === (b.town || 'hearthmoor'));
     if (b.staff.length < 3 && seekers.length) html += `<p>Looking for work:</p><div class="acts">${seekers.slice(0, 4).map(p => B_('Hire ' + esc(p.name) + ' · 7c', ['hireStaff', b.id, p.id, 7], 'alt')).join('')}</div>`;
@@ -7018,6 +7790,7 @@ const PLACE_NOTE = {
   field: 'Free grain for anyone who gathers it.', forest: 'Free wood for anyone who cuts it.', pit: 'Free iron ore for anyone who digs it.',
   market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
+  icmine: 'Adits driven into the crag, where most of Ironcrest works: iron ore by the cartload.', icsmelt: 'Three stone furnaces that turn ore into iron, day and night.', ickeep: 'The seat of the lord of Ironcrest.', ewquay: 'Ships from up and down the coast unload here. Dockers always needed.', ewyard: 'A ship on the slip, ribs showing.', ewkeep: 'The Warden of the Coast keeps her hall here.', ewgate: 'The Land Gate, where the coast road comes in.', ewlight: 'The lighthouse at the end of the mole.', 'stage:ironcrest': 'Coaches down to Crownmere and beyond, and horses for sale.', 'stage:eastwatch': 'Coaches west to Oakbridge and beyond, and horses for sale.',
   granary: 'The village food store.', cmmarket: 'The Great Market: stalls, shops and the great fountain.', cmhall: 'Seat of the Lord Mayor and the guilds.', cmcastle: 'The royal castle above the lake.', cmgreat: 'Where the lords gather and the court sits in state.', cmquay: 'Boats and barges on Crown Lake.', cmgate: 'The great south gate.', cmgatew: 'The west gate, to Greenhaven.', 'stage:crownmere': 'Coaches to every town, and horses for sale.', 'stage:hearthmoor': 'Coaches to Oakbridge and Greenhaven, and horses for sale.', 'stage:oakbridge': 'Coaches to Hearthmoor and Greenhaven, and horses for sale.', 'stage:greenhaven': 'Coaches to Hearthmoor and Oakbridge, and horses for sale.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
 };
 function renderMapCard() {
@@ -7163,8 +7936,8 @@ function journeyButtons(to) {
 function renderWorldCard() {
   const el = $('worldcard'), s = WORLD.find(w => w.id === UI.worldSel);
   if (!s) { el.hidden = true; return; }
-  const here = s.id === townHere(), open = ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere'].includes(s.id);
-  const status = here ? 'You are here.' : open ? (s.id === 'crownmere' ? 'The roads are open: north from Oakbridge, or north-east from Greenhaven.' : s.id === 'greenhaven' ? 'The north road is open: it forks from the east road at the waystation.' : 'The road is open. Walk it, or travel from the map.') : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
+  const here = s.id === townHere(), open = ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere', 'ironcrest', 'eastwatch'].includes(s.id);
+  const status = here ? 'You are here.' : open ? (s.id === 'ironcrest' ? 'The mountain road is open: up from Crownmere\u2019s King\u2019s Gate, over the Alder bridge.' : s.id === 'eastwatch' ? 'The coast road is open: east from Oakbridge, over the Alder bridge.' : s.id === 'crownmere' ? 'The roads are open: north from Oakbridge, or north-east from Greenhaven.' : s.id === 'greenhaven' ? 'The north road is open: it forks from the east road at the waystation.' : 'The road is open. Walk it, or travel from the map.') : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
   el.innerHTML = `<div><b>${esc(s.name)}</b><span>${esc(KINGDOM[s.k])} &middot; ${esc(s.tier)}${s.pop ? ' &middot; about ' + s.pop.toLocaleString() + ' people' : ''}</span><p>${esc(s.why)} <i>${esc(status)}</i></p></div>${here ? B_(s.id === 'hearthmoor' ? 'Village map' : 'Town map', ['ui', 'mapTown', s.id]) : open ? B_(s.id === 'hearthmoor' ? 'Village map' : 'Town map', ['ui', 'mapTown', s.id], 'alt') + journeyButtons(s.id) : ''}`;
   el.hidden = false;
 }
@@ -7543,6 +8316,16 @@ const Mini = (function () {
     { const c = O.castle, ux = Math.cos(c.face), uz = -Math.sin(c.face), vx = Math.sin(c.face), vz = Math.cos(c.face), P = (u, v) => [c.x + ux * u + vx * v, c.z + uz * u + vz * v];
       rect(3, c.x, c.z, 48, 40, -c.face, COL.plaza); line(5, [P(-24, -20), P(24, -20), P(24, 20), P(-24, 20), P(-24, -20)], 2.4, COL.wall); const k = P(0, -4); rect(4, k[0], k[1], 16, 14, c.face, COL.big); }
     line(5, O.wall, 2, COL.wall); }
+  // Ironcrest and Eastwatch, and the sea
+  for (let z = -1500; z < 1000; z += 20) rect(1, 1140 + 16 * Math.sin(z / 95) + 210, z, 420, 22, 0, COL.water);
+  rect(1, 1300, -300, 320, 270, 0, COL.water);
+  for (const O of [Sim.IC, Sim.EW]) {
+    O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street));
+    O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house));
+    rect(4, O.keep.x, O.keep.z, 11, 11, O.keep.face, COL.big);
+  }
+  line(5, Sim.EW.wall, 1.8, COL.wall); line(3, [[1136, -430], [1136, -170]], 3, COL.road); [-350, -300, -250].forEach(z => line(3, [[1136, z], [1172, z]], 3, COL.road)); line(3, [[1136, -430], [1170, -442]], 4, COL.big);
+  Sim.IC.smelters.forEach(m => circ(4, m.x, m.z, 2.6, COL.big)); circ(4, Sim.IC.slag.x, Sim.IC.slag.z, 8, '#4a4440'); for (let k = 0; k < 14; k++) rect(4, 640 + k * 11, -1385 - (k % 3) * 4, 12, 8, 0, '#6c675e');
   // the stage posts
   Object.values(Sim.STAGE).forEach(st => rect(4, st.x, st.z, 7, 4, st.face, COL.big));
   items.sort((a, b) => a.L - b.L);
@@ -7588,7 +8371,7 @@ const Mini = (function () {
       const el = $('minimap'), show = UI.mode === 'play' && !UI.overlay && !UI.inside && G && meta.settings.minimap !== 'off';
       if (el.hidden === show) el.hidden = !show;
       if (!show) return;
-      acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85 }[t] || 60; })();
+      acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85, ironcrest: 65, eastwatch: 80 }[t] || 60; })();
       if (acc < 0.1 && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
       if (acc < 0.1) return;
       acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
@@ -7611,12 +8394,12 @@ const Interior = (function () {
   const glowM = new THREE.MeshBasicMaterial({ color: 0xff8a3a }), lightM = new THREE.MeshBasicMaterial({ color: 0xf3e2b0 }), candleM = new THREE.MeshBasicMaterial({ color: 0xffd36a });
   let R = null; const av = { x: 0, z: 0, face: Math.PI, g: null, moving: false };
   const KIND = Object.assign({}, TRADE_KIND, { mill: 'mill', estate: 'home' });
-  const SIZE = { hut: [5.6, 4.6], home: [7.2, 5.6], tall: [8, 6.4], manor: [10, 7], tavern: [11, 8], smithy: [9, 7], bakery: [8.4, 6.6], butcher: [7.4, 6], fine: [7.4, 6.2], weaver: [9, 6.6], potter: [8.4, 6.4], tanner: [8.4, 7], yard: [10, 7.4], mason: [9, 7], dairy: [8, 6.2], mill: [9.4, 8], shop: [8, 6.4] };
-  const FLOOR = { home: '#7a5a3a', hut: '#6b5a40', smithy: '#5a554e', mason: '#6e6a62', tanner: '#6a5a44', mill: '#7a6a52', yard: '#7a6448' };
+  const SIZE = { great: [14, 10], hall: [11, 8], hut: [5.6, 4.6], home: [7.2, 5.6], tall: [8, 6.4], manor: [10, 7], tavern: [11, 8], smithy: [9, 7], bakery: [8.4, 6.6], butcher: [7.4, 6], fine: [7.4, 6.2], weaver: [9, 6.6], potter: [8.4, 6.4], tanner: [8.4, 7], yard: [10, 7.4], mason: [9, 7], dairy: [8, 6.2], mill: [9.4, 8], shop: [8, 6.4] };
+  const FLOOR = { castle: '#6e6a62', home: '#7a5a3a', hut: '#6b5a40', smithy: '#5a554e', mason: '#6e6a62', tanner: '#6a5a44', mill: '#7a6a52', yard: '#7a6448' };
 
   function build(d) {
-    const kind = d.kind === 'home' ? 'home' : (KIND[d.trade] || 'shop');
-    const sz = SIZE[d.kind === 'home' ? d.size : kind] || SIZE.shop, W = sz[0], D = sz[1];
+    const kind = d.kind === 'home' ? 'home' : d.kind === 'castle' ? 'castle' : (KIND[d.trade] || 'shop');
+    const sz = SIZE[d.kind === 'home' || d.kind === 'castle' ? d.size : kind] || SIZE.shop, W = sz[0], D = sz[1];
     const grp = new THREE.Group(); grp.position.set(OX, 0, OZ); sc.add(grp);
     const parts = [], solids = [], spots = [], seats = [], beds = [], glows = [], walls = { n: [], s: [], e: [], w: [] };
     const M = (x, y, z, ry, rx, rz, sx, sy, sz2) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx == null ? 1 : sx, sy == null ? 1 : sy, sz2 == null ? 1 : sz2));
@@ -7624,7 +8407,7 @@ const Interior = (function () {
     const P = (geo, c, x, y, z, ry, rx, rz, sx, sy, sz2) => parts.push({ geo, color: c, m: M(x, y, z, ry, rx, rz, sx, sy, sz2) });
     const S = (x, z, hx, hz) => solids.push({ x, z, hx, hz });
     const glow = (m, x, y, z, w, h, dd) => { const g = new THREE.Mesh(G_BOX, m); g.position.set(x, y, z); g.scale.set(w, h, dd); grp.add(g); glows.push(g); return g; };
-    const wallC = d.wall || (kind === 'smithy' || kind === 'mason' ? '#8b877c' : kind === 'bakery' || kind === 'dairy' ? '#e6dcc4' : '#c9b48a');
+    const wallC = d.wall || (kind === 'smithy' || kind === 'mason' || kind === 'castle' ? '#8b877c' : kind === 'bakery' || kind === 'dairy' ? '#e6dcc4' : '#c9b48a');
     // floor, and the four walls kept apart so the ones in front of the camera can fade
     const fl = FLOOR[d.kind === 'home' ? d.size === 'hut' ? 'hut' : 'home' : kind] || '#7a5a3a';
     B(fl, 0, -0.05, 0, W + 0.5, 0.1, D + 0.5);
@@ -7752,6 +8535,18 @@ const Interior = (function () {
       table(0, -0.4, 2.4, 1.0, '#c9a87a'); for (let k = 0; k < 4; k++) P(GEO.sack, '#f1e3b0', -0.8 + k * 0.5, 0.92, -0.4, 0, 0, 0, 0.9, 0.5, 0.9); spot(0, 0.4, Math.PI, 'work');
       P(G_CYL, '#8a6d48', W / 2 - 1.0, 0.5, 0.6, 0, 0, 0, 0.35, 1.0, 0.35); B('#6b4a2e', W / 2 - 1.0, 1.2, 0.6, 0.06, 0.8, 0.06); S(W / 2 - 1.0, 0.6, 0.4, 0.4); spot(W / 2 - 1.0, 1.3, Math.PI, 'work');
       shelf(-W / 2 + 0.25, 1.2, 2.2, Math.PI / 2, (x, y, z) => P(GEO.sack, '#f1e3b0', x, y + 0.1, z, 0, 0, 0, 0.7, 0.45, 0.7));
+    } else if (kind === 'castle') {
+      // a great hall: the dais and the high seat at the far end, banners, long tables, a fire
+      const ban = d.banner || '#2b4a7a', trim = d.trim || '#d9b04a';
+      B('#7d776a', 0, 0.2, -D / 2 + 1.4, W * 0.5, 0.4, 2.2); S(0, -D / 2 + 1.4, W * 0.25, 1.1);
+      B('#5b4029', 0, 0.9, -D / 2 + 1.0, 1.2, 1.0, 0.9); B('#5b4029', 0, 1.9, -D / 2 + 0.6, 1.2, 2.0, 0.15); B(trim, 0, 2.95, -D / 2 + 0.6, 0.6, 0.3, 0.12); B(ban, 0, 1.0, -D / 2 + 1.0, 1.0, 0.1, 0.8);
+      [-2.2, 2.2].forEach(x => { B('#5b4029', x, 0.7, -D / 2 + 1.2, 0.7, 0.6, 0.7); B(ban, x, 1.2, -D / 2 + 0.9, 0.7, 0.9, 0.1); });
+      spot(0, -D / 2 + 1.0, 0, 'stand'); seat(-2.2, -D / 2 + 1.25, 0); seat(2.2, -D / 2 + 1.25, 0);
+      for (let k = 0; k < 4; k++) { const x = -W / 2 + 1.6 + k * (W - 3.2) / 3; B(ban, x, 2.0, -D / 2 + 0.06, 0.9, 2.0, 0.04); B(trim, x, 2.6, -D / 2 + 0.08, 0.4, 0.4, 0.02); }
+      [-1, 1].forEach(sd => { for (let k = 0; k < 3; k++) { const z = -D / 2 + 3.4 + k * 2.2; P(G_CYL, '#9a948a', sd * (W / 2 - 1.2), WH / 2, z, 0, 0, 0, 0.35, WH, 0.35); S(sd * (W / 2 - 1.2), z, 0.35, 0.35); B(ban, sd * (W / 2 - 0.1), 2.0, z, 0.04, 1.6, 0.7); } });
+      [-1, 1].forEach(sd => { table(sd * 2.2, 0.6, 1.0, 4.4, '#7a5634'); bench(sd * 2.2 - 0.8, 0.6, 4.2, Math.PI / 2); bench(sd * 2.2 + 0.8, 0.6, 4.2, Math.PI / 2); for (let k = 0; k < 4; k++) { seat(sd * 2.2 - 0.8, -0.8 + k * 0.95, Math.PI / 2); seat(sd * 2.2 + 0.8, -0.8 + k * 0.95, -Math.PI / 2); P(GEO.mug, '#b9b4ab', sd * 2.2, 0.82, -0.8 + k * 0.95); candle(sd * 2.2, 0.82, -0.3 + k * 0.95); } });
+      rug(0, 0.6, 1.6, D - 3.2, '#8e2b22');
+      hearth(W / 2 - 0.6, D / 2 - 2.2, -Math.PI / 2, true);
     } else if (kind === 'mill') {
       P(G_CYL, '#8b877c', 0, 0.5, -0.6, 0, 0, 0, 1.4, 0.4, 1.4); P(G_CYL, '#9a948a', 0, 0.8, -0.6, 0, 0, 0, 1.35, 0.25, 1.35); B('#6b4a2e', 0, 1.9, -0.6, 0.6, 1.8, 0.6); P(G_KILN, '#8a6d48', 0, 3.0, -0.6, 0, Math.PI, 0, 0.9, 1.0, 0.9); S(0, -0.6, 1.5, 1.5);
       spot(1.8, -0.6, -Math.PI / 2, 'work'); spot(-1.8, 0.6, Math.PI / 2, 'work');
@@ -7772,11 +8567,13 @@ const Interior = (function () {
     for (const a of s.agents) {
       const p = a.pid && s.people[a.pid]; if (!p || p.status !== 'here') continue;
       if (d.kind === 'home') { if (p.home === 'you' && (a.indoors || near(a, 12))) out.push({ a, p, role: night ? 'bed' : 'home' }); continue; }
+      if (d.kind === 'castle') { if (p.home === 'seat:' + d.seat && hr >= 8 && hr < 20) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
       const staff = p.job && p.job.type === 'biz' && p.job.biz === d.bizId;
       if (staff && near(a, 16) && !night) out.push({ a, p, role: 'staff' });
       else if (!staff && !a.moving && near(a, 9) && out.length < 12) out.push({ a, p, role: 'guest' });
     }
     if (d.shop && d.shop.worker) out.push({ w: d.shop.worker, role: 'staff', shop: d.shop });
+    out.sort((x, y) => (y.lead ? 1 : 0) - (x.lead ? 1 : 0));
     return out;
   }
   function charFor(o) {
@@ -7868,7 +8665,7 @@ const Interior = (function () {
   function card() {
     const d = R.d, names = R.people.map(x => x.key.startsWith && String(x.key).startsWith('w:') ? (G.shops.find(sh => 'w:' + sh.id === x.key) || {}).worker : (G.agents.find(a => a.id === x.key) || {})).filter(Boolean).map(a => a.name);
     const who = names.length ? 'Here: ' + names.slice(0, 6).join(', ') + (names.length > 6 ? ' and ' + (names.length - 6) + ' more' : '') + '.' : d.kind === 'home' ? 'Nobody else is home.' : 'Nobody is in just now.';
-    return `<h2>${esc(d.title)}</h2><div class="sub">${esc(d.note || '')} ${esc(who)}</div><div class="acts">${B_('Step outside', ['ui', 'leave'])}${d.kind === 'home' && d.house ? B_('Property', ['page', 'property'], 'alt') : ''}</div>`;
+    return `<h2>${esc(d.title)}</h2><div class="sub">${esc(d.note || '')} ${esc(who)}</div><div class="acts">${B_('Step outside', ['ui', 'leave'])}${d.kind === 'home' ? (() => { const lv = d.house ? (d.house.comfort || 0) : (G.player.hutComfort || 0); return lv < 3 ? B_('Improve this home<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', d.house ? d.house.id : 'hut'], 'alt') : ''; })() : ''}${d.kind === 'castle' ? B_('The Realm', ['page', 'realm'], 'alt') : ''}</div>`;
   }
   return { enter, leave, step, camera: camera_, card, scene: sc, active: () => !!R };
 })();
@@ -7877,7 +8674,10 @@ const Interior = (function () {
 function insideOf(key) {
   const s = G, Lh = L[key]; if (!Lh) return null;
   const door = { x: s.player.x, z: s.player.z };
-  if (key === 'home') return { kind: 'home', size: 'hut', title: 'Your hut', note: s.player.house ? 'Your old hut, still yours.' : 'Small and draughty, but yours.', x: Lh.x, z: Lh.z, door };
+  const KEEPS = { cmcastle: ['crownmere', 'great', 'The Great Hall of Crownmere Castle', '#2b4a7a', '#d9b04a'], ickeep: ['ironcrest', 'hall', 'The hall of Stane Keep', '#3a3a3a', '#c9a24a'], ewkeep: ['eastwatch', 'hall', 'The hall of Eastwatch Castle', '#2f5d7a', '#e9e1cc'], oakkeep: ['oakbridge', 'hall', 'The hall of Oakbridge Keep', '#2f6b3a', '#efe9d8'] };
+  if (KEEPS[key]) { const [rg, size, title, banner, trim] = KEEPS[key], R = s.realm, lord = R ? Sim.regionLord(s, rg) : null, lp = lord && lord !== 'player' ? s.people[lord] : null, Lk = L[key];
+    return { kind: 'castle', size, title, note: lord === 'player' ? 'Your hall.' : lp ? (rg === 'crownmere' ? 'King ' + lp.name.split(' ')[0] + ' holds court here.' : lp.name + '\u2019s hall.') : '', x: Lk.x, z: Lk.z, door, seat: rg, lead: lord, banner, trim }; }
+  if (key === 'home') return { kind: 'home', size: 'hut', title: 'Your hut', note: s.player.house ? 'Your old hut, still yours.' : 'Small and draughty, but yours.', x: Lh.x, z: Lh.z, door, comfort: s.player.hutComfort || 0 };
   if (key === 'myhome') { const h = Sim.yourHouse(s); if (!h) return null; const sh = Sim.houseShape(h); return { kind: 'home', size: sh.tall ? 'tall' : 'home', title: h.name, note: 'Your home.', x: h.x, z: h.z, door, house: h, comfort: h.comfort || 0 }; }
   if (Lh.emp) { const e = Sim.empById(Lh.emp); return { kind: 'biz', trade: e.trade, title: e.name, note: e.boss + '’s ' + (TR[e.trade] ? TR[e.trade].name.toLowerCase() : e.trade) + '.', x: e.x, z: e.z, door, bizId: Lh.emp }; }
   if (Lh.plot != null) { const sh = Sim.shopOnPlot(s, Lh.plot); if (!sh) return null; const pl = Sim.PLOTS[Lh.plot]; return { kind: 'biz', trade: sh.trade, title: 'Your ' + TR[sh.trade].name.toLowerCase(), note: Sim.tierOf(sh).name + '.', x: pl.x, z: pl.z, door, shop: sh }; }
@@ -7901,6 +8701,7 @@ function frame(now) {
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
   syncCamera(G, dt, t);
   if (G) Mini.update(dt);
+  if (G && UI.mode === 'play') syncSkylines(focus.x, focus.z);
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
   if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
@@ -8156,8 +8957,20 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.2115';
+const BUILD = '2026.11.04.2230';
 const NOTES = [
+  { v: '0.33', date: '4 November', title: 'All of Alderwyn, and its crown', items: [
+    'Two new towns. Ironcrest, about 200 people on a mountain shelf above Crownmere: mines driven into the crags, smelters, charcoal burners and Stane Keep. Eastwatch, about 480 people in a walled port on the sea: quays, warehouses, ships at the piers, a shipyard, a lighthouse and the Warden\u2019s castle. Roads run up to Ironcrest from Crownmere and east to Eastwatch from Oakbridge, over new bridges on the Alder.',
+    'The realm has a King, a Prince, six regional lords and a royal council (Lord Treasurer, Master of Trade, Marshal and Lord Justice). A new Realm page in the Ledger shows them all, and your standing with each.',
+    'Rise at court: gifts to the crown and attending court in Crownmere castle win favour. With favour of 55 and 400c you can ask the King for a failing lord\u2019s lands; with 65, a lord can take a council seat. Lords set patrols, garrisons, road mending and taxes in their lands, and collect the taxes.',
+    'Your support has four parts: the lords, the guilds, the court and the towns. Gifts to the lords, feasts for the guilds and feasts in a town all raise it. With a lordship, a council seat, support of 65 and an old King whose own standing has fallen below 45, you can claim the crown.',
+    'As ruler you set taxes, tariffs and the size of the army, proclaim four laws, and keep the treasury out of debt. Rule badly and a rival claimant raises an army; lose and you go into exile, stripped of lands and seats, with half your coin seized. After a month you can win the realm back.',
+    'Bandits gather on the roads of every region. Left alone they raid towns, robbing chests, shops and people; on the road they can waylay you, worst at night and on foot. Patrols, garrisons, watchmen and the army keep them down, and anyone can pay for patrols.',
+    'Lordships and the crown pass to a grown child of your blood with the court\u2019s recognition; council seats are given, not inherited.',
+    'Homes and property: improve any home you own in three steps (homely, comfortable, fine), keep houses in repair, put houses and businesses up for sale and take or turn down buyers\u2019 offers, and let a business to someone who runs it and pays you rent each day. Property values rise and fall with each town\u2019s fortunes.',
+    'Walk into Crownmere castle\u2019s great hall, with the King on his high seat, and the halls of Stane Keep and Eastwatch Castle.',
+    'From far off, each town is a shape on the horizon, and Crownmere castle stands above the roofs as you approach. Ironcrest and Eastwatch fly the realm\u2019s green and white.'
+  ] },
   { v: '0.32', date: '4 November', title: 'Homes and interiors', items: [
     'Move into any house you own: open the Property page and tap "Move in" on an empty house. Your husband or wife and your children come with you, even to another town, and it shows on the map and minimap as your home.',
     'Your old hut stays yours. Its card lets you move back in whenever you like.',
