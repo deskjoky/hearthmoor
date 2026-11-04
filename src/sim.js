@@ -88,7 +88,10 @@
     mill: { x: -26, z: -42, r: 5, name: "Tamsin's Mill" },
     barn: { x: 30, z: -36, r: 5, name: 'The Barn' },
     bridge: { x: 50, z: 4, r: 4, name: 'Stream Bridge' },
-    lots: { x: 0, z: 54, r: 10, name: 'Open land' }
+    lots: { x: 0, z: 54, r: 10, name: 'Open land' },
+    waystation: { x: 226, z: -34, r: 9, name: 'The Waystation' },
+    ruin: { x: 290, z: -246, r: 12, name: 'Old Barrow Keep' },
+    oakgate: { x: 404, z: -372, r: 12, name: 'Oakbridge Gate' }
   };
   PLOTS.forEach((p, i) => { LOCS['plot' + i] = { x: p.x, z: p.z, r: 4.6, name: p.name, plot: i }; });
   EMPLOYERS.forEach(e => { LOCS['emp:' + e.id] = { x: e.x, z: e.z + 1.5 * e.dir, r: 3.8, name: e.name, emp: e.id }; });
@@ -107,6 +110,21 @@
     { name: 'Wood End', x: -22, z: 44, cap: 3 }
   ];
   const HOMES = HOUSES, WORKER_HOMES = [], NEW_HUTS = [];
+
+  /* ---------- the land beyond the village (Stage II) ----------
+     One continuous world, in metres, with Hearthmoor's square near the origin.
+     Distances follow the world map: Oakbridge about 600 m north-east by road, Greenhaven further north-west. */
+  const TOWNS = {
+    hearthmoor: { name: 'Hearthmoor', x: 0, z: 4, r: 95 },
+    oakbridge: { name: 'Oakbridge', x: 432, z: -432, r: 72, open: false },
+    greenhaven: { name: 'Greenhaven', x: -260, z: -830, r: 60, open: false }
+  };
+  const ROADS = {
+    east: [[88, 5], [120, 3], [160, -8], [200, -28], [240, -58], [272, -104], [298, -162], [326, -226], [356, -286], [384, -332], [404, -366]]
+  };
+  // the river Alder runs down from the mountains through Oakbridge, under its bridge, and on to the sea
+  const RIVER = [[540, -1500], [500, -1100], [470, -800], [452, -560], [438, -432], [466, -300], [536, -180], [640, -60], [780, 60], [940, 160]];
+  const WAYSTATION = { x: 226, z: -34 }, RUIN = { x: 290, z: -246 }, OAKGATE = { x: 404, z: -368 };
 
   /* ---------- the realm around the village ---------- */
   const REALM = {
@@ -2281,7 +2299,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    HOUSES, MILL, BIZ_SITES, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;

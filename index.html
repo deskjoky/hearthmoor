@@ -555,7 +555,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     mill: { x: -26, z: -42, r: 5, name: "Tamsin's Mill" },
     barn: { x: 30, z: -36, r: 5, name: 'The Barn' },
     bridge: { x: 50, z: 4, r: 4, name: 'Stream Bridge' },
-    lots: { x: 0, z: 54, r: 10, name: 'Open land' }
+    lots: { x: 0, z: 54, r: 10, name: 'Open land' },
+    waystation: { x: 226, z: -34, r: 9, name: 'The Waystation' },
+    ruin: { x: 290, z: -246, r: 12, name: 'Old Barrow Keep' },
+    oakgate: { x: 404, z: -372, r: 12, name: 'Oakbridge Gate' }
   };
   PLOTS.forEach((p, i) => { LOCS['plot' + i] = { x: p.x, z: p.z, r: 4.6, name: p.name, plot: i }; });
   EMPLOYERS.forEach(e => { LOCS['emp:' + e.id] = { x: e.x, z: e.z + 1.5 * e.dir, r: 3.8, name: e.name, emp: e.id }; });
@@ -574,6 +577,21 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     { name: 'Wood End', x: -22, z: 44, cap: 3 }
   ];
   const HOMES = HOUSES, WORKER_HOMES = [], NEW_HUTS = [];
+
+  /* ---------- the land beyond the village (Stage II) ----------
+     One continuous world, in metres, with Hearthmoor's square near the origin.
+     Distances follow the world map: Oakbridge about 600 m north-east by road, Greenhaven further north-west. */
+  const TOWNS = {
+    hearthmoor: { name: 'Hearthmoor', x: 0, z: 4, r: 95 },
+    oakbridge: { name: 'Oakbridge', x: 432, z: -432, r: 72, open: false },
+    greenhaven: { name: 'Greenhaven', x: -260, z: -830, r: 60, open: false }
+  };
+  const ROADS = {
+    east: [[88, 5], [120, 3], [160, -8], [200, -28], [240, -58], [272, -104], [298, -162], [326, -226], [356, -286], [384, -332], [404, -366]]
+  };
+  // the river Alder runs down from the mountains through Oakbridge, under its bridge, and on to the sea
+  const RIVER = [[540, -1500], [500, -1100], [470, -800], [452, -560], [438, -432], [466, -300], [536, -180], [640, -60], [780, 60], [940, 160]];
+  const WAYSTATION = { x: 226, z: -34 }, RUIN = { x: 290, z: -246 }, OAKGATE = { x: 404, z: -368 };
 
   /* ---------- the realm around the village ---------- */
   const REALM = {
@@ -2748,7 +2766,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    HOUSES, MILL, BIZ_SITES, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -2842,7 +2860,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixel
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x9fb1ad, 60, 200);
-const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 900);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 3200);
 const hemi = new THREE.HemisphereLight(0xcfe0e6, 0x3d3424, 0.75);
 const sun = new THREE.DirectionalLight(0xffe2b0, 0.9);
 sun.position.set(-20, 30, 12);
@@ -2891,7 +2909,8 @@ const PRODUCT_GEO = { bread: 'loaf', tools: 'tool', ale: 'mug', furniture: 'stoo
    The stream runs down the east side; a millrace leaves it in the north-east,
    runs along the foot of the manor's rise to the mill pond, and drains away west. */
 const SQ = Sim.P.center;
-const STREAM = [[56, -110], [53, -80], [50, -60], [48, -44], [50, -24], [49, 0], [51, 20], [48, 44], [53, 70], [50, 110]];
+const STREAM = [[70, -260], [60, -170], [56, -110], [53, -80], [50, -60], [48, -44], [50, -24], [49, 0], [51, 20], [48, 44], [53, 70], [50, 110], [44, 180], [52, 260]];
+const ROAD_E = Sim.ROADS.east, RIVER = Sim.RIVER, TOWNS = Sim.TOWNS;
 const RACE = [[48, -44], [38, -44], [24, -44], [12, -43], [2, -42], [-8, -44], [-14, -46.5]];
 const POND = { x: -18, z: -47, r: 4.2 };
 const TAIL = [[-22.4, -41], [-21, -33], [-28, -27], [-35, -24], [-58, -20], [-90, -16]];
@@ -2904,12 +2923,23 @@ function segDist(x, z, pts) {
   }
   return best;
 }
+const smooth01 = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+// the open country: long gentle swells, rising into highlands toward the northern mountains
+function worldH(x, z) {
+  let h = 3.4 * Math.sin(x * 0.0082 + 0.6) * Math.cos(z * 0.0071) + 2 * Math.sin((x - z) * 0.013) + 0.7 * Math.sin(x * 0.041) * Math.cos(z * 0.037);
+  h += Math.pow(Math.max(0, (-z - 1050) / 40), 1.7);
+  return h;
+}
 function groundH(x, z) {
   let h = 0.38 * Math.sin(x * 0.07 + 1) * Math.cos(z * 0.06) + 0.22 * Math.sin((x + z) * 0.11);
   h *= clamp(Math.hypot(x / 64, (z - 4) / 52), 0.22, 1);          // the village itself sits nearly level
   h += 4.2 * Math.exp(-((x - 2) ** 2 + (z + 62) ** 2) / 450);       // the manor's rise
-  const out = Math.max(0, Math.hypot(x / 92, (z - 4) / 86) - 1);    // hills beyond the village, mountains further out
-  h += out * out * 70 + out * 9 * (Math.sin(x * 0.05) + Math.cos(z * 0.043) + 1.2);
+  // beyond the village the land opens out into the wider country
+  const k = smooth01((Math.hypot(x / 64, (z - 4) / 56) - 1.3) / 0.7);
+  if (k > 0) h = h * (1 - k) + worldH(x, z) * k;
+  // towns sit on level ground
+  for (const id in TOWNS) { if (id === 'hearthmoor') continue; const T = TOWNS[id], d = Math.hypot(x - T.x, z - T.z) / T.r; if (d < 2) { const f = smooth01((d - 1.1) / 0.8); h = h * f + worldH(T.x, T.z) * (1 - f); } }
+  if (Math.abs(x - 470) < 260 && z > -1600 && z < 400) { const dv = segDist(x, z, RIVER); if (dv < 12) h -= (1 - dv / 12) * 3; }
   const ds = segDist(x, z, STREAM); if (ds < 5) h -= (1 - ds / 5) * 1.7;
   const dr = Math.min(segDist(x, z, RACE), segDist(x, z, TAIL)); if (dr < 2.2) h -= (1 - dr / 2.2) * 0.85;
   const dp = Math.hypot(x - POND.x, z - POND.z); if (dp < POND.r + 2) h -= (1 - dp / (POND.r + 2)) * 1.1;
@@ -2935,28 +2965,73 @@ function flushBuild() {
 }
 const facing = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
 
-(function buildGround() {
-  const N = 176, S = 440;
-  const g = new THREE.PlaneGeometry(S, S, N, N).toNonIndexed();
-  g.rotateX(-Math.PI / 2);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) p.setY(i, groundH(p.getX(i), p.getZ(i)));
+/* ----- the land loads in 128 m tiles around you, with its own trees and rocks ----- */
+const TILE = 128, TILE_RES = 50, TILE_RADIUS = 2;
+const tiles = new Map();
+let tileVersion = 0;
+const GREENS = ['#4f6236', '#536637', '#4e6034', '#58693a', '#5b693c'].map(c => new THREE.Color(c));
+const C_BANK = new THREE.Color('#5a5a3a'), C_ROCK = new THREE.Color('#6c675a'), C_SNOW = new THREE.Color('#d9dcd6'), C_TMP = new THREE.Color();
+function tileRand(i, j) { let s0 = ((i * 73856093) ^ (j * 19349663) ^ 0x5bd1e995) >>> 0; return () => { s0 = (Math.imul(s0, 1664525) + 1013904223) >>> 0; return s0 / 4294967296; }; }
+function inVillage(x, z) { return Math.hypot(x, z - 4) < 112; }
+function wildClear(x, z) {
+  if (inVillage(x, z)) return false;
+  if (segDist(x, z, ROAD_E) < 7 || segDist(x, z, STREAM) < 4.5) return false;
+  if (Math.abs(x - 470) < 300 && z > -1600 && z < 400 && segDist(x, z, RIVER) < 14) return false;
+  for (const id in TOWNS) { const T = TOWNS[id]; if (Math.hypot(x - T.x, z - T.z) < T.r * 1.9) return false; }
+  for (const L0 of [Sim.WAYSTATION, Sim.RUIN]) if (Math.hypot(x - L0.x, z - L0.z) < 16) return false;
+  for (const fm of FARMS) if (Math.abs(x - fm.x) < fm.w / 2 + 6 && Math.abs(z - fm.z) < fm.d / 2 + 6) return false;
+  return true;
+}
+const FARMS = [{ x: 150, z: 26, w: 46, d: 26 }, { x: 190, z: 14, w: 22, d: 18 }, { x: 352, z: -250, w: 40, d: 30 }, { x: 330, z: -300, w: 30, d: 22 }];
+function buildTile(i, j) {
+  const x0 = i * TILE, z0 = j * TILE;
+  const g = new THREE.PlaneGeometry(TILE, TILE, TILE_RES, TILE_RES).toNonIndexed();
+  g.rotateX(-Math.PI / 2); g.translate(x0 + TILE / 2, 0, z0 + TILE / 2);
+  const p = g.attributes.position, r = tileRand(i, j);
+  for (let k = 0; k < p.count; k++) p.setY(k, groundH(p.getX(k), p.getZ(k)));
   g.computeVertexNormals();
   const col = new Float32Array(p.count * 3);
-  const greens = ['#4f6236', '#566b39', '#4b5d31', '#5d6d3c', '#61693e'].map(c => new THREE.Color(c));
-  const bank = new THREE.Color('#5a5a3a'), rock = new THREE.Color('#6c675a'), snow = new THREE.Color('#d9dcd6'), tmp = new THREE.Color();
-  for (let i = 0; i < p.count; i += 3) {
-    const x = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, z = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3, y = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
-    tmp.copy(greens[Math.floor(rnd() * greens.length)]);
-    const wet = Math.min(segDist(x, z, STREAM), segDist(x, z, RACE) + 1, segDist(x, z, TAIL) + 1);
-    if (wet < 4.5) tmp.lerp(bank, 0.55);
-    if (y > 9) tmp.lerp(rock, Math.min(1, (y - 9) / 10));
-    if (y > 34) tmp.lerp(snow, Math.min(1, (y - 34) / 8));
-    for (let j = 0; j < 3; j++) { col[(i + j) * 3] = tmp.r; col[(i + j) * 3 + 1] = tmp.g; col[(i + j) * 3 + 2] = tmp.b; }
+  for (let k = 0; k < p.count; k += 3) {
+    const x = (p.getX(k) + p.getX(k + 1) + p.getX(k + 2)) / 3, z = (p.getZ(k) + p.getZ(k + 1) + p.getZ(k + 2)) / 3, y = (p.getY(k) + p.getY(k + 1) + p.getY(k + 2)) / 3;
+    C_TMP.copy(GREENS[Math.floor(r() * GREENS.length)]);
+    let wet = Math.min(segDist(x, z, STREAM), inVillage(x, z) ? Math.min(segDist(x, z, RACE) + 1, segDist(x, z, TAIL) + 1) : 99);
+    if (Math.abs(x - 470) < 300) wet = Math.min(wet, segDist(x, z, RIVER) - 6);
+    if (wet < 4.5) C_TMP.lerp(C_BANK, 0.55);
+    if (y > 12) C_TMP.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
+    if (y > 40) C_TMP.lerp(C_SNOW, Math.min(1, (y - 40) / 10));
+    for (let q = 0; q < 3; q++) { col[(k + q) * 3] = C_TMP.r; col[(k + q) * 3 + 1] = C_TMP.g; col[(k + q) * 3 + 2] = C_TMP.b; }
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  scene.add(new THREE.Mesh(g, vc));
-})();
+  const group = new THREE.Group(); group.add(new THREE.Mesh(g, vc));
+  // woods where the land wants them, scattered trees elsewhere
+  const pinesT = [], oaksT = [], bushesT = [], tuftsT = [], rocksT = [], solids = [];
+  for (let k = 0; k < 300; k++) {
+    const x = x0 + r() * TILE, z = z0 + r() * TILE;
+    const wood = Math.sin(x * 0.013 + 1.3) * Math.cos(z * 0.011 - 0.4) + 0.5 * Math.sin((x + z) * 0.021);
+    if (wood < 0.35 && r() > 0.2) continue;
+    if (!wildClear(x, z)) continue;
+    const sc = 0.9 + r() * 1.0;
+    if (wood > 0.35) (r() < 0.8 ? pinesT : oaksT).push([x, z, sc]); else (r() < 0.45 ? oaksT : r() < 0.5 ? pinesT : bushesT).push([x, z, 0.8 + r() * 0.5]);
+  }
+  for (let k = 0; k < 160; k++) { const x = x0 + r() * TILE, z = z0 + r() * TILE; if (!inVillage(x, z) && segDist(x, z, ROAD_E) > 3) tuftsT.push([x, z, 0.7 + r() * 0.8]); }
+  for (let k = 0; k < 10; k++) { const x = x0 + r() * TILE, z = z0 + r() * TILE; if (wildClear(x, z)) rocksT.push([x, z]); }
+  const inst = (geo, list, m0) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, m0 || vc, list.length); list.forEach(([x, z, sc], q) => im.setMatrixAt(q, M(x, groundH(x, z) - 0.05, z, r() * 6, sc || (0.6 + r()), (sc || 0.6) * (0.9 + r() * 0.25), sc || (0.6 + r())))); group.add(im); };
+  inst(pineGeo, pinesT); inst(oakGeo, oaksT); inst(bushGeo, bushesT); inst(tuftGeo, tuftsT); inst(rockGeo, rocksT, mat('#7d7b70'));
+  pinesT.forEach(([x, z, sc]) => solids.push({ c: 1, x, z, r: 0.45 * sc })); oaksT.forEach(([x, z, sc]) => solids.push({ c: 1, x, z, r: 0.35 * sc }));
+  scene.add(group);
+  return { group, solids };
+}
+function updateTiles(px, pz, budget) {
+  const ci = Math.floor(px / TILE), cj = Math.floor(pz / TILE);
+  let built = 0;
+  // nearest first, so the ground under you is always there
+  const want = [];
+  for (let di = -TILE_RADIUS; di <= TILE_RADIUS; di++) for (let dj = -TILE_RADIUS; dj <= TILE_RADIUS; dj++) want.push([ci + di, cj + dj, di * di + dj * dj]);
+  want.sort((a, b) => a[2] - b[2]);
+  for (const [i, j] of want) { const k = i + ',' + j; if (!tiles.has(k)) { if (built >= budget) break; tiles.set(k, buildTile(i, j)); built++; tileVersion++; } }
+  for (const [k, t] of tiles) { const [i, j] = k.split(',').map(Number); if (Math.abs(i - ci) > TILE_RADIUS + 1 || Math.abs(j - cj) > TILE_RADIUS + 1) { scene.remove(t.group); t.group.traverse(o => { if (o.geometry && o.geometry !== pineGeo && o.geometry !== oakGeo && o.geometry !== rockGeo && o.geometry !== bushGeo && o.geometry !== tuftGeo) o.geometry.dispose(); }); tiles.delete(k); tileVersion++; } }
+}
+function tileSolidsNear(px, pz) { const out = []; const ci = Math.floor(px / TILE), cj = Math.floor(pz / TILE); for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { const t = tiles.get((ci + di) + ',' + (cj + dj)); if (t) out.push(...t.solids); } return out; }
 
 /* ----- water: the stream, the millrace, the pond and the tail-race ----- */
 const waterMat = new THREE.MeshLambertMaterial({ color: '#4f7d8c', emissive: new THREE.Color('#0f2a33'), transparent: true, opacity: 0.88 });
@@ -2981,6 +3056,7 @@ function ribbon(pts, width, yOf, step) {
 }
 const waterY = (depth) => (x, z) => groundH(x, z) + depth;
 scene.add(new THREE.Mesh(ribbon(STREAM, 3.4, waterY(1.05), 1.5), waterMat));
+scene.add(new THREE.Mesh(ribbon(RIVER, 15, waterY(2.2), 6), waterMat));
 scene.add(new THREE.Mesh(ribbon(RACE, 1.5, waterY(0.5)), waterMat));
 scene.add(new THREE.Mesh(ribbon(TAIL, 1.3, waterY(0.5)), waterMat));
 mesh(new THREE.CylinderGeometry(POND.r + 0.6, POND.r + 0.6, 0.05, 20), waterMat, POND.x, groundH(POND.x, POND.z) + 0.75, POND.z);
@@ -3059,10 +3135,11 @@ const oakGeo = mergeColored([
   { geo: new THREE.IcosahedronGeometry(1.1, 0), color: '#58783a', m: M(0.7, 3.2, 0.3, 0.6) },
   { geo: new THREE.IcosahedronGeometry(1.0, 0), color: '#45622d', m: M(-0.8, 2.9, -0.4, 1.1) }
 ]);
+const tuftGeo = mergeColored([0, 1.1, 2.2].map(a => ({ geo: new THREE.ConeGeometry(0.09, 0.55, 3), color: a ? '#6a7f3e' : '#7d8f48', m: M(Math.cos(a) * 0.12, 0.25, Math.sin(a) * 0.12) })).concat([{ geo: new THREE.SphereGeometry(0.06, 4, 3), color: '#e8d36a', m: M(0.05, 0.5, 0.02) }]));
 const bushGeo = mergeColored([{ geo: new THREE.IcosahedronGeometry(0.7, 0), color: '#4a6530', m: M(0, 0.45, 0) }, { geo: new THREE.IcosahedronGeometry(0.5, 0), color: '#56743a', m: M(0.5, 0.4, 0.2) }]);
 const pines = [], oaks = [], bushes = [];
-for (let i = 0; i < 900; i++) { const x = -48 - rnd() * 60, z = -70 + rnd() * 150; if (clear(x, z) && !(Math.abs(x - L.forest.x - 4) < 6 && Math.abs(z - L.forest.z) < 5)) pines.push([x, z, 0.85 + rnd() * 0.7]); }
-for (let i = 0; i < 1600; i++) { const a = rnd() * Math.PI * 2, r = 84 + rnd() * 110, x = Math.cos(a) * r, z = 4 + Math.sin(a) * r; if (clear(x, z) && groundH(x, z) < 30) pines.push([x, z, 1 + rnd() * 1.1]); }
+for (let i = 0; i < 900; i++) { const x = -48 - rnd() * 60, z = -70 + rnd() * 150; if (!inVillage(x, z)) continue; if (clear(x, z) && !(Math.abs(x - L.forest.x - 4) < 6 && Math.abs(z - L.forest.z) < 5)) pines.push([x, z, 0.85 + rnd() * 0.7]); }
+for (let i = 0; i < 700; i++) { const a = rnd() * Math.PI * 2, r = 84 + rnd() * 28, x = Math.cos(a) * r, z = 4 + Math.sin(a) * r; if (clear(x, z) && segDist(x, z, ROAD_E) > 6) pines.push([x, z, 1 + rnd() * 1.1]); }
 for (let i = 0; i < 260; i++) { const x = (rnd() - 0.5) * 150, z = (rnd() - 0.5) * 150; if (clear(x, z) && Math.hypot(x, z - 4) > 16 && Math.hypot(x, z - 4) < 86) (rnd() < 0.7 ? oaks : bushes).push([x, z, 0.8 + rnd() * 0.5]); }
 for (let i = 0; i < 160; i++) { const k = Math.floor(rnd() * (STREAM.length - 3)) + 1, [ax, az] = STREAM[k], x = ax + (rnd() - 0.5) * 16, z = az + (rnd() - 0.5) * 20; if (clear(x, z)) (rnd() < 0.5 ? oaks : bushes).push([x, z, 0.9 + rnd() * 0.5]); }
 function plant(geo, list, sy) {
@@ -3081,9 +3158,8 @@ scene.add(rockInst);
 // the mountains beyond: always on the horizon
 (function mountains() {
   const parts = [];
-  for (let i = 0; i < 46; i++) {
-    const a = -Math.PI * 0.95 + i / 45 * Math.PI * 1.9 + (rnd() - 0.5) * 0.08, r = 250 + rnd() * 70;
-    const x = Math.sin(a) * r, z = -Math.cos(a) * r * 0.9 - 20, h = 60 + rnd() * 70 + (Math.abs(a) < 0.9 ? 40 : 0), w = 50 + rnd() * 40;
+  for (let i = 0; i < 70; i++) {
+    const x = -1900 + i * 58 + (rnd() - 0.5) * 30, z = -1550 - rnd() * 300 - Math.abs(x) * 0.12, h = 160 + rnd() * 220, w = 120 + rnd() * 90;
     parts.push({ geo: new THREE.ConeGeometry(w, h, 5), color: '#5b6066', m: M(x, h / 2 - 8, z, rnd() * 3) });
     parts.push({ geo: new THREE.ConeGeometry(w * 0.32, h * 0.32, 5), color: '#dfe3e2', m: M(x, h - 8 - h * 0.16 + 0.5, z, rnd() * 3) });
   }
@@ -3367,6 +3443,60 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   mesh(new THREE.BoxGeometry(0.12, 1.4, 0.12), '#5b4029', 0, 0.7, 0, V.forSaleSign); mesh(new THREE.BoxGeometry(1, 0.6, 0.06), '#d8c69a', 0, 1.2, 0.05, V.forSaleSign);
 })();
 flushBuild();
+
+/* ----- the road east: farms, a waystation, an old ruin, and the walls of Oakbridge ----- */
+(function roadEast() {
+  scene.add(new THREE.Mesh(mergeColored([{ geo: ribbon(ROAD_E, i => 3.6 + 0.5 * Math.sin(i * 0.7), (x, z) => groundH(x, z) + 0.09, 2), color: dirt }]), vc));
+  // fields and farmsteads along the way
+  FARMS.forEach((fm, n) => {
+    const f = fr(fm.x, fm.z, 0, 0.02);
+    for (let r = 0; r < Math.floor(fm.d / 3); r++) box(f, r % 2 ? '#7a6a3a' : (n % 2 ? '#b89a45' : '#8a7a3a'), 0, 0.03, -fm.d / 2 + 1.5 + r * 3, fm.w, 0.08, 2.6);
+    for (let x = -fm.w / 2; x <= fm.w / 2; x += 2) { box(null, '#5b4029', fm.x + x, groundH(fm.x + x, fm.z - fm.d / 2) + 0.4, fm.z - fm.d / 2, 0.12, 0.8, 0.12); box(null, '#5b4029', fm.x + x, groundH(fm.x + x, fm.z + fm.d / 2) + 0.4, fm.z + fm.d / 2, 0.12, 0.8, 0.12); }
+  });
+  [[150, 46, 0], [356, -224, Math.PI], [196, -2, 2.6]].forEach(([x, z, ry], i) => cottage(fr(x, z, ry), { w: 6, d: 4.6, h: 2.5, wall: WALLS[(i + 1) % 4], roof: THATCH[(i + 2) % 4], washing: i === 0 }));
+  // the waystation: a drovers' rest with a well, a trough and a stable
+  const W0 = Sim.WAYSTATION, wf = fr(W0.x, W0.z, facing(W0.x, W0.z, 240, -58));
+  cottage(wf, { w: 8, d: 5.4, h: 2.8, wall: '#c9b48a', roof: '#7a6440', door: '#5a3a28', yard: false, rh: 2.4 });
+  box(wf, '#6b4a2e', 6.4, 1.2, -0.5, 4, 2.4, 5); part(wf, roofG(5.6, 4.6, 1.4), '#7a6440', 6.4, 2.4, -0.5);
+  box(wf, '#6b4a2e', 0, 0.35, 5.2, 3, 0.5, 0.9); box(wf, '#4f7d8c', 0, 0.62, 5.2, 2.7, 0.05, 0.7);
+  box(wf, BEAMS, -3.8, 1.4, 4.4, 0.16, 2.8, 0.16); box(wf, '#d8c69a', -3.8, 2.5, 4.48, 1.4, 0.5, 0.06);
+  // Old Barrow Keep: a ruined tower on a knoll, long abandoned
+  const R0 = Sim.RUIN, rf = fr(R0.x, R0.z, 0.4);
+  [[0, 0, 5, 6.5, 5], [6, 2, 6, 2.2, 0.9], [-5, 3, 4, 1.6, 0.9], [2, -5.6, 7, 3, 0.9], [-4, -4, 0.9, 2.4, 5]].forEach(([x, z, w, h, d]) => box(rf, '#8b877c', x, h / 2, z, w, h, d));
+  box(rf, '#8b877c', 0, 7.4, -1.6, 5, 1.8, 0.9); box(rf, '#6c675e', 1.6, 7.6, 1.6, 1.4, 2.2, 1.4);
+  for (let k = 0; k < 14; k++) box(rf, '#7d7a70', (rnd() - 0.5) * 16, 0.25, (rnd() - 0.5) * 16, 0.6 + rnd(), 0.5, 0.5 + rnd(), rnd() * 3, rnd() * 0.4);
+  // milestones and a signpost at the fork by the waystation
+  [[120, 7], [200, -21], [276, -98], [346, -268]].forEach(([x, z], i) => { const g = fr(x, z); box(g, '#8b877c', 0, 0.45, 0, 0.5, 0.9, 0.3); });
+  // Oakbridge: its walls and towers stand above the river; the gates open in a coming update
+  const T = TOWNS.oakbridge, wy = h0 => groundH(T.x, T.z) + h0;
+  for (let k = 0; k < 40; k++) {
+    const a = k / 40 * Math.PI * 2, x = T.x + Math.cos(a) * T.r, z = T.z + Math.sin(a) * T.r;
+    const gateA = Math.atan2(Sim.OAKGATE.z - T.z, Sim.OAKGATE.x - T.x); if (Math.abs(Math.atan2(Math.sin(a - gateA), Math.cos(a - gateA))) < 0.06) continue;
+    if (segDist(x, z, RIVER) < 8) continue;
+    const g = new THREE.Matrix4().compose(new THREE.Vector3(x, wy(0), z), new THREE.Quaternion().setFromEuler(RX.set(0, -a, 0)), new THREE.Vector3(1, 1, 1));
+    box(g, '#9a948a', 0, 3, 0, 1.6, 6, 11.6);
+    if (k % 5 === 0) { box(g, '#8b877c', 0, 5, 0, 4.4, 10, 4.4); part(g, new THREE.ConeGeometry(3.4, 3.4, 4), '#7a3f2b', 0, 11.6, 0, Math.PI / 4); }
+  }
+  const ga = Math.atan2(Sim.OAKGATE.z - T.z, Sim.OAKGATE.x - T.x), gg = new THREE.Matrix4().compose(new THREE.Vector3(T.x + Math.cos(ga) * T.r, wy(0), T.z + Math.sin(ga) * T.r), new THREE.Quaternion().setFromEuler(RX.set(0, -ga, 0)), new THREE.Vector3(1, 1, 1));
+  box(gg, '#8b877c', 0, 6, -4.4, 4.6, 12, 3.6); box(gg, '#8b877c', 0, 6, 4.4, 4.6, 12, 3.6); box(gg, '#8b877c', 0, 10.6, 0, 4.6, 2.8, 5.4);
+  box(gg, '#4a3424', 0.4, 2.6, 0, 0.4, 5.2, 5.2); box(gg, '#2a2420', 0.7, 3.6, 0, 0.1, 0.2, 5.2); box(gg, '#2a2420', 0.7, 1.6, 0, 0.1, 0.2, 5.2);
+  [[-4.4], [4.4]].forEach(([zz]) => { box(gg, BEAMS, 2.6, 13.6, zz, 0.12, 3, 0.12); box(gg, '#8e2b22', 2.62, 14.2, zz + 0.45, 0.04, 1.4, 0.9); });
+  box(gg, BEAMS, 6, 1.2, -7, 0.16, 2.4, 0.16); box(gg, '#d8c69a', 6.1, 2.1, -7, 0.06, 0.7, 1.8);
+  // the town within: rooftops, the guildhall tower, the keep, and the bridge that gives Oakbridge its name
+  const rr = tileRand(9, 9);
+  for (let k = 0; k < 70; k++) {
+    const a = rr() * Math.PI * 2, d = 8 + Math.sqrt(rr()) * (T.r - 14), x = T.x + Math.cos(a) * d, z = T.z + Math.sin(a) * d;
+    if (segDist(x, z, RIVER) < 11) continue;
+    const g = fr(x, z, rr() * Math.PI), w = 4 + rr() * 3, d0 = 4 + rr() * 2, h = 3 + rr() * 4;
+    box(g, rr() < 0.5 ? '#c9b48a' : '#b9a47a', 0, h / 2, 0, w, h, d0); part(g, roofG(d0 + 0.6, w + 0.5, 1.8 + rr()), rr() < 0.6 ? '#7a3f2b' : '#5e4a2c', 0, h, 0);
+  }
+  const gh = fr(T.x - 20, T.z + 10, 0.3); box(gh, '#8b877c', 0, 5, 0, 10, 10, 7); part(gh, roofG(7.6, 10.6, 4), '#3f4a5a', 0, 10, 0); box(gh, '#8b877c', 4, 10, 0, 3.4, 20, 3.4); part(gh, new THREE.ConeGeometry(2.8, 5, 4), '#3f4a5a', 4, 22.4, 0, Math.PI / 4);
+  const kp = fr(T.x + 30, T.z - 30, 0.7); box(kp, '#8b877c', 0, 7, 0, 12, 14, 12); for (let q = 0; q < 4; q++) box(kp, '#8b877c', -6 + (q % 2) * 12, 9, -6 + Math.floor(q / 2) * 12, 3.6, 18, 3.6);
+  const bx = 438, bz = -432, by = groundH(bx - 12, bz) + 1.4;
+  const bf = new THREE.Matrix4().compose(new THREE.Vector3(bx, by, bz), new THREE.Quaternion().setFromEuler(RX.set(0, 0.2, 0)), new THREE.Vector3(1, 1, 1));
+  box(bf, '#9a948a', 0, 0, 0, 30, 1.2, 6); [-9, 0, 9].forEach(x => box(bf, '#8b877c', x, -2.4, 0, 2.4, 4, 6)); [-3, 3].forEach(z => box(bf, '#8b877c', 0, 0.9, z, 30, 0.8, 0.5));
+  flushBuild();
+})();
 
 /* ----- the barnyard animals: a few hens pecking, two cows in the pen ----- */
 const hens = [];
@@ -3784,6 +3914,8 @@ const staticSolids = (function () {
 })();
 function solidsNow(s) {
   const out = staticSolids.slice();
+  out.push(...tileSolidsNear(s.player.x, s.player.z));
+  if (!TOWNS.oakbridge.open) out.push({ c: 1, x: TOWNS.oakbridge.x, z: TOWNS.oakbridge.z, r: TOWNS.oakbridge.r + 1 });
   s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
   if (s.village.towerBuilt) out.push({ c: 1, x: L.tower.x, z: L.tower.z, r: 2 });
   if (s.village.step < 8) out.push({ x: L.manor.x, z: Sim.P.gate.z - 1.4, hx: 1.3, hz: 0.35 });
@@ -3807,7 +3939,7 @@ function collide(p, solids) {
       }
     }
   }
-  p.x = clamp(p.x, -95, 95); p.z = clamp(p.z, -88, 80);
+  p.x = clamp(p.x, -1400, 1400); p.z = clamp(p.z, -1500, 900);
 }
 
 // sticks: touch the left part of the screen to walk, the right part to turn and zoom
@@ -3918,7 +4050,7 @@ function walkPlayer(s, dt) {
   const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
   const vx = rx * mx + fx * -my, vz = rz * mx + fz * -my;
   const speed = 6.5 * dt, ox = p.x, oz = p.z;
-  const key = s.shops.map(x => x.plot + ':' + x.tier).join() + s.village.towerBuilt + (s.village.step >= 8);
+  const key = s.shops.map(x => x.plot + ':' + x.tier).join() + s.village.towerBuilt + (s.village.step >= 8) + ':' + tileVersion + ':' + Math.floor(s.player.x / TILE) + ',' + Math.floor(s.player.z / TILE);
   if (key !== solidKey) { solidCache = solidsNow(s); solidKey = key; }
   // small steps so a slow frame can never carry you through a wall
   const n = Math.max(1, Math.ceil(speed / 0.15));
@@ -4103,6 +4235,9 @@ function cardHTML(s) {
   }
   if (here === 'barn') return `<h2>The Barn</h2><div class="sub">The village barn and farmyard: hay for the winter, a cart, hens underfoot and two cows in the pen.</div>${walking}`;
   if (here === 'bridge') return `<h2>The Stream Bridge</h2><div class="sub">The road east crosses the stream here, on to Oakbridge and the capital, Crownmere. The road beyond is not yet open.</div>${walking}`;
+  if (here === 'waystation') return `<h2>The Waystation</h2><div class="sub">A drovers\u2019 rest halfway along the road to Oakbridge: a stable, a water trough, and a room for anyone caught out by the dark. Carriages will stop here once they run.</div>${walking}`;
+  if (here === 'ruin') return `<h2>Old Barrow Keep</h2><div class="sub">A tower that guarded this road long before the Varrows held Hearthmoor. Its stones have been carted off for barns and walls. Nobody lives here now.</div>${walking}`;
+  if (here === 'oakgate') return `<h2>Oakbridge Gate</h2><div class="sub">The walls of Oakbridge, the market city where the south road meets the coast road. The gates are shut for now. They open in a coming update.</div>${walking}`;
   if (here === 'lots') return `<h2>The Open Land</h2><div class="sub">Common land south of the village, staked out for the homes and lots Hearthmoor will need as it grows. Opening it is a decision for the Elder and the council.</div>${walking}`;
   if (here === 'home') return `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
@@ -4495,7 +4630,7 @@ const PLACE_NOTE = {
   field: 'Free grain for anyone who gathers it.', forest: 'Free wood for anyone who cuts it.', pit: 'Free iron ore for anyone who digs it.',
   market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
-  granary: 'The village food store.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
+  granary: 'The village food store.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The gates of Oakbridge, shut for now.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
 };
 function renderMapCard() {
   buildPins();
@@ -4940,6 +5075,7 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
@@ -5199,8 +5335,14 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.0258';
+const BUILD = '2026.11.04.0304';
 const NOTES = [
+  { v: '0.17', date: '3 November', title: 'The road east', items: [
+    'The world no longer ends at the edge of the village. The land loads around you as you walk, with woods, meadows, rocks and wildflowers.',
+    'Follow the road east over the stream bridge, past farms and a drovers\u2019 waystation, by the ruined tower of Old Barrow Keep, to the walls of Oakbridge on the river Alder.',
+    'Oakbridge\u2019s gates are shut for now. They open in the next part of Stage II.',
+    'The northern mountains now stand on the far horizon, where the world map puts them.'
+  ] },
   { v: '0.16', date: '3 November', title: 'Right of way', items: [
     'Villagers now step aside to let you through. Walk into a crowd and people move out of your path, instead of you being stuck.'
   ] },
