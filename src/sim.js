@@ -1157,10 +1157,36 @@
     s.agents.push({ id: s.nextId++, kind: 'person', pid: p.id, name: p.name, x: pt.x, z: pt.z, face: 0, mode: 'routine', doing: '', icon: null, iconUntil: 0, palette: p.palette, kid: !!p.kid, job: p.job && p.job.type === 'commons' ? p.job.what : null });
   }
   function bodyOf(s, p) { const a = indexOf(s.agents, 'pid').get(p.id); return a && a.pid === p.id ? a : null; }
+  // where you live: your hut, or a house you have bought and moved into
+  function yourHouse(s) { const id = s.player && s.player.house; const h = id ? houseById(s, id) : null; return h && h.owner === 'player' ? h : null; }
+  function yourTown(s) { const h = yourHouse(s); return h && h.town && h.town !== 'hearthmoor' ? h.town : undefined; }
+  // the shape of a house on the ground: which way its door faces, and whether it is a tall townhouse
+  function houseShape(h) {
+    const i = +String(h.id).replace(/^[a-z]+/, ''), L = h.town === 'oakbridge' ? OAK.houses : h.town === 'crownmere' ? CM.houses : h.town === 'greenhaven' ? GH.houses : null;
+    const src = L && L[i];
+    if (src) return { face: src.face, tall: !!src.tall, kind: h.town };
+    return { face: Math.atan2(P.center.x - h.x, P.center.z - h.z), tall: (h.cap || 0) >= 4, kind: 'hearthmoor' };
+  }
+  function doorOf(h) { const f = houseShape(h).face; return { x: h.x + Math.sin(f) * 4.2, z: h.z + Math.cos(f) * 4.2 }; }
+  function homeOfYou(s) { const h = yourHouse(s); return h ? { x: h.x, z: h.z, name: h.name, town: h.town || 'hearthmoor', house: h } : { x: P.home.x, z: P.home.z, name: 'your hut', town: 'hearthmoor', house: null }; }
+  // everyone who lives with you follows you to a new home
+  function bringFamily(s, why) {
+    const T = yourTown(s), tn = T || 'hearthmoor';
+    for (const p of living(s)) {
+      if (p.home !== 'you') continue;
+      if (townOf(p) !== tn) {
+        if (p.job && !(p.job.type === 'biz' && p.job.role === 'owner')) loseJob(s, p, 'Left their work to move with ' + s.name + '.');
+        p.town = T; plog(s, p, why);
+        const a = bodyOf(s, p); if (a && s.bodiesIn && s.bodiesIn !== tn) s.agents = s.agents.filter(x => x !== a);
+        if (!a && (!s.bodiesIn || s.bodiesIn === tn)) addBody(s, p);
+      }
+      const a = bodyOf(s, p), pt = homePoint(s, p); if (a && pt && Math.hypot(a.x - pt.x, a.z - pt.z) > 60) { a.x = pt.x; a.z = pt.z; }
+    }
+  }
   function homePoint(s, p) {
     if (!p.home) return null;
     if (p.home === 'manor') return MANOR_HOME;
-    if (p.home === 'you') return { x: P.home.x + 1.5, z: P.home.z + 1.5 };
+    if (p.home === 'you') { const H = yourHouse(s); return H ? { x: H.x + 1.5, z: H.z + 1.5 } : { x: P.home.x + 1.5, z: P.home.z + 1.5 }; }
     if (p.home.startsWith('biz:')) { const e = empById(p.home.slice(4)); return { x: e.x, z: e.z }; }
     const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
   }
@@ -1198,7 +1224,7 @@
   function vacancy(s, maxRent, town) {
     // empty homes first; failing that, a room as a lodger in someone else's house
     town = town || 'hearthmoor';
-    return s.houses.filter(h => (h.town || 'hearthmoor') === town && h.cap > h.tenants.length && !h.tenants.includes(h.owner) && h.owner !== 'player-home' && (maxRent == null || h.rent <= maxRent)).sort((a, b) => (a.tenants.length ? 1 : 0) - (b.tenants.length ? 1 : 0) || a.rent - b.rent)[0] || null;
+    return s.houses.filter(h => (h.town || 'hearthmoor') === town && h.cap > h.tenants.length && !h.tenants.includes(h.owner) && h.owner !== 'player-home' && !(s.player && s.player.house === h.id) && (maxRent == null || h.rent <= maxRent)).sort((a, b) => (a.tenants.length ? 1 : 0) - (b.tenants.length ? 1 : 0) || a.rent - b.rent)[0] || null;
   }
   function moveIn(s, p, h) {
     p.home = h.id; h.tenants.push(p.id); p.arrears = 0; p.owed = 0; p.homeless = 0;
@@ -1606,7 +1632,7 @@
     const Y = you(s); Y.spouse = q.id; q.spouse = Y.pid; Y.court = {};
     if (q.job && q.job.type === 'office' && HOUSEHOLD.includes(q.job.office)) loseJob(s, q, 'Left the manor to marry.');
     if (q.home && q.home !== 'you') moveOut(s, q, 'Moved in with ' + s.name + '.');
-    if (townOf(q) !== 'hearthmoor') { if (q.job && (q.job.type !== 'biz' || q.job.role !== 'owner')) loseJob(s, q, 'Left their work to move to Hearthmoor.'); q.town = undefined; }
+    { const T = yourTown(s); if (townOf(q) !== (T || 'hearthmoor')) { if (q.job && (q.job.type !== 'biz' || q.job.role !== 'owner')) loseJob(s, q, 'Left their work to move to ' + (T ? TOWNS[T].name : 'Hearthmoor') + '.'); q.town = T; } }
     q.home = 'you'; q.opinion = clamp((q.opinion || 0) + 30, -100, 100);
     if (Y.sex === 'm' && sexOf(q) === 'f') { q.maiden = q.maiden || q.name; const nn = q.name.split(' ')[0] + ' ' + familyName(s); if (!Object.values(s.people).some(x => x.name === nn)) q.name = nn; }
     plog(s, q, 'Married ' + s.name + '.'); s.people[Y.pid].log.unshift({ day: s.day, text: 'Married ' + q.name + '.' });
@@ -3010,6 +3036,7 @@
         if (L.emp) { walkTo(s, empById(L.emp).spot); return ok(); }
         if (a === 'market') { walkTo(s, P.market); return ok(); }
         if (a === 'home') { walkTo(s, P.home); return ok(); }
+        if (a === 'myhome') { const H = yourHouse(s); if (H) { walkTo(s, doorOf(H)); return ok(); } }
         if (a === 'well') { walkTo(s, P.well); return ok(); }
         walkTo(s, { x: L.x, z: L.z + L.r * 0.6 }); return ok();
       }
@@ -3349,6 +3376,23 @@
         event(s, 'You bought ' + h.name + ' for ' + price + 'c. ' + (h.tenants.length ? 'Its tenant now pays rent to you.' : 'It stands empty; someone may move in.'), 'story');
         return ok();
       }
+      case 'moveIn': {
+        const h = s.houses && houseById(s, a);
+        if (!h || h.owner !== 'player') return fail('You can only move into a house you own.');
+        if (s.player.house === h.id) return fail('You already live there.');
+        if (h.tenants.length) return fail('Your tenants live there. Give them notice first, or choose an empty house.');
+        const from = homeOfYou(s).name;
+        s.player.house = h.id; bringFamily(s, 'Moved into ' + h.name + ' with ' + s.name + '.');
+        s.people[you(s).pid] && plog(s, s.people[you(s).pid], 'Moved from ' + from + ' into ' + h.name + '.');
+        event(s, 'You move into ' + h.name + '. It is your home now' + (living(s).some(p => p.home === 'you') ? ', and your family comes with you' : '') + '. Your old ' + (from === 'your hut' ? 'hut stands empty, still yours' : 'house is yours to let') + '.', 'story');
+        return ok();
+      }
+      case 'moveToHut': {
+        if (!s.player.house) return fail('You already live in your hut.');
+        const h = yourHouse(s); s.player.house = null; bringFamily(s, 'Moved back to the hut with ' + s.name + '.');
+        event(s, 'You move back to your hut in Hearthmoor.' + (h ? ' ' + h.name + ' stands empty: a tenant may take it.' : ''), 'info');
+        return ok();
+      }
       case 'setRent': {
         const h = s.houses && houseById(s, a); if (!h || h.owner !== 'player') return fail('That is not your house.');
         const n = clamp(Math.round(b), 0, 20);
@@ -3678,7 +3722,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;

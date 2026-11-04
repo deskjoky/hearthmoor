@@ -2188,6 +2188,7 @@ function syncCamera(s, dt, t) {
     camera.lookAt(mapCam.x, 0, mapCam.z);
     return;
   }
+  if (UI.inside && UI.mode === 'play') { Interior.camera(); return; }
   if (UI.mode === 'title') {
     const a = calm() ? 0.6 : t * 0.05;
     camera.position.set(Math.sin(a) * 62, 34, 4 + Math.cos(a) * 62); camera.lookAt(0, 0, -6); return;
@@ -2627,7 +2628,8 @@ function cardHTML(s) {
   if (here === 'oakkeep') return `<h2>Oakbridge Keep</h2><div class="sub">The old keep on the east bank, held by the town watch for ${esc(Sim.REALM.lordShort)}. Its towers watch the river and the coast road.</div>${walking}`;
   if (here === 'oakbridge') return `<h2>The Oak Bridge</h2><div class="sub">A stone bridge on two great piers over the river Alder, built where an oak ferry once crossed. The town pays for its upkeep out of the market fees.</div>${walking}`;
   if (here === 'lots') return landCard(s, walking);
-  if (here === 'home') return `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
+  if (here === 'home') return s.player.house ? `<h2>Your old hut</h2><div class="sub">Still yours. You live in ${esc(Sim.yourHouse(s) ? Sim.yourHouse(s).name : 'a house')} now.</div>${walking}<div class="acts">${B_('Move back in', ['moveToHut'], 'alt')}${B_('Open the map', ['ui', 'map'], 'alt')}</div>` : `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
+  if (here === 'myhome') { const h = Sim.yourHouse(s); if (h) { const fam = Object.values(s.people).filter(q => q.home === 'you' && q.status === 'here'); return `<h2>${esc(h.name)}</h2><div class="sub">Your home${fam.length ? ', with ' + esc(fam.map(q => q.name.split(' ')[0]).join(', ')) : ''}.</div>${walking}<div class="acts">${B_('Property', ['page', 'property'], 'alt')}</div>`; } }
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
   return '';
 }
@@ -2690,9 +2692,11 @@ function relationActs(s, pr, body) {
 }
 function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
-  let html = cardHTML(G);
+  let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
   // a place you merely walk past shows only its name; tap the tab to open it
-  const p = G.player, here = UI.sel == null ? ((p.dest && UI.loc) || where(G) || UI.loc) : null, Lh = here && L[here];
+  const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || where(G) || UI.loc) : null, Lh = here && L[here];
+  // a door you can go through
+  if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
   const mineHere = Lh && ((Lh.emp && G.job && G.job.emp === Lh.emp) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
   const tab = html && here && Lh && UI.openLoc !== here && !mineHere && meta.settings.cards !== 'open';
@@ -2716,6 +2720,7 @@ document.addEventListener('click', e => {
 });
 
 function hud(s) {
+  if ((s.player.house || null) !== (UI.myHouse === undefined ? 'x' : UI.myHouse)) { UI.myHouse = s.player.house || null; syncMyHome(); }
   $('clock').textContent = `Day ${s.day} · ${Sim.clock(s.t)}`;
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
   const inv = s.player.inv, chips = [];
@@ -2970,7 +2975,8 @@ function pageProperty(s) {
   if (!mine.length) html += `<p>You own no houses yet${v.cottage !== 'forsale' ? ' apart from Old Ama’s cottage' : ''}.</p>`;
   for (const h of mine) {
     const ts = h.tenants.map(id => s.people[id]);
-    html += `<div class="box"><h5>${esc(h.name)}</h5>${ts.length ? ts.map(t => `<p>${esc(t.name)} lives here: ${esc(Sim.occupation(s, t))}, earns about ${Sim.income(s, t)}c a day, ${t.purse}c saved${t.arrears ? `, <b>${t.arrears} days behind</b>` : ''}. ${opinionText(t.opinion)}.</p>`).join('') : '<p>Empty. Someone looking for a home may move in.</p>'}
+    const live = s.player.house === h.id;
+    html += `<div class="box"><h5>${esc(h.name)}${live ? ' \u00b7 your home' : ''}</h5>${live ? `<p>You live here${Object.values(s.people).some(q => q.home === 'you' && q.status === 'here') ? ' with your family' : ''}.</p><div class="acts">${B_('Go home', ['goto', 'myhome'])}${B_('Move back to the hut', ['moveToHut'], 'alt')}</div>` : !ts.length ? `<div class="acts">${B_('Move in<small>make it your home; your family comes too</small>', ['moveIn', h.id])}</div>` : ''}${ts.length ? ts.map(t => `<p>${esc(t.name)} lives here: ${esc(Sim.occupation(s, t))}, earns about ${Sim.income(s, t)}c a day, ${t.purse}c saved${t.arrears ? `, <b>${t.arrears} days behind</b>` : ''}. ${opinionText(t.opinion)}.</p>`).join('') : '<p>Empty. Someone looking for a home may move in.</p>'}
       <div class="stepper"><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent - 1])}' aria-label="Lower rent">&minus;</button><output class="num">${h.rent}c</output><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent + 1])}' aria-label="Raise rent">+</button></div>
       <p>Rent per day. Tenants who cannot pay fall behind; after ${3} days they are evicted. Raising rent makes tenants think less of you.</p>
       <div class="acts">${ts.map(t => UI.confirm === 'evict' + t.id ? B_(`Yes, evict ${esc(t.name)}`, ['evict', h.id, t.id], 'warn') + B_('Cancel', ['ui', 'confirm', null], 'alt') : B_(`Evict ${esc(t.name)}&hellip;`, ['ui', 'confirm', 'evict' + t.id], 'alt')).join('')}</div></div>`;
@@ -3623,6 +3629,7 @@ function renderTitle() {
   pg.innerHTML = `<div class="spread"><div class="leaf">${left}</div><div class="leaf">${right}</div></div>`;
 }
 function enterGame(game, n) {
+  if (Interior.active()) Interior.leave(true); UI.inside = null; UI.myHouse = undefined;
   G = game; slot = n; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
   meta.lastSlot = n; saveMeta();
   resetMeshes(); focus.set(G.player.x, 0, G.player.z); solidKey = '';
@@ -3655,6 +3662,8 @@ function uiCmd(k, v) {
   if (k === 'pause') { openPause(); return; }
   if (k === 'map') { openMap(); return; }
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
+  if (k === 'enter') { const d = insideOf(v); if (d) Interior.enter(d); return; }
+  if (k === 'leave') { Interior.leave(); return; }
   if (k === 'openCard') { UI.openLoc = UI.lastHere; renderCard(true); return; }
   if (k === 'foldCard') { UI.openLoc = null; renderCard(true); return; }
   if (k === 'mapMode') { setMapMode(v); return; }
@@ -3828,7 +3837,7 @@ const Mini = (function () {
   }
   return {
     update(dt) {
-      const el = $('minimap'), show = UI.mode === 'play' && !UI.overlay && G && meta.settings.minimap !== 'off';
+      const el = $('minimap'), show = UI.mode === 'play' && !UI.overlay && !UI.inside && G && meta.settings.minimap !== 'off';
       if (el.hidden === show) el.hidden = !show;
       if (!show) return;
       acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85 }[t] || 60; })();
@@ -3842,11 +3851,302 @@ const Mini = (function () {
   };
 })();
 $('minimap').onclick = () => { if (UI.mode === 'play' && !UI.overlay) openMap(); };
+/* ================= interiors: step through a door and you are inside =================
+   Each room is built when you enter and thrown away when you leave, far from the world so nothing
+   outside can be tapped through it. The walls nearest the camera fade away, like a doll's house. */
+const Interior = (function () {
+  const OX = 6000, OZ = 6000, WH = 3.1;
+  const sc = new THREE.Scene(); sc.background = new THREE.Color('#15110d');
+  sc.add(new THREE.HemisphereLight(0xfff1d6, 0x4a3a2a, 0.8));
+  const key = new THREE.DirectionalLight(0xffe6c0, 0.5); key.position.set(OX + 5, 14, OZ + 9); key.target.position.set(OX, 0, OZ); sc.add(key, key.target);
+  const fireL = new THREE.PointLight(0xff9a4a, 0, 13, 2); sc.add(fireL);
+  const glowM = new THREE.MeshBasicMaterial({ color: 0xff8a3a }), lightM = new THREE.MeshBasicMaterial({ color: 0xf3e2b0 }), candleM = new THREE.MeshBasicMaterial({ color: 0xffd36a });
+  let R = null; const av = { x: 0, z: 0, face: Math.PI, g: null, moving: false };
+  const KIND = Object.assign({}, TRADE_KIND, { mill: 'mill', estate: 'home' });
+  const SIZE = { hut: [5.6, 4.6], home: [7.2, 5.6], tall: [8, 6.4], manor: [10, 7], tavern: [11, 8], smithy: [9, 7], bakery: [8.4, 6.6], butcher: [7.4, 6], fine: [7.4, 6.2], weaver: [9, 6.6], potter: [8.4, 6.4], tanner: [8.4, 7], yard: [10, 7.4], mason: [9, 7], dairy: [8, 6.2], mill: [9.4, 8], shop: [8, 6.4] };
+  const FLOOR = { home: '#7a5a3a', hut: '#6b5a40', smithy: '#5a554e', mason: '#6e6a62', tanner: '#6a5a44', mill: '#7a6a52', yard: '#7a6448' };
+
+  function build(d) {
+    const kind = d.kind === 'home' ? 'home' : (KIND[d.trade] || 'shop');
+    const sz = SIZE[d.kind === 'home' ? d.size : kind] || SIZE.shop, W = sz[0], D = sz[1];
+    const grp = new THREE.Group(); grp.position.set(OX, 0, OZ); sc.add(grp);
+    const parts = [], solids = [], spots = [], seats = [], beds = [], glows = [], walls = { n: [], s: [], e: [], w: [] };
+    const M = (x, y, z, ry, rx, rz, sx, sy, sz2) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx == null ? 1 : sx, sy == null ? 1 : sy, sz2 == null ? 1 : sz2));
+    const B = (c, x, y, z, w, h, dd, ry, rx, rz) => parts.push({ geo: G_BOX, color: c, m: M(x, y, z, ry, rx, rz, w, h, dd) });
+    const P = (geo, c, x, y, z, ry, rx, rz, sx, sy, sz2) => parts.push({ geo, color: c, m: M(x, y, z, ry, rx, rz, sx, sy, sz2) });
+    const S = (x, z, hx, hz) => solids.push({ x, z, hx, hz });
+    const glow = (m, x, y, z, w, h, dd) => { const g = new THREE.Mesh(G_BOX, m); g.position.set(x, y, z); g.scale.set(w, h, dd); grp.add(g); glows.push(g); return g; };
+    const wallC = d.wall || (kind === 'smithy' || kind === 'mason' ? '#8b877c' : kind === 'bakery' || kind === 'dairy' ? '#e6dcc4' : '#c9b48a');
+    // floor, and the four walls kept apart so the ones in front of the camera can fade
+    const fl = FLOOR[d.kind === 'home' ? d.size === 'hut' ? 'hut' : 'home' : kind] || '#7a5a3a';
+    B(fl, 0, -0.05, 0, W + 0.5, 0.1, D + 0.5);
+    if (fl === '#7a5a3a' || fl === '#6b5a40' || fl === '#7a6448') for (let x = -W / 2 + 0.5; x < W / 2; x += 1) B('#6b4d31', x, 0.005, 0, 0.04, 0.01, D);
+    else for (let x = -W / 2 + 0.6; x < W / 2; x += 1.2) for (let z = -D / 2 + 0.6; z < D / 2; z += 1.2) B(((x + z) * 7 | 0) % 2 ? '#625d55' : '#57534c', x, 0.005, z, 1.12, 0.012, 1.12);
+    const wallGroup = (side) => { const g = new THREE.Group(); grp.add(g); walls[side].push(g); return g; };
+    const wallMesh = (side, items) => { const g = wallGroup(side); g.add(new THREE.Mesh(mergeColored(items), vc)); return g; };
+    const WM = (c, x, y, z, w, h, dd) => ({ geo: G_BOX, color: c, m: M(x, y, z, 0, 0, 0, w, h, dd) });
+    const beam = '#4a3424';
+    // back wall (north), with windows
+    { const it = [WM(wallC, 0, WH / 2, -D / 2 - 0.12, W + 0.5, WH, 0.24), WM(beam, 0, WH - 0.1, -D / 2 + 0.02, W, 0.2, 0.08)]; for (let x = -W / 2; x <= W / 2 + 0.01; x += W / 3) it.push(WM(beam, x, WH / 2, -D / 2 + 0.02, 0.16, WH, 0.06)); const g = wallMesh('n', it); [-W / 4, W / 4].forEach(x => { const wnd = new THREE.Mesh(G_BOX, lightM); wnd.position.set(x, 1.8, -D / 2 + 0.01); wnd.scale.set(0.8, 0.9, 0.04); g.add(wnd); }); }
+    // side walls
+    ['w', 'e'].forEach((sd, k) => { const x = (k ? 1 : -1) * (W / 2 + 0.12), it = [WM(wallC, x, WH / 2, 0, 0.24, WH, D + 0.5)]; const g = wallMesh(sd, it); const wnd = new THREE.Mesh(G_BOX, lightM); wnd.position.set(x - (k ? 0.13 : -0.13), 1.8, 0); wnd.scale.set(0.04, 0.9, 0.8); g.add(wnd); });
+    // the front wall, with the door you came in by
+    { const dw = 1.3, it = [WM(wallC, -(W / 2 + dw / 2) / 2 - 0.13, WH / 2, D / 2 + 0.12, W / 2 - dw / 2 + 0.25, WH, 0.24), WM(wallC, (W / 2 + dw / 2) / 2 + 0.13, WH / 2, D / 2 + 0.12, W / 2 - dw / 2 + 0.25, WH, 0.24), WM(wallC, 0, WH - 0.4, D / 2 + 0.12, dw, 0.8, 0.24), WM(beam, 0, WH - 0.82, D / 2 + 0.02, dw + 0.3, 0.14, 0.1)]; wallMesh('s', it); }
+    B('#d8c9a0', 0, 0.02, D / 2 - 0.4, 1.2, 0.03, 0.7);   // the doormat
+    const door = { x: 0, z: D / 2 };
+    // ----- furniture -----
+    const table = (x, z, w, dd, c) => { c = c || '#8a6438'; B(c, x, 0.78, z, w, 0.08, dd); [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => B('#5b4029', x + a * (w / 2 - 0.12), 0.38, z + b * (dd / 2 - 0.12), 0.1, 0.76, 0.1)); S(x, z, w / 2 + 0.05, dd / 2 + 0.05); };
+    const bench = (x, z, len, ry) => { B('#6b4a2e', x, 0.45, z, len, 0.08, 0.36, ry); [-1, 1].forEach(a => B('#5b4029', x + Math.cos(ry || 0) * a * (len / 2 - 0.2), 0.22, z - Math.sin(ry || 0) * a * (len / 2 - 0.2), 0.08, 0.44, 0.3, ry)); };
+    const stool = (x, z) => { P(G_CYL, '#a77a4a', x, 0.48, z, 0, 0, 0, 0.24, 0.07, 0.24); [0, 2.1, 4.2].forEach(a => B('#5b4029', x + Math.cos(a) * 0.14, 0.23, z + Math.sin(a) * 0.14, 0.05, 0.46, 0.05)); };
+    const chest = (x, z, ry, c) => { B(c || '#6b4a2e', x, 0.3, z, 1.0, 0.6, 0.55, ry); B('#3a3632', x, 0.45, z, 1.02, 0.06, 0.57, ry); S(x, z, 0.55, 0.35); };
+    const bed = (x, z, ry, c, big) => { const w = big ? 1.6 : 1.0, l = 2.0, ux = Math.sin(ry), uz = Math.cos(ry); B('#5b4029', x, 0.25, z, w + 0.1, 0.5, l, ry); B('#e9e1cc', x, 0.55, z, w, 0.12, l - 0.1, ry); B(c || '#7a3b2a', x + ux * 0.25, 0.63, z + uz * 0.25, w + 0.02, 0.06, l * 0.65, ry); B('#f1e6c8', x - ux * 0.72, 0.66, z - uz * 0.72, w * 0.8, 0.12, 0.38, ry); B('#5b4029', x - ux * 1.0, 0.6, z - uz * 1.0, w + 0.1, 1.2, 0.1, ry); S(x, z, Math.abs(uz) > 0.5 ? w / 2 + 0.1 : 1.05, Math.abs(uz) > 0.5 ? 1.05 : w / 2 + 0.1); beds.push({ x, z, ry, big }); };
+    const shelf = (x, z, w, ry, items) => { const ux = Math.cos(ry || 0), uz = -Math.sin(ry || 0); [0.9, 1.5, 2.1].forEach(y => B('#6b4a2e', x, y, z, w, 0.05, 0.35, ry)); [-1, 1].forEach(a => B('#5b4029', x + ux * a * w / 2, 1.2, z + uz * a * w / 2, 0.06, 2.4, 0.35, ry)); if (items) for (let k = 0; k < Math.floor(w / 0.32); k++) for (const y of [0.9, 1.5, 2.1]) { const t = -w / 2 + 0.2 + k * 0.32; items(x + ux * t, y + 0.06, z + uz * t, k); } S(x, z, Math.abs(ux) > 0.5 ? w / 2 : 0.25, Math.abs(ux) > 0.5 ? 0.25 : w / 2); };
+    const barrel = (x, z, y) => { P(G_BARREL, '#6b4a2e', x, (y || 0) + 0.35, z); if (!y) S(x, z, 0.38, 0.38); };
+    const rug = (x, z, w, dd, c) => { B(c, x, 0.012, z, w, 0.012, dd); B('#e8d36a', x, 0.016, z, w - 0.3, 0.012, 0.08); };
+    const hearth = (x, z, ry, big) => { const ux = Math.sin(ry), uz = Math.cos(ry), w = big ? 2.0 : 1.6; B('#7d776a', x, 0.6, z, w, 1.2, 0.9, ry); B('#6c675e', x - ux * 0.15, 2.1, z - uz * 0.15, w * 0.7, 1.8, 0.6, ry); B('#2a1f16', x + ux * 0.3, 0.5, z + uz * 0.3, w * 0.6, 0.7, 0.3, ry); glow(glowM, x + ux * 0.38, 0.32, z + uz * 0.38, Math.abs(uz) > 0.5 ? w * 0.45 : 0.2, 0.22, Math.abs(uz) > 0.5 ? 0.2 : w * 0.45); for (let k = 0; k < 3; k++) P(GEO.log, '#5b4029', x + ux * 0.35 + (Math.abs(uz) > 0.5 ? -0.2 + k * 0.2 : 0), 0.2, z + uz * 0.35 + (Math.abs(ux) > 0.5 ? -0.2 + k * 0.2 : 0), ry, 0, Math.PI / 2, 1, 0.6, 1); R0.fire = { x: x + ux * 0.8, y: 0.8, z: z + uz * 0.8 }; S(x, z, Math.abs(uz) > 0.5 ? w / 2 : 0.5, Math.abs(uz) > 0.5 ? 0.5 : w / 2); };
+    const counter = (x, z, w, ry, c) => { B(c || '#7a5634', x, 0.5, z, w, 1.0, 0.6, ry); B('#8a6438', x, 1.03, z, w + 0.1, 0.06, 0.7, ry); S(x, z, Math.abs(Math.cos(ry || 0)) > 0.5 ? w / 2 : 0.35, Math.abs(Math.cos(ry || 0)) > 0.5 ? 0.35 : w / 2); };
+    const candle = (x, y, z) => { B('#efe6c8', x, y + 0.08, z, 0.05, 0.16, 0.05); glow(candleM, x, y + 0.2, z, 0.04, 0.06, 0.04); };
+    const stairs = (x, z) => { for (let k = 0; k < 7; k++) B('#6b4a2e', x, (k + 1) * 0.2, z - k * 0.42, 1.0, (k + 1) * 0.4, 0.42); S(x, z - 1.3, 0.55, 1.6); };
+    const spot = (x, z, face, pose) => spots.push({ x, z, face, pose: pose || 'work' });
+    const seat = (x, z, face) => seats.push({ x, z, face });
+    const R0 = { fire: null };
+    // ----- each kind of room -----
+    if (kind === 'home') {
+      const hut = d.size === 'hut', tall = d.size === 'tall', comfort = d.comfort || 0;
+      hearth(-W / 2 + 0.6, -D / 2 + 1.3, Math.PI / 2, !hut);
+      table(0.2, 0.2, hut ? 1.2 : 1.8, hut ? 0.8 : 1.0); bench(0.2, -0.55 + (hut ? 0.1 : 0), hut ? 1.2 : 1.8); bench(0.2, 0.95 - (hut ? 0.1 : 0), hut ? 1.2 : 1.8);
+      seat(-0.3, -0.5, 0); seat(0.7, -0.5, 0); seat(-0.3, 0.9, Math.PI); seat(0.7, 0.9, Math.PI);
+      P(GEO.loaf, '#c48a3f', 0.2, 0.86, 0.2); P(GEO.mug, '#8a6438', -0.3, 0.82, 0.3); P(GEO.mug, '#8a6438', 0.6, 0.82, 0.1);
+      bed(W / 2 - 0.8, -D / 2 + 1.15, -Math.PI / 2, '#7a3b2a', !hut);
+      if (tall) { bed(W / 2 - 2.2, -D / 2 + 1.15, -Math.PI / 2, '#2f5d7a'); chest(-1.7, D / 2 - 0.5, 0); rug(0.2, 0.2, 2.8, 2.2, '#8e2b22'); for (let k = 0; k < 7; k++) B('#6b4a2e', 0.9 + k * 0.42, (k + 1) * 0.2, D / 2 - 0.6, 0.42, (k + 1) * 0.4, 1.0); S(2.2, D / 2 - 0.6, 1.5, 0.55); }
+      else if (!hut) { bed(W / 2 - 0.65, D / 2 - 1.2, -Math.PI / 2, '#2f5d7a'); chest(W / 2 - 2.4, -D / 2 + 0.4, 0); rug(0.2, 0.2, 2.8, 2.2, '#8e2b22'); }
+      else chest(W / 2 - 0.6, D / 2 - 0.6, Math.PI / 2, '#5b4029');
+      shelf(-W / 2 + 0.25, D / 2 - 1.3, hut ? 1.0 : 1.4, Math.PI / 2, (x, y, z, k) => k % 2 ? P(GEO.mug, '#a89a80', x, y, z) : P(GEO.loaf, '#c9a24a', x, y + 0.04, z, 0, 0, 0, 0.8, 0.6, 0.8));
+      if (comfort >= 1 || d.size === 'manor') { rug(-1.6, 1.6, 1.4, 1.0, '#2f5d7a'); B('#6b4a2e', -W / 2 + 0.4, 1.6, -0.2, 0.06, 0.9, 1.2); B('#c9a24a', -W / 2 + 0.44, 1.6, -0.2, 0.02, 0.7, 1.0); }
+      spot(-W / 2 + 1.6, -D / 2 + 1.4, -Math.PI / 2, 'work');
+      for (let k = 0; k < 3; k++) candle(0.2 + (k - 1) * 0.5, 0.82, 0.25 + (k % 2) * 0.1);
+    } else if (kind === 'tavern') {
+      counter(-W / 2 + 2.2, -D / 2 + 1.6, 3.6, 0); B('#5b4029', -W / 2 + 2.2, 1.4, -D / 2 + 0.3, 3.8, 0.08, 0.5); for (let k = 0; k < 4; k++) P(G_BARREL, '#6b4a2e', -W / 2 + 0.8 + k * 0.9, 0.35 + 0, -D / 2 + 0.45, 0, Math.PI / 2, 0); for (let k = 0; k < 4; k++) P(G_BARREL, '#7a5232', -W / 2 + 0.8 + k * 0.9, 1.75, -D / 2 + 0.45, 0, Math.PI / 2, 0); S(-W / 2 + 2.2, -D / 2 + 0.45, 1.9, 0.4);
+      for (let k = 0; k < 6; k++) P(GEO.mug, '#8a6438', -W / 2 + 0.8 + k * 0.55, 1.1, -D / 2 + 1.6);
+      spot(-W / 2 + 2.2, -D / 2 + 1.0, 0, 'work'); spot(-W / 2 + 1.0, -D / 2 + 1.0, 0, 'work');
+      hearth(W / 2 - 0.6, -D / 2 + 1.6, -Math.PI / 2, true);
+      [[-1.6, 1.4], [1.4, 0.2], [1.4, 2.6], [-1.6, -0.6 + 3.4], [3.6, 1.4]].forEach(([x, z], k) => { if (Math.abs(x) > W / 2 - 1 || Math.abs(z) > D / 2 - 1) return; table(x, z, 1.2, 1.0, '#7a5634'); [[-0.85, 0, Math.PI / 2], [0.85, 0, -Math.PI / 2], [0, -0.75, 0], [0, 0.75, Math.PI]].forEach(([u, v, f], j) => { stool(x + u, z + v); seat(x + u, z + v, f); }); P(GEO.mug, '#8a6438', x - 0.2, 0.82, z); P(GEO.mug, '#8a6438', x + 0.25, 0.82, z + 0.15); candle(x, 0.82, z - 0.2); });
+      stairs(W / 2 - 0.8, D / 2 - 0.4);
+    } else if (kind === 'smithy') {
+      const fx = -W / 2 + 1.4, fz = -D / 2 + 1.2;
+      B('#7d776a', fx, 0.5, fz, 2.2, 1.0, 1.6); B('#55504a', fx, 1.02, fz, 1.6, 0.06, 1.1); glow(glowM, fx, 1.07, fz, 1.2, 0.04, 0.8); B('#6c675e', fx, 2.3, fz - 0.3, 1.4, 2.6, 1.0); S(fx, fz, 1.15, 0.85); R0.fire = { x: fx, y: 1.4, z: fz + 0.6 };
+      B('#6b4a2e', fx + 1.5, 0.6, fz - 0.3, 0.6, 0.5, 1.0); B('#8a6d48', fx + 1.5, 0.88, fz - 0.3, 0.5, 0.08, 0.9);
+      const ax = 0.2, az = -0.2; B('#3a3632', ax, 0.3, az, 0.4, 0.6, 0.35); B('#4a4744', ax, 0.68, az, 0.95, 0.2, 0.38); B('#4a4744', ax + 0.55, 0.7, az, 0.3, 0.12, 0.2); S(ax, az, 0.5, 0.25);
+      spot(ax, az + 0.75, Math.PI, 'work'); spot(fx + 0.4, fz + 1.1, Math.PI, 'work');
+      P(G_CYL, '#5b4029', 1.6, 0.4, -1.4, 0, 0, 0, 0.45, 0.8, 0.45); P(G_CYL, '#3a4a55', 1.6, 0.81, -1.4, 0, 0, 0, 0.4, 0.02, 0.4); S(1.6, -1.4, 0.45, 0.45);
+      B('#6b4a2e', W / 2 - 0.15, 1.6, -0.4, 0.08, 1.2, 2.4); for (let k = 0; k < 7; k++) B('#5a5550', W / 2 - 0.25, 1.5 + (k % 2) * 0.2, -1.4 + k * 0.33, 0.06, 0.7, 0.06);
+      B('#2a2826', W / 2 - 1.0, 0.25, D / 2 - 1.2, 1.2, 0.5, 1.0); for (let k = 0; k < 6; k++) P(GEO.ore, '#3a3632', W / 2 - 1.3 + (k % 3) * 0.3, 0.55, D / 2 - 1.4 + (k > 2 ? 0.35 : 0)); S(W / 2 - 1.0, D / 2 - 1.2, 0.6, 0.5);
+      table(-W / 2 + 1.2, D / 2 - 1.4, 1.6, 0.8, '#6b4a2e'); for (let k = 0; k < 3; k++) P(G_WHEEL, '#4a4744', -W / 2 + 0.8 + k * 0.4, 0.86, D / 2 - 1.4, 0, Math.PI / 2, 0, 0.25, 0.25, 0.5);
+    } else if (kind === 'bakery') {
+      const ox = -W / 2 + 1.5, oz = -D / 2 + 1.4;
+      P(G_HEMI, '#b9866a', ox, 0.9, oz, 0, 0, 0, 1.5, 1.4, 1.4); B('#9a6a4e', ox, 0.45, oz, 3.0, 0.9, 2.8); B('#2a1f16', ox, 1.2, oz + 1.38, 0.8, 0.6, 0.06); glow(glowM, ox, 1.12, oz + 1.36, 0.6, 0.35, 0.04); S(ox, oz, 1.5, 1.4); R0.fire = { x: ox, y: 1.2, z: oz + 1.8 };
+      table(0.6, -0.4, 2.0, 1.0, '#c9a87a'); for (let k = 0; k < 4; k++) P(GEO.loaf, '#e8d6a8', 0.0 + k * 0.4, 0.88, -0.4, 0, 0, 0, 1.4, 0.8, 1.6);
+      spot(0.6, 0.35, Math.PI, 'work'); spot(ox + 0.4, oz + 2.0, Math.PI, 'work');
+      counter(0.6, D / 2 - 1.3, 3.2, 0); for (let k = 0; k < 7; k++) P(GEO.loaf, '#c48a3f', -0.8 + k * 0.45, 1.12, D / 2 - 1.3, 0, 0, 0, 1.3, 0.9, 1.6);
+      shelf(W / 2 - 0.25, -0.6, 2.4, Math.PI / 2, (x, y, z) => P(GEO.loaf, '#b97a36', x, y + 0.05, z, 0, 0, 0, 1.2, 0.8, 1.4));
+      for (let k = 0; k < 5; k++) P(GEO.sack, '#e8dcbc', W / 2 - 0.6, 0.35 + (k > 2 ? 0.45 : 0), D / 2 - 0.6 - (k % 3) * 0.55, 0, 0, 0, 1.3, 1.2, 1.3); S(W / 2 - 0.6, D / 2 - 1.1, 0.45, 0.8);
+      for (let k = 0; k < 8; k++) P(GEO.log, '#7a5232', -W / 2 + 0.6 + (k % 4) * 0.3, 0.15 + Math.floor(k / 4) * 0.24, D / 2 - 0.6, 0, 0, Math.PI / 2);
+    } else if (kind === 'butcher') {
+      counter(0, 0.6, 3.6, 0, '#a77a4a'); for (let k = 0; k < 5; k++) P(GEO.sack, '#b5604a', -1.4 + k * 0.7, 1.12, 0.6, 0, 0, 0, 0.9, 0.35, 0.7);
+      B('#4a3424', 0, 2.5, -1.2, W - 1, 0.08, 0.08); for (let k = 0; k < 7; k++) { P(GEO.sack, '#9a4a3a', -2.4 + k * 0.8, 1.9, -1.2, 0, 0, 0, 0.6, 1.3, 0.6); B('#d8c9a0', -2.4 + k * 0.8, 2.35, -1.2, 0.02, 0.3, 0.02); }
+      P(G_CYL, '#7a5634', -W / 2 + 1, 0.45, -D / 2 + 1, 0, 0, 0, 0.5, 0.9, 0.5); S(-W / 2 + 1, -D / 2 + 1, 0.5, 0.5); table(W / 2 - 1.2, -D / 2 + 1.0, 1.6, 0.9, '#8a6d48');
+      spot(0, -0.2, 0, 'work'); spot(-W / 2 + 1, -D / 2 + 1.8, Math.PI, 'work');
+      for (let k = 0; k < 3; k++) barrel(W / 2 - 0.5, D / 2 - 0.6 - k * 0.85);
+    } else if (kind === 'fine') {
+      const t = d.trade, ware = t === 'goldsmith' ? '#e8c45a' : t === 'apothecary' ? '#5f8f6a' : t === 'chandler' ? '#f2e3a6' : '#8a5a78';
+      counter(0, 0.2, 3.4, 0, t === 'goldsmith' ? '#5b4029' : '#7a5634');
+      if (t === 'goldsmith') { for (let k = 0; k < 4; k++) { B('#a8c4d0', -1.2 + k * 0.8, 1.15, 0.2, 0.6, 0.18, 0.5); B('#e8c45a', -1.2 + k * 0.8, 1.1, 0.2, 0.3, 0.06, 0.2); } B('#3a3632', W / 2 - 0.7, 0.6, -D / 2 + 0.6, 1.0, 1.2, 0.8); B('#d9b04a', W / 2 - 0.7, 0.8, -D / 2 + 1.01, 0.12, 0.12, 0.02); S(W / 2 - 0.7, -D / 2 + 0.6, 0.55, 0.45); table(-W / 2 + 1.2, -D / 2 + 1.0, 1.4, 0.8, '#6b4a2e'); B('#4a4744', -W / 2 + 1.0, 0.9, -D / 2 + 1.0, 0.3, 0.2, 0.2); glow(candleM, -W / 2 + 1.5, 0.95, -D / 2 + 1.0, 0.1, 0.1, 0.1); }
+      if (t === 'tailor') { table(-0.8, -D / 2 + 1.3, 2.2, 1.0, '#8a6d48'); for (let k = 0; k < 4; k++) P(G_CYL, ['#2f5d7a', '#8e2b22', '#e9e1cc', '#4f6b3a'][k], -1.6 + k * 0.5, 0.95, -D / 2 + 1.3, 0, 0, Math.PI / 2, 0.15, 0.9, 0.15); B('#c9b48a', W / 2 - 0.9, 0.9, 0.8, 0.5, 1.2, 0.35); B('#5b4029', W / 2 - 0.9, 0.2, 0.8, 0.1, 0.4, 0.1); P(GEO.sack, '#c9b48a', W / 2 - 0.9, 1.6, 0.8, 0, 0, 0, 0.6, 0.6, 0.6); S(W / 2 - 0.9, 0.8, 0.3, 0.3); }
+      if (t === 'apothecary') { B('#3f6b4a', 0, 2.6, -D / 2 + 0.6, W - 1.2, 0.06, 0.06); for (let k = 0; k < 9; k++) P(GEO.sack, k % 2 ? '#6f8f45' : '#8a9a5a', -2.6 + k * 0.65, 2.35, -D / 2 + 0.6, 0, 0, 0, 0.35, 0.8, 0.35); table(-W / 2 + 1.2, -0.8, 1.2, 0.8); P(G_KILN, '#8a7a6a', -W / 2 + 1.2, 0.95, -0.8, 0, Math.PI, 0, 0.18, 0.3, 0.18); }
+      if (t === 'chandler') { for (let k = 0; k < 6; k++) candle(-1.3 + k * 0.5, 1.06, 0.2); B('#4a3424', 0, 2.4, -D / 2 + 1.0, 3, 0.06, 0.06); for (let k = 0; k < 10; k++) B('#efe6c8', -1.4 + k * 0.3, 2.05, -D / 2 + 1.0, 0.05, 0.6, 0.05); P(G_CYL, '#6b5a3a', W / 2 - 1.0, 0.45, -D / 2 + 1.0, 0, 0, 0, 0.5, 0.9, 0.5); S(W / 2 - 1.0, -D / 2 + 1.0, 0.5, 0.5); }
+      shelf(-W / 2 + 0.25, 0.4, 2.6, Math.PI / 2, (x, y, z, k) => B(ware, x, y + 0.08, z, 0.14, t === 'chandler' ? 0.3 : 0.16, 0.14));
+      shelf(0, -D / 2 + 0.25, 2.8, 0, (x, y, z, k) => P(G_KILN, k % 2 ? ware : '#b9a47a', x, y + 0.1, z, 0, Math.PI, 0, 0.09, 0.2, 0.09));
+      spot(0, -0.5, 0, 'work'); spot(-W / 2 + 1.2, -D / 2 + 1.8, Math.PI, 'work');
+      for (let k = 0; k < 2; k++) candle(-0.6 + k * 1.2, 1.06, 0.35);
+    } else if (kind === 'weaver') {
+      const loom = (x, z) => { [[-0.8, -0.5], [0.8, -0.5], [-0.8, 0.5], [0.8, 0.5]].forEach(([u, v]) => B('#6b4a2e', x + u, 0.8, z + v, 0.1, 1.6, 0.1)); B('#6b4a2e', x, 1.6, z - 0.5, 1.7, 0.1, 0.1); B('#6b4a2e', x, 0.7, z + 0.5, 1.7, 0.1, 0.1); B(['#2f5d7a', '#8e2b22', '#c9a24a'][Math.abs(x | 0) % 3], x, 1.0, z, 1.4, 0.02, 1.0, 0, -0.5); S(x, z, 0.9, 0.6); spot(x, z + 1.0, Math.PI, 'work'); };
+      loom(-W / 2 + 1.5, -D / 2 + 1.3); loom(0.4, -D / 2 + 1.3); loom(W / 2 - 1.5, -D / 2 + 1.3);
+      P(G_WHEEL, '#6b4a2e', -W / 2 + 1.2, 0.9, D / 2 - 1.2, Math.PI / 2, 0, 0, 0.8, 0.8, 0.8); B('#5b4029', -W / 2 + 1.2, 0.4, D / 2 - 1.2, 0.8, 0.1, 0.3); stool(-W / 2 + 1.9, D / 2 - 1.2); S(-W / 2 + 1.2, D / 2 - 1.2, 0.5, 0.4); spot(-W / 2 + 1.9, D / 2 - 1.2, -Math.PI / 2, 'work');
+      for (let k = 0; k < 8; k++) P(G_CYL, ['#2f5d7a', '#8e2b22', '#e9e1cc', '#4f6b3a', '#c9a24a'][k % 5], W / 2 - 0.6, 0.2 + Math.floor(k / 4) * 0.4, D / 2 - 2.6 + (k % 4) * 0.45, 0, Math.PI / 2, 0, 0.18, 1.0, 0.18); S(W / 2 - 0.6, D / 2 - 2.0, 0.5, 1.0);
+      table(1.2, D / 2 - 1.4, 1.8, 0.9, '#8a6d48');
+    } else if (kind === 'potter') {
+      const wheel = (x, z) => { P(G_CYL, '#6b4a2e', x, 0.35, z, 0, 0, 0, 0.5, 0.7, 0.5); P(G_CYL, '#8a6d48', x, 0.75, z, 0, 0, 0, 0.4, 0.06, 0.4); P(G_KILN, '#a8714d', x, 0.92, z, 0, Math.PI, 0, 0.15, 0.3, 0.15); stool(x, z + 0.7); S(x, z, 0.45, 0.45); spot(x, z + 0.7, Math.PI, 'work'); };
+      wheel(-1.2, -0.6); wheel(1.0, -0.6);
+      shelf(0, -D / 2 + 0.25, W - 1.6, 0, (x, y, z, k) => P(G_KILN, ['#b5704a', '#a8714d', '#c88a5a'][k % 3], x, y + 0.13, z, 0, Math.PI, 0, 0.12, 0.26, 0.12));
+      for (let k = 0; k < 3; k++) { P(G_CYL, '#5b4029', -W / 2 + 0.7, 0.4, D / 2 - 0.8 - k * 0.9, 0, 0, 0, 0.38, 0.8, 0.38); P(G_CYL, '#8a5a40', -W / 2 + 0.7, 0.81, D / 2 - 0.8 - k * 0.9, 0, 0, 0, 0.33, 0.02, 0.33); } S(-W / 2 + 0.7, D / 2 - 1.7, 0.4, 1.3);
+      table(W / 2 - 1.2, D / 2 - 1.4, 1.6, 0.9, '#8a6d48'); for (let k = 0; k < 4; k++) P(G_KILN, '#c88a5a', W / 2 - 1.8 + k * 0.4, 0.95, D / 2 - 1.4, 0, Math.PI, 0, 0.12, 0.26, 0.12);
+    } else if (kind === 'tanner') {
+      for (let k = 0; k < 4; k++) { const x = -W / 2 + 1.2 + (k % 2) * 1.6, z = -D / 2 + 1.2 + Math.floor(k / 2) * 1.8; P(G_CYL, '#5b4029', x, 0.45, z, 0, 0, 0, 0.65, 0.9, 0.65); P(G_CYL, ['#6b5a3a', '#7a6a4a', '#4f4a3a', '#5a4a30'][k], x, 0.91, z, 0, 0, 0, 0.58, 0.02, 0.58); S(x, z, 0.65, 0.65); }
+      spot(-W / 2 + 2.0, -D / 2 + 2.1, 0, 'work');
+      [0.8, 2.4].forEach(x => { B('#4a3424', x - 0.8, 1.0, -D / 2 + 0.6, 0.1, 2.0, 0.1); B('#4a3424', x + 0.8, 1.0, -D / 2 + 0.6, 0.1, 2.0, 0.1); B('#9a6a44', x, 1.2, -D / 2 + 0.6, 1.5, 1.3, 0.04); });
+      table(W / 2 - 1.3, 0.6, 1.8, 1.0, '#7a6448'); B('#a8784a', W / 2 - 1.3, 0.86, 0.6, 1.4, 0.03, 0.8); spot(W / 2 - 1.3, 1.4, Math.PI, 'work');
+      for (let k = 0; k < 5; k++) B('#8a5a34', -W / 2 + 0.6 + k * 0.1, 0.1 + k * 0.08, D / 2 - 0.9, 1.0, 0.06, 0.8);
+    } else if (kind === 'yard' || kind === 'shop') {
+      const t = d.trade;
+      table(-0.4, -D / 2 + 1.2, 3.2, 1.0, '#8a6d48'); B('#6b4a2e', -0.4, 1.6, -D / 2 + 0.15, 3.2, 1.2, 0.06); for (let k = 0; k < 8; k++) B('#5a5550', -1.8 + k * 0.4, 1.6, -D / 2 + 0.22, 0.05, 0.6, 0.05);
+      spot(-1.0, -D / 2 + 2.0, Math.PI, 'work'); spot(0.6, -D / 2 + 2.0, Math.PI, 'work');
+      for (let k = 0; k < 12; k++) P(GEO.log, '#9a7650', W / 2 - 0.5 - (k % 3) * 0.3, 0.2 + Math.floor(k / 3) * 0.26, -0.5, 0, Math.PI / 2, 0, 1, 2.6, 1); S(W / 2 - 0.8, -0.5, 0.5, 1.4);
+      if (t === 'wheelwright' || t === 'carter') { for (let k = 0; k < 4; k++) P(G_WHEEL, '#6b4a2e', -W / 2 + 0.3, 0.75, D / 2 - 1.0 - k * 0.5, Math.PI / 2); B('#7a5634', 0, 0.7, 1.4, 2.4, 0.4, 1.3); P(G_WHEEL, '#5b4029', 0, 0.6, 2.1); S(0, 1.4, 1.3, 0.8); }
+      else if (t === 'cooper') { [[-W / 2 + 0.6, 1.4], [-W / 2 + 0.6, 0.5], [-W / 2 + 0.6, 2.3], [-W / 2 + 1.5, 1.9], [0.4, 1.2]].forEach(([x, z]) => barrel(x, z)); P(G_BARREL, '#7a5232', -W / 2 + 0.6, 1.05, 0.95); for (let k = 0; k < 3; k++) P(G_WHEEL, '#5a5550', 1.6 + k * 0.6, 0.3, 1.6, 0, Math.PI / 2, 0, 0.5, 0.5, 1); }
+      else if (t === 'boatwright') { P(G_HEMI, '#7a5634', 0, 0.5, 1.2, 0, Math.PI, 0, 2.8, 0.8, 0.9); B('#5b4029', 0, 0.52, 1.2, 5.6, 0.06, 0.1); S(0, 1.2, 2.8, 0.9); }
+      else { B('#9a7650', 0.4, 0.6, 1.4, 1.8, 0.12, 0.5); B('#4a3424', 0.4, 0.3, 1.4, 1.4, 0.6, 0.1); S(0.4, 1.4, 0.9, 0.3); P(GEO.stool, '#a77a4a', -1.6, 0, 1.6); P(GEO.stool, '#a77a4a', -2.2, 0, 1.4); for (let k = 0; k < 6; k++) B('#b08a5a', -W / 2 + 0.6, 0.06 + k * 0.08, -0.4, 0.5, 0.06, 2.6); }
+    } else if (kind === 'mason') {
+      [[1.4, 0.4, 1.2, 1.2, 0.8, 0.9], [1.4, 1.15, 1.2, 0.9, 0.7, 0.8], [-1.6, 0.35, 1.4, 1.4, 0.7, 1.0], [W / 2 - 0.9, 0.4, -1.4, 1.0, 0.8, 1.6]].forEach(([x, y, z, w, h, dd]) => { B('#c9c2b2', x, y, z, w, h, dd); if (y < 0.5) S(x, z, w / 2, dd / 2); });
+      table(-0.6, -D / 2 + 1.2, 2.6, 1.0, '#7d776a'); B('#c9c2b2', -0.6, 1.0, -D / 2 + 1.2, 0.8, 0.4, 0.6); spot(-0.6, -D / 2 + 2.0, Math.PI, 'work'); spot(-1.6, 2.2, Math.PI, 'work');
+      B('#6b4a2e', -W / 2 + 0.15, 1.6, 0, 0.06, 1.2, 2.4);
+    } else if (kind === 'dairy') {
+      for (let k = 0; k < 5; k++) P(G_CYL, '#b9b4ab', -W / 2 + 0.7 + k * 0.6, 0.4, -D / 2 + 0.6, 0, 0, 0, 0.25, 0.8, 0.25); S(0, -D / 2 + 0.6, W / 2, 0.3);
+      table(0, -0.4, 2.4, 1.0, '#c9a87a'); for (let k = 0; k < 4; k++) P(GEO.sack, '#f1e3b0', -0.8 + k * 0.5, 0.92, -0.4, 0, 0, 0, 0.9, 0.5, 0.9); spot(0, 0.4, Math.PI, 'work');
+      P(G_CYL, '#8a6d48', W / 2 - 1.0, 0.5, 0.6, 0, 0, 0, 0.35, 1.0, 0.35); B('#6b4a2e', W / 2 - 1.0, 1.2, 0.6, 0.06, 0.8, 0.06); S(W / 2 - 1.0, 0.6, 0.4, 0.4); spot(W / 2 - 1.0, 1.3, Math.PI, 'work');
+      shelf(-W / 2 + 0.25, 1.2, 2.2, Math.PI / 2, (x, y, z) => P(GEO.sack, '#f1e3b0', x, y + 0.1, z, 0, 0, 0, 0.7, 0.45, 0.7));
+    } else if (kind === 'mill') {
+      P(G_CYL, '#8b877c', 0, 0.5, -0.6, 0, 0, 0, 1.4, 0.4, 1.4); P(G_CYL, '#9a948a', 0, 0.8, -0.6, 0, 0, 0, 1.35, 0.25, 1.35); B('#6b4a2e', 0, 1.9, -0.6, 0.6, 1.8, 0.6); P(G_KILN, '#8a6d48', 0, 3.0, -0.6, 0, Math.PI, 0, 0.9, 1.0, 0.9); S(0, -0.6, 1.5, 1.5);
+      spot(1.8, -0.6, -Math.PI / 2, 'work'); spot(-1.8, 0.6, Math.PI / 2, 'work');
+      for (let k = 0; k < 10; k++) P(GEO.sack, k % 2 ? '#e8dcbc' : '#d8c69a', W / 2 - 0.6 - (k % 2) * 0.6, 0.35 + (k > 5 ? 0.45 : 0), -D / 2 + 0.8 + (k % 5) * 0.6, 0, 0, 0, 1.3, 1.2, 1.3); S(W / 2 - 0.9, -D / 2 + 2.0, 0.7, 1.5);
+    }
+    const mesh0 = new THREE.Mesh(mergeColored(parts), vc); grp.add(mesh0);
+    // a little warm light from every fire
+    if (R0.fire) { fireL.position.set(OX + R0.fire.x, R0.fire.y + 0.4, OZ + R0.fire.z); fireL.intensity = 1.1; } else { fireL.position.set(OX, 2.6, OZ); fireL.intensity = 0.6; }
+    // anyone not given a working spot stands about near the door, or sits
+    if (!seats.length) for (let k = 0; k < 4; k++) seats.push({ x: -1.2 + k * 0.8, z: D / 2 - 1.4, face: Math.PI, stand: true });
+    return { grp, W, D, solids, spots, seats, beds, walls, glows, door, kind, mesh: mesh0 };
+  }
+
+  // who is in here right now
+  function occupants(d) {
+    const s = G, out = [], hr = Sim.hourOf(s), night = hr >= 21 || hr < 6;
+    const near = (a, r) => Math.hypot(a.x - d.x, a.z - d.z) < r;
+    for (const a of s.agents) {
+      const p = a.pid && s.people[a.pid]; if (!p || p.status !== 'here') continue;
+      if (d.kind === 'home') { if (p.home === 'you' && (a.indoors || near(a, 12))) out.push({ a, p, role: night ? 'bed' : 'home' }); continue; }
+      const staff = p.job && p.job.type === 'biz' && p.job.biz === d.bizId;
+      if (staff && near(a, 16) && !night) out.push({ a, p, role: 'staff' });
+      else if (!staff && !a.moving && near(a, 9) && out.length < 12) out.push({ a, p, role: 'guest' });
+    }
+    if (d.shop && d.shop.worker) out.push({ w: d.shop.worker, role: 'staff', shop: d.shop });
+    return out;
+  }
+  function charFor(o) {
+    let g;
+    if (o.w) { const fem = Sim.sexOf({ name: o.w.name }) === 'f'; g = makeChar({ tunic: '#b8a079', skin: SKIN[o.w.name.length % SKIN.length], apron: APRON[o.shop.trade], chef: o.shop.trade === 'bakery', pick: 'w:' + o.shop.id, fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[o.w.name.length % 5] }); }
+    else { const a = o.a, look = lookOf0(G, a); g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[(a.pid ? +a.pid.slice(1) : a.id) % SKIN.length], pick: a.id }, look)); if (o.p.kid) g.scale.setScalar(0.42 + Math.min(16, o.p.age) / 16 * 0.55); }
+    sc.add(g); return g;
+  }
+  function drop(g) { if (g.parent) g.parent.remove(g); const h = g.children.find(c => c.material === hitMat); const i = pickables.indexOf(h); if (i >= 0) pickables.splice(i, 1); }
+  function seatPeople() {
+    const want = occupants(R.d), keyOf = o => o.w ? 'w:' + o.shop.id : o.a.id, have = new Map(R.people.map(x => [x.key, x]));
+    const keep = []; const freeSpots = R.spots.slice(), freeSeats = R.seats.slice(), freeBeds = R.beds.slice();
+    for (const o of want) {
+      const k = keyOf(o); let x = have.get(k); have.delete(k);
+      if (!x) { x = { key: k, g: charFor(o) }; }
+      let at = null, pose = 'stand';
+      if (o.role === 'bed' && freeBeds.length) { const b = freeBeds.shift(); at = { x: b.x, z: b.z, face: b.ry }; pose = 'bed'; if (b.big && R.beds.length && freeBeds.length === R.beds.length - 1) freeBeds.unshift({ x: b.x + Math.cos(b.ry) * 0.4, z: b.z - Math.sin(b.ry) * 0.4, ry: b.ry }); }
+      else if (o.role === 'staff' && freeSpots.length) { at = freeSpots.shift(); pose = 'work'; }
+      else if (freeSeats.length) { at = freeSeats.shift(); pose = at.stand ? 'stand' : 'sit'; }
+      else if (freeSpots.length) { at = freeSpots.shift(); pose = 'work'; }
+      if (!at) { drop(x.g); continue; }
+      x.at = at; x.pose = pose; keep.push(x);
+      const g = x.g; g.rotation.set(0, 0, 0);
+      if (pose === 'bed') { g.position.set(OX + at.x, 0.62, OZ + at.z); g.rotation.order = 'YXZ'; g.rotation.y = at.face + Math.PI; g.rotation.x = -Math.PI / 2; }
+      else { g.position.set(OX + at.x, pose === 'sit' ? 0.12 : 0, OZ + at.z); g.rotation.y = at.face; }
+    }
+    for (const [, x] of have) drop(x.g);
+    R.people = keep;
+  }
+  function enter(d) {
+    if (R) leave(true);
+    const r = build(d); R = Object.assign(r, { d, people: [], t: 0 });
+    av.x = 0; av.z = R.D / 2 - 0.9; av.face = Math.PI;
+    av.g = makeChar(Object.assign(lookOpts(G.look), { player: true })); sc.add(av.g);
+    R.prevCam = { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist };
+    cam.yaw = 0.3; cam.pitch = 1.0; cam.dist = Math.max(R.W, R.D) * 1.2 + 3;
+    seatPeople();
+    UI.inside = d; UI.sel = null; UI.loc = null;
+    toast(d.kind === 'home' ? 'You step inside ' + d.name + '.' : 'You step into ' + d.name + '.', 'info', true);
+    renderCard(true);
+  }
+  function leave(quiet) {
+    if (!R) return;
+    R.people.forEach(x => drop(x.g)); if (av.g) drop(av.g); av.g = null;
+    sc.remove(R.grp); R.grp.traverse(o => { if (o.geometry && o.geometry !== G_BOX) o.geometry.dispose(); });
+    if (R.prevCam) Object.assign(cam, R.prevCam);
+    const d = R.d; R = null; UI.inside = null; UI.sel = null;
+    if (!quiet && G) { const p = G.player; p.x = d.door.x; p.z = d.door.z; p.dest = null; focus.set(p.x, 0, p.z); renderCard(true); }
+  }
+  function step(dt, t) {
+    if (!R) return;
+    let mx = stick.move.x, my = stick.move.y;
+    mx += (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+    my += (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
+    const m = Math.hypot(mx, my); av.moving = m > 0.15;
+    if (av.moving) {
+      if (m > 1) { mx /= m; my /= m; }
+      const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
+      const vx = rx * mx + fx * -my, vz = rz * mx + fz * -my, sp = 3.2 * dt;
+      av.face = Math.atan2(vx, vz);
+      for (let i = 0; i < 4; i++) {
+        av.x += vx * sp / 4; av.z += vz * sp / 4;
+        for (const o of R.solids) { const dx = av.x - o.x, dz = av.z - o.z, px = o.hx + 0.28 - Math.abs(dx), pz = o.hz + 0.28 - Math.abs(dz); if (px > 0 && pz > 0) { if (px < pz) av.x += Math.sign(dx) * px; else av.z += Math.sign(dz) * pz; } }
+        for (const x of R.people) { if (x.pose === 'bed') continue; const dx = av.x - x.at.x, dz = av.z - x.at.z, dd = Math.hypot(dx, dz); if (dd < 0.5 && dd > 0.001) { av.x = x.at.x + dx / dd * 0.5; av.z = x.at.z + dz / dd * 0.5; } }
+        av.x = clamp(av.x, -R.W / 2 + 0.3, R.W / 2 - 0.3);
+        if (av.z > R.D / 2 - 0.3) { if (Math.abs(av.x) < 0.55 && av.z > R.D / 2 + 0.1) { leave(); return; } if (Math.abs(av.x) >= 0.55) av.z = R.D / 2 - 0.3; }
+        av.z = Math.max(av.z, -R.D / 2 + 0.3);
+      }
+    }
+    const g = av.g; g.position.set(OX + av.x, 0, OZ + av.z); let df = av.face - g.rotation.y; df = Math.atan2(Math.sin(df), Math.cos(df)); g.rotation.y += df * 0.3;
+    animChar(g, t, { moving: av.moving });
+    for (const x of R.people) if (x.pose !== 'bed') animChar(x.g, t, { working: x.pose === 'work' });
+    if (R.glows.length && !calm()) { const f = 0.85 + Math.sin(t * 9) * 0.08 + Math.sin(t * 23) * 0.05; fireL.intensity = 1.1 * f; }
+    R.t += dt; if (R.t > 3) { R.t = 0; seatPeople(); }
+  }
+  function camera_() {
+    if (!R) return;
+    cam.yaw -= keyTurn() * 1.8 * 0.016;
+    const pitch = clamp(cam.pitch, 0.55, 1.35), d = clamp(cam.dist, 5, 18), fx = OX + av.x * 0.35, fz = OZ + av.z * 0.35 - 0.3;
+    camera.position.set(fx + Math.sin(cam.yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d + 0.6, fz + Math.cos(cam.yaw) * Math.cos(pitch) * d);
+    camera.lookAt(fx, 0.6, fz);
+    // the walls between you and the camera fade away
+    const cx = camera.position.x - OX, cz = camera.position.z - OZ;
+    R.walls.s.forEach(g => g.visible = cz < R.D / 2 + 0.5);
+    R.walls.n.forEach(g => g.visible = cz > -R.D / 2 - 0.5);
+    R.walls.e.forEach(g => g.visible = cx < R.W / 2 + 0.5);
+    R.walls.w.forEach(g => g.visible = cx > -R.W / 2 - 0.5);
+  }
+  function card() {
+    const d = R.d, names = R.people.map(x => x.key.startsWith && String(x.key).startsWith('w:') ? (G.shops.find(sh => 'w:' + sh.id === x.key) || {}).worker : (G.agents.find(a => a.id === x.key) || {})).filter(Boolean).map(a => a.name);
+    const who = names.length ? 'Here: ' + names.slice(0, 6).join(', ') + (names.length > 6 ? ' and ' + (names.length - 6) + ' more' : '') + '.' : d.kind === 'home' ? 'Nobody else is home.' : 'Nobody is in just now.';
+    return `<h2>${esc(d.title)}</h2><div class="sub">${esc(d.note || '')} ${esc(who)}</div><div class="acts">${B_('Step outside', ['ui', 'leave'])}${d.kind === 'home' && d.house ? B_('Property', ['page', 'property'], 'alt') : ''}</div>`;
+  }
+  return { enter, leave, step, camera: camera_, card, scene: sc, active: () => !!R };
+})();
+
+// what is behind a door: the room to build, and who belongs in it
+function insideOf(key) {
+  const s = G, Lh = L[key]; if (!Lh) return null;
+  const door = { x: s.player.x, z: s.player.z };
+  if (key === 'home') return { kind: 'home', size: 'hut', title: 'Your hut', note: s.player.house ? 'Your old hut, still yours.' : 'Small and draughty, but yours.', x: Lh.x, z: Lh.z, door };
+  if (key === 'myhome') { const h = Sim.yourHouse(s); if (!h) return null; const sh = Sim.houseShape(h); return { kind: 'home', size: sh.tall ? 'tall' : 'home', title: h.name, note: 'Your home.', x: h.x, z: h.z, door, house: h, comfort: h.comfort || 0 }; }
+  if (Lh.emp) { const e = Sim.empById(Lh.emp); return { kind: 'biz', trade: e.trade, title: e.name, note: e.boss + '’s ' + (TR[e.trade] ? TR[e.trade].name.toLowerCase() : e.trade) + '.', x: e.x, z: e.z, door, bizId: Lh.emp }; }
+  if (Lh.plot != null) { const sh = Sim.shopOnPlot(s, Lh.plot); if (!sh) return null; const pl = Sim.PLOTS[Lh.plot]; return { kind: 'biz', trade: sh.trade, title: 'Your ' + TR[sh.trade].name.toLowerCase(), note: Sim.tierOf(sh).name + '.', x: pl.x, z: pl.z, door, shop: sh }; }
+  if (Lh.biz) { const Lt = Sim.LAYOUT[Lh.town], site = Lt && Lt.biz.find(b => b.id === Lh.biz), b = s.biz[Lh.biz]; if (!site || !b) return null; if (b.trade === 'estate') return { kind: 'home', size: 'manor', title: site.name, note: 'The hall of the estate.', x: site.x, z: site.z, door, bizId: Lh.biz }; return { kind: 'biz', trade: b.trade, title: site.name, note: b.owner === 'player' ? 'Yours.' : (s.people[b.owner] ? s.people[b.owner].name + '’s.' : ''), x: site.x, z: site.z, door, bizId: Lh.biz }; }
+  return null;
+}
+// your bought house is a place on the map like any other
+function syncMyHome() {
+  const h = G && Sim.yourHouse(G);
+  if (h) { const dr = Sim.doorOf(h); L.myhome = { x: dr.x, z: dr.z, r: 3.4, name: h.name + ' (home)', town: h.town && h.town !== 'hearthmoor' ? h.town : undefined }; L.home.name = 'Your old hut'; }
+  else { delete L.myhome; L.home.name = 'Your Hut'; }
+}
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
-  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
@@ -3855,7 +4155,7 @@ function frame(now) {
   if (G) Mini.update(dt);
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
-  if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(scene, camera);
+  if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
   if (bench) bench.frame(now);
   requestAnimationFrame(frame);
 }
@@ -4110,6 +4410,14 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.32', date: '4 November', title: 'Homes and interiors', items: [
+    'Move into any house you own: open the Property page and tap "Move in" on an empty house. Your husband or wife and your children come with you, even to another town, and it shows on the map and minimap as your home.',
+    'Your old hut stays yours. Its card lets you move back in whenever you like.',
+    'Walk inside: stand at your home, your hut, or any shop, inn or workshop and tap "Go inside". Walk about as usual; the walls nearest you fade away so you can see in, and you leave by walking out of the door or tapping "Step outside".',
+    'Every trade has its own room. A forge with a glowing hearth and anvil, an inn with a bar, barrels, tables and a fire, a bakehouse with its domed oven, a butcher\u2019s counter under hanging hams, looms, potter\u2019s wheels, tanning vats, workbenches, a mill with its great stones, and more.',
+    'Homes have a hearth, a table and benches, beds, chests and shelves; townhouses have a staircase. At night your family are in their beds; by day whoever is home is about the house.',
+    'The people who work in a place are at their benches and ovens when you walk in, and visitors stand or sit about. Tap anyone inside to see who they are.'
+  ] },
   { v: '0.31', date: '4 November', title: 'Every trade its own building', items: [
     'Shops in Oakbridge, Greenhaven and Crownmere no longer share one design. You can tell what goes on inside from the street.',
     'Smithies are low stone forges with a great chimney and an open shed where the anvil and glowing hearth stand. Taverns are big inns with a jettied upper floor, dormers, benches and ale out front.',
