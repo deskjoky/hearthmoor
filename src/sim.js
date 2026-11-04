@@ -2106,7 +2106,8 @@
     const O = SEP.o, R = SEP.r, Wt = SEP.w; O.length = 0; R.length = 0; Wt.length = 0;
     for (const a of s.agents) if (!a.gone && !a.indoors) { O.push(a); R.push(a.kid ? 0.22 : BODY_R); Wt.push(1); }
     for (const sh of s.shops) if (sh.worker && !sh.worker.indoors) { O.push(sh.worker); R.push(BODY_R); Wt.push(1); }
-    O.push(s.player); R.push(BODY_R); Wt.push(0.35);   // you are shouldered aside less than you shoulder others
+    // you have right of way: villagers give you a little more room and step aside, and nobody shoves you back
+    const pl = s.player; O.push(pl); R.push(pl.pushing ? 0.5 : BODY_R); Wt.push(pl.pushing ? 0 : 0.35);
     const cell = SEP.cell; cell.clear();
     const K = (x, z) => (Math.floor(x) + 2048) * 4096 + (Math.floor(z) + 2048);
     for (let i = 0; i < O.length; i++) { const k = K(O[i].x, O[i].z), c = cell.get(k); if (c) c.push(i); else cell.set(k, [i]); }
@@ -2120,6 +2121,14 @@
           if (dx > m || dx < -m || dz > m || dz < -m) continue;
           const d = Math.sqrt(dx * dx + dz * dz); if (d >= m) continue;
           const nx = d > 1e-6 ? dx / d : Math.cos(i * 2.4 + j), nz = d > 1e-6 ? dz / d : Math.sin(i * 2.4 + j), push = m - d, tw = Wt[i] + Wt[j];
+          if (tw === 0) continue;
+          if (pl.pushing && (A === pl || B === pl)) {
+            // step out of your path to whichever side they are already on, rather than being bulldozed ahead of you
+            const other = A === pl ? B : A, sgn = A === pl ? 1 : -1, fx = Math.sin(pl.face || 0), fz = Math.cos(pl.face || 0);
+            const ox = nx * sgn, oz = nz * sgn, side = fx * oz - fz * ox >= 0 ? 1 : -1;
+            other.x += ox * push * 0.5 - fz * side * push * 0.9; other.z += oz * push * 0.5 + fx * side * push * 0.9;
+            continue;
+          }
           A.x -= nx * push * Wt[i] / tw; A.z -= nz * push * Wt[i] / tw; B.x += nx * push * Wt[j] / tw; B.z += nz * push * Wt[j] / tw;
           // walkers step aside to their right when someone is in their way, so two people meeting head-on slip past each other
           if (A.moving && A !== s.player) { const fx = Math.sin(A.face || 0), fz = Math.cos(A.face || 0); if (fx * nx + fz * nz > 0.2) { A.x += fz * push * 0.9; A.z -= fx * push * 0.9; } }

@@ -2573,7 +2573,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const O = SEP.o, R = SEP.r, Wt = SEP.w; O.length = 0; R.length = 0; Wt.length = 0;
     for (const a of s.agents) if (!a.gone && !a.indoors) { O.push(a); R.push(a.kid ? 0.22 : BODY_R); Wt.push(1); }
     for (const sh of s.shops) if (sh.worker && !sh.worker.indoors) { O.push(sh.worker); R.push(BODY_R); Wt.push(1); }
-    O.push(s.player); R.push(BODY_R); Wt.push(0.35);   // you are shouldered aside less than you shoulder others
+    // you have right of way: villagers give you a little more room and step aside, and nobody shoves you back
+    const pl = s.player; O.push(pl); R.push(pl.pushing ? 0.5 : BODY_R); Wt.push(pl.pushing ? 0 : 0.35);
     const cell = SEP.cell; cell.clear();
     const K = (x, z) => (Math.floor(x) + 2048) * 4096 + (Math.floor(z) + 2048);
     for (let i = 0; i < O.length; i++) { const k = K(O[i].x, O[i].z), c = cell.get(k); if (c) c.push(i); else cell.set(k, [i]); }
@@ -2587,6 +2588,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
           if (dx > m || dx < -m || dz > m || dz < -m) continue;
           const d = Math.sqrt(dx * dx + dz * dz); if (d >= m) continue;
           const nx = d > 1e-6 ? dx / d : Math.cos(i * 2.4 + j), nz = d > 1e-6 ? dz / d : Math.sin(i * 2.4 + j), push = m - d, tw = Wt[i] + Wt[j];
+          if (tw === 0) continue;
+          if (pl.pushing && (A === pl || B === pl)) {
+            // step out of your path to whichever side they are already on, rather than being bulldozed ahead of you
+            const other = A === pl ? B : A, sgn = A === pl ? 1 : -1, fx = Math.sin(pl.face || 0), fz = Math.cos(pl.face || 0);
+            const ox = nx * sgn, oz = nz * sgn, side = fx * oz - fz * ox >= 0 ? 1 : -1;
+            other.x += ox * push * 0.5 - fz * side * push * 0.9; other.z += oz * push * 0.5 + fx * side * push * 0.9;
+            continue;
+          }
           A.x -= nx * push * Wt[i] / tw; A.z -= nz * push * Wt[i] / tw; B.x += nx * push * Wt[j] / tw; B.z += nz * push * Wt[j] / tw;
           // walkers step aside to their right when someone is in their way, so two people meeting head-on slip past each other
           if (A.moving && A !== s.player) { const fx = Math.sin(A.face || 0), fz = Math.cos(A.face || 0); if (fx * nx + fz * nz > 0.2) { A.x += fz * push * 0.9; A.z -= fx * push * 0.9; } }
@@ -3902,7 +3911,7 @@ function walkPlayer(s, dt) {
   my += (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
   const m = Math.hypot(mx, my);
   const p = s.player;
-  if (m < 0.15) { UI.walking = false; if (!p.dest) p.moving = false; return; }
+  if (m < 0.15) { UI.walking = false; p.pushing = false; if (!p.dest) p.moving = false; return; }
   if (m > 1) { mx /= m; my /= m; }
   if (p.action || p.dest) { p.action = null; p.dest = null; }
   // forward is away from the camera
@@ -3913,11 +3922,9 @@ function walkPlayer(s, dt) {
   if (key !== solidKey) { solidCache = solidsNow(s); solidKey = key; }
   // small steps so a slow frame can never carry you through a wall
   const n = Math.max(1, Math.ceil(speed / 0.15));
-  // villagers and workers are solid too
-  const crowd = [];
-  for (const a of s.agents) if (!a.gone && !a.indoors && Math.abs(a.x - p.x) < 4 && Math.abs(a.z - p.z) < 4) crowd.push({ c: 1, x: a.x, z: a.z, r: a.kid ? 0.22 : 0.3 });
-  for (const sh of s.shops) { const w = sh.worker; if (w && !w.indoors && Math.abs(w.x - p.x) < 4 && Math.abs(w.z - p.z) < 4) crowd.push({ c: 1, x: w.x, z: w.z, r: 0.3 }); }
-  for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); if (crowd.length) collide(p, crowd); }
+  // you have right of way: villagers step aside as you walk (the simulation moves them out of your path)
+  p.pushing = true;
+  for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); }
   s.rec.walked += Math.hypot(p.x - ox, p.z - oz);
   p.face = Math.atan2(vx, vz); p.moving = true; UI.walking = true;
   UI.loc = null;
@@ -5192,8 +5199,11 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.0248';
+const BUILD = '2026.11.04.0258';
 const NOTES = [
+  { v: '0.16', date: '3 November', title: 'Right of way', items: [
+    'Villagers now step aside to let you through. Walk into a crowd and people move out of your path, instead of you being stuck.'
+  ] },
   { v: '0.15', date: '3 November', title: 'Your own face, and smoother crowds', items: [
     'A character creator when you start a new game: body, skin, hair style and colour, and clothes.',
     'You wear a backpack, and anything you carry goes into it. Your arms swing as you walk, carrying or not.',

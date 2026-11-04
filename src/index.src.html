@@ -1604,7 +1604,7 @@ function walkPlayer(s, dt) {
   my += (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
   const m = Math.hypot(mx, my);
   const p = s.player;
-  if (m < 0.15) { UI.walking = false; if (!p.dest) p.moving = false; return; }
+  if (m < 0.15) { UI.walking = false; p.pushing = false; if (!p.dest) p.moving = false; return; }
   if (m > 1) { mx /= m; my /= m; }
   if (p.action || p.dest) { p.action = null; p.dest = null; }
   // forward is away from the camera
@@ -1615,11 +1615,9 @@ function walkPlayer(s, dt) {
   if (key !== solidKey) { solidCache = solidsNow(s); solidKey = key; }
   // small steps so a slow frame can never carry you through a wall
   const n = Math.max(1, Math.ceil(speed / 0.15));
-  // villagers and workers are solid too
-  const crowd = [];
-  for (const a of s.agents) if (!a.gone && !a.indoors && Math.abs(a.x - p.x) < 4 && Math.abs(a.z - p.z) < 4) crowd.push({ c: 1, x: a.x, z: a.z, r: a.kid ? 0.22 : 0.3 });
-  for (const sh of s.shops) { const w = sh.worker; if (w && !w.indoors && Math.abs(w.x - p.x) < 4 && Math.abs(w.z - p.z) < 4) crowd.push({ c: 1, x: w.x, z: w.z, r: 0.3 }); }
-  for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); if (crowd.length) collide(p, crowd); }
+  // you have right of way: villagers step aside as you walk (the simulation moves them out of your path)
+  p.pushing = true;
+  for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); }
   s.rec.walked += Math.hypot(p.x - ox, p.z - oz);
   p.face = Math.atan2(vx, vz); p.moving = true; UI.walking = true;
   UI.loc = null;
@@ -2896,6 +2894,9 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.16', date: '3 November', title: 'Right of way', items: [
+    'Villagers now step aside to let you through. Walk into a crowd and people move out of your path, instead of you being stuck.'
+  ] },
   { v: '0.15', date: '3 November', title: 'Your own face, and smoother crowds', items: [
     'A character creator when you start a new game: body, skin, hair style and colour, and clothes.',
     'You wear a backpack, and anything you carry goes into it. Your arms swing as you walk, carrying or not.',
