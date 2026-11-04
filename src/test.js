@@ -286,7 +286,7 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   // fired, broke, evicted, gone
   const s = Sim.newGame(78); s.coins = 500; s.trades.bakery = 2;
   Sim.cmd(s, 'open', 1, 'bakery');
-  const shop = s.shops[0], ai = s.applicants.findIndex(a => a.local);
+  const shop = s.shops[0]; let ai = s.applicants.findIndex(a => a.local && a.name === 'Bram'); if (ai < 0) ai = s.applicants.findIndex(a => a.local);
   const name = s.applicants[ai].name;
   Sim.cmd(s, 'hire', shop.id, ai);
   const p = Object.values(s.people).find(x => x.name === name);
@@ -300,6 +300,8 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   check(evicted, name + ' fell behind on rent and was evicted');
   check(gone || !p.home, name + (gone ? ' gave up and left Hearthmoor' : ' is sleeping rough'));
   check(p.log.some(l => /Evicted/.test(l.text)), 'their life log tells the story');
+  const kid = Object.values(s.people).find(x => x.kid && (x.parents || []).includes(p.id));
+  if (kid) check(kid.home === p.home || kid.status === p.status, 'their daughter ' + kid.name + ' goes where her father goes (' + Sim.homeText(s, kid) + ')');
 
   // buy a business: its staff work for you, and you can fire them
   const b = Sim.newGame(79); b.coins = 1000;
@@ -411,6 +413,30 @@ console.log('13. Debt, respect, votes: anyone in power can fall, and only the de
   console.log('   recent decisions: ' + s.gov.log.slice(0, 5).map(l => 'D' + l.day + ' ' + l.text).join(' | '));
   const back = Sim.deserialize(Sim.serialize(s));
   check(Sim.serialize(back) === Sim.serialize(s), 'government saves and restores exactly');
+}
+
+console.log('14. The rebuilt village, and saves from before it');
+{
+  const s = Sim.newGame(91);
+  const kids = Sim.living(s).filter(p => p.kid), fams = new Set(Sim.living(s).filter(p => p.hh).map(p => p.hh));
+  check(Sim.living(s).length >= 25 && Sim.living(s).length <= 40, 'Hearthmoor starts with ' + Sim.living(s).length + ' residents');
+  check(kids.length >= 4 && fams.size >= 5, kids.length + ' children and ' + fams.size + ' families');
+  check(s.biz.mill && s.people[s.biz.mill.owner].name === 'Tamsin', 'the mill is a working business, run by Tamsin');
+  check(s.houses.every(h => h.tenants.every(id => s.people[id].home === h.id)), 'every home and its tenants agree');
+  Sim.advance(s, 1440 * 10);
+  const kid = Sim.living(s).find(p => p.kid);
+  check(kid && kid.purse >= 0 && kid.home, kid.name + ' is fed by their parents and still has a home after 10 days');
+  // a save from version 5: fifteen old huts, no mill, the player owning a hut that no longer exists
+  const o = Sim.newGame(92); o.v = 5; delete o.biz.mill;
+  const tam = Object.values(o.people).filter(p => p.job && p.job.biz === 'mill'); tam.forEach(p => { p.status = 'gone'; });
+  while (o.houses.length < 15) o.houses.push({ id: 'h' + o.houses.length, name: 'Old Hut ' + o.houses.length, x: 0, z: 0, owner: 'office:lord', rent: 2, cap: 1, tenants: [] });
+  o.houses[14].owner = 'player'; o.coins = 100; o.player.x = 999;
+  const back = Sim.deserialize(JSON.stringify(o));
+  check(back.v === Sim.VERSION && back.biz.mill && back.houses.length === Sim.HOUSES.length, 'an old save moves into the new village and gains the mill');
+  check(back.coins > 100, 'a house that no longer exists is paid for (' + (back.coins - 100) + 'c)');
+  check(Math.abs(back.player.x - Sim.P.home.x) < 1, 'you wake at your hut in the new village');
+  Sim.advance(back, 1440 * 3);
+  check(Sim.living(back).length >= 25, 'the moved village keeps living (' + Sim.living(back).length + ' people)');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');

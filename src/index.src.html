@@ -54,7 +54,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .goal em { font-family: var(--f-display); font-style: italic; color: #f5cf73; font-size: 14px; }
 
-.fast { border: 1px solid var(--line); background: transparent; border-radius: 4px; min-width: 40px; height: 36px; font-size: 18px; font-weight: 700; color: var(--ink-soft); }
+.speeds { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; flex: none; }
+.fast { border: 0; border-left: 1px solid var(--line); background: transparent; min-width: 34px; height: 34px; padding: 0 6px; font-size: 14px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.fast:first-child { border-left: 0; }
 .fast[aria-pressed="true"] { background: var(--leather); color: var(--parch); }
 /* thumbsticks rest in the lower corners and jump to wherever your thumb lands */
 .sticks { display: none; } /* the controls work without anything drawn on screen */
@@ -376,7 +378,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   <div class="strip">
     <button class="icon-btn" id="menuBtn" type="button" aria-label="Pause and open the menu"><span></span></button>
     <div class="clock num" id="clock">Day 1 · 06:00</div>
-    <button class="fast" id="fast" type="button" aria-label="Double speed" aria-pressed="false">&#187;</button>
+    <div class="speeds" id="speeds" role="group" aria-label="How fast time passes">
+      <button class="fast" type="button" data-speed="1" aria-label="Normal speed" aria-pressed="true">1&times;</button><button class="fast" type="button" data-speed="2" aria-label="Twice as fast" aria-pressed="false">2&times;</button><button class="fast" type="button" data-speed="4" aria-label="Four times as fast" aria-pressed="false">4&times;</button><button class="fast" type="button" data-speed="8" aria-label="Eight times as fast" aria-pressed="false">8&times;</button>
+    </div>
     <div class="coins num" id="coins">5c</div>
     <button class="book-btn" id="bookBtn" type="button">Ledger</button>
   </div>
@@ -506,8 +510,8 @@ const canvas = $('world');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixelRatio < 2, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x9fb1ad, 26, 70);
-const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 220);
+scene.fog = new THREE.Fog(0x9fb1ad, 60, 200);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 900);
 const hemi = new THREE.HemisphereLight(0xcfe0e6, 0x3d3424, 0.75);
 const sun = new THREE.DirectionalLight(0xffe2b0, 0.9);
 sun.position.set(-20, 30, 12);
@@ -540,238 +544,6 @@ let seed = 1337;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 const L = Sim.LOCS;
 
-function groundH(x, z) {
-  const r = Math.hypot(x, z);
-  const k = Math.min(1, Math.max(0, (r - 36) / 14));
-  return k * (2.2 + Math.sin(x * 0.21) * 1.6 + Math.cos(z * 0.17 + x * 0.05) * 1.8);
-}
-(function buildGround() {
-  const g = new THREE.PlaneGeometry(140, 140, 56, 56).toNonIndexed();
-  g.rotateX(-Math.PI / 2);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) p.setY(i, groundH(p.getX(i), p.getZ(i)));
-  g.computeVertexNormals();
-  const col = new Float32Array(p.count * 3);
-  const greens = ['#4f6236', '#566b39', '#47592f', '#5d6d3c', '#6a6a40'].map(c => new THREE.Color(c));
-  for (let i = 0; i < p.count; i += 3) {
-    const c = greens[Math.floor(rnd() * greens.length)];
-    for (let j = 0; j < 3; j++) { col[(i + j) * 3] = c.r; col[(i + j) * 3 + 1] = c.g; col[(i + j) * 3 + 2] = c.b; }
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  scene.add(new THREE.Mesh(g, vc));
-})();
-
-// paths and the village square
-const pathMat = mat('#6f5a3d');
-function path(a, b, w) {
-  const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w || 1.6, 0.06, len + (w || 1.6)), pathMat);
-  m.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2); m.rotation.y = Math.atan2(dx, dz); scene.add(m);
-}
-const SQ = Sim.P.plaza;
-mesh(new THREE.CylinderGeometry(7.5, 7.5, 0.05, 20), pathMat, SQ.x, 0.025, SQ.z);
-Sim.PLOTS.forEach(p => path({ x: p.x, z: p.z + 2 }, SQ, 2));
-Sim.EMPLOYERS.forEach(e => path({ x: e.x, z: e.z - 3 }, SQ, 1.8));
-path(SQ, { x: 38, z: 5 }, 2); path({ x: 18, z: 7 }, { x: 23.5, z: 11.5 }, 1.5);
-path({ x: 14, z: -3 }, { x: 22, z: -9 }, 1.4); path({ x: -14, z: -3 }, { x: -20, z: -10 }, 1.4);
-path({ x: -12, z: 12 }, { x: -22, z: 18 }, 1.4); path(SQ, { x: -17, z: 5.4 }, 1.4);
-path({ x: -6, z: 5 }, { x: -6, z: -11 }, 1.6); path({ x: -6, z: -11 }, { x: 0, z: -11 }, 1.8); path({ x: -6, z: -11 }, { x: -9, z: -12.5 }, 1.2);
-path({ x: 0, z: -18 }, { x: -6, z: -36 }, 1.6); path({ x: 33, z: 5 }, { x: 33, z: 10 }, 1.3); path({ x: 14, z: -6 }, { x: 21, z: -19.5 }, 1.2); path({ x: 6, z: -11 }, { x: 13, z: -11.5 }, 1.4);
-Sim.HOMES.concat(Sim.WORKER_HOMES, Sim.NEW_HUTS).forEach(h => { const d = Math.hypot(h.x, h.z); path({ x: h.x * (1 - 2 / d), z: h.z * (1 - 2 / d) }, { x: h.x * 0.55, z: h.z * 0.55 }, 1.1); });
-
-// trees, kept clear of every place people go
-const keepClear = [{ x: 0, z: 6, r: 22 }, { x: 0, z: -14, r: 7 }, { x: -9, z: -15, r: 4 }, { x: 13, z: -15, r: 6 }, { x: 33, z: 11, r: 4.5 }, { x: 22, z: -22, r: 4 }, { x: -7, z: -46, r: 13 }, { x: -3, z: -27, r: 5 }, { x: -6, z: -36, r: 7 }, { x: L.field.x, z: L.field.z, r: 9 }, { x: L.pit.x, z: L.pit.z, r: 7 }, { x: L.market.x, z: L.market.z, r: 6 }, { x: L.forest.x + 5, z: L.forest.z + 4, r: 3.4 }]
-  .concat(Sim.HOMES.concat(Sim.WORKER_HOMES, Sim.NEW_HUTS, [L.home]).map(h => ({ x: h.x, z: h.z, r: 4.5 })));
-const clear = (x, z) => keepClear.every(k => Math.hypot(x - k.x, z - k.z) > k.r) && !(x > 18 && Math.abs(z - 5) < 4);
-const pineGeo = mergeColored([
-  { geo: new THREE.CylinderGeometry(0.16, 0.22, 1.2, 5), color: '#4a3424', m: M(0, 0.6, 0) },
-  { geo: new THREE.ConeGeometry(1.25, 1.9, 6), color: '#24402a', m: M(0, 1.9, 0) },
-  { geo: new THREE.ConeGeometry(0.98, 1.6, 6), color: '#2c4b30', m: M(0, 2.8, 0, 0.5) },
-  { geo: new THREE.ConeGeometry(0.66, 1.3, 6), color: '#355636', m: M(0, 3.6, 0, 1) }
-]);
-const pines = [];
-for (let i = 0; i < 80; i++) { const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 9; const x = L.forest.x + Math.cos(a) * r - 1.5, z = L.forest.z + Math.sin(a) * r - 1.5; if (Math.hypot(x - (L.forest.x + 5), z - (L.forest.z + 4)) > 3.2) pines.push([x, z, 0.8 + rnd() * 0.6]); }
-for (let i = 0; i < 420; i++) { const a = rnd() * Math.PI * 2, r = 32 + rnd() * 34; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (clear(x, z)) pines.push([x, z, 0.9 + rnd() * 0.9]); }
-for (let i = 0; i < 40; i++) { const x = (rnd() - 0.5) * 60, z = (rnd() - 0.5) * 60; if (clear(x, z) && Math.hypot(x, z) > 20) pines.push([x, z, 0.8 + rnd() * 0.4]); }
-const pineInst = new THREE.InstancedMesh(pineGeo, vc, pines.length);
-pines.forEach(([x, z, s], i) => pineInst.setMatrixAt(i, M(x, groundH(x, z), z, rnd() * 6, s, s * (0.9 + rnd() * 0.3), s)));
-scene.add(pineInst);
-const rockGeo = flat(new THREE.IcosahedronGeometry(0.6, 0));
-const rocks = [];
-for (let i = 0; i < 60; i++) { const a = rnd() * Math.PI * 2, r = 16 + rnd() * 36, x = Math.cos(a) * r, z = Math.sin(a) * r; if (clear(x, z)) rocks.push([x, z]); }
-const rockInst = new THREE.InstancedMesh(rockGeo, mat('#7d7b70'), rocks.length);
-rocks.forEach(([x, z], i) => rockInst.setMatrixAt(i, M(x, groundH(x, z) + 0.1, z, rnd() * 6, 0.5 + rnd() * 1.2, 0.4 + rnd() * 0.6, 0.5 + rnd())));
-scene.add(rockInst);
-for (let i = 0; i < 6; i++) mesh(flat(new THREE.CylinderGeometry(0.3, 0.36, 0.35, 6)), '#6b4a2e', L.forest.x + 3.5 + rnd() * 4, 0.17, L.forest.z + 2.5 + rnd() * 3.5);
-
-// wheat field
-mesh(new THREE.BoxGeometry(11, 0.08, 8), '#6b5530', L.field.x, 0.04, L.field.z);
-const stalkGeo = mergeColored([{ geo: new THREE.BoxGeometry(0.07, 0.8, 0.07), color: '#b89a45', m: M(0, 0.4, 0) }, { geo: new THREE.BoxGeometry(0.14, 0.22, 0.14), color: '#d9b75a', m: M(0, 0.85, 0) }]);
-const wheat = new THREE.InstancedMesh(stalkGeo, vc, 520);
-for (let i = 0; i < 520; i++) {
-  const x = L.field.x - 5.2 + rnd() * 10.4, z = L.field.z - 3.7 + rnd() * 7.4;
-  wheat.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * 3, (rnd() - 0.5) * 0.3)), new THREE.Vector3(1, 0.8 + rnd() * 0.5, 1)));
-}
-scene.add(wheat);
-for (let i = 0; i <= 10; i++) { mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), '#5b4029', L.field.x - 5.6 + i * 1.12, 0.4, L.field.z - 4.1); mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), '#5b4029', L.field.x - 5.6 + i * 1.12, 0.4, L.field.z + 4.1); }
-mesh(new THREE.BoxGeometry(11.4, 0.1, 0.08), '#5b4029', L.field.x, 0.62, L.field.z - 4.1);
-mesh(new THREE.BoxGeometry(11.4, 0.1, 0.08), '#5b4029', L.field.x, 0.62, L.field.z + 4.1);
-[[0, 0], [1.2, 0.3]].forEach(([dx, dz]) => { mesh(flat(new THREE.CylinderGeometry(0.5, 0.5, 0.9, 8)), '#c9a64e', L.field.x - 7.5 + dx, 0.45, L.field.z + 2 + dz).rotation.z = Math.PI / 2; });
-
-// iron pit
-(function () {
-  const g = new THREE.Group(); g.position.set(L.pit.x, 0, L.pit.z); scene.add(g);
-  mesh(new THREE.CylinderGeometry(4.4, 4.8, 0.06, 14), '#4b4540', 0, 0.03, 0, g);
-  mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.08, 10), '#151210', -0.5, 0.06, -1.2, g);
-  const oreGeo = flat(new THREE.IcosahedronGeometry(0.35, 0));
-  for (let i = 0; i < 14; i++) { const a = rnd() * 6.3, r = 1.8 + rnd() * 2.2; const m = mesh(oreGeo, i % 3 ? '#6e4a3a' : '#8a5a3c', Math.cos(a) * r, 0.2, Math.sin(a) * r, g); m.scale.setScalar(0.6 + rnd() * 0.9); m.rotation.set(rnd(), rnd(), rnd()); }
-  for (let i = 0; i < 6; i++) { const m = mesh(rockGeo, '#6c6860', -3.5 + rnd() * 7, 0.35, -3.6 + rnd() * 1.2, g); m.scale.set(1 + rnd(), 0.8 + rnd(), 1 + rnd()); }
-  [-1.6, 0.6].forEach(x => mesh(new THREE.BoxGeometry(0.16, 1.6, 0.16), '#4a3424', x, 0.8, -1.2, g));
-  const roll = mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.4, 8), '#5b4029', -0.5, 1.45, -1.2, g); roll.rotation.z = Math.PI / 2;
-  mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6), '#5f4430', 2.2, 0.25, 1.4, g);
-})();
-
-// windows glow at night
-const windowMat = new THREE.MeshLambertMaterial({ color: '#3a2a1c', emissive: new THREE.Color('#ffb04a'), emissiveIntensity: 0 });
-function gableRoof(w, d, h, color, mt) {
-  const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0);
-  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2);
-  return new THREE.Mesh(flat(g), mt || mat(color));
-}
-function gableRoofGeo(w, d, h) {
-  const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0);
-  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); g.rotateY(Math.PI / 2); return g;
-}
-function hut(x, z, opts) {
-  const o = Object.assign({ w: 3.4, d: 2.8, h: 1.7, wall: '#6e4f33', roof: '#8a7445', door: '#3b2a1c' }, opts);
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = Math.atan2(-x, -z);
-  mesh(new THREE.BoxGeometry(o.w, o.h, o.d), o.wall, 0, o.h / 2, 0, g);
-  const r = gableRoof(o.d + 0.7, o.w + 0.5, 1.4, o.roof); r.position.y = o.h; r.rotation.y = Math.PI / 2; g.add(r);
-  mesh(new THREE.BoxGeometry(0.75, 1.15, 0.08), o.door, 0, 0.58, o.d / 2 + 0.03, g);
-  mesh(new THREE.BoxGeometry(0.5, 0.42, 0.06), windowMat, -o.w / 2 + 0.7, 1.05, o.d / 2 + 0.03, g);
-  mesh(new THREE.BoxGeometry(0.06, 0.42, 0.5), windowMat, o.w / 2 + 0.03, 1.05, 0, g);
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => mesh(new THREE.BoxGeometry(0.18, o.h + 0.05, 0.18), '#3e2c1d', a * o.w / 2, (o.h + 0.05) / 2, b * o.d / 2, g));
-  scene.add(g); return g;
-}
-const behind = (h, k) => { const d = Math.hypot(h.x, h.z); return [h.x + h.x / d * k, h.z + h.z / d * k]; };
-Sim.HOMES.forEach((h, i) => { const [x, z] = behind(h, 1.4); hut(x, z, { roof: ['#8a7445', '#7f6a3f', '#937b4a'][i % 3] }); });
-Sim.WORKER_HOMES.concat(Sim.NEW_HUTS).forEach(h => { const [x, z] = behind(h, 1.3); hut(x, z, { w: 2.8, d: 2.4, roof: '#7a6440' }); });
-hut(L.home.x, L.home.z, { door: '#2f4f6a', wall: '#73563a' });
-
-// well
-(function () {
-  const g = new THREE.Group(); g.position.set(L.well.x, 0, L.well.z); scene.add(g);
-  const ring = mesh(flat(new THREE.CylinderGeometry(0.9, 1, 0.75, 9, 1, true)), new THREE.MeshLambertMaterial({ color: '#86847a', side: THREE.DoubleSide }), 0, 0.38, 0, g);
-  mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 9), '#24343c', 0, 0.6, 0, g);
-  mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12), '#4a3424', -0.9, 0.85, 0, g); mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12), '#4a3424', 0.9, 0.85, 0, g);
-  const r = gableRoof(2.3, 1.4, 0.6, '#6b5636'); r.position.y = 1.7; g.add(r);
-})();
-
-// trading post
-(function () {
-  const g = new THREE.Group(); g.position.set(L.market.x, 0, L.market.z); g.rotation.y = Math.atan2(-L.market.x, -L.market.z); scene.add(g);
-  mesh(new THREE.BoxGeometry(3.4, 0.9, 1), '#6a4b2f', 0, 0.45, 0.4, g);
-  [[-1.6, 0.9], [1.6, 0.9], [-1.6, -0.9], [1.6, -0.9]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.14, 2.3, 0.14), '#3e2c1d', x, 1.15, z, g));
-  for (let i = 0; i < 6; i++) { const m = mesh(new THREE.BoxGeometry(0.62, 0.06, 2.3), i % 2 ? '#d8c69a' : '#2f5d55', -1.55 + i * 0.62, 2.35, 0, g); m.rotation.x = -0.18; }
-  [[-1, 0.45], [0.2, 0.42], [1.1, 0.5]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.6, 0.5, 0.6), '#7c5a37', x, 1.15, z, g));
-  [[-1.4, -0.5], [-0.8, -0.6], [1.3, -0.5]].forEach(([x, z]) => mesh(flat(new THREE.SphereGeometry(0.38, 6, 4)), '#c7b07c', x, 0.32, z, g).scale.set(1, 0.85, 1));
-  mesh(new THREE.BoxGeometry(0.9, 0.8, 0.9), '#6b4a2e', 2.4, 0.4, 0.6, g);
-  mesh(new THREE.BoxGeometry(1.4, 0.4, 2.2), '#5f4430', -3.2, 0.7, 0.2, g);
-  [[-0.8, 0.7], [-0.8, -0.5]].forEach(([x, z]) => { const w = mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 10), '#3e2c1d', -3.2 + x * 1.05, 0.42, z, g); w.rotation.z = Math.PI / 2; });
-})();
-
-/* ----- the realm: Moot Hall, granary, watchtower, manor, cottage, square projects ----- */
-const LORD_BLUE = '#2b4a7a', LORD_GOLD = '#d9b04a';
-function banner(parent, x, y, z, h) {
-  mesh(new THREE.BoxGeometry(0.1, h, 0.1), '#3e2c1d', x, y + h / 2, z, parent);
-  mesh(new THREE.BoxGeometry(0.7, 1.1, 0.04), LORD_BLUE, x + 0.38, y + h - 0.6, z, parent);
-  mesh(new THREE.BoxGeometry(0.22, 0.22, 0.05), LORD_GOLD, x + 0.38, y + h - 0.55, z, parent);
-}
-const V = {};
-(function hall() {
-  const g = new THREE.Group(); g.position.set(0, 0, -15); scene.add(g);
-  mesh(new THREE.BoxGeometry(8, 0.3, 5.4), '#7c776d', 0, 0.15, 0, g);
-  mesh(new THREE.BoxGeometry(7.6, 2.8, 4.8), '#6e5236', 0, 1.7, -0.1, g);
-  for (let i = -3; i <= 3; i += 2) mesh(new THREE.BoxGeometry(0.22, 2.9, 0.22), '#3e2c1d', i * 1.2, 1.6, 2.3, g);
-  mesh(new THREE.BoxGeometry(1.2, 1.8, 0.1), '#3b2a1c', 0, 1.2, 2.32, g);
-  [-2.2, 2.2].forEach(x => mesh(new THREE.BoxGeometry(0.6, 0.6, 0.06), windowMat, x, 1.9, 2.32, g));
-  const r = new THREE.Mesh(flat(gableRoofGeo(5.6, 8.6, 2.4)), mat('#5e4a2c')); r.position.y = 3.1; g.add(r);
-  banner(g, -3.4, 0, 3.2, 3.4); banner(g, 3.0, 0, 3.2, 3.4);
-  mesh(new THREE.BoxGeometry(2.2, 0.4, 0.5), '#6b4a2e', 3.4, 0.4, 3.6, g);
-})();
-(function granary() {
-  const g = new THREE.Group(); g.position.set(-9, 0, -15.6); scene.add(g); V.granary = g;
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), '#3e2c1d', a * 1.1, 0.35, b * 1.1, g));
-  mesh(new THREE.BoxGeometry(2.6, 1.8, 2.6), '#7a5a38', 0, 1.6, 0, g);
-  const r = new THREE.Mesh(flat(new THREE.ConeGeometry(2.3, 1.6, 4)), mat('#8a7445')); r.position.y = 3.3; r.rotation.y = Math.PI / 4; g.add(r);
-  V.grainSacks = [];
-  for (let i = 0; i < 10; i++) { const m = mesh(GEO_SACK(), '#c7b07c', -1.6 + (i % 5) * 0.8, 0.28 + Math.floor(i / 5) * 0.42, 2.0, g); m.scale.set(1, 0.95, 0.9); V.grainSacks.push(m); }
-  V.granaryWing = new THREE.Group(); g.add(V.granaryWing);
-  mesh(new THREE.BoxGeometry(2.2, 1.6, 2.4), '#7a5a38', 2.6, 1.5, 0, V.granaryWing);
-  const r2 = new THREE.Mesh(flat(new THREE.ConeGeometry(2, 1.3, 4)), mat('#8a7445')); r2.position.set(2.6, 2.95, 0); r2.rotation.y = Math.PI / 4; V.granaryWing.add(r2);
-})();
-function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGeometry(0.3, 6, 4))); }
-(function tower() {
-  const p = L.tower;
-  V.towerRuin = new THREE.Group(); V.towerRuin.position.set(p.x, 0, p.z); scene.add(V.towerRuin);
-  mesh(new THREE.BoxGeometry(3, 0.9, 3), '#7d7a70', 0, 0.45, 0, V.towerRuin);
-  [[-1.2, 0.6], [0.9, -0.8], [1.4, 1.3], [-0.4, -1.6]].forEach(([x, z], i) => { const m = mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6), '#6f6c63', x, 0.25, z, V.towerRuin); m.rotation.set(0.3 * i, i, 0.2); });
-  [[-1.4, -1.4], [1.4, 1.4]].forEach(([x, z]) => { const m = mesh(new THREE.BoxGeometry(0.2, 1.6, 0.2), '#3e2c1d', x, 0.6, z, V.towerRuin); m.rotation.z = 0.5; });
-  V.towerBuilt = new THREE.Group(); V.towerBuilt.position.set(p.x, 0, p.z); scene.add(V.towerBuilt);
-  mesh(new THREE.BoxGeometry(3, 5.5, 3), '#8b877c', 0, 2.75, 0, V.towerBuilt);
-  mesh(new THREE.BoxGeometry(3.6, 0.5, 3.6), '#5e5850', 0, 5.7, 0, V.towerBuilt);
-  for (let i = 0; i < 4; i++) { mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), '#8b877c', -1.5 + (i % 2) * 3, 6.25, -1.5 + Math.floor(i / 2) * 3, V.towerBuilt); }
-  mesh(new THREE.BoxGeometry(0.4, 0.6, 0.06), windowMat, 0, 3.6, 1.52, V.towerBuilt);
-  mesh(new THREE.BoxGeometry(1, 1.6, 0.08), '#3b2a1c', 0, 0.8, 1.52, V.towerBuilt);
-  banner(V.towerBuilt, 1.2, 5.9, 0, 2.6);
-})();
-(function manor() {
-  const gx = -6, gz = -38;
-  const ground = (x, z) => groundH(x, z);
-  const g = new THREE.Group(); g.position.set(-7, ground(-7, -47), -47); scene.add(g);
-  mesh(new THREE.BoxGeometry(12, 4.5, 6), '#8b877c', 0, 2.25, 0, g);
-  mesh(new THREE.BoxGeometry(4, 7, 4), '#8b877c', -6.5, 3.5, 1, g);
-  mesh(new THREE.BoxGeometry(4.6, 0.5, 4.6), '#5e5850', -6.5, 7.2, 1, g);
-  const r = new THREE.Mesh(flat(gableRoofGeo(6.6, 12.6, 2.8)), mat('#3f4a5a')); r.position.y = 4.5; g.add(r);
-  for (let i = -2; i <= 2; i++) mesh(new THREE.BoxGeometry(0.6, 0.8, 0.06), windowMat, i * 2.2, 2.6, 3.02, g);
-  banner(g, -6.5, 7.4, 1, 3.2); banner(g, 4.5, 4.5, 2.4, 3.6);
-  // curtain wall with the shut gate
-  const w = new THREE.Group(); w.position.set(gx, ground(gx, gz), gz); scene.add(w);
-  mesh(new THREE.BoxGeometry(9, 2.6, 0.8), '#7d7a70', -6.2, 1.3, 0, w); mesh(new THREE.BoxGeometry(9, 2.6, 0.8), '#7d7a70', 6.2, 1.3, 0, w);
-  [-1.9, 1.9].forEach(x => mesh(new THREE.BoxGeometry(1.4, 3.6, 1.4), '#6f6c63', x, 1.8, 0, w));
-  V.gate = mesh(new THREE.BoxGeometry(2.4, 2.4, 0.25), '#4a3424', 0, 1.2, 0, w);
-  mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 1.8, 0.05, w); mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 0.6, 0.05, w);
-  banner(w, -1.9, 3.6, 0, 1.8); banner(w, 1.9, 3.6, 0, 1.8);
-})();
-(function cottage() {
-  const p = L.cottage;
-  V.cottageOld = hut(p.x, p.z, { wall: '#5e4a36', roof: '#6b5a3a', door: '#2a2018' }); V.cottageOld.rotation.z = 0.04;
-  V.cottageNew = hut(p.x, p.z, { wall: '#7a5c3c', roof: '#9a8050', door: '#7a3a28' });
-  V.forSaleSign = new THREE.Group(); V.forSaleSign.position.set(p.x - 2, 0, p.z + 2.6); scene.add(V.forSaleSign);
-  mesh(new THREE.BoxGeometry(0.12, 1.4, 0.12), '#5b4029', 0, 0.7, 0, V.forSaleSign); mesh(new THREE.BoxGeometry(1, 0.6, 0.06), '#d8c69a', 0, 1.2, 0.05, V.forSaleSign);
-})();
-// square projects: stone paving and lanterns
-V.paving = mesh(new THREE.CylinderGeometry(7.3, 7.3, 0.07, 20), '#8d887c', SQ.x, 0.04, SQ.z); V.paving.visible = false;
-V.lanterns = new THREE.Group(); scene.add(V.lanterns);
-for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + 0.3; const x = SQ.x + Math.cos(a) * 7.8, z = SQ.z + Math.sin(a) * 7.8; mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), '#2a2420', x, 1.1, z, V.lanterns); mesh(new THREE.BoxGeometry(0.34, 0.4, 0.34), windowMat, x, 2.3, z, V.lanterns); }
-V.lanterns.visible = false;
-function syncVillage(s) {
-  const v = s.village;
-  V.grainSacks.forEach((m, i) => m.visible = v.shortage ? i < Math.floor(v.granary / v.granaryNeed * 10) : i < 8);
-  V.granaryWing.visible = !!v.projects.granary;
-  V.towerRuin.visible = !v.towerBuilt; V.towerBuilt.visible = v.towerBuilt;
-  V.cottageOld.visible = v.cottage === 'forsale' || v.cottage === 'owned'; V.cottageNew.visible = !V.cottageOld.visible; V.forSaleSign.visible = v.cottage === 'forsale';
-  V.paving.visible = !!v.projects.pave; V.lanterns.visible = !!v.projects.lanterns;
-  V.gate.position.x = v.step >= 8 ? 1.6 : 0;
-}
-
-/* ----- shops: four trades, three building tiers each ----- */
-const LOOK = {
-  bakery: { awning: '#8c3b29', banner: '#8c2e21', emblem: '#c48a3f' },
-  smithy: { awning: '#3d4148', banner: '#2f3a46', emblem: '#9aa3ab' },
-  tavern: { awning: '#3f6b3a', banner: '#2f5a2e', emblem: '#c9a050' },
-  joinery: { awning: '#2f5d7a', banner: '#2b4f6a', emblem: '#a77a4a' }
-};
 const GEO = {
   loaf: flat(new THREE.SphereGeometry(0.2, 7, 5)),
   sack: flat(new THREE.SphereGeometry(0.3, 6, 4)),
@@ -782,6 +554,537 @@ const GEO = {
   stool: mergeColored([{ geo: new THREE.CylinderGeometry(0.26, 0.26, 0.07, 8), color: '#a77a4a', m: M(0, 0.48, 0) }].concat([0, 2.1, 4.2].map(a => ({ geo: new THREE.CylinderGeometry(0.035, 0.035, 0.48, 5), color: '#7a5232', m: M(Math.cos(a) * 0.17, 0.24, Math.sin(a) * 0.17) }))))
 };
 const PRODUCT_GEO = { bread: 'loaf', tools: 'tool', ale: 'mug', furniture: 'stool' };
+
+/* ================= the land: Hearthmoor rebuilt =================
+   x runs east, z runs south (north is -z). The square is at (0, 4).
+   The stream runs down the east side; a millrace leaves it in the north-east,
+   runs along the foot of the manor's rise to the mill pond, and drains away west. */
+const SQ = Sim.P.center;
+const STREAM = [[56, -110], [53, -80], [50, -60], [48, -44], [50, -24], [49, 0], [51, 20], [48, 44], [53, 70], [50, 110]];
+const RACE = [[48, -44], [38, -44], [24, -44], [12, -43], [2, -42], [-8, -44], [-14, -46.5]];
+const POND = { x: -18, z: -47, r: 4.2 };
+const TAIL = [[-22.4, -41], [-21, -33], [-28, -27], [-35, -24], [-58, -20], [-90, -16]];
+function segDist(x, z, pts) {
+  let best = 1e9;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+    const d = Math.hypot(x - ax - t * dx, z - az - t * dz); if (d < best) best = d;
+  }
+  return best;
+}
+function groundH(x, z) {
+  let h = 0.38 * Math.sin(x * 0.07 + 1) * Math.cos(z * 0.06) + 0.22 * Math.sin((x + z) * 0.11);
+  h *= clamp(Math.hypot(x / 64, (z - 4) / 52), 0.22, 1);          // the village itself sits nearly level
+  h += 4.2 * Math.exp(-((x - 2) ** 2 + (z + 62) ** 2) / 450);       // the manor's rise
+  const out = Math.max(0, Math.hypot(x / 92, (z - 4) / 86) - 1);    // hills beyond the village, mountains further out
+  h += out * out * 70 + out * 9 * (Math.sin(x * 0.05) + Math.cos(z * 0.043) + 1.2);
+  const ds = segDist(x, z, STREAM); if (ds < 5) h -= (1 - ds / 5) * 1.7;
+  const dr = Math.min(segDist(x, z, RACE), segDist(x, z, TAIL)); if (dr < 2.2) h -= (1 - dr / 2.2) * 0.85;
+  const dp = Math.hypot(x - POND.x, z - POND.z); if (dp < POND.r + 2) h -= (1 - dp / (POND.r + 2)) * 1.1;
+  return h;
+}
+
+/* static scenery is merged into a few big meshes, so the whole village costs only a handful of draw calls */
+const PARTS = { solid: [], win: [] };
+const RX = new THREE.Euler();
+function partM(f, x, y, z, ry, rx, rz, sx, sy, sz) {
+  const local = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(RX.set(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx || 1, sy || 1, sz || 1));
+  return f ? f.clone().multiply(local) : local;
+}
+const fr = (x, z, ry, dy) => new THREE.Matrix4().compose(new THREE.Vector3(x, groundH(x, z) + (dy || 0), z), new THREE.Quaternion().setFromEuler(RX.set(0, ry || 0, 0)), new THREE.Vector3(1, 1, 1));
+const G_BOX = new THREE.BoxGeometry(1, 1, 1);
+function box(f, color, x, y, z, w, h, d, ry, rx, rz) { PARTS.solid.push({ geo: G_BOX, color, m: partM(f, x, y, z, ry, rx, rz, w, h, d) }); }
+function win(f, x, y, z, w, h, d) { PARTS.win.push({ geo: G_BOX, color: '#000', m: partM(f, x, y, z, 0, 0, 0, w, h, d) }); }
+function part(f, geo, color, x, y, z, ry, rx, rz, sx, sy, sz) { PARTS.solid.push({ geo, color, m: partM(f, x, y, z, ry, rx, rz, sx, sy, sz) }); }
+function flushBuild() {
+  if (PARTS.solid.length) scene.add(new THREE.Mesh(mergeColored(PARTS.solid), vc));
+  if (PARTS.win.length) scene.add(new THREE.Mesh(mergeColored(PARTS.win), windowMat));
+  PARTS.solid = []; PARTS.win = [];
+}
+const facing = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
+
+(function buildGround() {
+  const N = 176, S = 440;
+  const g = new THREE.PlaneGeometry(S, S, N, N).toNonIndexed();
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setY(i, groundH(p.getX(i), p.getZ(i)));
+  g.computeVertexNormals();
+  const col = new Float32Array(p.count * 3);
+  const greens = ['#4f6236', '#566b39', '#4b5d31', '#5d6d3c', '#61693e'].map(c => new THREE.Color(c));
+  const bank = new THREE.Color('#5a5a3a'), rock = new THREE.Color('#6c675a'), snow = new THREE.Color('#d9dcd6'), tmp = new THREE.Color();
+  for (let i = 0; i < p.count; i += 3) {
+    const x = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, z = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3, y = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
+    tmp.copy(greens[Math.floor(rnd() * greens.length)]);
+    const wet = Math.min(segDist(x, z, STREAM), segDist(x, z, RACE) + 1, segDist(x, z, TAIL) + 1);
+    if (wet < 4.5) tmp.lerp(bank, 0.55);
+    if (y > 9) tmp.lerp(rock, Math.min(1, (y - 9) / 10));
+    if (y > 34) tmp.lerp(snow, Math.min(1, (y - 34) / 8));
+    for (let j = 0; j < 3; j++) { col[(i + j) * 3] = tmp.r; col[(i + j) * 3 + 1] = tmp.g; col[(i + j) * 3 + 2] = tmp.b; }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  scene.add(new THREE.Mesh(g, vc));
+})();
+
+/* ----- water: the stream, the millrace, the pond and the tail-race ----- */
+const waterMat = new THREE.MeshLambertMaterial({ color: '#4f7d8c', emissive: new THREE.Color('#0f2a33'), transparent: true, opacity: 0.88 });
+function ribbon(pts, width, yOf, step) {
+  const pos = [];
+  const sample = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / (step || 1.2)));
+    for (let k = 0; k < n; k++) sample.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]);
+  }
+  sample.push(pts[pts.length - 1]);
+  const W = typeof width === 'function' ? width : () => width;
+  for (let i = 0; i < sample.length - 1; i++) {
+    const [ax, az] = sample[i], [bx, bz] = sample[i + 1];
+    const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l;
+    const wa = W(i) / 2, wb = W(i + 1) / 2;
+    const A = [ax + nx * wa, yOf(ax, az), az + nz * wa], B = [ax - nx * wa, yOf(ax, az), az - nz * wa], C = [bx + nx * wb, yOf(bx, bz), bz + nz * wb], D = [bx - nx * wb, yOf(bx, bz), bz - nz * wb];
+    pos.push(...A, ...C, ...B, ...B, ...C, ...D);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  return g;
+}
+const waterY = (depth) => (x, z) => groundH(x, z) + depth;
+scene.add(new THREE.Mesh(ribbon(STREAM, 3.4, waterY(1.05), 1.5), waterMat));
+scene.add(new THREE.Mesh(ribbon(RACE, 1.5, waterY(0.5)), waterMat));
+scene.add(new THREE.Mesh(ribbon(TAIL, 1.3, waterY(0.5)), waterMat));
+mesh(new THREE.CylinderGeometry(POND.r + 0.6, POND.r + 0.6, 0.05, 20), waterMat, POND.x, groundH(POND.x, POND.z) + 0.75, POND.z);
+// reeds along the banks
+(function reeds() {
+  const geo = mergeColored([{ geo: new THREE.BoxGeometry(0.05, 0.9, 0.05), color: '#6d7a3a', m: M(0, 0.45, 0) }, { geo: new THREE.BoxGeometry(0.09, 0.24, 0.09), color: '#5a4426', m: M(0, 0.95, 0) }]);
+  const spots = [];
+  for (let i = 0; i < 260; i++) {
+    const src = i % 3 === 0 ? RACE : STREAM, k = Math.floor(rnd() * (src.length - 1)), t = rnd();
+    const [ax, az] = src[k], [bx, bz] = src[k + 1], x = ax + (bx - ax) * t + (rnd() - 0.5) * 6, z = az + (bz - az) * t + (rnd() - 0.5) * 6;
+    const d = segDist(x, z, src); if (d > 1.4 && d < 3.2 && Math.abs(z - 4) > 4) spots.push([x, z]);
+  }
+  const inst = new THREE.InstancedMesh(geo, vc, spots.length);
+  spots.forEach(([x, z], i) => inst.setMatrixAt(i, M(x, groundH(x, z) - 0.1, z, rnd() * 6, 0.8 + rnd() * 0.6)));
+  scene.add(inst);
+})();
+
+/* ----- lanes: worn earth that winds between the buildings ----- */
+const LANES = [
+  { w: 3.4, pts: [[9, 4], [24, 4.5], [40, 4], [45, 4], [54, 4], [66, 3], [92, 5]] },              // the east road, over the bridge to Oakbridge
+  { w: 2.4, pts: [[0, -5], [0.5, -14], [1, -22], [2, -32], [2, -46]] },                            // up to the manor
+  { w: 2.2, pts: [[-9, 3], [-16, 3.5], [-26, 4]] },                                                 // to the Village Hall
+  { w: 1.8, pts: [[-26, 4], [-32, 0], [-38, -4]] },                                                 // the Long Hut
+  { w: 2.0, pts: [[-24, 0], [-22, -10], [-22, -20], [-24, -30], [-26, -37.5]] },                   // the mill lane
+  { w: 1.5, pts: [[-22, -10], [-27, -12.4]] },                                                      // hall lot gate
+  { w: 1.6, pts: [[-22, -14], [-17.4, -14]] },                                                      // Elder's House
+  { w: 1.6, pts: [[0.8, -21], [-8.5, -23]] }, { w: 1.6, pts: [[1, -21], [14.5, -23]] },             // Fern Cottage, Brook House
+  { w: 1.8, pts: [[14.5, -23], [26, -28], [30, -30.5]] }, { w: 1.6, pts: [[30, -30.5], [36, -40], [39, -47]] }, // barn, iron pit
+  { w: 1.8, pts: [[24, 4.5], [25.5, -6], [26, -12.6]] }, { w: 1.4, pts: [[28, 4.4], [28, 0]] },    // granary, Ash Lane
+  { w: 1.8, pts: [[34, 4.2], [34, 9.6]] },                                                          // trading post
+  { w: 2.4, pts: [[0, 13], [0, 20], [0, 25], [0, 40], [0.5, 56]] },                                // south to the lots and the open land
+  { w: 2.0, pts: [[-36, 30], [-26, 24.5], [-14, 25], [0, 25], [14, 25], [26, 24.5], [36, 33], [37.6, 36]] }, // the lots lane
+  { w: 1.4, pts: [[0, 41], [19.4, 41.5]] }, { w: 1.4, pts: [[0, 43], [-19.4, 43.5]] },              // Hill Croft, Wood End
+  { w: 1.8, pts: [[-26, 4], [-34, 12], [-35.4, 19.6]] },                                            // your hut
+  { w: 1.4, pts: [[-36.5, 21], [-50, 12], [-56, 9]] },                                              // into the woods
+  { w: 1.6, pts: [[-32, 0], [-40, -14], [-42, -22]] },                                              // to the wheat field
+  { w: 1.6, pts: [[66, 3], [63.5, -2.4]] }                                                          // the watchtower
+];
+const dirt = '#6f5a3d';
+(function buildLanes() {
+  const parts = [];
+  for (const ln of LANES) parts.push({ geo: ribbon(ln.pts, i => ln.w * (0.92 + 0.16 * Math.sin(i * 1.7)), (x, z) => groundH(x, z) + 0.08, 1), color: dirt });
+  // the square: an irregular worn green around the well
+  const ring = [];
+  for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2, r = 10.4 + Math.sin(a * 3) * 1.1 + Math.cos(a * 5) * 0.6; ring.push([SQ.x + Math.cos(a) * r, SQ.z + Math.sin(a) * r * 0.92]); }
+  const sq = [];
+  for (let i = 0; i < ring.length; i++) { const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length]; sq.push(SQ.x, groundH(SQ.x, SQ.z) + 0.1, SQ.z, bx, groundH(bx, bz) + 0.1, bz, ax, groundH(ax, az) + 0.1, az); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sq, 3)); sg.computeVertexNormals();
+  parts.push({ geo: sg, color: '#7a6446' });
+  scene.add(new THREE.Mesh(mergeColored(parts), vc));
+})();
+const nearLane = (x, z, r) => LANES.some(ln => segDist(x, z, ln.pts) < ln.w / 2 + r);
+
+/* ----- where trees may not grow ----- */
+const HOUSES = Sim.HOUSES;
+const keepClear = [
+  { x: SQ.x, z: SQ.z, r: 14 }, { x: -31, z: 4, r: 7 }, { x: -30, z: -16, r: 7 }, { x: 26, z: -15, r: 5 }, { x: 64, z: -6, r: 5 }, { x: 34, z: 12, r: 6 },
+  { x: 2, z: -58, r: 20 }, { x: -26, z: -42, r: 8 }, { x: POND.x, z: POND.z, r: 7 }, { x: 34, z: -34, r: 10 }, { x: L.pit.x, z: L.pit.z, r: 8 },
+  { x: L.home.x, z: L.home.z, r: 5 }, { x: L.cottage.x, z: L.cottage.z, r: 5 }, { x: 0, z: 54, r: 18 }
+].concat(Sim.EMPLOYERS.map(e => ({ x: e.x, z: e.z, r: 7 })), Sim.PLOTS.map(p => ({ x: p.x, z: p.z, r: 6.5 })), HOUSES.map(h => ({ x: h.x, z: h.z, r: 6.5 })));
+const fieldBox = { x0: L.field.x - 11, x1: L.field.x + 11, z0: L.field.z - 8, z1: L.field.z + 8 };
+const clear = (x, z) => keepClear.every(k => Math.hypot(x - k.x, z - k.z) > k.r) && !nearLane(x, z, 1.6)
+  && segDist(x, z, STREAM) > 3.6 && segDist(x, z, RACE) > 2.4 && segDist(x, z, TAIL) > 2.2
+  && !(x > fieldBox.x0 - 2 && x < fieldBox.x1 + 2 && z > fieldBox.z0 - 2 && z < fieldBox.z1 + 2);
+
+/* ----- trees: the Pine Woods to the west, broadleaf trees about the village, pines on the hills ----- */
+const pineGeo = mergeColored([
+  { geo: new THREE.CylinderGeometry(0.16, 0.22, 1.2, 5), color: '#4a3424', m: M(0, 0.6, 0) },
+  { geo: new THREE.ConeGeometry(1.25, 1.9, 6), color: '#24402a', m: M(0, 1.9, 0) },
+  { geo: new THREE.ConeGeometry(0.98, 1.6, 6), color: '#2c4b30', m: M(0, 2.8, 0, 0.5) },
+  { geo: new THREE.ConeGeometry(0.66, 1.3, 6), color: '#355636', m: M(0, 3.6, 0, 1) }
+]);
+const oakGeo = mergeColored([
+  { geo: new THREE.CylinderGeometry(0.2, 0.3, 1.8, 6), color: '#4f3826', m: M(0, 0.9, 0) },
+  { geo: new THREE.IcosahedronGeometry(1.5, 0), color: '#4c6a32', m: M(0, 2.6, 0) },
+  { geo: new THREE.IcosahedronGeometry(1.1, 0), color: '#58783a', m: M(0.7, 3.2, 0.3, 0.6) },
+  { geo: new THREE.IcosahedronGeometry(1.0, 0), color: '#45622d', m: M(-0.8, 2.9, -0.4, 1.1) }
+]);
+const bushGeo = mergeColored([{ geo: new THREE.IcosahedronGeometry(0.7, 0), color: '#4a6530', m: M(0, 0.45, 0) }, { geo: new THREE.IcosahedronGeometry(0.5, 0), color: '#56743a', m: M(0.5, 0.4, 0.2) }]);
+const pines = [], oaks = [], bushes = [];
+for (let i = 0; i < 900; i++) { const x = -48 - rnd() * 60, z = -70 + rnd() * 150; if (clear(x, z) && !(Math.abs(x - L.forest.x - 4) < 6 && Math.abs(z - L.forest.z) < 5)) pines.push([x, z, 0.85 + rnd() * 0.7]); }
+for (let i = 0; i < 1600; i++) { const a = rnd() * Math.PI * 2, r = 84 + rnd() * 110, x = Math.cos(a) * r, z = 4 + Math.sin(a) * r; if (clear(x, z) && groundH(x, z) < 30) pines.push([x, z, 1 + rnd() * 1.1]); }
+for (let i = 0; i < 260; i++) { const x = (rnd() - 0.5) * 150, z = (rnd() - 0.5) * 150; if (clear(x, z) && Math.hypot(x, z - 4) > 16 && Math.hypot(x, z - 4) < 86) (rnd() < 0.7 ? oaks : bushes).push([x, z, 0.8 + rnd() * 0.5]); }
+for (let i = 0; i < 160; i++) { const k = Math.floor(rnd() * (STREAM.length - 3)) + 1, [ax, az] = STREAM[k], x = ax + (rnd() - 0.5) * 16, z = az + (rnd() - 0.5) * 20; if (clear(x, z)) (rnd() < 0.5 ? oaks : bushes).push([x, z, 0.9 + rnd() * 0.5]); }
+function plant(geo, list, sy) {
+  const inst = new THREE.InstancedMesh(geo, vc, list.length);
+  list.forEach(([x, z, s], i) => inst.setMatrixAt(i, M(x, groundH(x, z) - 0.05, z, rnd() * 6, s, s * (sy || 1) * (0.9 + rnd() * 0.25), s)));
+  scene.add(inst); return inst;
+}
+plant(pineGeo, pines); plant(oakGeo, oaks); plant(bushGeo, bushes);
+const rockGeo = flat(new THREE.IcosahedronGeometry(0.6, 0));
+const rocks = [];
+for (let i = 0; i < 140; i++) { const a = rnd() * Math.PI * 2, r = 20 + rnd() * 90, x = Math.cos(a) * r, z = 4 + Math.sin(a) * r; if (clear(x, z)) rocks.push([x, z]); }
+for (let i = 0; i < 30; i++) { const x = L.pit.x + (rnd() - 0.5) * 22, z = L.pit.z - 4 - rnd() * 12; if (Math.hypot(x - L.pit.x, z - L.pit.z) > 5.5 && segDist(x, z, STREAM) > 4) rocks.push([x, z]); }
+const rockInst = new THREE.InstancedMesh(rockGeo, mat('#7d7b70'), rocks.length);
+rocks.forEach(([x, z], i) => rockInst.setMatrixAt(i, M(x, groundH(x, z) + 0.1, z, rnd() * 6, 0.5 + rnd() * 1.4, 0.4 + rnd() * 0.8, 0.5 + rnd())));
+scene.add(rockInst);
+// the mountains beyond: always on the horizon
+(function mountains() {
+  const parts = [];
+  for (let i = 0; i < 46; i++) {
+    const a = -Math.PI * 0.95 + i / 45 * Math.PI * 1.9 + (rnd() - 0.5) * 0.08, r = 250 + rnd() * 70;
+    const x = Math.sin(a) * r, z = -Math.cos(a) * r * 0.9 - 20, h = 60 + rnd() * 70 + (Math.abs(a) < 0.9 ? 40 : 0), w = 50 + rnd() * 40;
+    parts.push({ geo: new THREE.ConeGeometry(w, h, 5), color: '#5b6066', m: M(x, h / 2 - 8, z, rnd() * 3) });
+    parts.push({ geo: new THREE.ConeGeometry(w * 0.32, h * 0.32, 5), color: '#dfe3e2', m: M(x, h - 8 - h * 0.16 + 0.5, z, rnd() * 3) });
+  }
+  const m = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true, fog: false }));
+  m.material.color = new THREE.Color('#c9d2d6'); scene.add(m); window.__mountains = m;
+})();
+
+/* ----- the wheat field, with its fence ----- */
+const WF = fieldBox;
+(function field() {
+  const f = fr(L.field.x, L.field.z, 0.06);
+  box(f, '#6b5530', 0, 0.02, 0, 22, 0.12, 16);
+  const n = 1400, stalk = mergeColored([{ geo: new THREE.BoxGeometry(0.07, 0.8, 0.07), color: '#b89a45', m: M(0, 0.4, 0) }, { geo: new THREE.BoxGeometry(0.14, 0.22, 0.14), color: '#d9b75a', m: M(0, 0.85, 0) }]);
+  const wheat = new THREE.InstancedMesh(stalk, vc, n);
+  for (let i = 0; i < n; i++) {
+    const x = WF.x0 + 0.4 + rnd() * 21.2, z = WF.z0 + 0.4 + rnd() * 15.2;
+    wheat.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(x, groundH(x, z), z), new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * 3, (rnd() - 0.5) * 0.3)), new THREE.Vector3(1, 0.8 + rnd() * 0.5, 1)));
+  }
+  scene.add(wheat);
+  for (let i = 0; i <= 22; i++) { box(null, '#5b4029', WF.x0 + i, groundH(WF.x0 + i, WF.z0) + 0.4, WF.z0, 0.14, 0.8, 0.14); box(null, '#5b4029', WF.x0 + i, groundH(WF.x0 + i, WF.z1) + 0.4, WF.z1, 0.14, 0.8, 0.14); }
+  for (let i = 0; i <= 16; i++) { if (i > 6 && i < 10) continue; box(null, '#5b4029', WF.x1, groundH(WF.x1, WF.z0 + i) + 0.4, WF.z0 + i, 0.14, 0.8, 0.14); box(null, '#5b4029', WF.x0, groundH(WF.x0, WF.z0 + i) + 0.4, WF.z0 + i, 0.14, 0.8, 0.14); }
+  const G_ROLL = new THREE.CylinderGeometry(0.5, 0.5, 0.9, 8);
+  [[0, 0], [1.2, 0.3], [0.5, 1.4]].forEach(([dx, dz]) => part(null, G_ROLL, '#c9a64e', WF.x1 + 2 + dx, groundH(WF.x1 + 2, WF.z0 + 3) + 0.45, WF.z0 + 3 + dz, 0, 0, Math.PI / 2));
+})();
+
+/* ----- the iron pit, under the hills in the north-east ----- */
+(function pit() {
+  const f = fr(L.pit.x, L.pit.z, 0, -0.1);
+  part(f, new THREE.CylinderGeometry(5, 5.6, 0.1, 14), '#4b4540', 0, 0.05, 0);
+  part(f, new THREE.CylinderGeometry(1.5, 1.5, 0.12, 10), '#151210', -0.5, 0.1, -1.6);
+  const oreGeo = new THREE.IcosahedronGeometry(0.35, 0);
+  for (let i = 0; i < 16; i++) { const a = rnd() * 6.3, r = 2 + rnd() * 2.6, s = 0.6 + rnd() * 0.9; part(f, oreGeo, i % 3 ? '#6e4a3a' : '#8a5a3c', Math.cos(a) * r, 0.2, Math.sin(a) * r, rnd(), rnd(), rnd(), s, s, s); }
+  // a timber headframe over the shaft
+  [[-1.8, -2.6], [0.8, -2.6], [-1.8, -0.6], [0.8, -0.6]].forEach(([x, z]) => box(f, '#4a3424', x, 1.6, z, 0.2, 3.2, 0.2));
+  box(f, '#4a3424', -0.5, 3.2, -1.6, 3, 0.22, 2.4);
+  part(f, new THREE.CylinderGeometry(0.5, 0.5, 0.3, 10), '#5b4029', -0.5, 3.6, -1.6, 0, 0, Math.PI / 2);
+  box(f, '#5f4430', 2.6, 0.3, 1.6, 1.1, 0.6, 0.7);
+  [[2.6, 1.0], [2.6, 2.2]].forEach(([x, z]) => part(f, new THREE.CylinderGeometry(0.22, 0.22, 0.1, 8), '#3e2c1d', x, 0.2, z, 0, 0, Math.PI / 2));
+})();
+
+/* ----- houses: timber and wattle, thatched, each with its yard ----- */
+const windowMat = new THREE.MeshLambertMaterial({ color: '#3a2a1c', emissive: new THREE.Color('#ffb04a'), emissiveIntensity: 0 });
+function gableRoofGeo(w, d, h) {
+  const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); g.rotateY(Math.PI / 2); return g;
+}
+function gableRoof(w, d, h, color, mt) {
+  const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2);
+  return new THREE.Mesh(flat(g), mt || mat(color));
+}
+const THATCH = ['#9a8350', '#8a7445', '#a38c58', '#7f6a3f'], WALLS = ['#c9b48a', '#b9a47a', '#d1bf96', '#a89270'], BEAMS = '#4a3424';
+const roofGeoCache = {};
+const roofG = (w, d, h) => roofGeoCache[w + ',' + d + ',' + h] || (roofGeoCache[w + ',' + d + ',' + h] = gableRoofGeo(w, d, h));
+function cottage(f, o) {
+  const w = o.w || 5, d = o.d || 4, h = o.h || 2.3, wall = o.wall || WALLS[0], roof = o.roof || THATCH[0];
+  box(f, '#7d776a', 0, 0.15, 0, w + 0.4, 0.7, d + 0.4);                                    // stone footing, sunk into the slope
+  box(f, wall, 0, 0.4 + h / 2, 0, w, h, d);
+  // timber framing
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(f, BEAMS, a * w / 2, 0.4 + h / 2, b * d / 2, 0.18, h + 0.05, 0.18));
+  box(f, BEAMS, 0, 0.4 + h, d / 2 + 0.02, w + 0.1, 0.16, 0.08); box(f, BEAMS, 0, 0.4 + h * 0.5, d / 2 + 0.02, w, 0.1, 0.06);
+  part(f, roofG(d + 0.9, w + 0.7, o.rh || 2), roof, 0, 0.4 + h, 0);
+  box(f, '#6c675e', -w / 2 + 0.8, 0.4 + h + 1.1, -0.4, 0.6, 2.6, 0.6);                    // chimney
+  box(f, o.door || '#3b2a1c', o.doorX || 0.4, 0.4 + 0.6, d / 2 + 0.04, 0.8, 1.2, 0.08);
+  win(f, -w / 2 + 1, 0.4 + 1.2, d / 2 + 0.04, 0.55, 0.45, 0.06); if (w > 4.4) win(f, w / 2 - 0.9, 0.4 + 1.2, d / 2 + 0.04, 0.55, 0.45, 0.06);
+  win(f, w / 2 + 0.04, 0.4 + 1.2, 0, 0.06, 0.45, 0.55);
+  if (o.yard !== false) {
+    // a little garden: a picket fence, rows of vegetables, a woodpile and a water butt
+    const fz = d / 2 + 3.2, fx = w / 2 + 1.2;
+    for (let x = -fx; x <= fx + 0.01; x += 0.7) if (Math.abs(x - (o.doorX || 0.4)) > 0.7) box(f, '#8a6d48', x, 0.35, fz, 0.08, 0.7, 0.08);
+    box(f, '#8a6d48', -fx / 2 - 0.5, 0.5, fz, fx - 0.4, 0.07, 0.05); box(f, '#8a6d48', fx / 2 + 0.5, 0.5, fz, fx - 0.4, 0.07, 0.05);
+    for (let z = d / 2 + 0.2; z <= fz; z += 0.7) { box(f, '#8a6d48', -fx, 0.35, z, 0.08, 0.7, 0.08); box(f, '#8a6d48', fx, 0.35, z, 0.08, 0.7, 0.08); }
+    for (let r = 0; r < 3; r++) { box(f, '#5a4430', -fx + 1.4, 0.06, d / 2 + 0.9 + r * 0.7, 2.2, 0.12, 0.35); for (let k = 0; k < 5; k++) box(f, r % 2 ? '#6f8f45' : '#7fa04a', -fx + 0.5 + k * 0.45, 0.22, d / 2 + 0.9 + r * 0.7, 0.22, 0.22, 0.22); }
+    for (let k = 0; k < 6; k++) part(f, GEO.log, '#7a5232', w / 2 + 0.5, 0.15 + Math.floor(k / 3) * 0.24, -d / 2 + 0.6 + (k % 3) * 0.28, 0, 0, Math.PI / 2);
+    part(f, G_BARREL, '#6b4a2e', -w / 2 - 0.5, 0.35, d / 2 - 0.4);
+    if (o.washing) { box(f, BEAMS, w / 2 + 2.2, 0.9, -d / 2, 0.08, 1.8, 0.08); box(f, BEAMS, w / 2 + 2.2, 0.9, d / 2, 0.08, 1.8, 0.08); ['#e9e1cc', '#8aa0b0', '#c9b48a'].forEach((c, i) => box(f, c, w / 2 + 2.2, 1.45, -d / 2 + 0.8 + i * 1.1, 0.03, 0.6, 0.7)); }
+  }
+}
+const G_BARREL = new THREE.CylinderGeometry(0.4, 0.36, 0.7, 8);
+HOUSES.forEach((h, i) => {
+  const FACE = [[-2, -22], [6, -22], [-32, -2], [-26, 22], [26, 22], [28, 6], [-23, -14], [4, 41], [-30, 28], [-4, 43]][i] || [0, 4];
+  const ry = facing(h.x, h.z, FACE[0], FACE[1]);
+  const big = h.cap >= 4;
+  cottage(fr(h.x, h.z, ry), { w: big ? 6 : 4.6, d: big ? 4.6 : 3.8, h: big ? 2.5 : 2.2, wall: WALLS[i % 4], roof: THATCH[i % 4], washing: i % 3 === 0, door: ['#3b2a1c', '#5a3a28', '#2f4f6a', '#6b4a2e'][i % 4] });
+});
+// your hut: small, draughty, yours
+cottage(fr(L.home.x, L.home.z, facing(L.home.x, L.home.z, -30, 20)), { w: 3.6, d: 3, h: 1.9, wall: '#8a6e4c', roof: '#7a6440', door: '#2f4f6a', yard: false, rh: 1.6 });
+function hut(x, z, opts) {
+  const o = Object.assign({ w: 3.6, d: 3, h: 1.9, wall: '#6e4f33', roof: '#8a7445', door: '#3b2a1c' }, opts);
+  const g = new THREE.Group(); g.position.set(x, groundH(x, z), z); g.rotation.y = o.ry != null ? o.ry : Math.atan2(-x, -z);
+  mesh(new THREE.BoxGeometry(o.w + 0.3, 0.6, o.d + 0.3), '#7d776a', 0, 0.1, 0, g);
+  mesh(new THREE.BoxGeometry(o.w, o.h, o.d), o.wall, 0, 0.3 + o.h / 2, 0, g);
+  const r = gableRoof(o.d + 0.7, o.w + 0.5, 1.5, o.roof); r.position.y = 0.3 + o.h; r.rotation.y = Math.PI / 2; g.add(r);
+  mesh(new THREE.BoxGeometry(0.75, 1.15, 0.08), o.door, 0, 0.88, o.d / 2 + 0.03, g);
+  mesh(new THREE.BoxGeometry(0.5, 0.42, 0.06), windowMat, -o.w / 2 + 0.7, 1.35, o.d / 2 + 0.03, g);
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => mesh(new THREE.BoxGeometry(0.18, o.h + 0.05, 0.18), BEAMS, a * o.w / 2, 0.3 + (o.h + 0.05) / 2, b * o.d / 2, g));
+  scene.add(g); return g;
+}
+
+/* ----- the square: the well, two stalls and the notice board ----- */
+(function square() {
+  const f = fr(L.well.x, L.well.z);
+  part(f, new THREE.CylinderGeometry(1, 1.1, 0.8, 10), '#86847a', 0, 0.4, 0);
+  part(f, new THREE.CylinderGeometry(0.88, 0.88, 0.05, 10), '#24343c', 0, 0.78, 0);
+  box(f, BEAMS, -1, 0.9, 0, 0.14, 1.8, 0.14); box(f, BEAMS, 1, 0.9, 0, 0.14, 1.8, 0.14);
+  part(f, roofG(1.5, 2.5, 0.7), '#6b5636', 0, 1.8, 0, Math.PI / 2);
+  part(f, new THREE.CylinderGeometry(0.1, 0.1, 2.1, 6), '#5b4029', 0, 1.6, 0, 0, 0, Math.PI / 2);
+  // market stalls with striped awnings
+  [[-7.5, 1, '#8c3b29'], [7.5, 8.5, '#2f5d7a']].forEach(([x, z, c]) => {
+    const g = fr(x, z, facing(x, z, SQ.x, SQ.z));
+    box(g, '#7a5634', 0, 0.45, 0.5, 2.4, 0.9, 0.7);
+    [[-1.1, 0.9], [1.1, 0.9], [-1.1, -0.6], [1.1, -0.6]].forEach(([a, b]) => box(g, BEAMS, a, 1.05, b, 0.1, 2.1, 0.1));
+    for (let i = 0; i < 4; i++) box(g, i % 2 ? '#e2d3a8' : c, -0.9 + i * 0.6, 2.1, 0.15, 0.6, 0.05, 1.8, 0, 0.22);
+    for (let i = 0; i < 6; i++) part(g, GEO.sack, i % 2 ? '#c7b07c' : '#9a7a48', -0.9 + (i % 3) * 0.6, 1.05, 0.35 + Math.floor(i / 3) * 0.3, 0, 0, 0, 0.7, 0.6, 0.7);
+  });
+  const nb = fr(-4.5, -2.5, facing(-4.5, -2.5, SQ.x, SQ.z));
+  box(nb, BEAMS, -0.8, 0.9, 0, 0.12, 1.8, 0.12); box(nb, BEAMS, 0.8, 0.9, 0, 0.12, 1.8, 0.12);
+  box(nb, '#7a5634', 0, 1.35, 0, 1.9, 1, 0.1); part(nb, roofG(0.7, 2.2, 0.3), '#5e4a2c', 0, 1.9, 0);
+  [[-0.5, 1.5], [0.2, 1.25], [0.55, 1.55]].forEach(([x, y]) => box(nb, '#e8dcbc', x, y, 0.07, 0.42, 0.5, 0.02));
+})();
+
+/* ----- the trading post, where the road meets the village ----- */
+(function tradingPost() {
+  const f = fr(L.market.x, L.market.z, facing(L.market.x, L.market.z, L.market.x, 0));
+  box(f, '#6a4b2f', 0, 0.45, 0.4, 3.4, 0.9, 1);
+  [[-1.6, 0.9], [1.6, 0.9], [-1.6, -0.9], [1.6, -0.9]].forEach(([x, z]) => box(f, BEAMS, x, 1.15, z, 0.14, 2.3, 0.14));
+  for (let i = 0; i < 6; i++) box(f, i % 2 ? '#d8c69a' : '#2f5d55', -1.55 + i * 0.62, 2.35, 0, 0.62, 0.06, 2.3, 0, -0.18);
+  [[-1, 0.45], [0.2, 0.42], [1.1, 0.5]].forEach(([x, z]) => box(f, '#7c5a37', x, 1.15, z, 0.6, 0.5, 0.6));
+  [[-1.4, -0.5], [-0.8, -0.6], [1.3, -0.5]].forEach(([x, z]) => part(f, GEO.sack, '#c7b07c', x, 0.32, z, 0, 0, 0, 1.3, 1.1, 1.3));
+  box(f, '#6b4a2e', 2.4, 0.4, 0.6, 0.9, 0.8, 0.9);
+  box(f, '#5f4430', -3.2, 0.7, 0.2, 1.4, 0.4, 2.2);
+  [[-0.8, 0.7], [-0.8, -0.5]].forEach(([x, z]) => part(f, new THREE.CylinderGeometry(0.42, 0.42, 0.1, 10), BEAMS, -3.2 + x * 1.05, 0.42, z, 0, 0, Math.PI / 2));
+})();
+
+/* ----- the bridges ----- */
+(function bridges() {
+  // the road bridge over the stream
+  const y = Math.max(groundH(44.5, 4), groundH(54, 4)) + 0.45, f = new THREE.Matrix4().makeTranslation(49.3, y, 4);
+  box(f, '#6b4a2e', 0, 0, 0, 10, 0.3, 3.8);
+  for (let x = -4.6; x <= 4.6; x += 0.8) box(f, '#5b4029', x, 0.02, 0, 0.12, 0.32, 3.82);
+  [-1.85, 1.85].forEach(z => { box(f, BEAMS, 0, 0.75, z, 10, 0.14, 0.14); for (let x = -4.8; x <= 4.8; x += 1.6) box(f, BEAMS, x, 0.45, z, 0.16, 0.9, 0.16); });
+  [-3, 3].forEach(x => box(f, '#6c675e', x, -1.1, 0, 1, 2, 3.4));
+  // a plank footbridge where the manor lane crosses the millrace, and one where the mill lane crosses the tail-race
+  [[2, -42, 0], [-24.4, -30.4, 0.6]].forEach(([x, z, ry]) => {
+    const g = fr(x, z, ry, 0.25);
+    box(g, '#7a5a3a', 0, 0, 0, 2.6, 0.16, 3.2);
+    [-1.2, 1.2].forEach(a => box(g, BEAMS, a, 0.5, 0, 0.1, 0.1, 3.2));
+  });
+})();
+// signposts: to Oakbridge and Crownmere, and the open land
+(function signs() {
+  const s1 = fr(76, 7.5, Math.PI / 2);
+  box(s1, BEAMS, 0, 1.2, 0, 0.16, 2.4, 0.16); box(s1, '#d8c69a', 0.7, 1.9, 0, 1.5, 0.35, 0.06); box(s1, '#d8c69a', 0.5, 1.4, 0, 1.2, 0.3, 0.06);
+  const s2 = fr(3.2, 50, 0);
+  box(s2, BEAMS, 0, 1, 0, 0.14, 2, 0.14); box(s2, '#d8c69a', 0, 1.6, 0.05, 1.3, 0.6, 0.05);
+  // stakes marking out the common land for future homes
+  for (let i = 0; i < 16; i++) { const x = -18 + (i % 4) * 12, z = 50 + Math.floor(i / 4) * 7; if (Math.abs(x) < 2) continue; const g = fr(x, z); box(g, '#8a6d48', 0, 0.4, 0, 0.1, 0.8, 0.1); box(g, '#c2412d', 0, 0.78, 0, 0.12, 0.1, 0.12); }
+})();
+
+/* ----- the realm: Village Hall, granary, watchtower, manor, mill, barn, cottage ----- */
+const LORD_BLUE = '#2b4a7a', LORD_GOLD = '#d9b04a';
+function banner(parent, x, y, z, h) {
+  mesh(new THREE.BoxGeometry(0.1, h, 0.1), BEAMS, x, y + h / 2, z, parent);
+  mesh(new THREE.BoxGeometry(0.7, 1.1, 0.04), LORD_BLUE, x + 0.38, y + h - 0.6, z, parent);
+  mesh(new THREE.BoxGeometry(0.22, 0.22, 0.05), LORD_GOLD, x + 0.38, y + h - 0.55, z, parent);
+}
+function bannerB(f, x, y, z, h) { box(f, BEAMS, x, y + h / 2, z, 0.1, h, 0.1); box(f, LORD_BLUE, x + 0.38, y + h - 0.6, z, 0.7, 1.1, 0.04); box(f, LORD_GOLD, x + 0.38, y + h - 0.55, z, 0.22, 0.22, 0.05); }
+const V = {};
+(function hall() {
+  // the Village Hall: stone below, timber above, facing the square
+  const f = fr(L.hall.x, L.hall.z, facing(L.hall.x, L.hall.z, 0, 4));
+  box(f, '#7c776d', 0, 0.2, 0, 9, 0.8, 6.2);
+  box(f, '#8b877c', 0, 1.6, -0.1, 8.4, 2.2, 5.4);
+  box(f, '#b9a47a', 0, 3.6, -0.1, 8.6, 1.8, 5.6);
+  for (let i = -3; i <= 3; i++) box(f, BEAMS, i * 1.4, 3.6, 2.72, 0.18, 1.8, 0.1);
+  box(f, BEAMS, 0, 2.7, 2.72, 8.6, 0.2, 0.12);
+  part(f, roofG(6.6, 9.4, 2.8), '#5e4a2c', 0, 4.5, -0.1);
+  box(f, '#3b2a1c', 0, 1.3, 2.62, 1.4, 2, 0.1);
+  [-2.6, 2.6].forEach(x => { win(f, x, 1.8, 2.62, 0.7, 0.8, 0.06); win(f, x, 3.7, 2.72, 0.6, 0.6, 0.06); });
+  box(f, '#7c776d', 0, 0.35, 3.6, 3, 0.3, 1.6); box(f, '#7c776d', 0, 0.15, 4.6, 3.4, 0.3, 0.8);   // steps
+  bannerB(f, -3.8, 0, 3.8, 3.6); bannerB(f, 3.4, 0, 3.8, 3.6);
+  box(f, '#6b4a2e', 4.4, 0.45, 4.4, 2.2, 0.4, 0.5);
+})();
+(function granary() {
+  const g = new THREE.Group(); g.position.set(L.granary.x, groundH(L.granary.x, L.granary.z), L.granary.z); scene.add(g); V.granary = g;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), '#6c675e', a * 1.1, 0.4, b * 1.1, g));
+  mesh(new THREE.BoxGeometry(2.8, 2, 2.8), '#7a5a38', 0, 1.8, 0, g);
+  const r = new THREE.Mesh(flat(new THREE.ConeGeometry(2.4, 1.7, 4)), mat('#8a7445')); r.position.y = 3.65; r.rotation.y = Math.PI / 4; g.add(r);
+  V.grainSacks = [];
+  for (let i = 0; i < 10; i++) { const m = mesh(GEO_SACK(), '#c7b07c', -1.6 + (i % 5) * 0.8, 0.28 + Math.floor(i / 5) * 0.42, 2.1, g); m.scale.set(1, 0.95, 0.9); V.grainSacks.push(m); }
+  V.granaryWing = new THREE.Group(); g.add(V.granaryWing);
+  mesh(new THREE.BoxGeometry(2.2, 1.8, 2.4), '#7a5a38', 2.7, 1.7, 0, V.granaryWing);
+  const r2 = new THREE.Mesh(flat(new THREE.ConeGeometry(2, 1.3, 4)), mat('#8a7445')); r2.position.set(2.7, 3.25, 0); r2.rotation.y = Math.PI / 4; V.granaryWing.add(r2);
+})();
+function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGeometry(0.3, 6, 4))); }
+(function tower() {
+  const p = L.tower, y = groundH(p.x, p.z);
+  V.towerRuin = new THREE.Group(); V.towerRuin.position.set(p.x, y, p.z); scene.add(V.towerRuin);
+  mesh(new THREE.BoxGeometry(3, 0.9, 3), '#7d7a70', 0, 0.45, 0, V.towerRuin);
+  [[-1.2, 0.6], [0.9, -0.8], [1.4, 1.3], [-0.4, -1.6]].forEach(([x, z], i) => { const m = mesh(new THREE.BoxGeometry(0.9, 0.5, 0.6), '#6f6c63', x, 0.25, z, V.towerRuin); m.rotation.set(0.3 * i, i, 0.2); });
+  [[-1.4, -1.4], [1.4, 1.4]].forEach(([x, z]) => { const m = mesh(new THREE.BoxGeometry(0.2, 1.6, 0.2), BEAMS, x, 0.6, z, V.towerRuin); m.rotation.z = 0.5; });
+  V.towerBuilt = new THREE.Group(); V.towerBuilt.position.set(p.x, y, p.z); scene.add(V.towerBuilt);
+  mesh(new THREE.BoxGeometry(3.2, 7, 3.2), '#8b877c', 0, 3.5, 0, V.towerBuilt);
+  mesh(new THREE.BoxGeometry(3.8, 0.5, 3.8), '#5e5850', 0, 7.2, 0, V.towerBuilt);
+  for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), '#8b877c', -1.6 + (i % 2) * 3.2, 7.75, -1.6 + Math.floor(i / 2) * 3.2, V.towerBuilt);
+  mesh(new THREE.BoxGeometry(0.4, 0.6, 0.06), windowMat, 0, 4.6, 1.62, V.towerBuilt);
+  mesh(new THREE.BoxGeometry(1, 1.6, 0.08), '#3b2a1c', -0.2, 0.8, 1.62, V.towerBuilt);
+  banner(V.towerBuilt, 1.2, 7.4, 0, 2.6);
+})();
+(function manor() {
+  // Varrow Manor on its rise, behind a garden wall; the gate faces the lane up from the square
+  const mx = L.manor.x, mz = L.manor.z;
+  const f = fr(mx, mz, 0, -0.4);
+  box(f, '#8b877c', 0, 2.6, 0, 13, 5.6, 6.4);
+  box(f, '#8b877c', -7.2, 4, 0.8, 4.2, 8.4, 4.2);
+  box(f, '#5e5850', -7.2, 8.4, 0.8, 4.8, 0.5, 4.8);
+  for (let i = 0; i < 4; i++) box(f, '#8b877c', -9.1 + (i % 2) * 3.8, 8.95, -1.1 + Math.floor(i / 2) * 3.8, 0.6, 0.6, 0.6);
+  part(f, roofG(7, 13.6, 3), '#3f4a5a', 0, 5.4, 0);
+  for (let i = -2; i <= 2; i++) { win(f, i * 2.3, 2.2, 3.22, 0.6, 0.9, 0.06); win(f, i * 2.3, 4.2, 3.22, 0.6, 0.8, 0.06); }
+  box(f, '#3b2a1c', 0, 1.2, 3.25, 1.4, 2.2, 0.1);
+  box(f, '#7c776d', 0, 0.3, 4.3, 3.4, 0.5, 1.8);
+  bannerB(f, -7.2, 8.6, 0.8, 3.2); bannerB(f, 5.2, 5.4, 2.6, 3.6);
+  // the garden: hedges, a path of flagstones, a fountain
+  box(f, '#4a6530', -5, 0.5, 7.5, 5, 1, 1); box(f, '#4a6530', 5, 0.5, 7.5, 5, 1, 1);
+  for (let z = 4.6; z < 12.4; z += 1.1) box(f, '#9a948a', 0, 0.12, z, 1.6, 0.12, 0.9);
+  part(f, new THREE.CylinderGeometry(1.2, 1.3, 0.6, 10), '#86847a', -6, 0.3, 10); part(f, new THREE.CylinderGeometry(1, 1, 0.06, 10), '#4f7d8c', -6, 0.6, 10);
+  // the curtain wall with its gate, at the foot of the rise
+  const gz = Sim.P.gate.z - 1.4;
+  for (let x = -16; x <= 20; x += 2) { if (Math.abs(x - mx) < 2.4) continue; const g = fr(x, gz); box(g, '#7d7a70', 0, 1.1, 0, 2.05, 2.4, 0.7); }
+  for (let z = gz - 2; z >= mz - 12; z -= 2) [-16, 20].forEach(x => { const g = fr(x, z); box(g, '#7d7a70', 0, 1.1, 0, 0.7, 2.4, 2.05); });
+  for (let x = -16; x <= 20; x += 2) { const g = fr(x, mz - 12); box(g, '#7d7a70', 0, 1.1, 0, 2.05, 2.4, 0.7); }
+  const gf = fr(mx, gz);
+  [-1.9, 1.9].forEach(x => { box(gf, '#6f6c63', x, 1.8, 0, 1.4, 3.6, 1.4); bannerB(gf, x, 3.6, 0, 1.8); });
+  const gate = new THREE.Group(); gate.position.set(mx, groundH(mx, gz), gz); scene.add(gate);
+  V.gate = mesh(new THREE.BoxGeometry(2.4, 2.4, 0.25), '#4a3424', 0, 1.2, 0, gate);
+  mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 1.8, 0.05, V.gate.parent); mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 0.6, 0.05, V.gate.parent);
+})();
+(function mill() {
+  // Tamsin's mill: stone below, timber above, its wheel turned by the millrace
+  const e = Sim.MILL, f = fr(e.x, e.z, 0);
+  box(f, '#7d776a', 0, 0.2, 0, 7, 0.8, 5.6);
+  box(f, '#8b877c', 0, 1.7, 0, 6.4, 2.6, 5);
+  box(f, '#b9a47a', 0, 4, 0, 6.6, 2, 5.2);
+  for (let i = -3; i <= 3; i++) box(f, BEAMS, i * 1.05, 4, 2.62, 0.16, 2, 0.08);
+  part(f, roofG(6.4, 7.4, 2.6), '#7a6440', 0, 5, 0);
+  box(f, '#3b2a1c', -1, 1.3, 2.52, 1.6, 2, 0.1);
+  win(f, 1.6, 1.9, 2.52, 0.6, 0.6, 0.06); win(f, -1.6, 4.2, 2.62, 0.6, 0.6, 0.06); win(f, 1.6, 4.2, 2.62, 0.6, 0.6, 0.06);
+  for (let i = 0; i < 8; i++) part(f, GEO.sack, '#e6dcc0', -2.6 + (i % 4) * 0.55, 0.32 + Math.floor(i / 4) * 0.4, 3.1, 0, 0, 0, 1, 0.95, 0.9);
+  // the flume from the pond to the top of the wheel
+  const fl = fr(-20.3, -44.6, facing(-20.3, -44.6, POND.x, POND.z), 1.8);
+  box(fl, '#6b4a2e', 0, 0, 0, 0.9, 0.3, 5);
+  const wg = new THREE.Group(); wg.position.set(e.x + 3.7, groundH(e.x + 3.7, e.z) + 1.9, e.z - 0.6); scene.add(wg);
+  const wheel = new THREE.Group(); wg.add(wheel); V.millWheel = wheel;
+  { const rim = new THREE.Mesh(flat(new THREE.TorusGeometry(1.8, 0.12, 4, 16)), mat('#5b4029')); rim.rotation.y = Math.PI / 2; wheel.add(rim); }
+  for (let i = 0; i < 8; i++) { const sp = mesh(new THREE.BoxGeometry(0.1, 3.6, 0.1), '#4a3424', 0, 0, 0, wheel); sp.rotation.x = i * Math.PI / 8; }
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, pd = mesh(new THREE.BoxGeometry(0.6, 0.5, 0.1), '#6b4a2e', 0, Math.sin(a) * 1.75, Math.cos(a) * 1.75, wheel); pd.rotation.x = -a; }
+  mesh(new THREE.CylinderGeometry(0.2, 0.2, 1, 8), '#3a3634', -0.4, 0, 0, wg).rotation.z = Math.PI / 2;
+})();
+(function barn() {
+  const f = fr(L.barn.x, L.barn.z + 2, facing(L.barn.x, L.barn.z, 20, -26));
+  box(f, '#7d776a', 0, 0.1, 0, 9, 0.5, 6.4);
+  box(f, '#7a4a32', 0, 2, 0, 8.4, 3.4, 6);
+  part(f, roofG(7.2, 9.2, 3.2), '#6b4a2e', 0, 3.7, 0);
+  box(f, '#4a3424', 0, 1.6, 3.02, 3, 3, 0.1); box(f, '#8a6d48', 0, 1.6, 3.06, 0.12, 3, 0.04); box(f, '#8a6d48', 0, 1.6, 3.06, 3, 0.12, 0.04);
+  for (let i = 0; i < 5; i++) part(f, new THREE.CylinderGeometry(0.55, 0.55, 1, 8), '#c9a64e', 5.6 + (i % 3) * 0.6, 0.55 + Math.floor(i / 3) * 0.9, 1.5 - (i % 3) * 1.1, 0, 0, Math.PI / 2);
+  box(f, '#d2b260', -5.4, 0.9, 0, 1.8, 1.8, 2.2);                                                  // a haystack
+  // the farmyard pen
+  const px = 6, pz = -6;
+  for (let x = 0; x <= 8; x += 1) { box(f, '#8a6d48', px + x, 0.5, pz, 0.1, 1, 0.1); box(f, '#8a6d48', px + x, 0.5, pz - 6, 0.1, 1, 0.1); }
+  for (let z = 0; z <= 6; z += 1) { box(f, '#8a6d48', px, 0.5, pz - z, 0.1, 1, 0.1); box(f, '#8a6d48', px + 8, 0.5, pz - z, 0.1, 1, 0.1); }
+  [0.75, 0.4].forEach(y => { box(f, '#8a6d48', px + 4, y, pz, 8, 0.07, 0.05); box(f, '#8a6d48', px + 4, y, pz - 6, 8, 0.07, 0.05); box(f, '#8a6d48', px, y, pz - 3, 0.05, 0.07, 6); box(f, '#8a6d48', px + 8, y, pz - 3, 0.05, 0.07, 6); });
+  // a cart by the door
+  box(f, '#6b4a2e', -2.6, 0.8, 5, 1.6, 0.25, 2.6); [-0.9, 0.9].forEach(x => part(f, new THREE.CylinderGeometry(0.5, 0.5, 0.1, 10), BEAMS, -2.6 + x, 0.5, 5.4, 0, 0, Math.PI / 2));
+  V.barnFrame = f; V.penAt = { px, pz };
+})();
+(function cottage() {
+  const p = L.cottage, ry = facing(p.x, p.z, 34, 36);
+  V.cottageOld = hut(p.x, p.z, { wall: '#5e4a36', roof: '#6b5a3a', door: '#2a2018', ry }); V.cottageOld.rotation.z = 0.04;
+  V.cottageNew = hut(p.x, p.z, { wall: '#c9b48a', roof: '#9a8050', door: '#7a3a28', ry });
+  V.forSaleSign = new THREE.Group(); V.forSaleSign.position.set(p.x - 2.6, groundH(p.x - 2.6, p.z - 1), p.z - 1); scene.add(V.forSaleSign);
+  mesh(new THREE.BoxGeometry(0.12, 1.4, 0.12), '#5b4029', 0, 0.7, 0, V.forSaleSign); mesh(new THREE.BoxGeometry(1, 0.6, 0.06), '#d8c69a', 0, 1.2, 0.05, V.forSaleSign);
+})();
+flushBuild();
+
+/* ----- the barnyard animals: a few hens pecking, two cows in the pen ----- */
+const hens = [];
+(function animals() {
+  const f = V.barnFrame, hen = mergeColored([{ geo: new THREE.SphereGeometry(0.2, 6, 4), color: '#e8dcc4', m: M(0, 0.22, 0) }, { geo: new THREE.SphereGeometry(0.11, 5, 4), color: '#e8dcc4', m: M(0, 0.4, 0.15) }, { geo: new THREE.BoxGeometry(0.06, 0.08, 0.08), color: '#c2412d', m: M(0, 0.52, 0.16) }]);
+  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(hen, vc); scene.add(m); const local = new THREE.Vector3(-2 + rnd() * 6, 0, 4.5 + rnd() * 3).applyMatrix4(f); hens.push({ m, x: local.x, z: local.z, hx: local.x, hz: local.z, a: rnd() * 6, t: rnd() * 5 }); }
+  const cow = mergeColored([{ geo: new THREE.BoxGeometry(0.9, 0.8, 1.8), color: '#e9e1cc', m: M(0, 1.05, 0) }, { geo: new THREE.BoxGeometry(0.6, 0.55, 0.6), color: '#e9e1cc', m: M(0, 1.3, 1.1) }, { geo: new THREE.BoxGeometry(0.5, 0.3, 0.6), color: '#3a2a1c', m: M(0.1, 1.2, -0.2) }].concat([[-0.32, -0.6], [0.32, -0.6], [-0.32, 0.6], [0.32, 0.6]].map(([x, z]) => ({ geo: new THREE.BoxGeometry(0.18, 0.7, 0.18), color: '#e0d6c0', m: M(x, 0.35, z) }))));
+  [[9, -8.5, 0.6], [12, -10, 2.4]].forEach(([x, z, ry]) => { const m = new THREE.Mesh(cow, vc); m.applyMatrix4(partM(f, x, 0, z, ry)); scene.add(m); });
+})();
+function syncAnimals(dt, t) {
+  for (const h of hens) {
+    h.t -= dt; if (h.t < 0) { h.t = 1 + rnd() * 3; h.a = rnd() * 6.3; }
+    const nx = h.x + Math.sin(h.a) * dt * 0.5, nz = h.z + Math.cos(h.a) * dt * 0.5;
+    if (Math.hypot(nx - h.hx, nz - h.hz) < 3.5) { h.x = nx; h.z = nz; } else h.a += Math.PI;
+    h.m.position.set(h.x, groundH(h.x, h.z) + (h.t % 0.6 < 0.15 ? -0.06 : 0), h.z); h.m.rotation.y = h.a;
+    h.m.rotation.x = h.t % 1.3 < 0.25 ? 0.6 : 0;
+  }
+  if (V.millWheel) V.millWheel.rotation.x -= dt * 0.9;
+}
+
+// square projects: stone paving and lanterns
+V.paving = mesh(new THREE.CylinderGeometry(9.6, 9.6, 0.07, 24), '#8d887c', SQ.x, groundH(SQ.x, SQ.z) + 0.14, SQ.z); V.paving.visible = false;
+V.lanterns = new THREE.Group(); scene.add(V.lanterns);
+for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + 0.2; const x = SQ.x + Math.cos(a) * 10.4, z = SQ.z + Math.sin(a) * 10; const y = groundH(x, z); mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), '#2a2420', x, y + 1.1, z, V.lanterns); mesh(new THREE.BoxGeometry(0.34, 0.4, 0.34), windowMat, x, y + 2.3, z, V.lanterns); }
+V.lanterns.visible = false;
+function syncVillage(s) {
+  const v = s.village;
+  V.grainSacks.forEach((m, i) => m.visible = v.shortage ? i < Math.floor(v.granary / v.granaryNeed * 10) : i < 8);
+  V.granaryWing.visible = !!v.projects.granary;
+  V.towerRuin.visible = !v.towerBuilt; V.towerBuilt.visible = v.towerBuilt;
+  V.cottageOld.visible = v.cottage === 'forsale' || v.cottage === 'owned'; V.cottageNew.visible = !V.cottageOld.visible; V.forSaleSign.visible = v.cottage === 'forsale';
+  V.paving.visible = !!v.projects.pave; V.lanterns.visible = !!v.projects.lanterns;
+  V.gate.position.x = v.step >= 8 ? 1.6 : 0;
+}
+// chimneys that smoke in the morning and evening, when the hearths are lit
+const HEARTHS = HOUSES.map((h, i) => {
+  const FACE = [[-2, -22], [6, -22], [-32, -2], [-26, 22], [26, 22], [28, 6], [-23, -14], [4, 41], [-30, 28], [-4, 43]][i] || [0, 4];
+  const ry = facing(h.x, h.z, FACE[0], FACE[1]), w = h.cap >= 4 ? 6 : 4.6, hh = h.cap >= 4 ? 2.5 : 2.2;
+  const v = new THREE.Vector3(-w / 2 + 0.8, 0.4 + hh + 2.4, -0.4).applyMatrix4(fr(h.x, h.z, ry));
+  return { id: 'h' + i, x: v.x, y: v.y, z: v.z };
+});
+
+/* ----- shops: four trades, three building tiers each ----- */
+const LOOK = {
+  bakery: { awning: '#8c3b29', banner: '#8c2e21', emblem: '#c48a3f' },
+  smithy: { awning: '#3d4148', banner: '#2f3a46', emblem: '#9aa3ab' },
+  tavern: { awning: '#3f6b3a', banner: '#2f5a2e', emblem: '#c9a050' },
+  joinery: { awning: '#2f5d7a', banner: '#2b4f6a', emblem: '#a77a4a' }
+};
 function roofMat(c) { return new THREE.MeshLambertMaterial({ color: c, transparent: true, opacity: 1 }); }
 function station(trade, parent, stone, fx) {
   const z = -1.75, x = -2.3;
@@ -880,7 +1183,7 @@ function buildShop(trade, tier) {
   return { group: g, fx };
 }
 function forSale(i, locked) {
-  const g = new THREE.Group(), p = Sim.PLOTS[i]; g.position.set(p.x, 0, p.z);
+  const g = new THREE.Group(), p = Sim.PLOTS[i]; g.position.set(p.x, groundH(p.x, p.z), p.z); g.rotation.y = (p.dir || 1) < 0 ? Math.PI : 0;
   if (locked) {
     mesh(new THREE.BoxGeometry(7.6, 0.04, 5.2), '#4f5a34', 0, 0.02, -0.6, g);
     for (let k = 0; k < 9; k++) { mesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), '#5b4029', -3.8 + k * 0.95, 0.4, 2, g); }
@@ -899,7 +1202,7 @@ function forSale(i, locked) {
 const plotView = Sim.PLOTS.map((p, i) => ({ key: p.grant ? 'locked' : null, group: forSale(i, p.grant), fx: null }));
 // the four shops that hire, facing the square
 const empView = Sim.EMPLOYERS.map(e => {
-  const b = buildShop(e.trade, 1); b.group.position.set(e.x, 0, e.z); b.group.rotation.y = Math.PI; scene.add(b.group);
+  const b = buildShop(e.trade, 1); b.group.position.set(e.x, groundH(e.x, e.z), e.z); b.group.rotation.y = e.dir < 0 ? Math.PI : 0; scene.add(b.group);
   b.fx.display.forEach((m, i) => m.visible = i < 6);
   b.fx.sacks.forEach((m, i) => m.visible = e.trade !== 'smithy' && e.trade !== 'joinery' && i < 4);
   b.fx.logs.forEach((m, i) => m.visible = i < 6); b.fx.ore.forEach((m, i) => m.visible = e.trade === 'smithy' && i < 5);
@@ -955,7 +1258,7 @@ const playerMesh = makeChar({ tunic: '#2f5a7a', skin: '#e3b78f', player: true, p
 const workerMeshes = new Map(), agentMeshes = new Map();
 function placeChar(g, a, t, opts) {
   const u = g.userData;
-  g.position.x = a.x; g.position.z = a.z;
+  g.position.x = a.x; g.position.z = a.z; g.position.y = groundH(a.x, a.z);
   let d = (a.face || 0) - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * 0.25;
   animChar(g, t, opts);
   u.icon.visible = !!opts.icon;
@@ -988,7 +1291,7 @@ function syncChars(s, t) {
     let g = agentMeshes.get(a.id);
     const look = lookOf(s, a);
     if (g && g.userData.look !== look.key) { dropChar(g); agentMeshes.delete(a.id); g = null; }
-    if (!g) { g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[(a.pid ? +a.pid.slice(1) : a.id) % SKIN.length], pick: a.id }, look)); g.userData.look = look.key; agentMeshes.set(a.id, g); }
+    if (!g) { g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[(a.pid ? +a.pid.slice(1) : a.id) % SKIN.length], pick: a.id }, look)); g.userData.look = look.key; if (a.kid) g.scale.setScalar(0.74); agentMeshes.set(a.id, g); }
     const pp = a.pid && s.people[a.pid];
     const icon = a.icon || (pp && !pp.home && Sim.hourOf(s) >= 20 ? 'angry' : null) || (pp && pp.job && pp.job.office === 'elder' && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null)) ? 'wait' : null);
     placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors, selected: UI.sel === a.id });
@@ -1002,7 +1305,7 @@ function lookOf(s, a) {
   const p = a.pid && s.people[a.pid], j = p && p.job;
   if (!j) return { key: p && !p.home ? 'rags' : 'idle', tunic: p && !p.home ? '#5a5248' : undefined };
   if (j.type === 'commons') return Object.assign({ key: 'c' + j.what }, ROLE[j.what] || {});
-  if (j.type === 'biz') { const tr = Sim.empById(j.biz).trade; return { key: 'b' + j.biz + j.role, apron: APRON[tr], chef: tr === 'bakery' && j.role === 'owner' }; }
+  if (j.type === 'biz') { const tr = Sim.empById(j.biz).trade; return { key: 'b' + j.biz + j.role, apron: APRON[tr] || (tr === 'mill' ? '#e6dcc0' : undefined), chef: tr === 'bakery' && j.role === 'owner' }; }
   if (j.type === 'office') return j.office === 'guard' ? { key: 'guard', tunic: LORD_BLUE, hat: 'cap', capColor: '#8d949a' } : j.office === 'elder' ? { key: 'elder', tunic: '#5a4a6a', hat: 'bun' } : { key: 'o' + j.office, tunic: LORD_BLUE, hat: 'cap', capColor: LORD_GOLD };
   return { key: 'x' };
 }
@@ -1022,7 +1325,7 @@ function syncShops(s, t, dt) {
     const shop = Sim.shopOnPlot(s, i), v = plotView[i], key = shop ? shop.trade + shop.tier : locked ? 'locked' : null;
     if (v.key !== key) {
       scene.remove(v.group);
-      if (shop) { const b = buildShop(shop.trade, shop.tier); b.group.position.set(p.x, 0, p.z); scene.add(b.group); v.group = b.group; v.fx = b.fx; }
+      if (shop) { const b = buildShop(shop.trade, shop.tier); b.group.position.set(p.x, groundH(p.x, p.z), p.z); b.group.rotation.y = (p.dir || 1) < 0 ? Math.PI : 0; scene.add(b.group); v.group = b.group; v.fx = b.fx; }
       else { v.group = forSale(i, locked); v.fx = null; }
       v.key = key;
     }
@@ -1034,7 +1337,7 @@ function syncShops(s, t, dt) {
     if (v.fx.mouth) v.fx.mouth.material.emissiveIntensity = on ? 0.9 + flick * 0.5 : 0;
     const near = UI.overlay !== 'map' && Math.hypot(focus.x - p.x, focus.z - p.z) < 8;
     v.fx.roofs.forEach(r => { r.material.opacity += ((near ? 0.12 : 1) - r.material.opacity) * Math.min(1, dt * 6); r.material.depthWrite = r.material.opacity > 0.9; });
-    if (on && shop.trade !== 'joinery') glowing.push({ x: p.x + v.fx.chimney.x, y: v.fx.chimney.y, z: p.z + v.fx.chimney.z });
+    if (on && shop.trade !== 'joinery') { const d = p.dir || 1; glowing.push({ x: p.x + v.fx.chimney.x * d, y: groundH(p.x, p.z) + v.fx.chimney.y, z: p.z + v.fx.chimney.z * d }); }
   });
   const h = Sim.hourOf(s);
   Sim.EMPLOYERS.forEach((e, i) => {
@@ -1043,8 +1346,10 @@ function syncShops(s, t, dt) {
     fx.roofs.forEach(r => { r.material.opacity += ((near ? 0.12 : 1) - r.material.opacity) * Math.min(1, dt * 6); r.material.depthWrite = r.material.opacity > 0.9; });
     const lit = open && e.trade !== 'joinery';
     fx.light.intensity = lit ? 1.4 : 0; if (fx.mouth) fx.mouth.material.emissiveIntensity = lit ? 0.9 : 0;
-    if (lit) glowing.push({ x: e.x + 2.3, y: 4.4, z: e.z + 2.4 });
+    if (lit) glowing.push({ x: e.x - 2.3 * e.dir, y: groundH(e.x, e.z) + 4.4, z: e.z - 2.4 * e.dir });
   });
+  // cottage hearths are lit in the morning and the evening
+  if ((h >= 5.5 && h < 9) || (h >= 17 && h < 22)) HEARTHS.forEach((c, i) => { if ((i + Math.floor(h)) % 2 === 0) glowing.push(c); });
   smoke.forEach((m, k) => {
     const src = glowing[k % 8];
     m.userData.life += dt * 0.35;
@@ -1070,13 +1375,13 @@ function syncLight(h) {
   const ang = ((h - 6) / 15) * Math.PI;
   sun.position.set(Math.cos(ang) * -30, 10 + Math.sin(Math.max(0.1, ang)) * 25, 14);
   windowMat.emissiveIntensity = Math.max(0, 1 - k * 1.4) * 1.1;
-  scene.fog.near = 28 - (1 - k) * 8; scene.fog.far = 76 - (1 - k) * 22;
+  scene.fog.near = 55 - (1 - k) * 22; scene.fog.far = 200 - (1 - k) * 70;
 }
 
 /* ----- camera and input: twin thumbsticks ----- */
 const focus = new THREE.Vector3(0, 0, 6);
 const cam = { yaw: 0, pitch: 0.78, dist: 20 };
-const mapCam = { x: 0, z: -4, dist: 64 };
+const mapCam = { x: 0, z: -4, dist: 110 };
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < h ? 52 : 40; camera.updateProjectionMatrix();
@@ -1091,7 +1396,7 @@ function syncCamera(s, dt, t) {
   }
   if (UI.mode === 'title') {
     const a = calm() ? 0.6 : t * 0.05;
-    camera.position.set(Math.sin(a) * 34, 24, 6 + Math.cos(a) * 34); camera.lookAt(0, 0, 6); return;
+    camera.position.set(Math.sin(a) * 62, 34, 4 + Math.cos(a) * 62); camera.lookAt(0, 0, -6); return;
   }
   cam.yaw -= keyTurn() * 1.8 * dt * (meta.settings.lookX === 'inverted' ? -1 : 1);
   cam.pitch = clamp(cam.pitch + keyTilt() * 0.9 * dt, 0.3, 1.3);
@@ -1112,20 +1417,27 @@ function shopBoxes(tier) {
 }
 const staticSolids = (function () {
   const out = [];
-  Sim.HOMES.forEach(h => { const [x, z] = behind(h, 1.4); out.push({ c: 1, x, z, r: 2 }); });
-  Sim.WORKER_HOMES.concat(Sim.NEW_HUTS).forEach(h => { const [x, z] = behind(h, 1.3); out.push({ c: 1, x, z, r: 1.7 }); });
-  out.push({ c: 1, x: L.home.x, z: L.home.z, r: 2 }, { c: 1, x: L.well.x, z: L.well.z, r: 1.1 }, { c: 1, x: L.market.x, z: L.market.z, r: 2 }, { c: 1, x: -9, z: -15.6, r: 1.8 }, { c: 1, x: L.cottage.x, z: L.cottage.z, r: 2 });
-  out.push({ x: 0, z: -15.1, hx: 4, hz: 2.7 });
-  out.push({ x: -12.2, z: -38, hx: 4.5, hz: 0.4 }, { x: 0.2, z: -38, hx: 4.5, hz: 0.4 }, { x: -7.9, z: -38, hx: 0.7, hz: 0.7 }, { x: -4.1, z: -38, hx: 0.7, hz: 0.7 });
-  Sim.EMPLOYERS.forEach(e => shopBoxes(1).forEach(b => out.push({ x: e.x - b.x, z: e.z - b.z, hx: b.hx, hz: b.hz })));
-  pines.forEach(([x, z, sc]) => { if (Math.hypot(x, z) < 42) out.push({ c: 1, x, z, r: 0.45 * sc }); });
+  const C = (x, z, r) => out.push({ c: 1, x, z, r });
+  HOUSES.forEach(h => C(h.x, h.z, h.cap >= 4 ? 2.9 : 2.3));
+  C(L.home.x, L.home.z, 1.9); C(L.cottage.x, L.cottage.z, 2.1); C(L.well.x, L.well.z, 1.2); C(L.market.x, L.market.z, 2.2); C(L.granary.x, L.granary.z, 1.9);
+  C(-7.5, 1, 1.3); C(7.5, 8.5, 1.3); C(-4.5, -2.5, 0.7); C(POND.x, POND.z, POND.r);
+  out.push({ x: L.hall.x - 0.1, z: L.hall.z, hx: 2.9, hz: 4.4 });
+  const mx = L.manor.x, mz = L.manor.z, gz = Sim.P.gate.z - 1.4;
+  out.push({ x: mx - 1.4, z: mz, hx: 9.4, hz: 3.4 }, { x: (-16 + mx - 2.4) / 2, z: gz, hx: (mx - 2.4 + 16) / 2, hz: 0.45 }, { x: (mx + 2.4 + 20) / 2, z: gz, hx: (20 - mx - 2.4) / 2, hz: 0.45 },
+    { x: -16, z: (gz + mz - 12) / 2, hx: 0.45, hz: (gz - mz + 12) / 2 }, { x: 20, z: (gz + mz - 12) / 2, hx: 0.45, hz: (gz - mz + 12) / 2 }, { x: 2, z: mz - 12, hx: 18, hz: 0.45 });
+  out.push({ x: Sim.MILL.x, z: Sim.MILL.z, hx: 3.4, hz: 2.8 }); C(Sim.MILL.x + 3.8, Sim.MILL.z - 0.6, 1.1);
+  const bc = new THREE.Vector3(0, 0, 0).applyMatrix4(V.barnFrame), pc = new THREE.Vector3(V.penAt.px + 4, 0, V.penAt.pz - 3).applyMatrix4(V.barnFrame);
+  C(bc.x, bc.z, 4.3); C(pc.x, pc.z, 4.6);
+  Sim.EMPLOYERS.forEach(e => shopBoxes(1).forEach(b => out.push({ x: e.x + b.x * e.dir, z: e.z + b.z * e.dir, hx: b.hx, hz: b.hz })));
+  pines.forEach(([x, z, sc]) => { if (Math.abs(x) < 100 && Math.abs(z) < 95) C(x, z, 0.45 * sc); });
+  oaks.forEach(([x, z, sc]) => C(x, z, 0.35 * sc));
   return out;
 })();
 function solidsNow(s) {
   const out = staticSolids.slice();
-  s.shops.forEach(x => { const p = Sim.PLOTS[x.plot]; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x, z: p.z + b.z, hx: b.hx, hz: b.hz })); });
+  s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
   if (s.village.towerBuilt) out.push({ c: 1, x: L.tower.x, z: L.tower.z, r: 2 });
-  if (s.village.step < 8) out.push({ x: -6, z: -38, hx: 1.3, hz: 0.3 });
+  if (s.village.step < 8) out.push({ x: L.manor.x, z: Sim.P.gate.z - 1.4, hx: 1.3, hz: 0.35 });
   return out;
 }
 function collide(p, solids) {
@@ -1146,8 +1458,7 @@ function collide(p, solids) {
       }
     }
   }
-  const r = Math.hypot(p.x, p.z + 4);
-  if (r > 44) { p.x *= 44 / r; p.z = (p.z + 4) * 44 / r - 4; }
+  p.x = clamp(p.x, -95, 95); p.z = clamp(p.z, -88, 80);
 }
 
 // sticks: touch the left part of the screen to walk, the right part to turn and zoom
@@ -1202,10 +1513,10 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
   if (UI.overlay === 'map' && mapPtr.has(e.pointerId)) {
     const prev = mapPtr.get(e.pointerId); mapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (mapPtr.size === 2 && mapPinch) { const [a, b] = [...mapPtr.values()]; mapCam.dist = clamp(mapPinch.dist * mapPinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 18, 110); return; }
+    if (mapPtr.size === 2 && mapPinch) { const [a, b] = [...mapPtr.values()]; mapCam.dist = clamp(mapPinch.dist * mapPinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 18, 190); return; }
     const k = mapCam.dist / window.innerHeight;
-    mapCam.x = clamp(mapCam.x - (e.clientX - prev.x) * k * 0.78, -48, 48);
-    mapCam.z = clamp(mapCam.z - (e.clientY - prev.y) * k * 0.9, -55, 40);
+    mapCam.x = clamp(mapCam.x - (e.clientX - prev.x) * k * 0.78, -85, 85);
+    mapCam.z = clamp(mapCam.z - (e.clientY - prev.y) * k * 0.9, -90, 70);
     return;
   }
   const t = touches.get(e.pointerId); if (!t) return;
@@ -1213,7 +1524,7 @@ canvas.addEventListener('pointermove', e => {
   if (d > 10) t.moved = true;
   if (t.look) {
     const mx = e.clientX - t.lx, my = e.clientY - t.ly; t.lx = e.clientX; t.ly = e.clientY;
-    if (look.size === 2 && lookPinch) { const [a, b] = [...look.values()]; cam.dist = clamp(lookPinch.dist * lookPinch.d / Math.max(20, Math.hypot(a.lx - b.lx, a.ly - b.ly)), 8, 34); return; }
+    if (look.size === 2 && lookPinch) { const [a, b] = [...look.values()]; cam.dist = clamp(lookPinch.dist * lookPinch.d / Math.max(20, Math.hypot(a.lx - b.lx, a.ly - b.ly)), 8, 46); return; }
     if (t.moved) lookDrag(mx, my);
     return;
   }
@@ -1232,7 +1543,7 @@ function endTouch(e) {
 }
 canvas.addEventListener('pointerup', endTouch);
 canvas.addEventListener('pointercancel', endTouch);
-canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, 110); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 8, 34); }, { passive: false });
+canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, 190); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 8, 46); }, { passive: false });
 // on a computer, drag with the right mouse button to look
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -1303,7 +1614,7 @@ function carryText(s) {
   const inv = s.player.inv, parts = Sim.GOODS.filter(g => inv[g]).map(g => inv[g] + ' ' + g);
   return parts.length ? 'You carry ' + parts.join(', ') + ' (' + Sim.carried(s) + '/' + Sim.CARRY + ').' : 'Your hands are empty.';
 }
-const PLACES = [['hall', 'Moot Hall'], ['field', 'Wheat Field'], ['forest', 'Pine Woods'], ['pit', 'Iron Pit'], ['market', 'Trading Post'], ['home', 'Your Hut']];
+const PLACES = [['hall', 'Village Hall'], ['field', 'Wheat Field'], ['forest', 'Pine Woods'], ['pit', 'Iron Pit'], ['market', 'Trading Post'], ['home', 'Your Hut']];
 function placesRow(s) {
   const list = [];
   if (s.job) list.push(['emp:' + s.job.emp, 'Your job']);
@@ -1355,7 +1666,7 @@ function cardHTML(s) {
     if (mine) {
       const on = Sim.inShift(s), len = (e.shift[1] - e.shift[0]) * 60;
       if (on) info += `<div class="why">${Sim.playerAtWork(s) ? '<b>Working your shift.</b> Stay here to get paid, or lend a hand for tips.' : '<b>Your shift is on.</b> Go to the workstation to be counted.'} Strikes: ${s.job.strikes}/3.</div>${progressBar(s.job.workedMin / (len * 0.6))}`;
-      if (on && Sim.playerAtWork(s)) acts.push(B_(MINI[e.trade].name + '<small>tips so far: ' + (s.job.tips || 0) + '/8c</small>', ['ui', 'mini']));
+      if (on && Sim.playerAtWork(s)) { acts.push(B_(MINI[e.trade].name + '<small>tips so far: ' + (s.job.tips || 0) + '/8c</small>', ['ui', 'mini'])); acts.push(B_('Work the rest of the shift<small>skip to ' + String(e.shift[1]).padStart(2, '0') + ':00 and get paid</small>', ['workRest'], 'alt')); }
       else info += `<div class="why">Your next shift is ${shiftText(e)}. You have worked ${s.job.shifts} ${s.job.shifts === 1 ? 'shift' : 'shifts'} here. Strikes: ${s.job.strikes}/3.</div>`;
       if (!Sim.playerAtWork(s)) acts.push(B_('Go to work', ['work']));
       acts.push(UI.confirm === 'quit' ? B_('Yes, quit', ['quitJob'], 'warn') + B_('Stay', ['ui', 'confirm', null], 'alt') : B_('Quit this job', ['ui', 'confirm', 'quit'], 'alt'));
@@ -1371,7 +1682,7 @@ function cardHTML(s) {
   if (Lh && Lh.plot != null) {
     const shop = Sim.shopOnPlot(s, Lh.plot);
     if (!shop && Sim.PLOTS[Lh.plot].grant && !s.village.landGranted) {
-      return `<h2>${esc(Lh.name)}</h2><div class="sub">Council land beside the Moot Hall, fenced and flying ${esc(Sim.REALM.lordShort)}'s banner. Only the village council can grant it.</div>${walking}<div class="acts">${B_('Ask at the Moot Hall', ['goto', 'hall'], 'alt')}</div>`;
+      return `<h2>${esc(Lh.name)}</h2><div class="sub">Council land beside the Village Hall, fenced and flying ${esc(Sim.REALM.lordShort)}'s banner. Only the village council can grant it.</div>${walking}<div class="acts">${B_('Ask at the Village Hall', ['goto', 'hall'], 'alt')}</div>`;
     }
     if (!shop) {
       const acts = Sim.TRADE_KEYS.map(k => {
@@ -1426,7 +1737,7 @@ function cardHTML(s) {
   }
   if (here === 'manor') {
     const v = s.village;
-    const info = v.step >= 8 ? 'The gate stands open to you now. The steward will send for you.' : v.step === 7 ? 'You carry the steward\u2019s letter. The guard is expecting you.' : `The seat of ${esc(Sim.REALM.lord)}, who holds Hearthmoor for ${esc(Sim.REALM.king)}. The gate is barred to shopkeepers and hired hands.`;
+    const info = v.step >= 8 ? 'The gate stands open to you now. The steward will send for you.' : v.step === 7 ? 'You carry the steward\u2019s letter. The guard is expecting you.' : `The seat of ${esc(Sim.lordTitle(s))}, on its rise above the village, who holds Hearthmoor for ${esc(Sim.REALM.king)}. The gate is barred to shopkeepers and hired hands.`;
     return `<h2>Varrow Manor</h2><div class="sub">${info}</div>${walking}<div class="acts">${B_(v.step === 7 ? 'Present the letter' : 'Speak to the guard', ['gate'], v.step === 7 ? '' : 'alt')}</div>`;
   }
   if (here === 'cottage') {
@@ -1435,15 +1746,22 @@ function cardHTML(s) {
     const act2 = v.cottage === 'forsale' ? B_('Buy it · 90c', ['buyCottage'], '', s.coins < 90) : v.cottage === 'owned' ? B_('Repair it · 30c and 12 wood', ['repairCottage'], '', !Sim.canPay(s, { coin: 30, wood: 12 })) : '';
     return `<h2>Old Ama\u2019s Cottage</h2><div class="sub">${st} Owning property is optional: another way to grow your wealth.</div>${walking}<div class="acts">${act2}</div>`;
   }
+  if (here === 'mill') {
+    const b = s.biz.mill, own = b && (b.owner === 'player' ? null : s.people[b.owner]);
+    return `<h2>Tamsin\u2019s Mill</h2><div class="sub">A waterwheel mill on the millrace, which runs from the stream along the foot of the manor\u2019s rise. ${b && b.closed ? 'The wheel stands still: the mill has closed.' : 'It grinds the village\u2019s grain into flour for the bakehouse.'}${own ? ' Run by ' + esc(own.name) + '.' : b && b.owner === 'player' ? ' It is yours.' : ''}</div>${walking}<div class="acts">${B_('Businesses', ['page', 'property'], 'alt')}</div>`;
+  }
+  if (here === 'barn') return `<h2>The Barn</h2><div class="sub">The village barn and farmyard: hay for the winter, a cart, hens underfoot and two cows in the pen.</div>${walking}`;
+  if (here === 'bridge') return `<h2>The Stream Bridge</h2><div class="sub">The road east crosses the stream here, on to Oakbridge and the capital, Crownmere. The road beyond is not yet open.</div>${walking}`;
+  if (here === 'lots') return `<h2>The Open Land</h2><div class="sub">Common land south of the village, staked out for the homes and lots Hearthmoor will need as it grows. Opening it is a decision for the Elder and the council.</div>${walking}`;
   if (here === 'home') return `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
-  if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops along one side of the square hire hands. The three lots across from them wait for owners. Villagers lunch at the well at noon.</div>${walking}`;
+  if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
   return '';
 }
 function hallCard(s, walking) {
   const v = s.village, R = Sim.REALM;
   const acts = [];
   const g = s.gov, isElder = s.offices.elder === 'player';
-  let info = `<h2>The Moot Hall</h2><div class="sub">Where Hearthmoor’s council meets, under ${esc(Sim.lordTitle(s, true))}’s banner. ${isElder ? 'You hold the Elder’s chair.' : v.council ? 'You sit on the council.' : ''}</div>${walking}`;
+  let info = `<h2>The Village Hall</h2><div class="sub">Where Hearthmoor’s council meets, under ${esc(Sim.lordTitle(s, true))}’s banner. ${isElder ? 'You hold the Elder’s chair.' : v.council ? 'You sit on the council.' : ''}</div>${walking}`;
   const step = Sim.STEPS[v.step];
   if (step && v.step < 6) info += `<div class="why"><b>${esc(Sim.elderTitle(s))}:</b> ${esc(step)}.</div>`;
   if (g) {
@@ -1675,16 +1993,16 @@ function personDetail(s, pr) {
 }
 function pagePeople(s) {
   const all = Object.values(s.people), here = all.filter(p => p.status === 'here');
-  const working = here.filter(p => p.job).length, idle = here.filter(p => !p.job && !p.retired).length, rough = here.filter(p => !p.home).length, gone = all.length - here.length;
+  const working = here.filter(p => p.job).length, idle = here.filter(p => !p.job && !p.retired && !p.kid).length, kids = here.filter(p => p.kid).length, rough = here.filter(p => !p.home).length, gone = all.length - here.length;
   const groups = [
-    ['Out of work or without a roof', here.filter(p => !p.home || (!p.job && !p.retired))],
+    ['Out of work or without a roof', here.filter(p => !p.home || (!p.job && !p.retired && !p.kid))],
     ['Work for you', here.filter(p => p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) && p.home)],
-    ['The village', here.filter(p => p.home && (p.job || p.retired) && !(p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) || p.job && p.job.type === 'office'))],
+    ['The village', here.filter(p => p.home && (p.job || p.retired || p.kid) && !(p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) || p.job && p.job.type === 'office'))],
     ['The lord’s household and the elder', here.filter(p => p.job && p.job.type === 'office' && p.home)],
     ['Gone from Hearthmoor', all.filter(p => p.status !== 'here')]
   ];
   return `<h3>The People of Hearthmoor</h3><p class="lead">Everyone has a purse, a job or not, and a roof or not. Tap a name for their story.</p>
-    <div class="box"><dl class="kv"><dt>Living here</dt><dd>${here.length}</dd><dt>Working</dt><dd>${working}</dd><dt>Out of work</dt><dd>${idle}</dd><dt>Homeless</dt><dd>${rough}</dd><dt>Have left</dt><dd>${gone}</dd><dt>Lord of Hearthmoor</dt><dd>${esc(Sim.holderName(s, 'lord'))}</dd><dt>Village Elder</dt><dd>${esc(Sim.holderName(s, 'elder'))}</dd></dl></div>
+    <div class="box"><dl class="kv"><dt>Living here</dt><dd>${here.length}</dd><dt>Working</dt><dd>${working}</dd><dt>Children</dt><dd>${kids}</dd><dt>Out of work</dt><dd>${idle}</dd><dt>Homeless</dt><dd>${rough}</dd><dt>Have left</dt><dd>${gone}</dd><dt>Lord of Hearthmoor</dt><dd>${esc(Sim.holderName(s, 'lord'))}</dd><dt>Village Elder</dt><dd>${esc(Sim.holderName(s, 'elder'))}</dd></dl></div>
     ${groups.filter(g => g[1].length).map(([t, ps]) => `<h4>${t}</h4><div class="plist">${ps.map(pr => personRow(s, pr)).join('')}</div>`).join('')}`;
 }
 function pageProperty(s) {
@@ -1711,11 +2029,11 @@ function pageProperty(s) {
 function bizBox(s, b) {
   const e = Sim.empById(b.id), own = b.owner === 'player', owner = own ? null : s.people[b.owner];
   const staff = b.staff.map(st => ({ st, p: s.people[st.pid] }));
-  let html = `<div class="box"><h5>${esc(e.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h5><dl class="kv"><dt>Owner</dt><dd>${own ? 'You' : esc(owner.name)}</dd><dt>Trade</dt><dd>${TR[b.trade].name}</dd><dt>Last day</dt><dd>${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit</dd><dt>Staff</dt><dd>${staff.length ? esc(staff.map(x => x.p.name).join(', ')) : 'none'}</dd></dl>`;
+  let html = `<div class="box"><h5>${esc(e.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h5><dl class="kv"><dt>Owner</dt><dd>${own ? 'You' : esc(owner.name)}</dd><dt>Trade</dt><dd>${TR[b.trade] ? TR[b.trade].name : 'Milling'}</dd><dt>Last day</dt><dd>${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit</dd><dt>Staff</dt><dd>${staff.length ? esc(staff.map(x => x.p.name).join(', ')) : 'none'}</dd></dl>`;
   if (!own) { const price = Sim.bizPrice(s, b.id); html += `<div class="acts">${B_('Buy for ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)}</div><p>${esc(owner.name)} stays on as your manager, and the staff work for you.</p>`; }
   else {
     html += staff.map(({ st, p }) => `<div class="staffrow"><span>${esc(p.name)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${st.wage}c</output><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'fs' + p.id ? B_('Yes, let go', ['fireStaff', b.id, p.id], 'warn') : B_('Let go&hellip;', ['ui', 'confirm', 'fs' + p.id], 'alt')}</div>`).join('');
-    const seekers = Sim.living(s).filter(p => !p.job && !p.retired);
+    const seekers = Sim.living(s).filter(p => !p.job && !p.retired && !p.kid);
     if (b.staff.length < 3 && seekers.length) html += `<p>Looking for work:</p><div class="acts">${seekers.slice(0, 4).map(p => B_('Hire ' + esc(p.name) + ' · 7c', ['hireStaff', b.id, p.id, 7], 'alt')).join('')}</div>`;
   }
   return html + `</div>`;
@@ -1728,11 +2046,11 @@ function pageVillage(s) {
     <div class="box"><dl class="kv"><dt>Your standing</dt><dd>${v.standing}/100</dd><dt>Position</dt><dd>${v.council ? 'Councillor since day ' + s.rec.councilSince : v.step > 0 ? 'Known to the elder' : 'A newcomer'}</dd><dt>Granary</dt><dd>${v.shortage ? 'short: ' + v.granary + '/' + v.granaryNeed + ' grain' : 'stocked'}</dd><dt>Watchtower</dt><dd>${v.towerBuilt ? 'rebuilt' : 'in ruins'}</dd><dt>Out of work</dt><dd>${v.jobless.length ? v.jobless.join(' and ') : 'nobody'}</dd><dt>Taxes paid</dt><dd>${s.rec.taxesPaid}c</dd></dl></div>
     <h4>The elder’s tasks</h4><ul class="goals">${Sim.STEPS.map((t, i) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : i + 1}</span><span>${esc(t)}</span></li>`).join('')}</ul>`;
   if (v.council || s.offices.elder === 'player') {
-    html += `<h4>Your powers</h4><p>Chest: <b class="${v.chest < 0 ? 'neg' : ''}">${v.chest}c</b>. Projects and rulings are made in person at the Moot Hall.</p>
+    html += `<h4>Your powers</h4><p>Chest: <b class="${v.chest < 0 ? 'neg' : ''}">${v.chest}c</b>. Projects and rulings are made in person at the Village Hall.</p>
       ${s.offices.elder === 'player' ? `<div class="setting"><span>Help for the poor</span>${seg2('relief', s.gov.relief, [['none', 'None'], ['some', 'A little'], ['all', 'Everyone in need']])}<p>Each morning the chest feeds the hungry and the homeless. A little: up to three people, 2c each, only while the chest has coin. Everyone: 3c each, borrowing if need be. The village notices either way.</p></div>` : ''}
       <div class="setting"><span>Toll on travelers</span>${seg2('toll', v.toll, Object.keys(Sim.TOLLS).map(k => [k, Sim.TOLLS[k].name]))}<p>A toll fills the chest from every traveler who stops, but fewer travelers come. None: all of them; low: about 85%; high: about 60%.</p></div>
       <div class="grid2">${Object.keys(Sim.PROJECTS).map(k => { const pr = Sim.PROJECTS[k]; return `<div class="box"><h5>${esc(pr.name)}</h5><p>${esc(pr.text)}</p><p>${v.projects[k] ? '<span class="pill yes">done on day ' + v.projects[k] + '</span>' : pr.cost + 'c from the chest'}</p></div>`; }).join('')}</div>
-      ${v.dispute != null ? `<p><b>Waiting at the Moot Hall:</b> ${esc(Sim.DISPUTES[v.dispute].text)}</p>` : '<p>No quarrels before the council today.</p>'}`;
+      ${v.dispute != null ? `<p><b>Waiting at the Village Hall:</b> ${esc(Sim.DISPUTES[v.dispute].text)}</p>` : '<p>No quarrels before the council today.</p>'}`;
   }
   html += `<h4>Property and orders</h4><p>Old Ama’s cottage: ${({ forsale: 'for sale at 90c', owned: 'yours, needs repairs', repaired: 'repaired, tenant arriving', let: 'rented out at 5c a day' })[v.cottage]}. Rent collected: ${s.rec.rentCollected}c.</p>
     <p>${v.contract ? `Open order at the Trading Post: ${esc(v.contract.who)} wants ${esc(Sim.goodsName(v.contract.trade, v.contract.qty))} by day ${v.contract.until} for ${v.contract.reward}c.` : 'No merchant orders right now. They appear at the Trading Post for goods your shops make.'}</p>`;
@@ -1791,7 +2109,7 @@ function pinLabel(k) {
   if (k === 'you') return s.name;
   if (Lk.plot != null) { const sh = Sim.shopOnPlot(s, Lk.plot); return sh ? 'Your ' + TR[sh.trade].name.toLowerCase() : Sim.PLOTS[Lk.plot].grant && !v.landGranted ? 'Council land' : Lk.name; }
   if (Lk.emp) return MAPNAME[Lk.emp] + (s.job && s.job.emp === Lk.emp ? ' ★' : '');
-  return { well: 'The square', home: 'Your hut', cottage: v.cottage === 'forsale' ? 'Cottage for sale' : 'Your cottage', tower: 'Watchtower', manor: 'Varrow Manor', market: 'Trading Post', forest: 'Pine Woods', field: 'Wheat Field', pit: 'Iron Pit', hall: 'Moot Hall', granary: 'Granary' }[k] || Lk.name;
+  return { well: 'The square', home: 'Your hut', cottage: v.cottage === 'forsale' ? 'Cottage for sale' : 'Your cottage', tower: 'Watchtower', manor: 'Varrow Manor', market: 'Trading Post', forest: 'Pine Woods', field: 'Wheat Field', pit: 'Iron Pit', hall: 'Village Hall', granary: 'Granary' }[k] || Lk.name;
 }
 function pinKind(k) {
   const Lk = L[k];
@@ -1803,10 +2121,10 @@ function pinKind(k) {
   return 'place';
 }
 function pinPos(k) {
-  if (k === 'you') return new THREE.Vector3(G.player.x, 0, G.player.z);
-  const Lk = L[k], h = { manor: groundH(-7, -47) + 9, tower: 8, hall: 6.5, granary: 5 }[k] || (Lk.plot != null || Lk.emp ? 4.6 : 3);
-  const at = k === 'manor' ? { x: -7, z: -47 } : Lk.plot != null ? Sim.PLOTS[Lk.plot] : Lk.emp ? Sim.empById(Lk.emp) : k === 'granary' ? { x: -9, z: -15.6 } : k === 'hall' ? { x: 0, z: -15 } : Lk;
-  return new THREE.Vector3(at.x, h, at.z);
+  if (k === 'you') return new THREE.Vector3(G.player.x, groundH(G.player.x, G.player.z), G.player.z);
+  const Lk = L[k], h = { manor: 10, tower: 8.5, hall: 7.5, granary: 5, mill: 7.5, barn: 7 }[k] || (Lk.plot != null || Lk.emp ? 4.6 : 3);
+  const at = Lk.plot != null ? Sim.PLOTS[Lk.plot] : Lk.emp ? Sim.empById(Lk.emp) : Lk;
+  return new THREE.Vector3(at.x, groundH(at.x, at.z) + h, at.z);
 }
 const pinV = new THREE.Vector3();
 function buildPins() {
@@ -1824,9 +2142,9 @@ function updatePins() {
 }
 const PLACE_NOTE = {
   field: 'Free grain for anyone who gathers it.', forest: 'Free wood for anyone who cuts it.', pit: 'Free iron ore for anyone who digs it.',
-  market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side of the square.',
+  market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
-  granary: 'The village food store.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
+  granary: 'The village food store.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
 };
 function renderMapCard() {
   buildPins();
@@ -1843,7 +2161,7 @@ function renderMapCard() {
 function openMap() {
   UI.overlay = 'map'; UI.mapSel = null;
   ['book', 'pause', 'panel', 'hud', 'sticks'].forEach(id => $(id).hidden = true);
-  mapCam.x = clamp(G.player.x * 0.5, -20, 20); mapCam.z = clamp(G.player.z * 0.5 - 6, -22, 10); mapCam.dist = 64;
+  mapCam.x = clamp(G.player.x * 0.5, -40, 40); mapCam.z = clamp(G.player.z * 0.5 - 8, -40, 20); mapCam.dist = 120;
   $('mapui').hidden = false; $('toasts').hidden = true; renderMapCard();
 }
 /* ----- pause menu ----- */
@@ -2069,11 +2387,12 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => { const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
-$('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, 110); };
-$('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, 110); };
+$('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, 190); };
+$('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, 190); };
 $('menuBtn').onclick = () => openPause();
 $('goal').onclick = () => openBook('goals');
-$('fast').onclick = () => { UI.speed = UI.speed === 1 ? 2 : 1; $('fast').setAttribute('aria-pressed', UI.speed === 2); };
+function setSpeed(n) { UI.speed = n; document.querySelectorAll('#speeds .fast').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === n))); }
+$('speeds').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (b) setSpeed(+b.dataset.speed); });
 ['book', 'pause'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) closeOverlay(); }));
 document.addEventListener('keydown', e => { if (e.code === 'KeyM' && UI.mode === 'play' && !(e.target.closest && e.target.closest('input, textarea'))) { if (UI.overlay === 'map') closeOverlay(); else if (!UI.overlay) openMap(); return; } if (e.key === 'Escape' && UI.mode === 'play') { if (UI.overlay) closeOverlay(); else openPause(); } });
 
@@ -2095,9 +2414,9 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); walkPlayer(G, dt); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); drainEvents(); }
-  syncChars(G, t); syncShops(G, t, dt); syncVillage(G);
+  syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
-  if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 30; scene.fog.far = mapCam.dist + 140; updatePins(); }
+  if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
   syncCamera(G, dt, t);
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
@@ -2355,6 +2674,14 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.13', date: '3 November', title: 'Hearthmoor, rebuilt', items: [
+    'A new, larger Hearthmoor: winding lanes around a central square, a stream with a bridge on the road east to Oakbridge, and the Pine Woods to the west.',
+    'Tamsin\u2019s Mill turns on a millrace that runs from the stream along the foot of the manor\u2019s rise. Varrow Manor sits on that rise behind its garden wall.',
+    'A barn and farmyard with hens and cows, the Village Hall facing the square, three lots south of the square, and open land staked out for the village to grow into.',
+    'Families: husbands, wives and children share homes, and children play in the square. Thirty people live here now.',
+    'Speed buttons beside the clock: 1\u00d7, 2\u00d7, 4\u00d7 and 8\u00d7. On shift you can also work the rest of the shift and skip to the end.',
+    'Your save moves into the new village, with your money, businesses, houses and everyone\u2019s stories.'
+  ] },
   { v: '0.12', date: '3 November', title: 'Longer days, and room to grow', items: [
     'Days now last about 18 minutes, so there is time to work, shop and walk the roads. Settings can make them 12 or 24 minutes.',
     'Wages, hunger, rent and work all follow the same clock. Villagers walk at a natural pace, and gathering is quicker.',
@@ -2431,7 +2758,7 @@ function boot(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 const hot = window.claude && window.claude.hot;
-window.__hm = { mini, judge, solids: () => solidsNow(G), collide, get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
+window.__hm = { mini, judge, cam, focus, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries }), solids: () => solidsNow(G), collide, get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
 openStore().then(() => { if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {}); });
 })();
 </script>
