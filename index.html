@@ -471,7 +471,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 (function (root) {
   'use strict';
 
-  const VERSION = 8;
+  const VERSION = 9;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -584,7 +584,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const TOWNS = {
     hearthmoor: { name: 'Hearthmoor', x: 0, z: 4, r: 95 },
     oakbridge: { name: 'Oakbridge', x: 432, z: -432, r: 72, open: true },
-    greenhaven: { name: 'Greenhaven', x: -260, z: -830, r: 60, open: false }
+    greenhaven: { name: 'Greenhaven', x: -238, z: -826, r: 95, open: true }
   };
   const ROADS = {
     east: [[88, 5], [120, 3], [160, -8], [200, -28], [240, -58], [272, -104], [298, -162], [326, -226], [356, -286], [384, -332], [404, -366]]
@@ -797,6 +797,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     setupPeople(s);
     initGov(s);
     setupOakbridge(s);
+    setupGreenhaven(s);
     openDay(s);
     event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. The four shops across the square are hiring.', 'story');
     return s;
@@ -808,7 +809,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (job === 'forest') return { x: LOCS.forest.x + 3 + j() * 5, z: LOCS.forest.z + 2 + j() * 5 };
     if (job === 'pit') return { x: LOCS.pit.x + j() * 4, z: LOCS.pit.z + j() * 3 };
     if (job === 'market') return { x: LOCS.market.x + 1.6, z: LOCS.market.z - 0.6 };
-    if (OAK.spots[job]) { const o = OAK.spots[job]; return { x: o.x + j() * 2 * o.rx, z: o.z + j() * 2 * o.rz }; }
+    const sp = OAK.spots[job] || GH.spots[job]; if (sp) return { x: sp.x + j() * 2 * sp.rx, z: sp.z + j() * 2 * sp.rz };
     return { x: P.well.x + 1.2, z: P.well.z + 0.4 };
   }
 
@@ -1141,7 +1142,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     a.indoors = arrived && doing === 'Asleep';
   }
   function jobDoing(job) {
-    return OAK_JOBS[job] ? OAK_JOBS[job][1] : { field: 'Reaping wheat', forest: 'Felling pines', pit: 'Digging iron ore', market: 'Trading at the post', well: 'Drawing water' }[job] || 'Working';
+    const cj = OAK_JOBS[job] || GH_JOBS[job]; return cj ? cj[1] : { field: 'Reaping wheat', forest: 'Felling pines', pit: 'Digging iron ore', market: 'Trading at the post', well: 'Drawing water' }[job] || 'Working';
   }
 
   function updateAgents(s, dt) {
@@ -1522,7 +1523,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function landlordName(s, owner) {
     if (owner === 'player') return s.name;
     if (owner === 'office:lord') return 'the lord of the manor';
-    if (owner === 'town:oakbridge') return 'the town of Oakbridge';
+    if (owner && owner.startsWith('town:')) return 'the town of ' + (TOWNS[owner.slice(5)] || { name: owner.slice(5) }).name;
     if (owner && s.people[owner]) return s.people[owner].name;
     return 'the village';
   }
@@ -1552,7 +1553,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function occupation(s, p) {
     const j = p.job;
     if (!j) return p.kid ? (p.age >= 10 ? 'Child, helps at home' : 'Child') : p.retired ? 'Retired' : p.status === 'left' ? 'Gone from Hearthmoor' : 'Out of work';
-    if (j.type === 'commons') return OAK_JOBS[j.what] ? OAK_JOBS[j.what][0] : { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader at the post', well: 'Water-carrier' }[j.what];
+    if (j.type === 'commons') return (OAK_JOBS[j.what] || GH_JOBS[j.what]) ? (OAK_JOBS[j.what] || GH_JOBS[j.what])[0] : { field: 'Farmer', forest: 'Woodcutter', pit: 'Miner', market: 'Trader at the post', well: 'Water-carrier' }[j.what];
     if (j.type === 'biz') { const e = empById(j.biz), b = s.biz[j.biz]; return (j.role === 'owner' ? 'Owner of ' : (b.owner === 'player' ? 'Works for you at ' : 'Works at ')) + e.name; }
     if (j.type === 'office' && j.office === 'mayor') return 'Mayor of Oakbridge';
     if (j.type === 'shop') { const sh = shopById(s, j.shop); return 'Works for you at your ' + (sh ? TRADES[sh.trade].name.toLowerCase() : 'shop'); }
@@ -1570,7 +1571,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function income(s, p) {
     const j = p.job;
     if (!j) return p.retired || p.kid ? 0 : ODD_JOBS;
-    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : COMMONS_PAY - (s.village.shortage ? 2 : 0);
+    if (j.type === 'commons') return townOf(p) === 'oakbridge' ? COMMONS_PAY + 1 : townOf(p) === 'greenhaven' ? COMMONS_PAY : COMMONS_PAY - (s.village.shortage ? 2 : 0);
     if (j.type === 'biz') { const b = s.biz[j.biz]; if (j.role === 'owner') return Math.max(0, Math.round(avg(b.profits))); const st = b.staff.find(x => x.pid === p.id); return st ? st.wage : 0; }
     if (j.type === 'shop') { const sh = shopById(s, j.shop); return sh && sh.worker ? sh.worker.wage : 0; }
     if (j.type === 'office') return OFFICES[j.office].salary;
@@ -1742,7 +1743,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
           p.purse -= pay; p.owed -= pay;
           if (h.owner === 'player') { earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay; }
           else if (h.owner === 'office:lord') { if (lordHolder === 'player') { earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay; } else if (lordHolder && s.people[lordHolder]) s.people[lordHolder].purse += pay; }
-          else if (h.owner === 'town:oakbridge' && s.towns && s.towns.oakbridge) s.towns.oakbridge.chest += pay;
+          else if (h.owner && h.owner.startsWith('town:') && s.towns && s.towns[h.owner.slice(5)]) s.towns[h.owner.slice(5)].chest += pay;
           else if (s.people[h.owner]) s.people[h.owner].purse += pay;
         }
         p.arrears = Math.ceil(p.owed / h.rent);
@@ -1833,17 +1834,17 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   // chatting: small groups of two to four, each in its own circle
   function chatSpot(s, id, town) {
     if (townSpots(town)) {
-      const q = pickPlaza(id, s.day, 3), groups = Math.max(3, Math.floor((q.line ? q.r1 * 4 : q.r1 * q.r1) / 5)), g = Math.floor(h01(id, s.day, 4) * groups);
+      const q = pickPlaza(LAYOUT[town], id, s.day, 3), groups = Math.max(3, Math.floor((q.line ? q.r1 * 4 : q.r1 * q.r1) / 5)), g = Math.floor(h01(id, s.day, 4) * groups);
       const gc = plazaSpot(q, g, s.day * 7 + 1, 19);
       return ringSpot(gc.x, gc.z, 0.75, 1.0, id, s.day, 11);
     }
     const pz = (townSpots(town) || { plaza: P.plaza }).plaza, g = Math.floor(h01(id, s.day, 3) * 4), ga = g * 1.57 + (s.day % 7) * 0.6, gc = { x: pz.x + Math.cos(ga) * 3.4, z: pz.z + 0.5 + Math.sin(ga) * 2.6 };
     return ringSpot(gc.x, gc.z, 0.75, 1.0, id, s.day, 11);
   }
-  const wellSpot = (s, id, salt, town) => { const ts = townSpots(town); return ts ? plazaSpot(pickPlaza(id, s.day, salt || 5), id, s.day, (salt || 5) + 3) : ringSpot(LOCS.well.x, LOCS.well.z, 2, 4.6, id, s.day, salt || 5); };
+  const wellSpot = (s, id, salt, town) => { const ts = townSpots(town); return ts ? plazaSpot(pickPlaza(LAYOUT[town], id, s.day, salt || 5), id, s.day, (salt || 5) + 3) : ringSpot(LOCS.well.x, LOCS.well.z, 2, 4.6, id, s.day, salt || 5); };
   // Oakbridge has several places to gather, so a crowd never piles into one square
-  function pickPlaza(id, day, salt) {
-    const P0 = OAK.plazas, tot = P0.reduce((t, q) => t + q.w, 0); let x = h01(id, day, salt + 101) * tot;
+  function pickPlaza(L, id, day, salt) {
+    const P0 = L.plazas, tot = P0.reduce((t, q) => t + q.w, 0); let x = h01(id, day, salt + 101) * tot;
     for (const q of P0) { x -= q.w; if (x < 0) return q; } return P0[0];
   }
   function plazaSpot(q, id, day, salt) {
@@ -1851,11 +1852,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return ringSpot(q.x, q.z, q.r0, q.r1, id, day, salt);
   }
   // the way through town: over the bridge to cross the river, and through the gate to leave the walls
-  function oakWay(a, tgt) {
-    const inA = OAK.inside(a.x, a.z), inT = OAK.inside(tgt.x, tgt.z), G = OAK.gate, gx = Math.sin(G.face), gz = Math.cos(G.face);
+  function townWay(OAK, a, tgt) {
+    const inA = OAK.inside(a.x, a.z), inT = OAK.inside(tgt.x, tgt.z), G = OAK.gate, gx = G ? Math.sin(G.face) : 0, gz = G ? Math.cos(G.face) : 0;
     const side = (x, z) => x < OAK.riverX(z) ? -1 : 1;
-    if (inA && !inT && side(a.x, a.z) > 0) return oakWay(a, { x: G.x - gx * 6, z: G.z - gz * 6 });
-    if (inA !== inT) {
+    if (G && inA && !inT && side(a.x, a.z) > 0) return townWay(OAK, a, { x: G.x - gx * 6, z: G.z - gz * 6 });
+    if (G && inA !== inT) {
       const mine = inA ? { x: G.x - gx * 6, z: G.z - gz * 6 } : { x: G.x + gx * 6, z: G.z + gz * 6 }, other = inA ? { x: G.x + gx * 7, z: G.z + gz * 7 } : { x: G.x - gx * 7, z: G.z - gz * 7 };
       return Math.hypot(a.x - G.x, a.z - G.z) < 6.5 ? other : mine;
     }
@@ -1873,13 +1874,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     for (const f of [0.15, 0.35, 0.55, 0.75, 0.95]) {
       const px = a.x + (tgt.x - a.x) * f, pz = a.z + (tgt.z - a.z) * f;
       if (dT * (1 - f) < 6) break;
-      if (OAK.riverDist(px, pz) < 7.6) { const w = { x: OAK.riverX(pz) + sa * 10.5, z: pz }; return Math.hypot(a.x - w.x, a.z - w.z) < 1 ? tgt : w; }
+      if (OAK.riverDist(px, pz) < OAK.avoid) { const w = { x: OAK.riverX(pz) + sa * OAK.push, z: pz }; return Math.hypot(a.x - w.x, a.z - w.z) < 1 ? tgt : w; }
     }
     return tgt;
   }
   // standing at home in the daytime: by the front door, each in their own place, not all on one spot
   function homeYard(s, p, id) {
-    const h = p.home && p.home.startsWith('o') ? OAK.houses[+p.home.slice(1)] : null, home = homePoint(s, p);
+    const h = p.home && /^o\d/.test(p.home) ? OAK.houses[+p.home.slice(1)] : p.home && /^g\d/.test(p.home) ? GH.houses[+p.home.slice(1)] : null, home = homePoint(s, p);
     if (!home) return null;
     if (h) { const k = h01(id, 1, 83) - 0.5, d = 4 + h01(id, 1, 84) * 1.6; return { x: h.x + Math.sin(h.face) * d + Math.cos(h.face) * k * 4, z: h.z + Math.cos(h.face) * d - Math.sin(h.face) * k * 4, look: { x: h.x, z: h.z } }; }
     return ringSpot(home.x, home.z, 0.3, 1.8, id, 1, 85);
@@ -1907,7 +1908,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (!tgt && p.kid) {
       if (h < 8 || h >= 19) { tgt = night ? home : homeYard(s, p, a.id) || P.plaza; doing = 'At home with the family'; }
       else if (p.age >= 10 && h < 12) { tgt = home ? { x: home.x + 2.2, z: home.z + 2.4 } : P.plaza; doing = 'Helping with chores at home'; working = true; }
-      else if (ts) { const q = pickPlaza(a.id, s.day, 61); tgt = plazaSpot(q, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in ' + q.name; }
+      else if (ts) { const q = pickPlaza(LAYOUT[town], a.id, s.day, 61); tgt = plazaSpot(q, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in ' + q.name; }
       else { const pz = P.plaza; tgt = ringSpot(pz.x, pz.z + 1, 0.5, 4.5, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in the square'; }
     }
     if (!tgt) {
@@ -1916,7 +1917,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       else if (!j && !p.retired && !p.kid && (!ts || h01(a.id, s.day * 24 + Math.floor(h), 71) < 0.3)) { const bd = ts ? ts.board : { x: -4.5, z: -2.5 }; tgt = ts ? ringSpot(bd.x, bd.z, 2, 6.5, a.id, s.day, 17) : ringSpot(bd.x, bd.z + 1.5, 1.2, 3, a.id, s.day, 17); tgt.look = bd; doing = 'At the notice board, looking for work'; }
       else { tgt = wellSpot(s, a.id, 21, town); doing = ts ? 'Passing the time in town' : 'Passing the time by the well'; }
     }
-    const way = town === 'oakbridge' ? oakWay(a, tgt) : tgt;
+    const way = LAYOUT[town] ? townWay(LAYOUT[town], a, tgt) : tgt;
     if (way !== tgt) a.settle = false;
     const arrived = moveTo(a, way.x, way.z, 0.9 * dt) && way === tgt;
     a.doing = arrived ? doing : doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + doing.toLowerCase();
@@ -2398,7 +2399,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       { id: 'quay', name: 'the quay', x: quayX(-480) + 1, z: -480, r0: 0, r1: 9, w: 1.5, line: true },
       { id: 'green', name: 'Tanners’ Green', x: green.x, z: green.z, r0: 0, r1: green.r - 1, w: 0.8 }
     ];
-    return { C, green, wall, gate, inside, square, hallSq, guildSq, streets, biz, hall, keep, guildhall, bridge, houses, spots, plazas, riverDist, riverX, quayX };
+    return { C, green, wall, board: { x: square.x - 9, z: square.z - 4 }, avoid: 7.6, push: 10.5, gate, inside, square, hallSq, guildSq, streets, biz, hall, keep, guildhall, bridge, houses, spots, plazas, riverDist, riverX, quayX };
   })();
   // the road from Hearthmoor runs to the gate, and the gate is where the wall meets it
   TOWNS.oakbridge.r = 135;
@@ -2414,11 +2415,107 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   OAK.biz.forEach(b0 => { LOCS['ob:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'oakbridge' }; });
   const OAK_JOBS = { docks: ['Porter on the quay', 'Hauling cargo on the quay'], carting: ['Carter', 'Loading carts'], watch: ['Town watchman', 'Keeping watch at the gate'], washing: ['Washerwoman', 'Washing linen at the river steps'], oakfields: ['Field hand', 'Working the fields outside the walls'], labour: ['Labourer', 'Hauling stone on the east bank'] };
   OAK.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  /* ---------- Greenhaven: a farming town on the river Green (Stage II) ----------
+     Cottages around a broad village green with its maypole and well; the Great Mill on the river;
+     the Plough inn; the moot hall where the reeve and council sit; Ashcombe Hall on its rise across
+     the river; and all around, open fields, pasture and orchards. No walls: it has never needed them. */
+  const GREEN = [[-330, -1400], [-292, -1100], [-270, -930], [-262, -830], [-272, -742], [-326, -610], [-440, -430], [-640, -230], [-900, -70]];
+  const GH = (function () {
+    const C = { x: -238, z: -826 };
+    let sd = 5113; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    const segD = (x, z, pts) => { let best = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); best = Math.min(best, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return best; };
+    const riverDist = (x, z) => segD(x, z, GREEN);
+    const riverX = z => { for (let i = 0; i < GREEN.length - 1; i++) { const [ax, az] = GREEN[i], [bx, bz] = GREEN[i + 1]; if ((z - az) * (z - bz) <= 0) return ax + (bx - ax) * (z - az) / (bz - az); } return C.x; };
+    const green = { x: -222, z: -826, r: 17 };
+    const bz0 = -838, bx0 = riverX(bz0);
+    const bridge = { x: bx0, z: bz0, w: 4.2, half: 9, ax: bx0 - 9, az: bz0, bx: bx0 + 9, bz: bz0 };   // ax/az on the west bank
+    const entry = { x: -168, z: -808 };
+    const streets = [
+      { name: 'High Street', w: 4.4, pts: [[entry.x, entry.z], [-186, -812], [green.x + 17, green.z - 2]] },
+      { name: 'Bridge Lane', w: 3.6, pts: [[green.x - 17, green.z - 3], [bridge.bx, bridge.bz]] },
+      { name: 'Mill Lane', w: 3.4, pts: [[green.x - 6, green.z - 16], [-236, -856], [riverX(-872) + 14, -872]] },
+      { name: 'South Lane', w: 3.2, pts: [[green.x + 2, green.z + 17], [-218, -790], [-222, -760]] },
+      { name: 'Back Lane', w: 2.8, pts: [[green.x + 12, green.z - 12], [-196, -852], [-194, -876]] },
+      { name: 'Hall Drive', w: 3.2, pts: [[bridge.ax, bridge.az], [-290, -842], [-304, -850]] },
+      { name: 'Orchard Lane', w: 2.6, pts: [[green.x + 12, green.z + 12], [-190, -800], [-178, -786]] }
+    ];
+    const streetDist = (x, z) => Math.min(...streets.map(st => segD(x, z, st.pts) - st.w / 2));
+    const onRing = (q, a, extra) => { const d = q.r + (extra || 5.4); return { x: q.x + Math.cos(a) * d, z: q.z + Math.sin(a) * d, face: Math.atan2(-Math.cos(a), -Math.sin(a)) }; };
+    const onStreet = (si, t, side) => {
+      const st = streets[si], pts = st.pts; let L = 0; const ls = []; for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); ls.push(l); L += l; }
+      let d = t * L, i = 0; while (i < ls.length - 1 && d > ls[i]) { d -= ls[i]; i++; }
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1], f = d / ls[i], nx = -(bz - az) / ls[i], nz = (bx - ax) / ls[i], off = st.w / 2 + 5;
+      return { x: ax + (bx - ax) * f + nx * off * side, z: az + (bz - az) * f + nz * off * side, face: Math.atan2(-nx * side, -nz * side) };
+    };
+    const millAt = { x: riverX(-874) + 10, z: -874, face: Math.PI / 2 };
+    const T = (id, trade, name, boss, at, district) => ({ id, trade, name, boss, x: at.x, z: at.z, face: at.face, district, town: 'greenhaven', noJob: true, oak: true, shift: [6, 16], wage: 6 });
+    const biz = [
+      T('g_mill', 'mill', 'The Great Mill', 'Hamon Miller', millAt, 'river'),
+      T('g_plough', 'tavern', 'The Plough', 'Goodwife Elsbeth', onRing(green, -2.55), 'green'),
+      T('g_bake', 'bakery', 'Greenhaven Bakehouse', 'Osric Baxter', onRing(green, -1.35), 'green'),
+      T('g_forge', 'smithy', 'Brook Forge', 'Wat Smith', onStreet(0, 0.35, 1), 'green'),
+      T('g_dairy', 'dairy', 'Meadow Dairy', 'Mabel Cowley', onRing(green, 1.12), 'green'),
+      T('g_fleece', 'weaver', 'Fleece & Loom', 'Agnes Webb', onRing(green, 2.1), 'green'),
+      T('g_butcher', 'butcher', 'Coker the Butcher', 'Ralf Coker', onStreet(3, 0.55, -1), 'south'),
+      T('g_wheel', 'wheelwright', 'Cartwright\u2019s Yard', 'Jack Cartwright', onStreet(0, 0.6, -1), 'green'),
+      T('g_estate', 'estate', 'Ashcombe Hall', 'Maud Ashcombe', { x: -318, z: -850, face: Math.PI / 2 }, 'estate')
+    ];
+    const hall = onRing(green, 2.72, 7);                                               // the moot hall, facing the green from the south-west
+    const estate = { x: -318, z: -850, face: Math.PI / 2, r: 16 };             // Ashcombe Hall, on its rise
+    const fields = [
+      { x: -150, z: -860, w: 44, d: 34, crop: 0 }, { x: -150, z: -760, w: 40, d: 30, crop: 3 }, { x: -205, z: -740, w: 34, d: 26, crop: 2 },
+      { x: -205, z: -905, w: 44, d: 26, crop: 0 }, { x: -320, z: -790, w: 38, d: 28, crop: 1 }
+    ];
+    const pastures = [{ x: -330, z: -905, w: 50, d: 36, kind: 'sheep' }, { x: -308, z: -742, w: 30, d: 24, kind: 'cows' }];
+    const orchard = { x: -172, z: -788, w: 20, d: 16 };
+    const inField = (x, z, m) => fields.concat(pastures, [orchard]).some(f => Math.abs(x - f.x) < f.w / 2 + m && Math.abs(z - f.z) < f.d / 2 + m);
+    const fits = (x, z, rad) => riverDist(x, z) > rad + 9 && streetDist(x, z) > rad - 1.2 && Math.hypot(x - green.x, z - green.z) > green.r + rad + 1 &&
+      Math.hypot(x - hall.x, z - hall.z) > 9 + rad && Math.hypot(x - estate.x, z - estate.z) > estate.r + rad && !inField(x, z, rad) && Math.hypot(x - C.x, z - C.z) < 70;
+    const houses = [], taken = biz.map(b => ({ x: b.x, z: b.z, r: b.id === 'g_mill' ? 8 : b.id === 'g_estate' ? 12 : 5.2 }));
+    const free = (x, z, rad) => taken.every(t => Math.hypot(x - t.x, z - t.z) > t.r + rad + 1.2);
+    for (const row of [0, 1]) for (const st of streets) {
+      if (st.name === 'Hall Drive') continue;
+      for (let i = 0; i < st.pts.length - 1; i++) {
+        const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+        for (let d = 3; d < len - 2; d += 2) for (const side of [-1, 1]) {
+          const off = st.w / 2 + 4 + row * 11, x = ax + (bx - ax) * d / len + nx * off * side, z = az + (bz - az) * d / len + nz * off * side, rad = 3.8;
+          if (!fits(x, z, rad) || !free(x, z, rad)) continue;
+          houses.push({ x, z, face: Math.atan2(-nx * side, -nz * side), tall: r() < 0.15 }); taken.push({ x, z, r: rad });
+        }
+      }
+    }
+    // cottages facing the green, between the shops
+    for (let k = 0; k < 24; k++) { const at = onRing(green, k / 24 * Math.PI * 2, 5); if (fits(at.x, at.z, 3.8) && free(at.x, at.z, 3.8)) { houses.push({ x: at.x, z: at.z, face: at.face, tall: false }); taken.push({ x: at.x, z: at.z, r: 3.8 }); } }
+    const spots = {
+      ghfields: { x: fields[0].x, z: fields[0].z, rx: 18, rz: 13 }, ghfields2: { x: fields[1].x, z: fields[1].z, rx: 16, rz: 11 },
+      shepherd: { x: pastures[0].x, z: pastures[0].z, rx: 20, rz: 14 }, cowherd: { x: pastures[1].x, z: pastures[1].z, rx: 11, rz: 9 },
+      orchard: { x: orchard.x, z: orchard.z, rx: 8, rz: 6 }, hedging: { x: -195, z: -880, rx: 14, rz: 3 }
+    };
+    const plazas = [
+      { id: 'green', name: 'the village green', x: green.x, z: green.z, r0: 4, r1: green.r - 2, w: 4 },
+      { id: 'innyard', name: 'the Plough\u2019s yard', x: biz[1].x + Math.sin(biz[1].face) * 8, z: biz[1].z + Math.cos(biz[1].face) * 8, r0: 0, r1: 3.5, w: 1 },
+      { id: 'millyard', name: 'the mill yard', x: millAt.x + 9, z: millAt.z + 2, r0: 0, r1: 4, w: 1 }
+    ];
+    const inside = () => true;
+    return { C, green, bridge, streets, biz, hall, estate, fields, pastures, orchard, houses, spots, plazas, riverDist, riverX, inside, entry, waterHalf: 5, avoid: 5.4, push: 7.5, board: { x: green.x + 6, z: green.z + 15 } };
+  })();
+  TOWNS.greenhaven.x = GH.C.x; TOWNS.greenhaven.z = GH.C.z;
+  // the north road leaves the east road at the waystation fork and climbs to Greenhaven
+  ROADS.north = [[240, -58], [238, -120], [216, -200], [172, -300], [122, -400], [62, -500], [-8, -600], [-78, -690], [-128, -760], [-150, -792], [GH.entry.x, GH.entry.z]];
+  LOCS.ghgreen = { x: GH.green.x, z: GH.green.z, r: GH.green.r, name: 'Greenhaven Village Green', town: 'greenhaven' };
+  LOCS.ghhall = { x: GH.hall.x + Math.sin(GH.hall.face) * 6, z: GH.hall.z + Math.cos(GH.hall.face) * 6, r: 4.5, name: 'Greenhaven Moot Hall', town: 'greenhaven' };
+  LOCS.ghbridge = { x: GH.bridge.x, z: GH.bridge.z, r: 5, name: 'The Green Bridge', town: 'greenhaven' };
+  LOCS.ghentry = { x: GH.entry.x + 4, z: GH.entry.z + 1, r: 8, name: 'The road into Greenhaven', town: 'greenhaven' };
+  GH.biz.forEach(b0 => { const d = b0.id === 'g_estate' ? 9 : b0.id === 'g_mill' ? 6 : 3.6; LOCS['gb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * d, z: b0.z + Math.cos(b0.face) * d, r: 3.4, name: b0.name, biz: b0.id, town: 'greenhaven' }; });
+  GH.biz.forEach(b => { const d = b.id === 'g_estate' ? 7 : b.id === 'g_mill' ? 5 : 1.2, f = d + (b.id === 'g_estate' ? 2 : 2.8); b.spot = { x: b.x + Math.sin(b.face) * d, z: b.z + Math.cos(b.face) * d }; b.front = { x: b.x + Math.sin(b.face) * f, z: b.z + Math.cos(b.face) * f }; BIZ_SITES.push(b); });
+  const GH_JOBS = { ghfields: ['Field hand', 'Working the wheat fields'], ghfields2: ['Field hand', 'Hoeing the barley'], shepherd: ['Shepherd', 'Minding the sheep'], cowherd: ['Cowherd', 'Minding the cattle'], orchard: ['Orchard hand', 'Tending the orchard'], hedging: ['Hedger', 'Laying the hedges'] };
+  Object.assign(BIZ_BASE, { dairy: 22, estate: 40 });
+  const LAYOUT = { oakbridge: OAK, greenhaven: GH };
   Object.assign(BIZ_BASE, { butcher: 28, chandler: 22, tailor: 24, wheelwright: 24, cooper: 22, weaver: 24, tanner: 24, potter: 20, carter: 26, boatwright: 24, goldsmith: 34, apothecary: 26, mason: 26 });
-  const TRADE_NAMES = { bakery: 'Bakery', tavern: 'Tavern', smithy: 'Smithy', joinery: 'Joinery', mill: 'Milling', butcher: 'Butchery', chandler: 'Chandlery', tailor: 'Tailoring', wheelwright: 'Wheelwright', cooper: 'Cooperage', weaver: 'Weaving', tanner: 'Tannery', potter: 'Pottery', carter: 'Carting', boatwright: 'Boatbuilding', goldsmith: 'Goldsmithing', apothecary: 'Apothecary', mason: 'Masonry' };
+  const TRADE_NAMES = { bakery: 'Bakery', tavern: 'Tavern', smithy: 'Smithy', joinery: 'Joinery', mill: 'Milling', butcher: 'Butchery', chandler: 'Chandlery', tailor: 'Tailoring', wheelwright: 'Wheelwright', cooper: 'Cooperage', dairy: 'Dairy', estate: 'Farming estate', weaver: 'Weaving', tanner: 'Tannery', potter: 'Pottery', carter: 'Carting', boatwright: 'Boatbuilding', goldsmith: 'Goldsmithing', apothecary: 'Apothecary', mason: 'Masonry' };
   const tradeName = t => TRADE_NAMES[t] || (TRADES[t] && TRADES[t].name) || t;
   const townOf = p => (p && p.town) || 'hearthmoor';
-  const townSpots = town => town === 'oakbridge' ? { well: { x: OAK.square.x, z: OAK.square.z }, plaza: { x: OAK.square.x + 2, z: OAK.square.z + 6 }, board: { x: OAK.square.x - 9, z: OAK.square.z - 4 }, center: OAK.C } : null;
+  const townSpots = town => { const L = LAYOUT[town]; if (!L) return null; const q = L.plazas[0]; return { well: { x: q.x, z: q.z }, plaza: { x: q.x + 2, z: q.z + 6 }, board: L.board || { x: q.x - 9, z: q.z - 4 }, center: L.C }; };
 
   const FIRST = ['Alda', 'Bertram', 'Cecily', 'Denholm', 'Edith', 'Fulk', 'Gisela', 'Hugh', 'Imogen', 'Jory', 'Katrin', 'Leofric', 'Mabyn', 'Nell', 'Osbert', 'Petra', 'Quenby', 'Ralph', 'Sibyl', 'Thurstan', 'Una', 'Walter', 'Yseult', 'Aelred', 'Beatrix', 'Clement', 'Dulcie', 'Emery', 'Faye', 'Godwin', 'Hawise', 'Ivo', 'Joan', 'Kit', 'Lettice', 'Martin', 'Nesta', 'Odo', 'Philippa', 'Roger', 'Sabine', 'Tibby', 'Wymond', 'Avice', 'Baldric', 'Constance', 'Drogo', 'Eda', 'Fenwick', 'Gilbert', 'Helewise', 'Isabel', 'Jocelyn', 'Lambert', 'Muriel', 'Norbert', 'Orabel', 'Peregrine', 'Rohese', 'Simon', 'Tiffany', 'Warin'];
   const FAMILY = ['Ashby', 'Brewer', 'Carver', 'Dyer', 'Fletcher', 'Glover', 'Hayward', 'Kemp', 'Lister', 'Marsh', 'Nash', 'Parr', 'Quarrie', 'Rook', 'Sadler', 'Tanner', 'Underhill', 'Vane', 'Webb', 'Yates', 'Alder', 'Bridger', 'Crofter', 'Fenn', 'Holt', 'Mercer', 'Pike', 'Ridley', 'Stroud', 'Thatcher'];
@@ -2493,57 +2590,121 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (Math.hypot(s.player.x - OAK.C.x, s.player.z - OAK.C.z) < 150) { s.player.x = OAK.square.x; s.player.z = OAK.square.z + 8; s.player.dest = null; s.player.action = null; }
     event(s, 'Oakbridge has grown: wider streets, a larger market square, a stone bridge you can cross, and new walls that follow the land.', 'story');
   }
+  // Greenhaven: about eighty farming folk, the miller, the inn, the Ashcombes of the Hall, and a reeve chosen from among them
+  function setupGreenhaven(s) {
+    if (!s.towns || s.towns.greenhaven) return;
+    let sd = 31337; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    const used = new Set(Object.values(s.people).map(p => p.name));
+    const FIRST_F = FIRST.filter(n => FEMALE.has(n)), FIRST_M = FIRST.filter(n => !FEMALE.has(n));
+    const nameFor = (fam, sex) => { const L = sex === 'f' ? FIRST_F : sex === 'm' ? FIRST_M : FIRST; for (let k = 0; k < 40; k++) { const n = L[Math.floor(r() * L.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Farmer ' + used.size; used.add(n); return n; };
+    const gh = GH.houses.map((h, i) => ({ id: 'g' + i, name: (h.tall ? 'Farmhouse, ' : 'Cottage, ') + (h.x < GH.riverX(h.z) ? 'by the Hall' : Math.hypot(h.x - GH.green.x, h.z - GH.green.z) < 40 ? 'on the green' : 'Greenhaven'), x: h.x, z: h.z, owner: 'town:greenhaven', rent: h.tall ? 3 : 2, cap: h.tall ? 6 : 4, tenants: [], town: 'greenhaven' }));
+    s.houses.push(...gh);
+    const P0 = (o, h) => { const p = newPerson(s, Object.assign({ town: 'greenhaven', purse: 14 + Math.floor(r() * 20), palette: Math.floor(r() * 10) }, o)); if (h) moveIn(s, p, h); p.log = [{ day: s.day, text: 'Lives in Greenhaven.' }]; p.rep = 20; return p; };
+    let hi = 0; const nextHouse = () => gh[hi++ % gh.length];
+    const family = (head, h, fam, kids) => {
+      const sp = r() < 0.8 ? P0({ name: nameFor(fam, sexOf(head) === 'f' ? 'm' : 'f'), age: Math.max(18, head.age - 4 + Math.floor(r() * 8)) }, h) : null;
+      if (sp) { head.spouse = sp.id; sp.spouse = head.id; sp.hh = head.id; }
+      for (let k = 0; k < kids; k++) { const c = P0({ name: nameFor(fam), age: 2 + Math.floor(r() * 12), purse: 0 }, h); c.kid = true; c.parents = [head.id].concat(sp ? [sp.id] : []); c.hh = head.id; }
+      return sp;
+    };
+    for (const b of GH.biz) {
+      const fam = b.boss.split(' ').slice(-1)[0];
+      const own = P0({ name: b.boss, age: 36 + Math.floor(r() * 22), purse: b.id === 'g_estate' ? 600 : 90 + Math.floor(r() * 70), job: { type: 'biz', biz: b.id, role: 'owner' }, home: 'biz:' + b.id });
+      used.add(own.name);
+      s.biz[b.id] = { id: b.id, trade: b.trade, owner: own.id, staff: [], profits: [8, 8, 8], closed: false, opened: 0, lastProfit: 0, lastRevenue: 0, town: 'greenhaven' };
+      const sp = r() < 0.7 ? P0({ name: nameFor(fam, sexOf(own) === 'f' ? 'm' : 'f'), age: own.age - 3, home: 'biz:' + b.id }) : null;
+      if (sp) { own.spouse = sp.id; sp.spouse = own.id; sp.hh = own.id; }
+      const nk = Math.floor(r() * 3); for (let k = 0; k < nk; k++) { const c = P0({ name: nameFor(fam), age: 3 + Math.floor(r() * 11), purse: 0, home: 'biz:' + b.id }); c.kid = true; c.parents = [own.id].concat(sp ? [sp.id] : []); c.hh = own.id; }
+      const nh = b.id === 'g_estate' ? 3 : b.id === 'g_mill' ? 2 : Math.floor(r() * 2);
+      for (let k = 0; k < nh; k++) {
+        const hf = FAMILY[Math.floor(r() * FAMILY.length)], h = nextHouse();
+        const hand = P0({ name: nameFor(hf), age: 18 + Math.floor(r() * 25), job: { type: 'biz', biz: b.id, role: 'hand' } }, h);
+        s.biz[b.id].staff.push({ pid: hand.id, wage: 6 + Math.floor(r() * 3) });
+        if (r() < 0.5) family(hand, h, hf, Math.floor(r() * 3));
+      }
+    }
+    const jobs = Object.keys(GH_JOBS);
+    while (Object.values(s.people).filter(p => p.town === 'greenhaven').length < 78) {
+      const fam = FAMILY[Math.floor(r() * FAMILY.length)], h = nextHouse();
+      const head = P0({ name: nameFor(fam), age: 20 + Math.floor(r() * 40), job: r() < 0.9 ? { type: 'commons', what: jobs[Math.floor(r() * jobs.length)] } : null }, h);
+      const sp = family(head, h, fam, Math.floor(r() * 4));
+      if (sp && r() < 0.5) sp.job = { type: 'commons', what: jobs[Math.floor(r() * jobs.length)] };
+    }
+    // half the cottages belong to the Ashcombes of the Hall, the rest to the town
+    const lady = s.people[s.biz.g_estate.owner];
+    gh.forEach(h => { if (r() < 0.5 && !h.tenants.includes(lady.id)) h.owner = lady.id; });
+    for (const p of Object.values(s.people)) if (p.town === 'greenhaven') p.rep = Math.round(repTarget(s, p));
+    const masters = Object.values(s.people).filter(p => p.town === 'greenhaven' && p.job && p.job.role === 'owner').sort((a, b) => b.rep - a.rep || b.purse - a.purse);
+    const reeve = masters.find(p => p.job.biz !== 'g_estate');   // the reeve is one of the townsfolk; the Hall sits on the council
+    s.towns.greenhaven = { title: 'Reeve', chest: 80, fee: 'normal', approval: 62, council: masters.filter(p => p !== reeve).slice(0, 3).map(p => p.id), mayor: reeve.id, nextVote: s.day + 7, log: [], lastVote: null };
+    plog(s, reeve, 'Chosen as Reeve of Greenhaven by the moot.');
+  }
+  const UPKEEP = { oakbridge: 135, greenhaven: 34 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
+  function townFolk(s, id) { return living(s).filter(p => p.town === id); }
+  const titleOf = T => T.title || 'Mayor';
   // each morning the mayor collects the market fee, pays for the watch and the bridge, and decides
-  function townMorning(s) {
-    const T = s.towns && s.towns.oakbridge; if (!T) return;
+  function townMorning(s) { for (const id in (s.towns || {})) townMorning1(s, id, s.towns[id]); }
+  function townMorning1(s, id, T) {
+    T.id = id;
     const fee = FEES[T.fee].coin;
-    for (const b of Object.values(s.biz)) if (b.town === 'oakbridge' && !b.closed) { const o = b.owner === 'player' ? null : s.people[b.owner]; if (o) { o.purse -= fee; T.chest += fee; } else if (b.owner === 'player') { spend(s, fee); T.chest += fee; } }
-    const up = 135; T.chest -= up;   // the watch, the bridge, the walls, the streets
+    for (const b of Object.values(s.biz)) if (b.town === id && !b.closed) { const o = b.owner === 'player' ? null : s.people[b.owner]; if (o) { o.purse -= fee; T.chest += fee; } else if (b.owner === 'player') { spend(s, fee); T.chest += fee; } }
+    const up = UPKEEP[id] || 40; T.chest -= up;   // the watch, the bridge, the walls, the streets
     // the mayor feeds the hungry from the town chest, more or less generously
     const m0 = s.people[T.mayor];
     if (m0 && T.chest > 60) {
-      const needy = oakFolk(s).filter(p => (p.hungry || p.purse < 3) && !p.kid).slice(0, thriftOf(m0) < 0.5 ? 40 : 20);
-      needy.forEach(p => { p.purse += 2; T.chest -= 2; });
+      const folk0 = townFolk(s, id), hungryKids = new Set(folk0.filter(p => p.kid && p.hungry).flatMap(p => p.parents || []));
+      const needy = folk0.filter(p => (p.hungry || p.purse < 3 || hungryKids.has(p.id)) && !p.kid).sort((a, b) => (hungryKids.has(b.id) ? 1 : 0) - (hungryKids.has(a.id) ? 1 : 0)).slice(0, (thriftOf(m0) < 0.5 ? 45 : 30) * (id === 'oakbridge' ? 1 : 0.4));
+      const gift = hungryKids.size > 6 && T.chest > 150 ? 3 : 2; needy.forEach(p => { p.purse += gift; T.chest -= gift; });
       if (needy.length) T.approval = clamp(T.approval + Math.min(2, needy.length / 15), 0, 100);
-      T.dole = needy.length * 2;
+      T.dole = needy.length * gift;
     } else T.dole = 0;
     if (T.chest < 0) T.chest -= Math.max(1, Math.ceil(-T.chest * INTEREST));
     const m = s.people[T.mayor];
     if (m && s.day % 4 === 0) {
-      const want = T.chest < 0 ? 'high' : T.chest > 220 ? 'low' : T.chest < 60 ? 'high' : 'normal';
-      if (want !== T.fee) { T.fee = want; T.approval = clamp(T.approval + (want === 'high' ? -6 : want === 'low' ? 4 : 1), 0, 100); townLog(s, T, 'Mayor ' + m.name + ' sets ' + FEES[want].name.toLowerCase() + (T.chest < 0 ? ', to pay down the town’s debts.' : '.')); }
+      const k = id === 'oakbridge' ? 1 : 0.35, want = T.chest < 0 ? 'high' : T.chest > 220 * k ? 'low' : T.chest < 60 * k ? 'high' : 'normal';
+      if (want !== T.fee) { T.fee = want; T.approval = clamp(T.approval + (want === 'high' ? -6 : want === 'low' ? 4 : 1), 0, 100); townLog(s, T, titleOf(T) + ' ' + m.name + ' sets ' + FEES[want].name.toLowerCase() + (T.chest < 0 ? ', to pay down the town’s debts.' : '.')); }
     }
     if (s.day >= T.nextVote) { T.nextVote = s.day + 7; townVote(s, T); }
   }
-  function townLog(s, T, text) { T.log.unshift({ day: s.day, text }); if (T.log.length > 20) T.log.length = 20; event(s, 'Oakbridge: ' + text, 'info'); }
-  function townEvening(s) {
-    const T = s.towns && s.towns.oakbridge; if (!T) return;
+  function townLog(s, T, text) { T.log.unshift({ day: s.day, text }); if (T.log.length > 20) T.log.length = 20; event(s, (TOWNS[T.id || 'oakbridge'] || TOWNS.oakbridge).name + ': ' + text, 'info'); }
+  function townEvening(s) { for (const id in (s.towns || {})) townEvening1(s, id, s.towns[id]); }
+  function townEvening1(s, id, T) {
+    T.id = id;
+    // a hungry household sends someone out to find day work: on the quay, in the fields, wherever there is some
+    const jobsHere = Object.keys(id === 'greenhaven' ? GH_JOBS : OAK_JOBS);
+    const famHungry = new Set(townFolk(s, id).filter(p => p.kid && p.hungry).flatMap(p => p.parents || []));
+    for (const p of townFolk(s, id)) {
+      if (p.kid || p.job || p.retired || p.age < 16 || p.age > 62 || !(p.hungry || famHungry.has(p.id) || p.purse < 4) || rand(s) > 0.35) continue;
+      const what = jobsHere[Math.floor(rand(s) * jobsHere.length)];
+      p.job = { type: 'commons', what }; plog(s, p, 'Took work as ' + (OAK_JOBS[what] || GH_JOBS[what])[0].toLowerCase() + ' to keep the family fed.');
+    }
     const m = s.people[T.mayor]; if (m && m.job && m.job.type !== 'office') { m.purse += 6; }
-    const folk = oakFolk(s), hungry = folk.filter(p => p.hungry).length, homeless = folk.filter(p => !p.home && !p.kid).length;
+    const folk = townFolk(s, id), hungry = folk.filter(p => p.hungry).length, homeless = folk.filter(p => !p.home && !p.kid).length;
     const pen = d => d < 0 ? Math.min(4, 1 + -d / 80) : 0;
-    T.approval += (58 - T.approval) * 0.08 - pen(T.chest) - pen(m ? m.purse : 0) - Math.min(3, hungry * 0.1 + homeless * 0.2) - (T.fee === 'high' ? 0.6 : 0);
+    T.approval += (58 - T.approval) * 0.08 - pen(T.chest * (id === 'oakbridge' ? 1 : 2.5)) - pen(m ? m.purse : 0) - Math.min(3, hungry * 0.1 + homeless * 0.2) - (T.fee === 'high' ? 0.6 : 0);
     T.approval = Math.round(clamp(T.approval, 0, 100) * 10) / 10;
   }
   function townVote(s, T) {
+    const id = T.id || 'oakbridge', TN = TOWNS[id].name, TT = titleOf(T);
     const m = s.people[T.mayor];
     T.council = T.council.filter(id => s.people[id] && s.people[id].status === 'here' && (s.people[id].rep || 0) >= 30);
     if (!m || m.status !== 'here' || T.approval < 45) {
       let yes = 0, no = 0;
-      if (m && m.status === 'here') for (const p of oakFolk(s)) { if (p.kid || p.age < 16 || p.id === m.id) continue; if (T.approval + (p.mood - 50) * 0.25 + (rand(s) - 0.5) * 24 >= 45) yes++; else no++; }
-      if (m && m.status === 'here' && yes >= no) { T.approval += 6; T.lastVote = { day: s.day, text: 'Mayor ' + m.name + ' survives a vote, ' + yes + ' to ' + no + '.' }; townLog(s, T, T.lastVote.text); return; }
-      const cands = T.council.map(id => s.people[id]).filter(p => p && p.status === 'here').concat(Object.values(s.people).filter(p => p.town === 'oakbridge' && p.status === 'here' && p.job && p.job.role === 'owner' && !T.council.includes(p.id) && p !== m)).sort((a, b) => (b.rep || 0) - (a.rep || 0)).slice(0, 4);
+      if (m && m.status === 'here') for (const p of townFolk(s, id)) { if (p.kid || p.age < 16 || p.id === m.id) continue; if (T.approval + (p.mood - 50) * 0.25 + (rand(s) - 0.5) * 24 >= 45) yes++; else no++; }
+      if (m && m.status === 'here' && yes >= no) { T.approval += 6; T.lastVote = { day: s.day, text: TT + ' ' + m.name + ' survives a vote, ' + yes + ' to ' + no + '.' }; townLog(s, T, T.lastVote.text); return; }
+      const cands = T.council.map(id => s.people[id]).filter(p => p && p.status === 'here').concat(Object.values(s.people).filter(p => p.town === id && p.status === 'here' && p.job && p.job.role === 'owner' && !T.council.includes(p.id) && p !== m)).sort((a, b) => (b.rep || 0) - (a.rep || 0)).slice(0, 4);
       if (!cands.length) return;
       const tally = new Map(cands.map(c => [c.id, 0]));
-      for (const p of oakFolk(s)) { if (p.kid || p.age < 16) continue; let best = null, bs = -1e9; for (const c of cands) { const sc = (c.rep || 0) + (rand(s) - 0.5) * 16; if (sc > bs) { bs = sc; best = c.id; } } tally.set(best, tally.get(best) + 1); }
+      for (const p of townFolk(s, id)) { if (p.kid || p.age < 16) continue; let best = null, bs = -1e9; for (const c of cands) { const sc = (c.rep || 0) + (rand(s) - 0.5) * 16; if (sc > bs) { bs = sc; best = c.id; } } tally.set(best, tally.get(best) + 1); }
       const win = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0], w = s.people[win];
-      if (m) { m.rep = Math.max(0, (m.rep || 0) - 20); plog(s, m, 'Voted out as Mayor of Oakbridge.'); }
+      if (m) { m.rep = Math.max(0, (m.rep || 0) - 20); plog(s, m, 'Voted out as ' + TT + ' of ' + TN + '.'); }
       T.mayor = win; T.approval = 60; T.council = T.council.filter(id => id !== win);
-      plog(s, w, 'Elected Mayor of Oakbridge.');
-      T.lastVote = { day: s.day, text: (m ? 'The town votes Mayor ' + m.name + ' out. ' : '') + w.name + ' (' + tradeName(s.biz[w.job.biz] ? s.biz[w.job.biz].trade : '').toLowerCase() + ') is the new Mayor of Oakbridge.' };
+      plog(s, w, 'Elected ' + TT + ' of ' + TN + '.');
+      T.lastVote = { day: s.day, text: (m ? 'The town votes ' + TT + ' ' + m.name + ' out. ' : '') + w.name + ' (' + tradeName(s.biz[w.job.biz] ? s.biz[w.job.biz].trade : '').toLowerCase() + ') is the new ' + TT + ' of ' + TN + '.' };
       townLog(s, T, T.lastVote.text);
-    } else T.lastVote = { day: s.day, text: 'No one calls for a vote against Mayor ' + m.name + '.' };
+    } else T.lastVote = { day: s.day, text: 'No one calls for a vote against ' + TT + ' ' + m.name + '.' };
   }
   // only the town you are in has people walking about; the others keep living on paper
   function townAt(x, z) { for (const id in TOWNS) { const T = TOWNS[id]; if (Math.hypot(x - T.x, z - T.z) < T.r + 160) return id; } return null; }
@@ -2557,7 +2718,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
 
   /* buying, renting and firing */
-  function bizPrice(s, id) { const b = s.biz[id]; return b.closed ? 100 : Math.round(150 + 25 * Math.max(0, avg(b.profits))); }
+  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1)); }
   function housePrice(s, h) { return 40 + h.rent * 45; }
   function sellerWilling(s, ownerPid) { const o = s.people[ownerPid]; return !o || o.opinion > -40; }
 
@@ -3125,6 +3286,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.v === 5) { s.v = 6; relocate(s); }
     if (s.v === 6) { s.v = 7; setupOakbridge(s); event(s, 'The gates of Oakbridge are open. The road east leads to a city of 240 people.', 'story'); }
     if (s.v === 7) { s.v = 8; rebuildOakbridge(s); }
+    if (s.v === 8) { s.v = 9; setupGreenhaven(s); event(s, 'The north road is open. It leaves the east road at the waystation and climbs to Greenhaven, a farming town of eighty people with a great mill.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
@@ -3136,7 +3298,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    sexOf, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -3280,7 +3442,7 @@ const PRODUCT_GEO = { bread: 'loaf', tools: 'tool', ale: 'mug', furniture: 'stoo
    runs along the foot of the manor's rise to the mill pond, and drains away west. */
 const SQ = Sim.P.center;
 const STREAM = [[70, -260], [60, -170], [56, -110], [53, -80], [50, -60], [48, -44], [50, -24], [49, 0], [51, 20], [48, 44], [53, 70], [50, 110], [44, 180], [52, 260]];
-const ROAD_E = Sim.ROADS.east, RIVER = Sim.RIVER, TOWNS = Sim.TOWNS;
+const ROAD_E = Sim.ROADS.east, ROAD_N = Sim.ROADS.north, RIVER = Sim.RIVER, GREEN = Sim.GREEN, TOWNS = Sim.TOWNS, GH_TREES = [];
 const RACE = [[48, -44], [38, -44], [24, -44], [12, -43], [2, -42], [-8, -44], [-14, -46.5]];
 const POND = { x: -18, z: -47, r: 4.2 };
 const TAIL = [[-22.4, -41], [-21, -33], [-28, -27], [-35, -24], [-58, -20], [-90, -16]];
@@ -3310,6 +3472,10 @@ function groundH(x, z) {
   // towns sit on level ground
   for (const id in TOWNS) { if (id === 'hearthmoor') continue; const T = TOWNS[id], d = Math.hypot(x - T.x, z - T.z) / T.r; if (d < 2) { const f = smooth01((d - 1.1) / 0.8); h = h * f + worldH(T.x, T.z) * (1 - f); } }
   if (Math.abs(x - 470) < 260 && z > -1600 && z < 400) { const dv = segDist(x, z, RIVER); if (dv < 12) h -= (1 - dv / 12) * 3; }
+  if (x < -100 && z < -300) {
+    h += 1.6 * Math.exp(-((x + 318) ** 2 + (z + 850) ** 2) / 500);                  // the rise under Ashcombe Hall
+    const dg = segDist(x, z, GREEN); if (dg < 8) h -= (1 - dg / 8) * 2.4;            // the river Green
+  }
   const ds = segDist(x, z, STREAM); if (ds < 5) h -= (1 - ds / 5) * 1.7;
   const dr = Math.min(segDist(x, z, RACE), segDist(x, z, TAIL)); if (dr < 2.2) h -= (1 - dr / 2.2) * 0.85;
   const dp = Math.hypot(x - POND.x, z - POND.z); if (dp < POND.r + 2) h -= (1 - dp / (POND.r + 2)) * 1.1;
@@ -3319,8 +3485,10 @@ function groundH(x, z) {
 // Oakbridge stands on level ground; its bridge and wharf are walked on, so people stand on them, not in the water below
 const OAK_Y = worldH(TOWNS.oakbridge.x, TOWNS.oakbridge.z), OAK_TREES = [];
 const deckH0 = t => OAK_Y + 0.12 + 0.9 * Math.sin(Math.PI * Math.max(0, Math.min(1, t)));
+const waterLevelGreen = z => { const x = Sim.GH.riverX(z); return groundH(x, z) + 2.4 - 0.7; };
 function standH(x, z) {
-  const g = groundH(x, z), O = Sim.OAK, B = O.bridge;
+  const g = groundH(x, z), O = Sim.OAK, B = O.bridge, GB = Sim.GH.bridge;
+  if (Math.abs(z - GB.z) < GB.w / 2 + 0.3 && x > GB.ax - 0.4 && x < GB.bx + 0.4) return Math.max(g, groundH(GB.ax, GB.az) + 0.15);
   if (Math.abs(x - B.x) < 30 && Math.abs(z - B.z) < 30) {
     const L = B.half * 2, t = ((x - B.ax) * (B.bx - B.ax) + (z - B.az) * (B.bz - B.az)) / (L * L), c = Math.abs((x - B.ax) * (B.bz - B.az) - (z - B.az) * (B.bx - B.ax)) / L;
     if (t > -0.02 && t < 1.02 && c < B.w / 2 + 0.3) return Math.max(g, deckH0(t));
@@ -3358,7 +3526,8 @@ function tileRand(i, j) { let s0 = ((i * 73856093) ^ (j * 19349663) ^ 0x5bd1e995
 function inVillage(x, z) { return Math.hypot(x, z - 4) < 112; }
 function wildClear(x, z) {
   if (inVillage(x, z)) return false;
-  if (segDist(x, z, ROAD_E) < 7 || segDist(x, z, STREAM) < 4.5) return false;
+  if (segDist(x, z, ROAD_E) < 7 || segDist(x, z, STREAM) < 4.5 || segDist(x, z, ROAD_N) < 6) return false;
+  if (x < -100 && z < -300 && segDist(x, z, GREEN) < 10) return false;
   if (Math.abs(x - 470) < 300 && z > -1600 && z < 400 && segDist(x, z, RIVER) < 14) return false;
   for (const id in TOWNS) { const T = TOWNS[id]; if (Math.hypot(x - T.x, z - T.z) < T.r * 1.9) return false; }
   for (const L0 of [Sim.WAYSTATION, Sim.RUIN]) if (Math.hypot(x - L0.x, z - L0.z) < 16) return false;
@@ -3379,6 +3548,7 @@ function buildTile(i, j) {
     C_TMP.copy(GREENS[Math.floor(r() * GREENS.length)]);
     let wet = Math.min(segDist(x, z, STREAM), inVillage(x, z) ? Math.min(segDist(x, z, RACE) + 1, segDist(x, z, TAIL) + 1) : 99);
     if (Math.abs(x - 470) < 300) wet = Math.min(wet, segDist(x, z, RIVER) - 6);
+    if (x < -100 && z < -300) wet = Math.min(wet, segDist(x, z, GREEN) - 3);
     if (wet < 4.5) C_TMP.lerp(C_BANK, 0.55);
     if (y > 12) C_TMP.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
     if (y > 40) C_TMP.lerp(C_SNOW, Math.min(1, (y - 40) / 10));
@@ -3440,6 +3610,7 @@ function ribbon(pts, width, yOf, step) {
 const waterY = (depth) => (x, z) => groundH(x, z) + depth;
 scene.add(new THREE.Mesh(ribbon(STREAM, 3.4, waterY(1.05), 1.5), waterMat));
 const chaikin = (pts, n) => { for (let k = 0; k < n; k++) { const o = [pts[0]]; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1]; o.push([ax * 0.75 + bx * 0.25, az * 0.75 + bz * 0.25], [ax * 0.25 + bx * 0.75, az * 0.25 + bz * 0.75]); } o.push(pts[pts.length - 1]); pts = o; } return pts; };
+scene.add(new THREE.Mesh(ribbon(chaikin(GREEN, 2), 10.6, (x, z) => { const d = segDist(x, z, GREEN); return groundH(x, z) + Math.max(0, 1 - d / 8) * 2.4 - 0.7; }, 4), waterMat));
 scene.add(new THREE.Mesh(ribbon(chaikin(RIVER, 2), 17.6, (x, z) => { const d = segDist(x, z, RIVER); return groundH(x, z) + Math.max(0, 1 - d / 12) * 3 - 0.8; }, 6), waterMat));   // the river lies a little below its banks
 scene.add(new THREE.Mesh(ribbon(RACE, 1.5, waterY(0.5)), waterMat));
 scene.add(new THREE.Mesh(ribbon(TAIL, 1.3, waterY(0.5)), waterMat));
@@ -3986,6 +4157,108 @@ const CROPS = [
   flushBuild();
 })();
 
+/* ----- the north road and Greenhaven: a farming town on the river Green ----- */
+(function buildGreenhaven() {
+  const H = Sim.GH, T = TOWNS.greenhaven, rr = tileRand(57, 3);
+  const M4 = (x, y, z, ry, rx) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(RX.set(rx || 0, ry || 0, 0)), new THREE.Vector3(1, 1, 1));
+  const at = (x, z, ry) => fr(x, z, ry);
+  // the road, its milestones, and the signpost at the fork
+  scene.add(new THREE.Mesh(mergeColored([{ geo: ribbon(ROAD_N, i => 3.2 + 0.4 * Math.sin(i * 0.9), (x, z) => groundH(x, z) + 0.09, 2), color: dirt }]), vc));
+  const sp = fr(244, -66, 0.6); box(sp, BEAMS, 0, 1.3, 0, 0.16, 2.6, 0.16); box(sp, '#d8c69a', 0.7, 2.2, 0, 1.4, 0.32, 0.06, 0.5); box(sp, '#d8c69a', -0.6, 1.8, 0, 1.3, 0.32, 0.06, -0.9);
+  [[196, -250], [96, -450], [-44, -646], [-140, -776]].forEach(([x, z]) => box(fr(x, z), '#8b877c', 0, 0.45, 0, 0.5, 0.9, 0.3));
+  // lanes of packed earth, and the green
+  H.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.08, 1), color: '#8f7a55', m: new THREE.Matrix4() }));
+  part(M4(H.green.x, groundH(H.green.x, H.green.z) + 0.04, H.green.z), new THREE.CylinderGeometry(H.green.r, H.green.r, 0.08, 32), '#5c8240', 0, 0, 0);
+  // the maypole, ribbons streaming, and the well
+  const mp = at(H.green.x + 3, H.green.z - 2); box(mp, '#e8dcbc', 0, 4.5, 0, 0.26, 9, 0.26); part(mp, new THREE.CylinderGeometry(0.7, 0.7, 0.3, 10), '#3f6b3a', 0, 8.6, 0);
+  ['#c2412d', '#2f5d7a', '#e8d36a', '#4f6b3a', '#e8dcbc', '#6d5a78'].forEach((c, i) => { const a = i / 6 * Math.PI * 2; box(mp, c, Math.cos(a) * 1.6, 5, Math.sin(a) * 1.6, 0.06, 7.6, 0.04, 0, Math.sin(a) * 0.2, -Math.cos(a) * 0.2); });
+  const wl = at(H.green.x - 6, H.green.z + 5); part(wl, new THREE.CylinderGeometry(1.1, 1.2, 0.9, 10), '#8b877c', 0, 0.45, 0); box(wl, BEAMS, -0.9, 1.4, 0, 0.12, 2, 0.12); box(wl, BEAMS, 0.9, 1.4, 0, 0.12, 2, 0.12); part(wl, roofG(1.4, 2.4, 0.6), '#6b5636', 0, 2.4, 0, Math.PI / 2);
+  const ot = (x, z, sc, c) => { const g = M4(x, groundH(x, z), z, rr() * 6); box(g, '#5b4029', 0, 1.3 * sc, 0, 0.45 * sc, 2.6 * sc, 0.45 * sc); part(g, GEO.sack, c || '#4f6b3a', 0, 3.4 * sc, 0, 0, 0, 0, 7 * sc, 5.6 * sc, 7 * sc); };
+  ot(H.green.x - 9, H.green.z - 7, 1.4);
+  [[-4, 9, 0.4], [7, 9, -0.3]].forEach(([u, v, ry]) => { const g = M4(H.green.x + u, groundH(H.green.x, H.green.z), H.green.z + v, ry); box(g, '#6b4a2e', 0, 0.45, 0, 2, 0.12, 0.5); box(g, '#5b4029', -0.8, 0.22, 0, 0.12, 0.45, 0.4); box(g, '#5b4029', 0.8, 0.22, 0, 0.12, 0.45, 0.4); });
+  const bd = at(H.board.x, H.board.z, Math.PI); box(bd, BEAMS, -0.8, 1, 0, 0.12, 2, 0.12); box(bd, BEAMS, 0.8, 1, 0, 0.12, 2, 0.12); box(bd, '#7a5634', 0, 1.5, 0, 1.9, 1, 0.08); box(bd, '#e8dcbc', -0.3, 1.5, 0.06, 0.5, 0.5, 0.02);
+  // cottages, thatched and limewashed, a few larger farmhouses
+  H.houses.forEach((h, i) => {
+    const f = at(h.x, h.z, h.face);
+    if (h.tall) { cottage(f, { w: 7, d: 5, h: 3, wall: WALLS[(i + 2) % 4], roof: THATCH[i % 4], yard: false, door: '#3b2a1c', rh: 2.6 }); box(f, '#6b4a2e', 4.6, 1.1, -0.5, 2.4, 2.2, 3.6); part(f, roofG(4, 2.8, 1.1), THATCH[(i + 1) % 4], 4.6, 2.2, -0.5, Math.PI / 2); }
+    else cottage(f, { w: 5.2, d: 4.2, h: 2.3, wall: WALLS[i % 4], roof: THATCH[(i + 1) % 4], yard: false, door: ['#3b2a1c', '#5a3a28', '#2f4f6a', '#4f6b3a'][i % 4] });
+    if (i % 2 === 0) { const b = M4(h.x - Math.sin(h.face) * 6, groundH(h.x, h.z) + 0.04, h.z - Math.cos(h.face) * 6, h.face); box(b, '#6e5a36', 0, 0, 0, 4.4, 0.1, 2.6); for (let k = 0; k < 6; k++) part(b, GEO.sack, k % 2 ? '#5f8a3e' : '#7aa04a', -1.8 + (k % 3) * 1.8, 0.2, -0.6 + Math.floor(k / 3) * 1.2, 0, 0, 0, 0.9, 0.7, 0.9); }
+  });
+  // the shops round the green: a shop below, the family above, a sign out front
+  const SIGN = { bakery: '#c48a3f', tavern: '#3f6b3a', smithy: '#4a4744', dairy: '#e8e2d0', weaver: '#2f5d7a', butcher: '#8e2b22', wheelwright: '#7a5232' };
+  H.biz.forEach((b, i) => {
+    if (b.id === 'g_mill' || b.id === 'g_estate') return;
+    const f = at(b.x, b.z, b.face), c = SIGN[b.trade] || '#8a6a2a', big = b.id === 'g_plough';
+    const w = big ? 9 : 7, d = big ? 7 : 6;
+    box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.6, d + 0.4); box(f, WALLS[(i + 3) % 4], 0, 1.7, 0, w, 2.8, d); box(f, WALLS[(i + 1) % 4], 0, 4.3, 0.2, w + 0.3, 2.4, d + 0.4);
+    [-w / 2, -w / 6, w / 6, w / 2].forEach(x => box(f, BEAMS, x, 3, d / 2 + 0.02, 0.16, 5.6, 0.08));
+    part(f, roofG(d + 1, w + 0.8, 3), THATCH[(i + 2) % 4], 0, 5.5, 0.2);
+    box(f, '#2a1f16', 0, 1.5, d / 2 + 0.02, 2.4, 2.4, 0.06); win(f, -w / 3, 1.9, d / 2 + 0.02, 0.9, 0.9, 0.06); win(f, w / 3, 1.9, d / 2 + 0.02, 0.9, 0.9, 0.06); win(f, -w / 4, 4.3, d / 2 + 0.42, 0.7, 0.7, 0.06); win(f, w / 4, 4.3, d / 2 + 0.42, 0.7, 0.7, 0.06);
+    box(f, BEAMS, w / 2 + 0.4, 3.2, d / 2 + 0.3, 1.4, 0.1, 0.1); box(f, c, w / 2 + 0.9, 2.7, d / 2 + 0.3, 0.9, 0.8, 0.06);
+    if (big) { box(f, '#6b4a2e', -2.5, 0.45, d / 2 + 1.8, 2.2, 0.1, 0.8); box(f, '#6b4a2e', 2.5, 0.45, d / 2 + 1.8, 2.2, 0.1, 0.8); part(f, G_BARREL, '#6b4a2e', 4, 0.35, d / 2 + 1); }
+    if (b.trade === 'smithy') { box(f, '#4a4744', w / 2 - 1, 6.4, -1, 0.8, 2.6, 0.8); box(f, '#3a3632', -w / 2 - 1, 0.5, d / 2 - 1, 1, 1, 1); }
+    if (b.trade === 'wheelwright') [0, 1.2].forEach(k => part(f, new THREE.TorusGeometry(0.7, 0.08, 4, 12), '#6b4a2e', -w / 2 - 0.5, 0.75, d / 2 - 1 - k, Math.PI / 2));
+    if (b.trade === 'dairy') for (let k = 0; k < 3; k++) part(f, new THREE.CylinderGeometry(0.25, 0.25, 0.8, 8), '#b9b4ab', -w / 2 + 0.8 + k * 0.6, 0.4, d / 2 + 0.6);
+  });
+  // the Great Mill: stone below, timber above, and its wheel turning in the river
+  const mb = H.biz.find(b => b.id === 'g_mill'), mf = at(mb.x, mb.z, mb.face);
+  box(mf, '#8b877c', 0, 2.4, 0, 10, 4.8, 9); box(mf, '#b9a47a', 0, 6.4, 0, 10.4, 3.2, 9.4); [-5, -2.5, 0, 2.5, 5].forEach(x => box(mf, BEAMS, x, 6.4, 4.72, 0.18, 3.2, 0.08));
+  part(mf, roofG(10, 11, 4), '#5e4a2c', 0, 8, 0); box(mf, '#2a1f16', 0, 1.6, 4.52, 2.4, 3.2, 0.08); win(mf, -3, 3, 4.52, 0.9, 0.9, 0.06); win(mf, 3, 3, 4.52, 0.9, 0.9, 0.06);
+  box(mf, BEAMS, 0, 9.4, 4.8, 0.2, 0.2, 1.4); box(mf, '#d8c69a', 0, 8.6, 5.4, 0.7, 1.2, 0.5);
+  for (let k = 0; k < 8; k++) part(mf, GEO.sack, k % 2 ? '#e8dcbc' : '#d8c69a', -4 + (k % 4) * 0.8, 0.35, 5.5 + Math.floor(k / 4) * 0.7, 0, 0, 0, 1, 0.9, 1);
+  { const ax = mb.x - Math.sin(mb.face) * 6.2, az = mb.z - Math.cos(mb.face) * 6.2, wg = new THREE.Group(); wg.position.set(ax, waterLevelGreen(az) + 1.4, az); wg.rotation.y = mb.face + Math.PI / 2; scene.add(wg);
+    const wheel = new THREE.Group(); wg.add(wheel); V.ghWheel = wheel;
+    const rim = new THREE.Mesh(flat(new THREE.TorusGeometry(3, 0.16, 4, 20)), mat('#5b4029')); rim.rotation.y = Math.PI / 2; wheel.add(rim);
+    for (let i = 0; i < 8; i++) { const s0 = mesh(new THREE.BoxGeometry(0.14, 6, 0.14), '#4a3424', 0, 0, 0, wheel); s0.rotation.x = i * Math.PI / 8; }
+    for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, pd = mesh(new THREE.BoxGeometry(1.2, 0.7, 0.12), '#6b4a2e', 0, Math.sin(a) * 2.9, Math.cos(a) * 2.9, wheel); pd.rotation.x = -a; }
+    mesh(new THREE.BoxGeometry(0.4, 0.4, 3), '#3a3128', 0, 0, 0, wg).rotation.y = Math.PI / 2; }
+  // the moot hall: a timber hall raised on stone posts, open below for the market in the wet
+  const hf = at(H.hall.x, H.hall.z, H.hall.face);
+  [-4, -1.3, 1.3, 4].forEach(x => [-2.5, 2.5].forEach(z => box(hf, '#8b877c', x, 1.2, z, 0.6, 2.4, 0.6)));
+  box(hf, '#6b4a2e', 0, 2.5, 0, 10, 0.25, 6.4); box(hf, '#c9b48a', 0, 3.9, 0, 9.6, 2.6, 6); [-4.8, -2.4, 0, 2.4, 4.8].forEach(x => box(hf, BEAMS, x, 3.9, 3.02, 0.16, 2.6, 0.08));
+  part(hf, roofG(7, 10.6, 2.8), '#5e4a2c', 0, 5.2, 0); box(hf, '#d8c69a', 0, 6.6, 0, 0.8, 1, 0.8); part(hf, new THREE.ConeGeometry(0.7, 1.2, 4), '#3f4a5a', 0, 7.7, 0, Math.PI / 4);
+  win(hf, -2.6, 4, 3.02, 0.8, 0.8, 0.06); win(hf, 2.6, 4, 3.02, 0.8, 0.8, 0.06); box(hf, '#6b4a2e', 4.6, 1.3, 3.6, 1.2, 0.12, 2.4, 0, -0.5);
+  // Ashcombe Hall, behind its garden wall on the rise
+  const eb = H.biz.find(b => b.id === 'g_estate'), ef = at(eb.x, eb.z, eb.face);
+  box(ef, '#7d776a', 0, 0.3, 0, 18, 1, 11); box(ef, '#a39d90', 0, 3.4, 0, 16, 6.2, 10); box(ef, '#a39d90', -9, 2.8, -2, 4, 5, 13); box(ef, '#a39d90', 9, 2.8, -2, 4, 5, 13);
+  part(ef, roofG(10.6, 16.6, 3.6), '#3f4a5a', 0, 6.5, 0); part(ef, roofG(13.4, 4.6, 2.4), '#3f4a5a', -9, 5.3, -2, Math.PI / 2); part(ef, roofG(13.4, 4.6, 2.4), '#3f4a5a', 9, 5.3, -2, Math.PI / 2);
+  [-6, 6].forEach(x => box(ef, '#8b877c', x, 7.6, -2, 0.8, 3, 0.8)); box(ef, '#3b2a1c', 0, 1.9, 5.02, 2.2, 3.2, 0.1); [-5.5, -3, 3, 5.5].forEach(x => { win(ef, x, 2.4, 5.02, 1, 1.4, 0.06); win(ef, x, 5, 5.02, 0.9, 1.1, 0.06); });
+  box(ef, '#2f5a2e', 0, 6.2, 5.06, 1.4, 1.4, 0.04); box(ef, '#d9b04a', 0, 6.2, 5.1, 0.6, 0.6, 0.02);
+  for (let k = -1; k <= 1; k += 2) { box(ef, '#8b877c', k * 12, 1, 6, 0.6, 2, 18); box(ef, '#8b877c', k * 7.5, 1, 15, 9, 2, 0.6); box(ef, '#8b877c', k * 2.2, 1.3, 15, 0.9, 2.6, 0.9); }
+  [[-7, 10], [7, 10], [-4, 12.5], [4, 12.5]].forEach(([u, v]) => { const g = new THREE.Matrix4().copy(ef).multiply(M4(u, 0, v)); part(g, new THREE.SphereGeometry(0.9, 6, 4), '#3f6b3a', 0, 0.8, 0); });
+  // the Green Bridge, at the level of the lanes
+  const B = H.bridge, by = groundH(B.ax, B.az);
+  box(M4(B.x, by + 0.15, B.z), '#a39d90', 0, -0.2, 0, B.half * 2 + 0.4, 0.4, B.w); [-1, 1].forEach(k => box(M4(B.x, by + 0.15, B.z), '#8b877c', 0, 0.35, k * (B.w / 2 - 0.2), B.half * 2 + 0.4, 0.7, 0.4));
+  box(M4(B.x, by, B.z), '#8b877c', 0, -1.6, 0, 1.8, 3, B.w + 0.4);
+  // fields of wheat, barley, beans and cabbages, hedged; pasture with sheep and cattle; the orchard
+  const hedge = (x0, z0, x1, z1) => { const len = Math.hypot(x1 - x0, z1 - z0); for (let d = 0; d < len; d += 2.2) { const x = x0 + (x1 - x0) * d / len, z = z0 + (z1 - z0) * d / len; part(M4(x, groundH(x, z), z), GEO.sack, d % 4.4 < 2.2 ? '#3f5a2e' : '#465f30', 0, 0.5, 0, 0, 0, 0, 3.6, 2.6, 3.6); } };
+  const ring = (f, gap) => { const x0 = f.x - f.w / 2, x1 = f.x + f.w / 2, z0 = f.z - f.d / 2, z1 = f.z + f.d / 2; hedge(x0, z0, x1, z0); hedge(x0, z1, x1 - gap, z1); hedge(x0, z0, x0, z1); hedge(x1, z0, x1, z1); };
+  H.fields.forEach((fm, n) => {
+    const f = fr(fm.x, fm.z, 0, 0.02), crop = CROPS[fm.crop % CROPS.length];
+    for (let r0 = 0; r0 < Math.floor(fm.d / 3); r0++) {
+      const rz = -fm.d / 2 + 1.5 + r0 * 3; box(f, '#6e5a36', 0, 0.03, rz, fm.w - 1, 0.1, 2.4);
+      for (let x = -fm.w / 2 + 1.2; x < fm.w / 2 - 0.8; x += crop.gap * 1.3) for (const dz of [-0.55, 0.55]) { const j = Math.sin(x * 12.9 + rz * 7.1 + dz + n) * 0.5 + 0.5; part(f, crop.geo, j < 0.5 ? crop.a : crop.b, x + (j - 0.5) * 0.3, crop.y, rz + dz, j * 6, 0, 0, 0.8 + j * 0.4, 0.8 + j * 0.5, 0.8 + j * 0.4); }
+    }
+    ring(fm, 4);
+  });
+  const sheep = mergeColored([{ geo: new THREE.SphereGeometry(0.45, 6, 4), color: '#ece6d6', m: M(0, 0.55, 0) }, { geo: new THREE.BoxGeometry(0.24, 0.26, 0.3), color: '#2a2420', m: M(0, 0.62, 0.48) }].concat([[-0.18, -0.22], [0.18, -0.22], [-0.18, 0.22], [0.18, 0.22]].map(([x, z]) => ({ geo: new THREE.BoxGeometry(0.08, 0.32, 0.08), color: '#2a2420', m: M(x, 0.16, z) }))));
+  const cow = mergeColored([{ geo: new THREE.BoxGeometry(0.9, 0.8, 1.8), color: '#8a5a3a', m: M(0, 1.05, 0) }, { geo: new THREE.BoxGeometry(0.6, 0.55, 0.6), color: '#8a5a3a', m: M(0, 1.3, 1.1) }, { geo: new THREE.BoxGeometry(0.5, 0.3, 0.6), color: '#e9e1cc', m: M(0.1, 1.2, -0.2) }].concat([[-0.32, -0.6], [0.32, -0.6], [-0.32, 0.6], [0.32, 0.6]].map(([x, z]) => ({ geo: new THREE.BoxGeometry(0.18, 0.7, 0.18), color: '#6b4a2e', m: M(x, 0.35, z) }))));
+  H.pastures.forEach(pa => {
+    const x0 = pa.x - pa.w / 2, x1 = pa.x + pa.w / 2, z0 = pa.z - pa.d / 2, z1 = pa.z + pa.d / 2;
+    for (let x = x0; x <= x1; x += 2.5) [z0, z1].forEach(z => box(null, '#8a6d48', x, groundH(x, z) + 0.5, z, 0.12, 1, 0.12));
+    for (let z = z0; z <= z1; z += 2.5) [x0, x1].forEach(x => box(null, '#8a6d48', x, groundH(x, z) + 0.5, z, 0.12, 1, 0.12));
+    [0.75, 0.4].forEach(y => { box(null, '#8a6d48', pa.x, groundH(pa.x, z0) + y, z0, pa.w, 0.07, 0.05); box(null, '#8a6d48', pa.x, groundH(pa.x, z1) + y, z1, pa.w, 0.07, 0.05); box(null, '#8a6d48', x0, groundH(x0, pa.z) + y, pa.z, 0.05, 0.07, pa.d); box(null, '#8a6d48', x1, groundH(x1, pa.z) + y, pa.z, 0.05, 0.07, pa.d); });
+    const n = pa.kind === 'sheep' ? 22 : 7, geo = pa.kind === 'sheep' ? sheep : cow;
+    for (let k = 0; k < n; k++) { const x = pa.x + (rr() - 0.5) * (pa.w - 4), z = pa.z + (rr() - 0.5) * (pa.d - 4), m = new THREE.Mesh(geo, vc); m.position.set(x, groundH(x, z), z); m.rotation.y = rr() * 6.3; scene.add(m); }
+  });
+  const O = H.orchard; for (let x = O.x - O.w / 2 + 2; x < O.x + O.w / 2; x += 4) for (let z = O.z - O.d / 2 + 2; z < O.z + O.d / 2; z += 4) ot(x, z, 0.6, rr() < 0.5 ? '#5d7a40' : '#6b8a44');
+  // barns and haystacks at the edges of town
+  [[-176, -840, 0.2], [-202, -768, 1.4], [-290, -800, 0.6]].forEach(([x, z, ry]) => { const f = at(x, z, ry); box(f, '#6b4a2e', 0, 2.2, 0, 8, 4.4, 6); part(f, roofG(7, 8.6, 3), '#5e4a2c', 0, 4.4, 0); box(f, '#4a3424', 0, 1.6, 3.02, 3, 3.2, 0.1); box(f, '#d2b260', 6, 0.9, 0, 1.8, 1.8, 2.2); });
+  // trees along the river and in the hedgerows
+  for (let k = 0; k < 160; k++) { const z = T.z - 110 + rr() * 220, x = H.riverX(z) + (rr() < 0.5 ? -1 : 1) * (8 + rr() * 6); if (Math.abs(z - H.bridge.z) < 8 || Math.abs(z - (mb.z)) < 9 || rr() < 0.55) continue; ot(x, z, 0.8 + rr() * 0.5, rr() < 0.5 ? '#4f6b3a' : '#56703c'); GH_TREES.push([x, z]); }
+  flushBuild();
+})();
+
 /* ----- the barnyard animals: a few hens pecking, two cows in the pen ----- */
 const hens = [];
 (function animals() {
@@ -4003,6 +4276,7 @@ function syncAnimals(dt, t) {
     h.m.rotation.x = h.t % 1.3 < 0.25 ? 0.6 : 0;
   }
   if (V.millWheel) V.millWheel.rotation.x -= dt * 0.9;
+  if (V.ghWheel) V.ghWheel.rotation.x -= dt * 0.6;
 }
 
 // square projects: stone paving and lanterns
@@ -4457,9 +4731,24 @@ const OAK_SOLIDS = (function () {
   C(O.square.x, O.square.z, 3.6);
   return out;
 })();
+const GH_SOLIDS = (function () {
+  const H = Sim.GH, out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
+  H.houses.forEach(h => { C(h.x, h.z, 2.8); if (h.tall) C(h.x + Math.cos(h.face) * 4.6, h.z - Math.sin(h.face) * 4.6, 2); });
+  H.biz.forEach(b => {
+    const ux = Math.cos(b.face), uz = -Math.sin(b.face);
+    if (b.id === 'g_estate') { [-9, -4.5, 0, 4.5, 9].forEach(u => C(b.x + ux * u, b.z + uz * u, 4)); return; }
+    if (b.id === 'g_mill') { [-2.5, 2.5].forEach(u => C(b.x + ux * u, b.z + uz * u, 4.4)); return; }
+    const w = b.id === 'g_plough' ? 2.4 : 1.6; [-w, w].forEach(u => C(b.x + ux * u, b.z + uz * u, b.id === 'g_plough' ? 3.6 : 3.2));
+  });
+  const hx = Math.cos(H.hall.face), hz = -Math.sin(H.hall.face); [-4, -1.3, 1.3, 4].forEach(u => [-2.5, 2.5].forEach(v => C(H.hall.x + hx * u + Math.sin(H.hall.face) * v, H.hall.z + hz * u + Math.cos(H.hall.face) * v, 0.45)));
+  C(H.green.x + 3, H.green.z - 2, 0.3); C(H.green.x - 6, H.green.z + 5, 1.3); C(H.green.x - 9, H.green.z - 7, 0.5);
+  [[-176, -840], [-202, -768], [-290, -800]].forEach(([x, z]) => C(x, z, 4.6));
+  return out;
+})();
 function solidsNow(s) {
   const out = staticSolids.slice();
   out.push(...tileSolidsNear(s.player.x, s.player.z));
+  if (Math.hypot(s.player.x - TOWNS.greenhaven.x, s.player.z - TOWNS.greenhaven.z) < TOWNS.greenhaven.r + 60) out.push(...GH_SOLIDS, ...GH_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.oakbridge.x, s.player.z - TOWNS.oakbridge.z) < TOWNS.oakbridge.r + 40) out.push(...OAK_SOLIDS, ...OAK_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
   if (s.village.towerBuilt) out.push({ c: 1, x: L.tower.x, z: L.tower.z, r: 2 });
@@ -4783,8 +5072,12 @@ function cardHTML(s) {
   if (here === 'waystation') return `<h2>The Waystation</h2><div class="sub">A drovers\u2019 rest halfway along the road to Oakbridge: a stable, a water trough, and a room for anyone caught out by the dark. Carriages will stop here once they run.</div>${walking}`;
   if (here === 'ruin') return `<h2>Old Barrow Keep</h2><div class="sub">A tower that guarded this road long before the Varrows held Hearthmoor. Its stones have been carted off for barns and walls. Nobody lives here now.</div>${walking}`;
   if (here === 'oakgate') return `<h2>Oakbridge Gate</h2><div class="sub">The south gate of Oakbridge, the market city where the south road meets the coast road. The gates stand open from dawn to dusk; the watch keeps the toll.</div>${walking}<div class="acts">${B_('The market square', ['goto', 'oaksq'], 'alt')}${B_('The town hall', ['goto', 'oakhall'], 'alt')}</div>`;
-  if (Lh && Lh.town === 'oakbridge' && Lh.biz) return oakBizCard(s, Lh, walking);
+  if (Lh && Lh.town && Lh.biz) return oakBizCard(s, Lh, walking);
   if (here === 'oakhall') return oakHallCard(s, walking);
+  if (here === 'ghhall') return oakHallCard(s, walking, 'greenhaven');
+  if (here === 'ghgreen') { const T = s.towns && s.towns.greenhaven; return `<h2>Greenhaven Village Green</h2><div class="sub">The green: grazing for the town\u2019s geese, the maypole, the well, and room for the whole town at the harvest feast. The Plough, the bakehouse, the dairy and Fleece & Loom look onto it.${T ? ' Traders pay the reeve ' + Sim.FEES[T.fee].coin + 'c a day.' : ''}</div>${walking}<div class="acts">${B_('Moot hall', ['goto', 'ghhall'], 'alt')}${B_('Businesses', ['page', 'property'], 'alt')}</div>`; }
+  if (here === 'ghbridge') return `<h2>The Green Bridge</h2><div class="sub">A stone bridge over the river Green, between the town and Ashcombe Hall. The mill race runs just upstream.</div>${walking}`;
+  if (here === 'ghentry') return `<h2>Greenhaven</h2><div class="sub">A farming town of about eighty on the river Green: wheat and barley, sheep and cattle, and the Great Mill. The north road runs back down to the waystation fork and Hearthmoor.</div>${walking}<div class="acts">${B_('The village green', ['goto', 'ghgreen'], 'alt')}${B_('The moot hall', ['goto', 'ghhall'], 'alt')}</div>`;
   if (here === 'oaksq') {
     const T = s.towns && s.towns.oakbridge, open = Sim.OAK.biz.filter(b => s.biz[b.id] && !s.biz[b.id].closed && b.district === 'market').length;
     return `<h2>Oakbridge Market Square</h2><div class="sub">Stalls around the fountain, and ${open} shops facing the square: bakers, a butcher, a chandler, a tailor and The Bell. Traders pay the town ${T ? Sim.FEES[T.fee].coin + 'c' : 'a fee'} a day to sell here.</div>${walking}<div class="acts">${B_('Town hall', ['goto', 'oakhall'], 'alt')}${B_('Businesses', ['page', 'property'], 'alt')}</div>`;
@@ -5031,18 +5324,20 @@ function personDetail(s, pr) {
     ${mine.length ? `<p><b>${mine.join(' ')}</b></p>` : ''}
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
+const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven' };
+const townHere = () => { const t = Sim.townAt(G.player.x, G.player.z); return t && TOWN_NAMES[t] && (t === 'hearthmoor' || Math.hypot(G.player.x - TOWNS[t].x, G.player.z - TOWNS[t].z) < TOWNS[t].r + 70) ? t : 'hearthmoor'; };
 function townPick(s) {
-  const t = UI.ptown || (Sim.townAt(s.player.x, s.player.z) === 'oakbridge' ? 'oakbridge' : 'hearthmoor');
-  return [t, `<div class="seg" role="group">${[['hearthmoor', 'Hearthmoor'], ['oakbridge', 'Oakbridge']].map(([v, n]) => `<button type="button" aria-pressed="${t === v}" data-c='${JSON.stringify(['ui', 'ptown', v])}'>${n}</button>`).join('')}</div>`];
+  const t = UI.ptown || townHere();
+  return [t, `<div class="seg" role="group">${[['hearthmoor', 'Hearthmoor'], ['oakbridge', 'Oakbridge'], ['greenhaven', 'Greenhaven']].map(([v, n]) => `<button type="button" aria-pressed="${t === v}" data-c='${JSON.stringify(['ui', 'ptown', v])}'>${n}</button>`).join('')}</div>`];
 }
 function pagePeople(s) {
-  const [town, pick] = townPick(s), TN = town === 'oakbridge' ? 'Oakbridge' : 'Hearthmoor';
+  const [town, pick] = townPick(s), TN = TOWN_NAMES[town];
   const all = Object.values(s.people).filter(p => Sim.townOf(p) === town), here = all.filter(p => p.status === 'here');
   const working = here.filter(p => p.job).length, idle = here.filter(p => !p.job && !p.retired && !p.kid).length, kids = here.filter(p => p.kid).length, rough = here.filter(p => !p.home).length, gone = all.length - here.length;
   const groups = [
     ['Out of work or without a roof', here.filter(p => !p.home || (!p.job && !p.retired && !p.kid))],
     ['Work for you', here.filter(p => p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) && p.home)],
-    [town === 'oakbridge' ? 'The town' : 'The village', here.filter(p => p.home && (p.job || p.retired || p.kid) && !(p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) || p.job && p.job.type === 'office'))],
+    [town !== 'hearthmoor' ? 'The town' : 'The village', here.filter(p => p.home && (p.job || p.retired || p.kid) && !(p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) || p.job && p.job.type === 'office'))],
     ['The lord’s household and the elder', here.filter(p => p.job && p.job.type === 'office' && p.home)],
     ['Gone from ' + TN, all.filter(p => p.status !== 'here')]
   ];
@@ -5070,28 +5365,31 @@ function pageProperty(s) {
     return `<div class="box"><h5>${esc(h.name)}</h5><dl class="kv"><dt>Owner</dt><dd>${esc(Sim.landlordName(s, h.owner))}</dd><dt>Tenant</dt><dd>${ts.length ? esc(ts.join(', ')) : 'empty'}</dd><dt>Rent</dt><dd>${h.rent}c a day</dd><dt>Price</dt><dd>${price}c</dd></dl><div class="acts">${B_('Buy for ' + price + 'c', ['buyHouse', h.id], '', s.coins < price)}</div></div>`;
   }).join('')}</div>`;
   const bizIn = t => Object.values(s.biz).filter(b => (b.town || 'hearthmoor') === t);
-  html += `<h4>${town === 'oakbridge' ? 'Oakbridge' : 'Hearthmoor'} businesses</h4><div class="grid2">${bizIn(town).map(b => bizBox(s, b)).join('')}</div>`;
+  html += `<h4>${TOWN_NAMES[town]} businesses</h4><div class="grid2">${bizIn(town).map(b => bizBox(s, b)).join('')}</div>`;
   return html;
 }
 function oakBizCard(s, Lh, walking) {
-  const b = s.biz[Lh.biz], site = Sim.OAK.biz.find(x => x.id === Lh.biz);
+  const L = Sim.LAYOUT[Lh.town], b = s.biz[Lh.biz], site = L.biz.find(x => x.id === Lh.biz);
   if (!b) return `<h2>${esc(Lh.name)}</h2>${walking}`;
   const own = b.owner === 'player', owner = own ? null : s.people[b.owner];
-  const rivals = Sim.OAK.biz.filter(x => x.trade === b.trade && x.id !== b.id).map(x => x.name);
-  const dist = { market: 'Market Square', guild: 'Guild Quarter', riverside: 'Riverside', east: 'East Bank' }[site.district];
-  let html = `<h2>${esc(Lh.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${dist}. ${own ? 'It is yours.' : 'Run by ' + esc(owner ? owner.name : site.boss) + '.'} ${b.staff.length} ${b.staff.length === 1 ? 'hand' : 'hands'} · last day ${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit.${rivals.length ? ' Competes with ' + esc(rivals.join(' and ')) + '.' : ''}</div>${walking}`;
+  const rivals = L.biz.filter(x => x.trade === b.trade && x.id !== b.id).map(x => x.name);
+  const dist = { market: 'Market Square', guild: 'Guild Quarter', riverside: 'Riverside', east: 'East Bank', green: 'on the green', river: 'on the river Green', south: 'South Lane', estate: 'across the river' }[site.district];
+  const blurb = { g_mill: ' The Great Mill grinds the valley\u2019s wheat and barley into flour for half the kingdom\u2019s bakers.', g_estate: ' The Ashcombes\u2019 hall and home farm: the family own half the cottages in town and the best of the land.', g_plough: ' Farmers\u2019 ale, a fire, and the gossip of the whole valley.' }[b.id] || '';
+  let html = `<h2>${esc(Lh.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${dist}.${blurb} ${own ? 'It is yours.' : 'Run by ' + esc(owner ? owner.name : site.boss) + '.'} ${b.staff.length} ${b.staff.length === 1 ? 'hand' : 'hands'} · last day ${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit.${rivals.length ? ' Competes with ' + esc(rivals.join(' and ')) + '.' : ''}</div>${walking}`;
   const acts = [];
   if (!own && owner) { const price = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)); }
   acts.push(B_('Businesses', ['page', 'property'], 'alt'));
   return html + `<div class="acts">${acts.join('')}</div>`;
 }
-function oakHallCard(s, walking) {
-  const T = s.towns && s.towns.oakbridge;
-  if (!T) return `<h2>Oakbridge Town Hall</h2>${walking}`;
+function oakHallCard(s, walking, id) {
+  id = id || 'oakbridge';
+  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'greenhaven' ? 'Greenhaven Moot Hall' : 'Oakbridge Town Hall';
+  if (!T) return `<h2>${HN}</h2>${walking}`;
   const m = s.people[T.mayor], who = id => s.people[id] ? esc(s.people[id].name) : '';
   const mTrade = m && m.job && s.biz[m.job.biz] ? Sim.tradeName(s.biz[m.job.biz].trade).toLowerCase() : 'merchant';
-  return `<h2>Oakbridge Town Hall</h2><div class="sub">The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.</div>${walking}
-  <dl class="kv"><dt>Mayor</dt><dd>${m ? esc(m.name) + ' (' + esc(mTrade) + ')' : 'none'}</dd><dt>Approval</dt><dd>${Math.round(T.approval)}%</dd><dt>Town chest</dt><dd>${Math.round(T.chest)}c</dd><dt>Market fee</dt><dd>${esc(Sim.FEES[T.fee].name)}</dd><dt>Council</dt><dd>${T.council.map(who).filter(Boolean).join(', ') || 'empty'}</dd><dt>Next vote</dt><dd>day ${T.nextVote}</dd></dl>
+  const intro = id === 'greenhaven' ? 'The reeve and council run Greenhaven for the townsfolk: they set the market fee, keep the bridge, the lanes and the common, and help hungry families from the town chest. The Ashcombes of the Hall have a seat, but no more than that.' : 'The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.';
+  return `<h2>${HN}</h2><div class="sub">${intro}</div>${walking}
+  <dl class="kv"><dt>${TT}</dt><dd>${m ? esc(m.name) + ' (' + esc(mTrade) + ')' : 'none'}</dd><dt>Approval</dt><dd>${Math.round(T.approval)}%</dd><dt>Town chest</dt><dd>${Math.round(T.chest)}c</dd><dt>Market fee</dt><dd>${esc(Sim.FEES[T.fee].name)}</dd><dt>Council</dt><dd>${T.council.map(who).filter(Boolean).join(', ') || 'empty'}</dd><dt>Next vote</dt><dd>day ${T.nextVote}</dd></dl>
   ${progressBar(T.approval / 100)}
   ${T.log.length ? `<div class="why">${T.log.slice(0, 3).map(e => `Day ${e.day}: ${esc(e.text)}`).join('<br>')}</div>` : ''}`;
 }
@@ -5186,7 +5484,7 @@ function pinKind(k) {
   if (Lk.plot != null) return Sim.shopOnPlot(G, Lk.plot) ? 'mine' : 'lot';
   if (Lk.emp) return G.job && G.job.emp === Lk.emp ? 'mine' : 'work';
   if (Lk.biz && Lk.town) return G.biz[Lk.biz] && G.biz[Lk.biz].owner === 'player' ? 'mine' : 'work';
-  if (k === 'oakhall' || k === 'oakkeep') return 'realm';
+  if (k === 'oakhall' || k === 'oakkeep' || k === 'ghhall') return 'realm';
   if (['hall', 'manor', 'tower', 'granary'].includes(k)) return 'realm';
   if (k === 'home' || (k === 'cottage' && G.village.cottage !== 'forsale')) return 'mine';
   return 'place';
@@ -5215,7 +5513,7 @@ const PLACE_NOTE = {
   field: 'Free grain for anyone who gathers it.', forest: 'Free wood for anyone who cuts it.', pit: 'Free iron ore for anyone who digs it.',
   market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
-  granary: 'The village food store.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
+  granary: 'The village food store.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
 };
 function renderMapCard() {
   buildPins();
@@ -5232,8 +5530,8 @@ function renderMapCard() {
 function openMap() {
   UI.overlay = 'map'; UI.mapSel = null;
   ['book', 'pause', 'panel', 'hud', 'sticks'].forEach(id => $(id).hidden = true);
-  const T = TOWNS.oakbridge, inOak = Math.hypot(G.player.x - T.x, G.player.z - T.z) < T.r + 60;
-  MAP_C.x = inOak ? T.x : 0; MAP_C.z = inOak ? T.z : 0;
+  const here = townHere(), T = TOWNS[here];
+  MAP_C.x = here === 'hearthmoor' ? 0 : T.x; MAP_C.z = here === 'hearthmoor' ? 0 : T.z; MAP_C.name = TOWN_NAMES[here];
   mapCam.x = MAP_C.x + clamp((G.player.x - MAP_C.x) * 0.5, -40, 40); mapCam.z = MAP_C.z + clamp((G.player.z - MAP_C.z) * 0.5 - 8, -40, 20); mapCam.dist = 120;
   $('mapui').hidden = false; $('toasts').hidden = true; setMapMode(UI.mapMode || 'village');
 }
@@ -5242,7 +5540,7 @@ function openMap() {
    settlements show what each is and when its road opens. */
 const WORLD = [
   { id: 'hearthmoor', name: 'Hearthmoor', k: 'A', tier: 'Starting village', pop: 30, x: 215, y: 735, kind: 'star', why: 'A farming village on the road to Oakbridge, where your story begins.', stage: 0 },
-  { id: 'greenhaven', name: 'Greenhaven', k: 'A', tier: 'Small farming town', pop: 80, x: 120, y: 430, kind: 'town', why: 'River-meadow farms and a great mill. Flour, wool and cattle.', stage: 2 },
+  { id: 'greenhaven', name: 'Greenhaven', k: 'A', tier: 'Small farming town', pop: 80, x: 120, y: 430, kind: 'town', why: 'River-meadow farms and the Great Mill on the river Green. Flour, wool and cattle, a reeve chosen by the townsfolk, and the Ashcombes of the Hall.', stage: 2 },
   { id: 'oakbridge', name: 'Oakbridge', k: 'A', tier: 'Market city', pop: 240, x: 365, y: 575, kind: 'city', why: 'The bridge where the south road meets the coast road: a walled market city of four districts, with rival shops, a guildhall, a mayor and a town treasury.', stage: 2 },
   { id: 'ironcrest', name: 'Ironcrest', k: 'A', tier: 'Mining city', pop: 200, x: 455, y: 150, kind: 'city', why: 'Mountain mines and smelters. Iron, tools and weapons.', stage: 3 },
   { id: 'crownmere', name: 'Crownmere', k: 'A', tier: 'Capital of Alderwyn', pop: 1150, x: 330, y: 330, kind: 'capital', why: 'The royal seat on its lake beneath the mountains: the court, the guilds and the crown.', stage: 3 },
@@ -5255,7 +5553,7 @@ const WORLD = [
   { id: 'valdor', name: 'Valdor', k: 'V', tier: 'Capital of Valdoria', pop: 1100, x: 1320, y: 420, kind: 'capital', why: 'The walled river capital and the Valdorian court. Wine, silk and banking.', stage: 5 }
 ];
 const KINGDOM = { A: 'Kingdom of Alderwyn', V: 'Kingdom of Valdoria', S: 'The Sundering Sea' };
-const W_ROADS = [['hearthmoor', 'oakbridge'], ['oakbridge', 'crownmere'], ['oakbridge', 'eastwatch'], ['crownmere', 'greenhaven'], ['crownmere', 'ironcrest'],
+const W_ROADS = [['hearthmoor', 'oakbridge'], ['hearthmoor', 'greenhaven'], ['oakbridge', 'crownmere'], ['oakbridge', 'eastwatch'], ['crownmere', 'greenhaven'], ['crownmere', 'ironcrest'],
   ['dawnport', 'valdor'], ['valdor', 'stonewatch'], ['valdor', 'thornwick'], ['valdor', 'goldmeadow']];
 function worldSVG(sel) {
   let sd = 9001; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
@@ -5346,8 +5644,8 @@ const worldView = { s: 1, x: 0, y: 0 };
 function renderWorldCard() {
   const el = $('worldcard'), s = WORLD.find(w => w.id === UI.worldSel);
   if (!s) { el.hidden = true; return; }
-  const here = s.id === (Sim.townAt(G.player.x, G.player.z) === 'oakbridge' ? 'oakbridge' : 'hearthmoor'), open = s.id === 'hearthmoor' || s.id === 'oakbridge';
-  const status = here ? 'You are here.' : open ? 'The road east is open. Walk it, or travel from the map.' : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
+  const here = s.id === townHere(), open = ['hearthmoor', 'oakbridge', 'greenhaven'].includes(s.id);
+  const status = here ? 'You are here.' : open ? (s.id === 'greenhaven' ? 'The north road is open: it forks from the east road at the waystation.' : 'The road is open. Walk it, or travel from the map.') : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
   el.innerHTML = `<div><b>${esc(s.name)}</b><span>${esc(KINGDOM[s.k])} &middot; ${esc(s.tier)}${s.pop ? ' &middot; about ' + s.pop.toLocaleString() + ' people' : ''}</span><p>${esc(s.why)} <i>${esc(status)}</i></p></div>${here ? B_('Village map', ['ui', 'mapMode', 'village']) : ''}`;
   el.hidden = false;
 }
@@ -5378,7 +5676,7 @@ function applyWorldView() {
 function setMapMode(m) {
   UI.mapMode = m;
   $('worldmap').hidden = m !== 'world'; $('pins').hidden = m === 'world'; $('mapcard').hidden = m === 'world' || !UI.mapSel; $('mapzoomBox').hidden = m === 'world';
-  $('mapTitle').textContent = m === 'world' ? 'The World' : MAP_C.x ? 'Oakbridge' : 'Hearthmoor'; document.querySelector('[data-m=village]').textContent = MAP_C.x ? 'Town' : 'Village';
+  $('mapTitle').textContent = m === 'world' ? 'The World' : MAP_C.name || 'Hearthmoor'; document.querySelector('[data-m=village]').textContent = MAP_C.x ? 'Town' : 'Village';
   document.querySelectorAll('#mapTabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
   if (m === 'world') { worldView.s = 1; worldView.x = 0; worldView.y = 0; renderWorld(); } else renderMapCard();
 }
@@ -5923,8 +6221,17 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.0911';
+const BUILD = '2026.11.04.0932';
 const NOTES = [
+  { v: '0.21', date: '4 November', title: 'The north road and Greenhaven', items: [
+    'The north road is open. It leaves the east road at the signpost by the waystation and climbs north-west to Greenhaven.',
+    'Greenhaven is a farming town of about eighty on the river Green: cottages round a village green with a maypole and a well, the Plough inn, a bakehouse, a dairy, a forge, Fleece & Loom, a butcher and a wheelwright.',
+    'The Great Mill turns its wheel in the river, and the Ashcombes keep Ashcombe Hall behind its garden wall across the Green Bridge. The Hall is a business like any other: buy it if you can afford it.',
+    'Hedged fields of wheat, barley and beans surround the town, with sheep and cattle in their pastures and an orchard by the lanes. Townsfolk work the fields, mind the flocks and lay the hedges.',
+    'Greenhaven has its own reeve and council, chosen from the townsfolk by standing, with a town chest and votes like Oakbridge\u2019s. Visit the moot hall to see them.',
+    'Hungry families now send someone out to find day work, and the mayor and reeve feed the children first.',
+    'The map, the People and Property pages, and the world map all know about Greenhaven.'
+  ] },
   { v: '0.20', date: '4 November', title: 'Men and women', items: [
     'Women now wear long dresses to the ground, with long hair, braids, buns or a white coif. Men wear belted tunics with hose and shoes, short or cropped hair, and many have beards.',
     'Everyone has their own hair and hair colour, and the old go grey.',

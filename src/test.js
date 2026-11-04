@@ -490,5 +490,28 @@ console.log('15. Oakbridge: a market city of its own');
   check(nb.v === Sim.VERSION && nh.length === O.houses.length && nh.every(h => h.x !== 0) && Sim.oakFolk(nb).every(p => p.home), 'a save from the smaller Oakbridge moves everyone into the larger town');
 }
 
+
+console.log('16. Greenhaven: the farming town up the north road');
+{
+  const s = Sim.newGame(101), G = Sim.GH;
+  const folk = Sim.townFolk(s, 'greenhaven'), gb = Object.values(s.biz).filter(b => b.town === 'greenhaven');
+  check(folk.length >= 70 && folk.length <= 90 && folk.every(p => p.home), 'Greenhaven has ' + folk.length + ' people, every one with a roof');
+  check(gb.length === 9 && s.biz.g_mill && s.biz.g_plough && s.biz.g_estate, gb.length + ' businesses: the Great Mill, the Plough, the Hall estate and more');
+  const T = s.towns.greenhaven, rv = s.people[T.mayor];
+  check(T.title === 'Reeve' && rv && rv.town === 'greenhaven' && rv.job && rv.job.role === 'owner', 'the reeve, ' + rv.name + ', holds a business in the town, chosen by standing');
+  check(Sim.ROADS.north[0][0] === 240 && Math.hypot(Sim.ROADS.north.at(-1)[0] - G.entry.x, Sim.ROADS.north.at(-1)[1] - G.entry.z) < 1, 'the north road runs from the waystation fork to Greenhaven');
+  s.player.x = G.green.x; s.player.z = G.green.z + 6; Sim.step(s, 1);
+  const bodies = s.agents.filter(a => a.kind === 'person');
+  check(bodies.length >= 70 && bodies.every(a => Sim.townOf(s.people[a.pid]) === 'greenhaven'), 'on the green, ' + bodies.length + ' Greenhaven folk are about, and only they');
+  let wet = 0; for (let k = 0; k < 1440; k++) { Sim.advance(s, 1); if (k % 10) continue; for (const a of s.agents) if (a.kind === 'person' && G.riverDist(a.x, a.z) < 3.5 && Math.hypot(a.x - G.bridge.x, a.z - G.bridge.z) > G.bridge.half + 1 && a.pid !== s.biz.g_mill.owner) wet++; }
+  check(wet === 0, 'nobody in Greenhaven wades the river: the Green Bridge carries them over');
+  Sim.advance(s, 1440 * 30);
+  check(Sim.townFolk(s, 'greenhaven').length >= 70 && Number.isFinite(T.chest) && T.log.length > 0, 'after a month Greenhaven has ' + Sim.townFolk(s, 'greenhaven').length + ' people and a chest of ' + Math.round(T.chest) + 'c');
+  const old = Sim.newGame(102); old.v = 8; delete old.towns.greenhaven; old.houses = old.houses.filter(h => h.town !== 'greenhaven');
+  Object.keys(old.biz).filter(k => old.biz[k].town === 'greenhaven').forEach(k => delete old.biz[k]);
+  Object.values(old.people).filter(p => p.town === 'greenhaven').forEach(p => delete old.people[p.id]);
+  const nb = Sim.deserialize(JSON.stringify(old));
+  check(nb.v === Sim.VERSION && nb.towns.greenhaven && Sim.townFolk(nb, 'greenhaven').length >= 70, 'a save from before the north road opened gains Greenhaven');
+}
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
