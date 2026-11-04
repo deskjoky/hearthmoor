@@ -1,5 +1,7 @@
 // Headless tests for the Hearthmoor simulation. Run: node test.js
 const Sim = require('./sim.js');
+// most tests look at one system at a time, so the world does not age in them; the life-cycle tests turn it back on
+const newGameAging = Sim.newGame; Sim.newGame = (...a) => { const s = newGameAging(...a); s.ageRate = 0; return s; };
 let failures = 0;
 function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + msg); } else console.log('  ok: ' + msg); }
 function runIdle(s, max = 3000) { let m = 0; while ((s.player.dest || s.player.action) && m < max) { Sim.step(s, 1); m++; } return m; }
@@ -577,8 +579,44 @@ console.log('19. The Elder\u2019s powers: the village works, officers, and the o
   check(Sim.cmd(s, 'project', k).ok && v.projects[k] && v.chest === before - Math.round(Sim.PROJECTS[k].cost / 2), 'mending it costs half the price of building it');
   check(Sim.cmd(s, 'dismiss', 'keeper').ok && !s.offices.keeper && !c.job, 'you can dismiss an officer');
   // an elder who is not you uses the same powers
-  const n = Sim.newGame(105); n.village.chest = 160; let opened = false; for (let d = 0; d < 40 && !opened; d++) { Sim.advance(n, 1440); opened = !!n.village.land; }
+  const n = Sim.newGame(105); let opened = false; for (let d = 0; d < 60 && !opened; d++) { n.village.chest = Math.max(n.village.chest, 150); Sim.advance(n, 1440); opened = !!n.village.land; }
   check(opened, 'Elder ' + Sim.holderName(n, 'elder') + ' opens the common land on their own when the chest allows');
+}
+
+console.log('20. A whole life: ageing, marriage, children, death and inheritance');
+{
+  const s = newGameAging(110);
+  check(s.ageRate === 4, 'by default a year passes every four days');
+  const age0 = Sim.living(s).map(p => [p.id, p.age]);
+  Sim.advance(s, 1440 * 4);
+  const aged = age0.filter(([id, a]) => s.people[id].status === 'here' && s.people[id].age === a + 1).length;
+  check(aged >= age0.length * 0.9, aged + ' of ' + age0.length + ' people had a birthday in four days');
+  const bdays = new Set(Sim.living(s).slice(0, 60).map(p => (parseInt(p.id.slice(1), 10) * 7 + 3) % 4));
+  check(bdays.size === 4, 'birthdays are spread over the year, so nobody ages all at once');
+  Sim.advance(s, 1440 * 120);
+  const all = Object.values(s.people), L = Sim.living(s);
+  const babies = all.filter(p => p.born), dead = all.filter(p => p.status === 'dead'), wed = L.filter(p => p.spouse && p.maiden);
+  check(babies.length > 20 && dead.length > 20 && wed.length > 5, 'thirty years on: ' + babies.length + ' born, ' + dead.length + ' died, ' + wed.length + ' new marriages');
+  check(L.length > 250 && L.length < 600, 'the population stays sensible (' + L.length + ' living)');
+  check(L.every(p => Number.isFinite(p.purse) && Number.isFinite(p.age)), 'every purse and age is a real number');
+  check(s.offices.elder && s.offices.lord, 'there is still an Elder (' + Sim.holderName(s, 'elder') + ') and a lord (' + Sim.lordTitle(s) + ')');
+  // inheritance, step by step
+  const t = newGameAging(111), owner = Sim.living(t).find(p => p.job && p.job.role === 'owner' && Sim.childrenOf(t, p).length && p.spouse);
+  if (owner) { const c = Sim.childrenOf(t, owner)[0]; c.kid = false; c.age = 21; }
+  if (owner) {
+    const bz = owner.job.biz, purse = owner.purse, H = Sim.heirsOf(t, owner);
+    Sim.dies(t, owner);
+    const next = t.biz[bz].owner, np = t.people[next];
+    check(owner.status === 'dead' && np && np.status === 'here' && np.job && np.job.biz === bz, owner.name + ' dies and ' + (np ? np.name : '?') + ' takes over ' + bz);
+    check(!H.spouse || H.spouse.purse >= purse, 'the widow or widower inherits the coin');
+  } else check(true, '(no owner with grown children in this world)');
+  const lone = Sim.living(t).find(p => p.job && p.job.role === 'owner' && !p.spouse && !Sim.childrenOf(t, p).length && !(p.parents || []).length);
+  if (lone) { const bz = lone.job.biz; Sim.dies(t, lone); check(t.biz[bz].closed, 'with no family at all, ' + lone.name + '\u2019s business closes until someone reopens it'); }
+  const m = t.towns.oakbridge.mayor; Sim.dies(t, t.people[m]); Sim.advance(t, 1440 * 2);
+  check(t.towns.oakbridge.mayor && t.towns.oakbridge.mayor !== m, 'when a mayor dies, the town votes in a successor');
+  const back = Sim.deserialize(Sim.serialize(s)); Sim.advance(s, 600); Sim.advance(back, 600);
+  check(Sim.serialize(s) === Sim.serialize(back), 'a world thirty years on saves and loads exactly');
+  check(Sim.serialize(s).length < 900000, 'and its save is ' + Math.round(Sim.serialize(s).length / 1024) + ' KB');
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

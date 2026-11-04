@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 9;
+  const VERSION = 10;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -330,7 +330,7 @@
   /* ---------- new game ---------- */
   function newGame(seed, name) {
     const s = {
-      v: VERSION, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
+      v: VERSION, ageRate: 4, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
       player: { x: P.home.x, z: P.home.z, face: 0, dest: null, action: null, inv: { grain: 0, wood: 0, ore: 0 } },
       shops: [], nextShop: 1, job: null, trades: { bakery: 0, smithy: 0, tavern: 0, joinery: 0 },
       agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null, village: freshVillage()
@@ -1380,8 +1380,116 @@
     }
   }
 
+  /* ---------- a whole life: everyone ages, marries, has children, grows old and dies, and what they leave passes on ----------
+     A year passes every few game days (s.ageRate: 0 means ageing is off). Birthdays are spread over the year, so a
+     generation never all grows old at once. */
+  const AGE_RATES = { off: 0, slow: 6, normal: 4, fast: 3 };
+  const bdayOf = (s, p) => { const n = parseInt(String(p.id).slice(1), 10) || 0; return (n * 7 + 3) % Math.max(1, s.ageRate || 1); };
+  const sameFamily = (a, b) => (a.parents || []).some(id => (b.parents || []).includes(id)) || (a.parents || []).includes(b.id) || (b.parents || []).includes(a.id);
+  const childrenOf = (s, p) => Object.values(s.people).filter(q => (q.parents || []).includes(p.id));
+  const surname = n => String(n).split(' ').slice(-1)[0];
+  function lifeDay(s) {
+    const rate = s.ageRate; if (!rate) return;
+    const today = s.day % rate;
+    for (const p of living(s)) {
+      if (isHousehold(p) && p.job && p.job.office !== 'lord') continue;   // the manor's servants come and go
+      if (bdayOf(s, p) !== today) continue;
+      p.age++;
+      if (p.kid && p.age >= 16) { p.kid = false; plog(s, p, 'Came of age at sixteen.'); }
+      if (!p.kid && !p.retired && p.age >= 64 + (parseInt(String(p.id).slice(1), 10) % 6) && !(p.job && (p.job.role === 'owner' || p.job.type === 'office' || p.job.type === 'manage'))) { if (p.job) loseJob(s, p, 'Retired after a long working life.'); p.retired = true; plog(s, p, 'Retired.'); }
+      // the old Elder hands over the chair
+      if (p.job && p.job.type === 'office' && p.job.office === 'elder' && p.age >= 72 && s.offices.elder === p.id) { loseJob(s, p, 'Stepped down as Elder in old age.'); p.retired = true; s.offices.elder = null; govLog(s, 'Elder ' + p.name + ' steps down at ' + p.age + '. The moot will choose a successor.', 'story'); }
+      const die = p.age >= 95 ? 1 : p.age >= 80 ? 0.25 : p.age >= 70 ? 0.1 : p.age >= 60 ? 0.03 : p.age >= 2 ? 0.003 : 0.02;
+      if (rand(s) < die) { dies(s, p); continue; }
+      // grown children with work and savings set up on their own
+      if (!p.kid && !p.spouse && p.age >= 19 && p.job && p.purse >= 15 && (p.parents || []).length && p.home && parentsOf(s, p).some(q => q.home === p.home)) {
+        const h = vacancy(s, Math.max(1, income(s, p) - FOOD), townOf(p)); if (h) { moveOut(s, p, 'Left the family home.'); moveIn(s, p, h); }
+      }
+      // courtship and marriage
+      if (!p.kid && !p.spouse && p.age >= 18 && p.age <= 45 && rand(s) < 0.3) {
+        const sx = sexOf(p), mate = living(s).find(q => q !== p && !q.kid && !q.spouse && townOf(q) === townOf(p) && sexOf(q) !== sx && Math.abs(q.age - p.age) <= 8 && q.age >= 18 && !sameFamily(p, q) && !isHousehold(q));
+        if (mate) marry(s, p, mate);
+      }
+      // children, spread out over the years
+      if (p.spouse && sexOf(p) === 'f' && p.age >= 18 && p.age <= 42) {
+        const kids = childrenOf(s, p).filter(c => c.status === 'here' && c.kid).length;
+        const hh = p.home && houseById(s, p.home), full = hh && hh.tenants.length >= (hh.cap || 4);
+        if (rand(s) < (full ? 0.02 : Math.max(0.03, 0.17 - kids * 0.04))) born(s, p, s.people[p.spouse]);
+      }
+    }
+  }
+  function marry(s, a, b) {
+    const man = sexOf(a) === 'm' ? a : b, wife = man === a ? b : a;
+    a.spouse = b.id; b.spouse = a.id;
+    if (!wife.maiden) wife.maiden = wife.name;
+    const nn = wife.name.split(' ')[0] + ' ' + surname(man.name); if (!Object.values(s.people).some(q => q.name === nn && q !== wife)) wife.name = nn;
+    // they set up house together: in his home, hers, or somewhere new
+    const hm = man.home && houseById(s, man.home), hw = wife.home && houseById(s, wife.home);
+    const room = h => h && h.tenants.length < (h.cap || 4);
+    if (room(hm) && !String(man.home).startsWith('biz:')) { if (wife.home && !String(wife.home).startsWith('biz:')) moveOut(s, wife, 'Moved in with ' + man.name + '.'); moveIn(s, wife, hm); wife.hh = man.id; }
+    else if (room(hw)) { moveOut(s, man, 'Moved in with ' + wife.name + '.'); moveIn(s, man, hw); man.hh = wife.id; }
+    else if (String(man.home).startsWith('biz:')) { moveOut(s, wife, 'Moved in above the shop.'); wife.home = man.home; }
+    plog(s, man, 'Married ' + wife.name + '.'); plog(s, wife, 'Married ' + man.name + '.');
+    if (townOf(a) === 'hearthmoor') event(s, man.name + ' and ' + wife.name + ' are married.', 'info');
+  }
+  const BABY_F = ['Alys', 'Avice', 'Edith', 'Joan', 'Mabyn', 'Nell', 'Petra', 'Sibyl', 'Una', 'Isabel', 'Muriel', 'Cecily', 'Tilly', 'Maud'], BABY_M = ['Hugh', 'Walter', 'Ralph', 'Odo', 'Simon', 'Martin', 'Ivo', 'Godwin', 'Kit', 'Wat', 'Roger', 'Gilbert', 'Jory', 'Osbert'];
+  function born(s, mother, father) {
+    const fem = rand(s) < 0.5, L = fem ? BABY_F : BABY_M, fam = surname((father || mother).name);
+    let name = L[Math.floor(rand(s) * L.length)] + ' ' + fam; for (let k = 0; k < 6 && Object.values(s.people).some(q => q.name === name); k++) name = L[Math.floor(rand(s) * L.length)] + ' ' + fam;
+    const c = newPerson(s, { name, age: 0, purse: 0, rep: 0, palette: Math.floor(rand(s) * 10), town: mother.town, sex: fem ? 'f' : 'm', born: s.day });
+    c.kid = true; c.parents = [mother.id].concat(father ? [father.id] : []); c.hh = (father && father.home === mother.home ? father : mother).id;
+    c.log = [{ day: s.day, text: 'Born to ' + mother.name + (father ? ' and ' + father.name : '') + '.' }];
+    if (mother.home && houseById(s, mother.home)) moveIn(s, c, houseById(s, mother.home)); else c.home = mother.home;
+    plog(s, mother, 'Gave birth to ' + c.name + '.'); if (father) plog(s, father, 'Became a father to ' + c.name + '.');
+    if (bodyOf(s, mother)) addBody(s, c);
+    if (townOf(mother) === 'hearthmoor') event(s, mother.name + (father ? ' and ' + father.name : '') + ' have a ' + (fem ? 'daughter' : 'son') + ', ' + c.name.split(' ')[0] + '.', 'info');
+    return c;
+  }
+  // who inherits: a spouse first, then the children (adults before minors, eldest first), then brothers and sisters
+  function heirsOf(s, p) {
+    const sp = p.spouse && s.people[p.spouse] && s.people[p.spouse].status === 'here' ? s.people[p.spouse] : null;
+    const kids = childrenOf(s, p).filter(c => c.status === 'here').sort((a, b) => b.age - a.age);
+    const sibs = living(s).filter(q => q !== p && (p.parents || []).length && (q.parents || []).some(id => (p.parents || []).includes(id)) && !q.kid);
+    return { spouse: sp, kids, sibs, first: sp || kids.find(c => !c.kid) || sibs[0] || kids[0] || null };
+  }
+  function dies(s, p) {
+    p.status = 'dead'; p.died = s.day; plog(s, p, 'Died, aged ' + p.age + '.'); p.log = p.log.slice(0, 8);
+    const b = bodyOf(s, p); if (b) s.agents = s.agents.filter(x => x !== b);
+    const H = heirsOf(s, p), heir = H.first, town = TOWNS[townOf(p)] ? TOWNS[townOf(p)].name : 'Hearthmoor';
+    const said = [];
+    // coin: all to the spouse, or shared among the children, or to the next of kin
+    if (p.purse > 0) {
+      if (H.spouse) H.spouse.purse += p.purse; else if (H.kids.length) H.kids.forEach(c => { c.purse += Math.floor(p.purse / H.kids.length); }); else if (heir) heir.purse += p.purse;
+    }
+    p.purse = 0;
+    // houses they owned
+    for (const h of s.houses) if (h.owner === p.id) { h.owner = heir ? heir.id : (h.town ? 'town:' + h.town : 'office:lord'); said.push(h.name); }
+    // their business: the heir takes it on if grown, or it shuts until someone reopens it
+    if (p.job && p.job.type === 'biz' && p.job.role === 'owner') {
+      const bz = s.biz[p.job.biz], adult = heir && !heir.kid ? heir : (H.kids.find(c => !c.kid) || null);
+      if (bz && adult) { if (adult.job) loseJob(s, adult, 'Left their work to take over ' + empById(bz.id).name + '.'); bz.owner = adult.id; bz.staff = bz.staff.filter(x => x.pid !== adult.id); adult.job = { type: 'biz', biz: bz.id, role: 'owner' }; plog(s, adult, 'Inherited ' + empById(bz.id).name + '.'); said.push(empById(bz.id).name); }
+      else if (bz) { bz.closed = true; bz.staff.forEach(x => { const w = s.people[x.pid]; if (w) { w.job = null; plog(s, w, empById(bz.id).name + ' closed when ' + p.name + ' died.'); } }); bz.staff = []; }
+      p.job = null;
+    }
+    // offices fall vacant and are filled their own way; a lordship passes to a grown child, with the crown's recognition
+    if (p.job && p.job.type === 'office') {
+      const off = p.job.office; p.job = null;
+      if (off === 'lord') { const ch = H.kids.find(c => !c.kid); if (ch) { s.offices.lord = null; appoint(s, 'lord', ch.id); ch.home = 'manor'; govLog(s, ch.name + ' succeeds as lord of Hearthmoor, recognised by ' + REALM.king + '.', 'story'); } else { s.offices.lord = p.id; replaceLord(s, 'he has died without an heir'); } }
+      else if (s.offices[off] === p.id) { s.offices[off] = null; if (off === 'elder') govLog(s, 'Elder ' + p.name + ' has died. The moot will choose a successor.', 'story'); }
+    } else if (p.job) loseJob(s, p, 'Died.');
+    for (const id in (s.towns || {})) { const T = s.towns[id]; if (T.mayor === p.id) { T.mayor = null; T.nextVote = s.day + 1; townLog(s, Object.assign(T, { id }), (T.title || 'Mayor') + ' ' + p.name + ' has died. The town will vote for a successor tomorrow.'); } T.council = T.council.filter(x => x !== p.id); }
+    if (s.gov) s.gov.council = s.gov.council.filter(x => x !== p.id);
+    for (const sh of s.shops) if (sh.worker && sh.worker.pid === p.id) { sh.worker = null; event(s, p.name + ', who worked at your ' + TRADES[sh.trade].name.toLowerCase() + ', has died.', 'bad'); }
+    if (p.home && houseById(s, p.home)) { const h = houseById(s, p.home); h.tenants = h.tenants.filter(x => x !== p.id); }
+    if (H.spouse) { H.spouse.spouse = null; H.spouse.widowed = p.id; H.spouse.mood = clamp(H.spouse.mood - 30, 0, 100); plog(s, H.spouse, 'Widowed: ' + p.name + ' has died.'); }
+    if (p.hh) { /* their household carries on under whoever is left */ }
+    living(s).filter(q => q.hh === p.id).forEach(q => { q.hh = H.spouse ? H.spouse.id : null; });
+    event(s, p.name + ' of ' + town + ' has died, aged ' + p.age + '.' + (heir ? ' ' + heir.name + ' inherits' + (said.length ? ' ' + said.join(' and ') : '') + '.' : ''), townOf(p) === 'hearthmoor' ? 'story' : 'info');
+  }
+
   /* each morning: the jobless look for work, the homeless for a roof, and some give up */
   function peopleMorning(s) {
+    lifeDay(s);
     for (const k of living(s).filter(q => q.kid)) {
       const pars = parentsOf(s, k), par = pars.find(q => q.home) || pars[0];
       if (!pars.length) { if ((k.parents || []).length && !(k.parents || []).some(id => s.people[id] && s.people[id].status === 'here')) { k.status = 'left'; plog(s, k, 'Left Hearthmoor with family.'); const b = bodyOf(s, k); if (b) b.gone = true; } continue; }
@@ -2641,6 +2749,7 @@
         addStanding(s, o.standing, 'the council rules: ' + o.label.toLowerCase() + '.');
         return ok();
       }
+      case 'ageRate': if (AGE_RATES[a] == null) return fail('Unknown pace.'); s.ageRate = AGE_RATES[a]; return ok();
       case 'works': {
         if (!s.gov || s.offices.elder !== 'player') return fail('Only the Elder sets the village works.');
         s.gov.works = clamp(Math.round(a), 0, 15); return ok();
@@ -3075,6 +3184,7 @@
     if (s.v === 6) { s.v = 7; setupOakbridge(s); event(s, 'The gates of Oakbridge are open. The road east leads to a city of 240 people.', 'story'); }
     if (s.v === 7) { s.v = 8; rebuildOakbridge(s); }
     if (s.v === 8) { s.v = 9; setupGreenhaven(s); event(s, 'The north road is open. It leaves the east road at the waystation and climbs to Greenhaven, a farming town of eighty people with a great mill.', 'story'); }
+    if (s.v === 9) { s.v = 10; s.ageRate = 4; event(s, 'Time now passes for everyone: people age a year every four days, marry, have children, grow old and die. Change the pace in Settings.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
@@ -3086,7 +3196,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;

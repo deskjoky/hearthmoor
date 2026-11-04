@@ -1759,9 +1759,10 @@ function syncChars(s, t) {
     let g = agentMeshes.get(a.id);
     const look = lookOf(s, a);
     if (g && g.userData.look !== look.key) { dropChar(g); agentMeshes.delete(a.id); g = null; }
-    if (!g) { g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[(a.pid ? +a.pid.slice(1) : a.id) % SKIN.length], pick: a.id }, look)); g.userData.look = look.key; if (a.kid) g.scale.setScalar(0.74); agentMeshes.set(a.id, g); }
+    if (!g) { g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[(a.pid ? +a.pid.slice(1) : a.id) % SKIN.length], pick: a.id }, look)); g.userData.look = look.key;  agentMeshes.set(a.id, g); }
     const pp = a.pid && s.people[a.pid];
     const icon = a.icon || (pp && !pp.home && Sim.hourOf(s) >= 20 ? 'angry' : null) || (pp && pp.job && pp.job.office === 'elder' && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null)) ? 'wait' : null);
+    if (a.kid && pp) { const k = 0.42 + Math.min(16, pp.age) / 16 * 0.55; if (Math.abs(g.scale.x - k) > 0.01) g.scale.setScalar(k); } else if (!a.kid && g.scale.x < 1) g.scale.setScalar(pp && Sim.sexOf(pp) === 'f' ? 1.02 : 1.1);
     placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors, selected: UI.sel === a.id });
   }
   for (const [id, g] of agentMeshes) if (!seen.has(id)) { dropChar(g); agentMeshes.delete(id); if (UI.sel === id) UI.sel = null; }
@@ -2548,9 +2549,19 @@ function pageJobs(s) {
   return html;
 }
 function personRow(s, pr) {
-  const st = pr.status === 'left' ? 'left' : !pr.home ? 'homeless' : !pr.job ? (pr.retired ? 'retired' : 'jobless') : 'ok';
-  const pill = { left: '<span class="pill">gone</span>', homeless: '<span class="pill bad">homeless</span>', jobless: '<span class="pill warn">out of work</span>', retired: '<span class="pill">retired</span>', ok: '' }[st];
+  const st = pr.status === 'dead' ? 'dead' : pr.status === 'left' ? 'left' : !pr.home ? 'homeless' : !pr.job ? (pr.retired ? 'retired' : 'jobless') : 'ok';
+  const pill = { dead: '<span class="pill">died</span>', left: '<span class="pill">gone</span>', homeless: '<span class="pill bad">homeless</span>', jobless: '<span class="pill warn">out of work</span>', retired: '<span class="pill">retired</span>', ok: '' }[st];
   return `<button type="button" class="prow ${UI.person === pr.id ? 'open' : ''}" data-c='${esc(JSON.stringify(['ui', 'person', UI.person === pr.id ? null : pr.id]))}'><b>${esc(pr.name)}</b> ${pill}<span>${esc(Sim.occupation(s, pr))}</span><em class="num ${pr.purse < 0 ? 'neg' : ''}">${pr.purse}c</em></button>${UI.person === pr.id ? personDetail(s, pr) : ''}`;
+}
+function familyLine(s, pr) {
+  const nm = id => s.people[id] ? esc(s.people[id].name) + (s.people[id].status === 'dead' ? ' (died)' : '') : '';
+  const kids = Sim.childrenOf(s, pr), par = (pr.parents || []).map(nm).filter(Boolean), out = [];
+  if (pr.spouse) out.push('Married to ' + nm(pr.spouse)); else if (pr.widowed) out.push('Widowed: ' + nm(pr.widowed));
+  if (pr.maiden) out.push('born ' + esc(pr.maiden));
+  if (par.length) out.push('child of ' + par.join(' and '));
+  if (kids.length) out.push(kids.length + (kids.length === 1 ? ' child: ' : ' children: ') + kids.map(c => nm(c.id)).join(', '));
+  if (pr.status === 'dead') out.push('died on day ' + pr.died + ', aged ' + pr.age);
+  return out.length ? `<p class="family">${out.join(' · ')}.</p>` : '';
 }
 function personDetail(s, pr) {
   const mine = [];
@@ -2561,6 +2572,7 @@ function personDetail(s, pr) {
   if (h && h.owner === 'player') mine.push(`Rents ${esc(h.name)} from you at ${h.rent}c a day.`);
   return `<div class="pdetail"><dl class="kv"><dt>Age</dt><dd>${pr.age}</dd><dt>Work</dt><dd>${esc(Sim.occupation(s, pr))}</dd><dt>Earns</dt><dd>about ${Sim.income(s, pr)}c a day</dd><dt>Home</dt><dd>${esc(Sim.homeText(s, pr))}</dd><dt>Respect</dt><dd>${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ', on the council' : ''}</dd><dt>Purse</dt><dd>${pr.purse}c</dd><dt>Mood</dt><dd>${Math.round(pr.mood)}/100</dd><dt>Of you</dt><dd>${opinionText(pr.opinion)} (${pr.opinion})</dd></dl>
     ${mine.length ? `<p><b>${mine.join(' ')}</b></p>` : ''}
+    ${familyLine(s, pr)}
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
 const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven' };
@@ -2578,7 +2590,8 @@ function pagePeople(s) {
     ['Work for you', here.filter(p => p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) && p.home)],
     [town !== 'hearthmoor' ? 'The town' : 'The village', here.filter(p => p.home && (p.job || p.retired || p.kid) && !(p.job && (p.job.type === 'shop' || (p.job.type === 'biz' && s.biz[p.job.biz].owner === 'player')) || p.job && p.job.type === 'office'))],
     ['The lord’s household and the elder', here.filter(p => p.job && p.job.type === 'office' && p.home)],
-    ['Gone from ' + TN, all.filter(p => p.status !== 'here')]
+    ['Gone from ' + TN, all.filter(p => p.status === 'left' || p.status === 'gone')],
+    ['Remembered: the most recent deaths', all.filter(p => p.status === 'dead').sort((a, b) => (b.died || 0) - (a.died || 0)).slice(0, 30)]
   ];
   return `<h3>The People of ${TN}</h3>${pick}<p class="lead">Everyone has a purse, a job or not, and a roof or not. Tap a name for their story.</p>
     <div class="box"><dl class="kv"><dt>Living here</dt><dd>${here.length}</dd><dt>Working</dt><dd>${working}</dd><dt>Children</dt><dd>${kids}</dd><dt>Out of work</dt><dd>${idle}</dd><dt>Homeless</dt><dd>${rough}</dd><dt>Have left</dt><dd>${gone}</dd><dt>Lord of Hearthmoor</dt><dd>${esc(Sim.holderName(s, 'lord'))}</dd><dt>Village Elder</dt><dd>${esc(Sim.holderName(s, 'elder'))}</dd></dl></div>
@@ -3047,8 +3060,9 @@ function saveHTML() {
 }
 function seg(id, value, opts) { return `<div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${value === v}" data-c='${esc(JSON.stringify(['ui', 'set', [id, v]]))}'>${n}</button>`).join('')}</div>`; }
 function settingsHTML() {
-  const st = meta.settings;
+  const st = meta.settings, ar = G ? ({ 0: 'off', 6: 'slow', 4: 'normal', 3: 'fast' }[G.ageRate] || 'normal') : 'normal';
   return `<h3>Settings</h3>
+  ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast'], ['off', 'Off']])}<p>How fast everyone grows older: a year every 6, 4 or 3 days. At normal pace a life lasts many hours of play; children grow up while you build. Off stops time for everyone.</p></div>` : ''}
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 12 minutes, normal about 18, relaxed about 24. Wages, hunger, rent and work all follow the same clock.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
   <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>
@@ -3496,6 +3510,14 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.25', date: '4 November', title: 'A whole life', items: [
+    'Time now passes for everyone. People age a year every four days of play, with birthdays spread through the year so a generation never grows old all at once.',
+    'Young people court and marry (a wife takes her husband\u2019s name), set up house together, and have children spread over the years. Children grow, come of age at sixteen, find work and leave home.',
+    'The old retire, and in time they die. What they leave passes on: coin to a husband or wife, or shared among the children; houses and businesses to the next of kin. A business with nobody to take it on closes until someone reopens it.',
+    'Offices fall vacant and are filled their own way: the moot chooses a new Elder, a town votes in a new mayor or reeve, and a lordship passes to a grown child with the crown\u2019s recognition.',
+    'Each person\u2019s page shows their husband or wife, parents and children. The People page remembers those who have died.',
+    'Choose the pace of ageing in Settings: slow, normal, fast, or off. Your own character\u2019s life comes in the next update.'
+  ] },
   { v: '0.24', date: '4 November', title: 'The Elder\u2019s powers', items: [
     'As Elder you now decide what becomes of the open land south of the village: three new cottages for incoming families, or a common pasture that pays field hands more and brings grazing fees.',
     'Set the budget for the village works. Spend too little and the well, the lanterns or the paving fall into disrepair and people grumble; spend more and they think well of you. Mending costs half the price of building.',
