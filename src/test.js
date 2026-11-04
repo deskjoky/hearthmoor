@@ -432,7 +432,7 @@ console.log('14. The rebuilt village, and saves from before it');
   while (o.houses.length < 15) o.houses.push({ id: 'h' + o.houses.length, name: 'Old Hut ' + o.houses.length, x: 0, z: 0, owner: 'office:lord', rent: 2, cap: 1, tenants: [] });
   o.houses[14].owner = 'player'; o.coins = 100; o.player.x = 999;
   const back = Sim.deserialize(JSON.stringify(o));
-  check(back.v === Sim.VERSION && back.biz.mill && back.houses.length === Sim.HOUSES.length, 'an old save moves into the new village and gains the mill');
+  check(back.v === Sim.VERSION && back.biz.mill && back.houses.filter(h => h.town !== 'oakbridge').length === Sim.HOUSES.length, 'an old save moves into the new village and gains the mill');
   check(back.coins > 100, 'a house that no longer exists is paid for (' + (back.coins - 100) + 'c)');
   check(Math.abs(back.player.x - Sim.P.home.x) < 1, 'you wake at your hut in the new village');
   Sim.advance(back, 1440 * 3);
@@ -466,6 +466,28 @@ console.log('15. Oakbridge: a market city of its own');
   check(Number.isFinite(T.chest) && T.log.length > 0, 'the mayor keeps the town chest (' + T.chest + 'c) and makes decisions');
   const back = Sim.deserialize(Sim.serialize(s)); Sim.advance(s, 600); Sim.advance(back, 600);
   check(Sim.serialize(s) === Sim.serialize(back), 'Oakbridge saves and restores exactly');
+  // the layout: nothing stands in a street, nothing overlaps, everything is inside the walls
+  const O = Sim.OAK, segD = (x, z, pts) => { let b = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); b = Math.min(b, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return b; };
+  const blds = O.biz.map(b => ({ x: b.x, z: b.z, r: 4.9, n: b.name })).concat(O.houses.map((h, i) => ({ x: h.x, z: h.z, r: 4.3, n: 'house ' + i })));
+  const onStreet = blds.filter(b => O.streets.some(st => segD(b.x, b.z, st.pts) < st.w / 2 + 2.8));
+  check(!onStreet.length, 'no building stands in a street' + (onStreet.length ? ': ' + onStreet.map(b => b.n).join(', ') : ''));
+  let clash = 0; for (let i = 0; i < blds.length; i++) for (let j = i + 1; j < blds.length; j++) if (Math.hypot(blds[i].x - blds[j].x, blds[i].z - blds[j].z) < 8.2) clash++;
+  check(!clash && blds.every(b => O.inside(b.x, b.z)) && O.square.r >= 20, blds.length + ' buildings, none crowding another, a market square ' + O.square.r * 2 + ' m across, all within the walls');
+  const rad = O.wall.map(([x, z]) => Math.hypot(x - O.C.x, z - O.C.z));
+  check(Math.max(...rad) - Math.min(...rad) > 15, 'the walls follow the land (' + Math.round(Math.min(...rad)) + ' to ' + Math.round(Math.max(...rad)) + ' m from the centre), not a circle');
+  // crossing the river: townsfolk use the bridge, not the water
+  const c = Sim.newGame(95); c.player.x = O.square.x; c.player.z = O.square.z + 8; Sim.step(c, 1);
+  let wet = 0; for (let k = 0; k < 24 * 60; k++) { Sim.advance(c, 1); if (k % 10) continue; for (const a of c.agents) if (a.kind === 'person' && O.riverDist(a.x, a.z) < 5 && Math.hypot(a.x - O.bridge.x, a.z - O.bridge.z) > O.bridge.half + 1) wet++; }
+  check(wet === 0, 'over a whole day, nobody wades the river: they cross by the bridge');
+  // a crowd never piles into one place
+  const A = c.agents.filter(a => a.kind === 'person'); Sim.advance(c, ((18.5 - Sim.hourOf(c) + 24) % 24) * 60);
+  let most = 0; for (const a of A) { let n = 0; for (const b of A) if (Math.hypot(a.x - b.x, a.z - b.z) < 3) n++; most = Math.max(most, n); }
+  check(most <= 14, 'at half past six in the evening, no more than ' + most + ' people stand within 3 m of anyone');
+  // a save from the first, smaller Oakbridge moves into the new one, families and all
+  const old = Sim.newGame(96); old.v = 7; const oh = old.houses.filter(h => h.town === 'oakbridge'); oh.forEach(h => { h.x = 0; h.z = 0; });
+  old.houses = old.houses.filter(h => h.town !== 'oakbridge' || +h.id.slice(1) < 63);
+  const nb = Sim.deserialize(JSON.stringify(old)), nh = nb.houses.filter(h => h.town === 'oakbridge');
+  check(nb.v === Sim.VERSION && nh.length === O.houses.length && nh.every(h => h.x !== 0) && Sim.oakFolk(nb).every(p => p.home), 'a save from the smaller Oakbridge moves everyone into the larger town');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
