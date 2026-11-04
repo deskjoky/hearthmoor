@@ -96,6 +96,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   padding-left: calc(max(16px, env(safe-area-inset-left, 0px)) + 160px); padding-right: calc(max(16px, env(safe-area-inset-right, 0px)) + 160px); pointer-events: none; }
 .card { pointer-events: auto; max-width: 440px; margin: 0 auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.4); padding: 10px 12px 12px; max-height: 46vh; overflow-y: auto; }
+.card.tab { max-width: 300px; padding: 0; background: rgba(32,26,20,.78); border-color: rgba(232,214,174,.5); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+.cardtab { display: flex; align-items: baseline; justify-content: center; gap: 8px; width: 100%; border: 0; background: none; color: #f1e3c2; font: 400 16px var(--f-display); padding: 7px 14px; cursor: pointer; }
+.cardtab small { font: 400 11px var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: rgba(241,227,194,.7); }
+.cardfold { float: right; border: 1px solid var(--line); background: rgba(255,255,255,.35); border-radius: 6px; width: 30px; height: 26px; margin: 0 0 4px 8px; font-size: 14px; color: var(--ink-soft); cursor: pointer; }
 .card h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 19px; line-height: 1.1; text-wrap: balance; }
 .card .sub { color: var(--ink-soft); font-size: 13px; margin-top: 2px; line-height: 1.3; }
 .card .why { font-size: 13px; margin-top: 5px; padding: 5px 7px; line-height: 1.3; background: rgba(255,255,255,.35); border-radius: 4px; }
@@ -2282,7 +2286,7 @@ function act(c) {
   if (c[0] === 'page') { openBook(c[1]); return; }
   if (c[0] === 'goto') { travel(c[1]); return; }
   if (c[0] === 'work' && G.job && !Sim.playerAtWork(G) && Sim.dist(G.player, L['emp:' + G.job.emp]) > L['emp:' + G.job.emp].r) { travel('emp:' + G.job.emp); }
-  if (c[0] === 'goto') UI.loc = c[1];
+  if (c[0] === 'goto') { UI.loc = c[1]; UI.openLoc = c[1]; }
   else if (c[0] === 'walk') UI.loc = null;
   else if (c[0] === 'gather') UI.loc = Sim.GATHER[c[1]].loc;
   else if (c[0] === 'work' && G.job) UI.loc = 'emp:' + G.job.emp;
@@ -2540,7 +2544,15 @@ function relationActs(s, pr, body) {
 }
 function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
-  const html = cardHTML(G);
+  let html = cardHTML(G);
+  // a place you merely walk past shows only its name; tap the tab to open it
+  const p = G.player, here = UI.sel == null ? ((p.dest && UI.loc) || where(G) || UI.loc) : null, Lh = here && L[here];
+  if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
+  const mineHere = Lh && ((Lh.emp && G.job && G.job.emp === Lh.emp) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
+  const tab = html && here && Lh && UI.openLoc !== here && !mineHere && meta.settings.cards !== 'open';
+  if (tab) { const m = html.match(/<h2>([\s\S]*?)<\/h2>/); html = `<button type="button" class="cardtab" data-c='["ui","openCard"]'>${m ? m[1] : 'This place'}<small>tap to open</small></button>`; }
+  else if (html && here && Lh && !mineHere) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
+  $('card').classList.toggle('tab', !!tab);
   const i = html.search(/<div class="(acts|places)">/);
   const info = i < 0 ? html : html.slice(0, i), rest = i < 0 ? '' : html.slice(i);
   if (force || info !== UI.ci) { $('cardInfo').innerHTML = info; UI.ci = info; }
@@ -3056,7 +3068,7 @@ function travel(key) {
   const dist = Math.hypot(d.x - ox, d.z - oz), mins = Math.round(dist / (p.riding ? Sim.RIDE_MPM : Sim.WALK_MPM));
   p.x = d.x; p.z = d.z; G.rec.walked += dist;
   if (mins > 0) Sim.advance(G, mins);
-  UI.loc = key; UI.sel = null;
+  UI.loc = key; UI.openLoc = key; UI.sel = null;
   focus.set(p.x, 0, p.z);
   if (UI.overlay) closeOverlay();
   if (mins > 1) toast('You walk to ' + Lk.name + ' (' + mins + ' min).', 'info', true);
@@ -3388,6 +3400,7 @@ function settingsHTML() {
   ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast'], ['off', 'Off']])}<p>How fast everyone grows older: a year every 6, 4 or 3 days. At normal pace a life lasts many hours of play; children grow up while you build. Off stops time for everyone.</p></div>` : ''}
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 12 minutes, normal about 18, relaxed about 24. Wages, hunger, rent and work all follow the same clock.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
+  <div class="setting"><span>Place cards</span>${seg('cards', st.cards || 'tab', [['tab', 'Name only until tapped'], ['open', 'Open as you arrive']])}<p>Walking past a place shows just its name at the bottom; tap it for the full card.</p></div>
   <div class="setting"><span>Minimap</span>${seg('minimap', st.minimap || 'on', [['on', 'Shown'], ['off', 'Hidden']])}<p>A small map in the top corner, north at the top. Tap it to open the full map.</p></div>
   <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>
   <h4>Sound</h4>
@@ -3496,6 +3509,8 @@ function uiCmd(k, v) {
   if (k === 'pause') { openPause(); return; }
   if (k === 'map') { openMap(); return; }
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
+  if (k === 'openCard') { UI.openLoc = UI.lastHere; renderCard(true); return; }
+  if (k === 'foldCard') { UI.openLoc = null; renderCard(true); return; }
   if (k === 'mapMode') { setMapMode(v); return; }
   if (k === 'mapTown') { setMapTown(v); setMapMode('village'); return; }
   if (k === 'journeyTo') { const r = Sim.cmd(G, 'journey', v[0]); if (!r.ok) { toast(r.msg, 'warn'); return; } if (r.mins > 0) Sim.advance(G, r.mins); toast((r.how === 'ride' ? 'You ride to ' : 'You walk to ') + TOWN_NAMES[v[0]] + ' (' + r.mins + ' min).', 'info', true); drainEvents(); travel(v[1]); return; }
@@ -3949,6 +3964,11 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.30', date: '4 November', title: 'Quieter place cards', items: [
+    'Walking past a place no longer opens its big card. A small tab with its name shows at the bottom instead: tap it to open the card, and tap \u25be to fold it away again.',
+    'Places you chose to go to, your own job while on shift, and your own shops and businesses still open fully, since you need their buttons.',
+    'If you liked the old way, Settings has "Place cards: open as you arrive".'
+  ] },
   { v: '0.29', date: '4 November', title: 'A minimap', items: [
     'A small round map now sits in the top-right corner: the streets, buildings, walls and water around you, with north at the top. The arrow is you, pointing the way the camera looks.',
     'Your hut, your houses and your businesses are marked in gold. Below it is the name of the town you are in, or "On the road".',
