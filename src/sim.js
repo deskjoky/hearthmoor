@@ -161,7 +161,7 @@
 
   const BUY = { grain: 2, wood: 2, ore: 3 };
   const SELL = { grain: 1, wood: 1, ore: 1 };
-  const GATHER = { grain: { min: 30, n: 2, loc: 'field' }, wood: { min: 40, n: 2, loc: 'forest' }, ore: { min: 50, n: 2, loc: 'pit' } };
+  const GATHER = { grain: { min: 20, n: 2, loc: 'field' }, wood: { min: 26, n: 2, loc: 'forest' }, ore: { min: 32, n: 2, loc: 'pit' } };
 
   const CHAPTERS = [
     { n: 1, name: 'The Hired Hand', lead: 'From nothing to a business of your own.' },
@@ -197,7 +197,10 @@
     return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
   }
   function hm(min) { const m = Math.round(min); return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm'; }
+  // people walk at about 1.4 m a second on the 18-minute day; WALKX converts the old speeds
+  const WALKX = 1.8;
   function moveTo(a, tx, tz, step, s) {
+    step *= WALKX;
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
     if (d <= step || d < 0.05) { if (s) s.rec.walked += d; a.x = tx; a.z = tz; a.moving = false; return true; }
     a.x += dx / d * step; a.z += dz / d * step; a.face = Math.atan2(dx, dz); a.moving = true;
@@ -209,7 +212,14 @@
     if (s.events.length > 40) s.events.splice(0, s.events.length - 40);
   }
   const carried = s => GOODS.reduce((a, g) => a + s.player.inv[g], 0);
-  const agentById = (s, id) => s.agents.find(a => a.id === id);
+  // lookups stay fast as towns grow: an index per array, rebuilt only when the array changes
+  const IDX = new WeakMap();
+  function indexOf(arr, key) {
+    let e = IDX.get(arr);
+    if (!e || e.n !== arr.length || e.first !== arr[0] || e.last !== arr[arr.length - 1]) { const m = new Map(); for (const x of arr) m.set(x[key], x); e = { n: arr.length, first: arr[0], last: arr[arr.length - 1], m }; IDX.set(arr, e); }
+    return e.m;
+  }
+  const agentById = (s, id) => { const a = indexOf(s.agents, 'id').get(id); return a && a.id === id ? a : s.agents.find(x => x.id === id); };
   const shopById = (s, id) => s.shops.find(x => x.id === id);
   const shopOnPlot = (s, i) => s.shops.find(x => x.plot === i);
   const tierOf = shop => TRADES[shop.trade].tiers[shop.tier];
@@ -695,7 +705,7 @@
     const p = s.player;
     p.working = false;
     if (p.dest) {
-      if (moveTo(p, p.dest.x, p.dest.z, 1.5 * dt, s)) { const then = p.dest.then; p.dest = null; if (then) beginAction(s, then); }
+      if (moveTo(p, p.dest.x, p.dest.z, 4.3 * dt, s)) { const then = p.dest.then; p.dest = null; if (then) beginAction(s, then); }
       return;
     }
     p.moving = false;
@@ -980,7 +990,7 @@
   const person = (s, id) => s.people[id];
   const living = s => Object.values(s.people).filter(p => p.status === 'here');
   function plog(s, p, text) { p.log.unshift({ day: s.day, text }); if (p.log.length > 14) p.log.length = 14; }
-  function houseById(s, id) { return s.houses.find(h => h.id === id); }
+  function houseById(s, id) { const h = indexOf(s.houses, 'id').get(id); return h && h.id === id ? h : s.houses.find(x => x.id === id); }
   function landlordName(s, owner) {
     if (owner === 'player') return s.name;
     if (owner === 'office:lord') return 'the lord of the manor';
@@ -999,7 +1009,7 @@
     const pt = at || homePoint(s, p) || P.square;
     s.agents.push({ id: s.nextId++, kind: 'person', pid: p.id, name: p.name, x: pt.x, z: pt.z, face: 0, mode: 'routine', doing: '', icon: null, iconUntil: 0, palette: p.palette, job: p.job && p.job.type === 'commons' ? p.job.what : null });
   }
-  function bodyOf(s, p) { return s.agents.find(a => a.pid === p.id); }
+  function bodyOf(s, p) { const a = indexOf(s.agents, 'pid').get(p.id); return a && a.pid === p.id ? a : null; }
   function homePoint(s, p) {
     if (!p.home) return null;
     if (p.home === 'manor') return MANOR_HOME;
@@ -1978,7 +1988,9 @@
 
   /* ---------- stepping ---------- */
   function crossed(a, b, mark) { return Math.floor((b - mark) / DAY) > Math.floor((a - mark) / DAY); }
-  function rate(s) { const h = hourOf(s); return (h >= 21 || h < 6) ? 45 : 4; }
+  // daylight (06:00-21:00) lasts about 18 real minutes at normal pace; nights pass in about 12 seconds
+  const DAY_RATE = 900 / 1080;
+  function rate(s) { const h = hourOf(s); return (h >= 21 || h < 6) ? 45 : DAY_RATE; }
   function step(s, dt) {
     const before = s.t;
     s.t += dt;

@@ -430,11 +430,53 @@ const TR = Sim.TRADES;
 
 /* ================= storage: three save slots, a backup each, and settings ================= */
 const SLOTS = 3, KEY = n => 'hearthmoor.slot.' + n, BAK = n => 'hearthmoor.slot.' + n + '.bak', META = 'hearthmoor.meta';
-const store = {
+// Saves live in the browser database (IndexedDB), which holds far more than localStorage's ~5 MB.
+// Everything is mirrored in memory so reads stay instant; writes go to the database in the background.
+// Small keys (settings, timestamps) are also kept in localStorage; if the database is unavailable, everything falls back to it.
+const mem = new Map();
+let idb = null;
+const BIG = k => /^hearthmoor\.slot\.\d(\.bak)?$/.test(k);
+const ls = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { } }
 };
+function idbPut(k, v) {
+  return new Promise(res => { try { const tx = idb.transaction('kv', 'readwrite'); v == null ? tx.objectStore('kv').delete(k) : tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false); } catch (e) { res(false); } });
+}
+const store = {
+  get(k) { return mem.has(k) ? mem.get(k) : ls.get(k); },
+  set(k, v) {
+    mem.set(k, v);
+    if (idb && BIG(k)) { idbPut(k, v).then(ok => { if (!ok) saveOk = ls.set(k, v); else ls.del(k); }); return true; }
+    return ls.set(k, v) || (idb ? (idbPut(k, v), true) : false);
+  },
+  del(k) { mem.delete(k); ls.del(k); if (idb) idbPut(k, null); }
+};
+function openStore() {
+  return new Promise(res => {
+    let done = false; const finish = () => { if (!done) { done = true; res(); } };
+    setTimeout(finish, 2500); // never hold the game up for a slow database
+    try {
+      const rq = indexedDB.open('hearthmoor', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+      rq.onerror = finish;
+      rq.onsuccess = () => {
+        const db = rq.result, tx = db.transaction('kv', 'readonly'), os = tx.objectStore('kv'), kr = os.getAllKeys(), vr = os.getAll();
+        tx.oncomplete = () => {
+          idb = db;
+          kr.result.forEach((k, i) => mem.set(k, vr.result[i]));
+          // move saves out of localStorage into the database, freeing the small store
+          for (let n = 1; n <= 3; n++) for (const k of ['hearthmoor.slot.' + n, 'hearthmoor.slot.' + n + '.bak']) {
+            const v = ls.get(k); if (v && !mem.has(k)) { mem.set(k, v); idbPut(k, v).then(ok => { if (ok) ls.del(k); }); } else if (v && mem.has(k)) ls.del(k);
+          }
+          finish();
+        };
+        tx.onerror = finish;
+      };
+    } catch (e) { finish(); }
+  });
+}
 let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'all', motion: 'full', lookX: 'normal', lookY: 'normal', lookSpeed: 'normal', music: 'normal', sfx: 'normal', amb: 'normal' } };
 try { const m = JSON.parse(store.get(META) || 'null'); if (m) meta = Object.assign(meta, m, { settings: Object.assign(meta.settings, m.settings || {}) }); } catch (e) { }
 function saveMeta() { store.set(META, JSON.stringify(meta)); }
@@ -457,7 +499,7 @@ function saveNow() {
 }
 const encodeSave = s => btoa(unescape(encodeURIComponent(Sim.serialize(s))));
 const decodeSave = t => Sim.deserialize(decodeURIComponent(escape(atob(t.trim()))));
-const PACE = { brisk: 1.33, normal: 1, relaxed: 0.66 };
+const PACE = { brisk: 1.5, normal: 1, relaxed: 0.75 };
 
 /* ================= three.js world ================= */
 const canvas = $('world');
@@ -1721,7 +1763,7 @@ function seg2(id, value, opts) { return `<div class="seg" role="group">${opts.ma
 function pageGoals(s) {
   const chapter = c => { const gs = Sim.GOALS.filter(g => g.ch === c.n), first = gs.findIndex(g => !g.done(s)); return `<h3>Chapter ${c.n === 1 ? 'One' : 'Two'}: ${esc(c.name)}</h3><p class="lead">${esc(c.lead)}</p><ul class="goals">${gs.map((g, i) => `<li class="${g.done(s) ? 'done' : i === first ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(g.text)}</span></li>`).join('')}</ul>`; };
   return Sim.CHAPTERS.map(chapter).join('') + `
-<h4>How Hearthmoor works</h4><p>Days run from 06:00 to 21:00, about four minutes of real time. Nights pass quickly. Villagers keep their own routines: work in the fields, woods and iron pit, lunch at the well at noon, an evening in the square, and bed. Each shop draws its own customers, and a better building draws more travelers from the east road.</p>
+<h4>How Hearthmoor works</h4><p>Days run from 06:00 to 21:00, about 18 minutes of real time (Settings can make them 12 or 24). Nights pass quickly. Villagers keep their own routines: work in the fields, woods and iron pit, lunch at the well at noon, an evening in the square, and bed. Each shop draws its own customers, and a better building draws more travelers from the east road.</p>
   <p>The books close at 21:00, when wages and upkeep are paid in full. If your coin runs out you go into debt to the Ashford moneylender, who adds 2% a day. Stay below ${Sim.SEIZE_AT}c for three days and your creditors seize property to cover it.</p>
   <h4>Who leads, and how they fall</h4><p>Everyone climbs the same ladder: hired hand, shop owner, a seat on the council, Elder, Steward, Lord. Respect comes from the position someone has earned, how well they run it, and staying out of debt. Each week the moot meets; a leader whose approval falls too low faces a vote, and the Elder is chosen from the council. The lord answers to the King, who will replace a lord buried in debt or petitioned against twice.</p>`;
 }
@@ -1900,7 +1942,7 @@ function seg(id, value, opts) { return `<div class="seg" role="group">${opts.map
 function settingsHTML() {
   const st = meta.settings;
   return `<h3>Settings</h3>
-  <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 3 minutes, normal about 4, relaxed about 6.</p></div>
+  <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 12 minutes, normal about 18, relaxed about 24. Wages, hunger, rent and work all follow the same clock.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
   <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>
   <h4>Sound</h4>
@@ -1946,7 +1988,7 @@ function renderTitle() {
       ${UI.confirm && UI.confirm.startsWith('del') ? `<p class="warnline">Tap Erase to delete slot ${UI.confirm.slice(3)} for good.</p>` : ''}`;
   } else {
     const st = meta.settings;
-    left = `${back}<h3>Settings</h3><div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>About 3, 4 or 6 minutes a day.</p></div>`;
+    left = `${back}<h3>Settings</h3><div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>About 12, 18 or 24 minutes a day.</p></div>`;
     right = `<div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}</div>
       <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>`;
   }
@@ -2313,6 +2355,12 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.12', date: '3 November', title: 'Longer days, and room to grow', items: [
+    'Days now last about 18 minutes, so there is time to work, shop and walk the roads. Settings can make them 12 or 24 minutes.',
+    'Wages, hunger, rent and work all follow the same clock. Villagers walk at a natural pace, and gathering is quicker.',
+    'Saves now live in the browser\u2019s database, with room for the much larger world that is coming. Your old saves move over on their own.',
+    'Under the hood: the village handles crowds of hundreds without slowing down, ready for the towns and cities ahead.'
+  ] },
   { v: '0.11', date: '3 November', title: 'Debt, and leaders who can fall', items: [
     'Sound now works on iPhone, even with the silent switch on. Settings has a button to play a test chord.',
     'You can go into debt. Wages, upkeep and taxes are always paid, and the Ashford moneylender adds 2% a day. Stay below -150c for three days and your creditors seize your property.',
@@ -2384,6 +2432,6 @@ function boot(data) {
 }
 const hot = window.claude && window.claude.hot;
 window.__hm = { mini, judge, solids: () => solidsNow(G), collide, get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
-if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
+openStore().then(() => { if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {}); });
 })();
 </script>
