@@ -418,8 +418,8 @@ console.log('13. Debt, respect, votes: anyone in power can fall, and only the de
 console.log('14. The rebuilt village, and saves from before it');
 {
   const s = Sim.newGame(91);
-  const kids = Sim.living(s).filter(p => p.kid), fams = new Set(Sim.living(s).filter(p => p.hh).map(p => p.hh));
-  check(Sim.living(s).length >= 25 && Sim.living(s).length <= 40, 'Hearthmoor starts with ' + Sim.living(s).length + ' residents');
+  const kids = Sim.villagers(s).filter(p => p.kid), fams = new Set(Sim.villagers(s).filter(p => p.hh).map(p => p.hh));
+  check(Sim.villagers(s).length >= 25 && Sim.villagers(s).length <= 40, 'Hearthmoor starts with ' + Sim.villagers(s).length + ' residents');
   check(kids.length >= 4 && fams.size >= 5, kids.length + ' children and ' + fams.size + ' families');
   check(s.biz.mill && s.people[s.biz.mill.owner].name === 'Tamsin', 'the mill is a working business, run by Tamsin');
   check(s.houses.every(h => h.tenants.every(id => s.people[id].home === h.id)), 'every home and its tenants agree');
@@ -437,6 +437,35 @@ console.log('14. The rebuilt village, and saves from before it');
   check(Math.abs(back.player.x - Sim.P.home.x) < 1, 'you wake at your hut in the new village');
   Sim.advance(back, 1440 * 3);
   check(Sim.living(back).length >= 25, 'the moved village keeps living (' + Sim.living(back).length + ' people)');
+}
+
+console.log('15. Oakbridge: a market city of its own');
+{
+  const s = Sim.newGame(93);
+  const oak = Sim.oakFolk(s), ob = Object.values(s.biz).filter(b => b.town === 'oakbridge');
+  check(oak.length >= 220 && oak.length <= 260, 'Oakbridge has ' + oak.length + ' residents');
+  const trades = {}; ob.forEach(b => { trades[b.trade] = (trades[b.trade] || 0) + 1; });
+  check(ob.length >= 20 && trades.bakery >= 2 && trades.tavern >= 2 && trades.smithy >= 2, ob.length + ' businesses, with rival bakers, taverns and smiths');
+  const T = s.towns.oakbridge, m = s.people[T.mayor];
+  check(m && m.job && m.job.role === 'owner' && m.town === 'oakbridge', 'the mayor, ' + m.name + ', is a guild master of the town');
+  check(oak.every(p => p.home), 'everyone in Oakbridge has a home');
+  check(s.agents.every(a => a.kind !== 'person' || Sim.townOf(s.people[a.pid]) === 'hearthmoor'), 'only Hearthmoor’s people walk about while you are in Hearthmoor');
+  // walk to Oakbridge: its people come to life, and Hearthmoor's go quiet
+  s.player.x = 420; s.player.z = -420; Sim.step(s, 1);
+  const bodies = s.agents.filter(a => a.kind === 'person');
+  check(bodies.length > 200 && bodies.every(a => Sim.townOf(s.people[a.pid]) === 'oakbridge'), 'in Oakbridge, ' + bodies.length + ' townsfolk are out and about');
+  // a shop at home keeps selling to villagers while you are away
+  const h = Sim.newGame(94); h.coins = 500; h.trades.bakery = 2; Sim.cmd(h, 'open', 1, 'bakery');
+  const sh = h.shops[0]; Sim.cmd(h, 'hire', sh.id, 0, 12); Sim.cmd(h, 'policy', sh.id, 'supplyRuns', true);
+  Sim.advance(h, 1440); h.player.x = 420; h.player.z = -420; Sim.advance(h, 1440 * 3);
+  const sold = h.ledger.slice(-2).reduce((a, d) => a + d.shops[0].sold, 0);
+  check(sold > 0, 'your bakery in Hearthmoor sold ' + sold + ' loaves to villagers in two days while you were in Oakbridge');
+  Sim.advance(s, 1440 * 30);
+  const o2 = Sim.oakFolk(s);
+  check(o2.length >= 200 && Object.values(s.biz).filter(b => b.town === 'oakbridge' && !b.closed).length >= 18, 'after a month Oakbridge still has ' + o2.length + ' people and its shops are open');
+  check(Number.isFinite(T.chest) && T.log.length > 0, 'the mayor keeps the town chest (' + T.chest + 'c) and makes decisions');
+  const back = Sim.deserialize(Sim.serialize(s)); Sim.advance(s, 600); Sim.advance(back, 600);
+  check(Sim.serialize(s) === Sim.serialize(back), 'Oakbridge saves and restores exactly');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
