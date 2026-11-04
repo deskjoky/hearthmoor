@@ -340,6 +340,15 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .tsub { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 6px 0 16px; font-size: 16px; }
 .rule { height: 10px; margin: 0 auto 14px; width: 70%; background: radial-gradient(circle, var(--seal) 0 3px, transparent 3.5px) center/14px 10px no-repeat, linear-gradient(var(--line), var(--line)) center/100% 1px no-repeat; }
 .tmenu { display: grid; gap: 8px; position: relative; }
+.cc { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin-top: 8px; }
+.cc > span { font-family: var(--f-display); font-size: 15px; color: var(--ink-soft); }
+.cc .seg { flex-wrap: wrap; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(42,31,22,.45); padding: 0; }
+.sw[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 2px; }
+.ccprev { text-align: center; } .ccprev p { margin: 4px 0 10px; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); }
+.ccsvg { width: 120px; height: 150px; } .ccprev.small .ccsvg { width: 70px; height: 88px; }
+@media (orientation: landscape) and (max-height: 520px) { .ccsvg { width: 96px; height: 120px; } .sw { width: 26px; height: 26px; } }
 .tbtn { border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 4px; padding: 10px 14px; min-height: 50px; text-align: left; font-family: var(--f-display); font-size: 20px; }
 .tbtn.primary { background: var(--ink); color: var(--parch); }
 .tbtn small { display: block; font-family: var(--f-body); font-size: 13px; opacity: .8; margin-top: 2px; }
@@ -679,9 +688,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const WALKX = 1.8;
   function moveTo(a, tx, tz, step, s) {
     step *= WALKX;
+    if (a.tx == null || Math.abs(a.tx - tx) + Math.abs(a.tz - tz) > 0.5) { a.tx = tx; a.tz = tz; a.settle = false; }
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
-    // close enough: someone else may be standing right on the spot, so don't keep shuffling into them
-    if (d < 0.45 && a.moving === false) return true;
+    // close enough: someone may be standing right on the spot, so stop here instead of shoving into them
+    if ((d < 0.45 && a.moving === false) || (a.settle === 2 && d < 6) || (a.settle && d < 1.2)) { a.moving = false; return true; }
     if (d <= step || d < 0.05) { if (s) s.rec.walked += d; a.x = tx; a.z = tz; a.moving = false; return true; }
     a.x += dx / d * step; a.z += dz / d * step; a.face = Math.atan2(dx, dz); a.moving = true;
     if (s) s.rec.walked += step;
@@ -2578,6 +2588,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
           const d = Math.sqrt(dx * dx + dz * dz); if (d >= m) continue;
           const nx = d > 1e-6 ? dx / d : Math.cos(i * 2.4 + j), nz = d > 1e-6 ? dz / d : Math.sin(i * 2.4 + j), push = m - d, tw = Wt[i] + Wt[j];
           A.x -= nx * push * Wt[i] / tw; A.z -= nz * push * Wt[i] / tw; B.x += nx * push * Wt[j] / tw; B.z += nz * push * Wt[j] / tw;
+          // walkers step aside to their right when someone is in their way, so two people meeting head-on slip past each other
+          if (A.moving && A !== s.player) { const fx = Math.sin(A.face || 0), fz = Math.cos(A.face || 0); if (fx * nx + fz * nz > 0.2) { A.x += fz * push * 0.9; A.z -= fx * push * 0.9; } }
+          if (B.moving && B !== s.player) { const fx = Math.sin(B.face || 0), fz = Math.cos(B.face || 0); if (-(fx * nx + fz * nz) > 0.2) { B.x += fz * push * 0.9; B.z -= fx * push * 0.9; } }
+          // someone already standing on the spot you were heading for: stop close by instead
+          // or, if they're part of a crowd gathered at the same place you're going, join the edge of it
+          if (A.moving && !B.moving && A.tx != null) { if (Math.hypot(A.x - A.tx, A.z - A.tz) < 1.2) A.settle = true; else if (B.tx != null && Math.hypot(B.tx - A.tx, B.tz - A.tz) < 0.8) A.settle = 2; }
+          if (B.moving && !A.moving && B.tx != null) { if (Math.hypot(B.x - B.tx, B.z - B.tz) < 1.2) B.settle = true; else if (A.tx != null && Math.hypot(A.tx - B.tx, A.tz - B.tz) < 0.8) B.settle = 2; }
         }
       }
     }
@@ -2722,7 +2739,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    HOUSES, MILL, BIZ_SITES, relocate, cityLoad, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    HOUSES, MILL, BIZ_SITES, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -3526,7 +3543,7 @@ const CG = {
   shadow: new THREE.CircleGeometry(0.42, 12), hit: new THREE.CylinderGeometry(0.8, 0.8, 1.9, 6), icon: new THREE.OctahedronGeometry(0.15),
   ring: new THREE.TorusGeometry(0.52, 0.045, 4, 24), cap: flat(new THREE.SphereGeometry(0.25, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2)),
   brim: new THREE.CylinderGeometry(0.42, 0.42, 0.04, 10), crown: flat(new THREE.ConeGeometry(0.22, 0.25, 7)), chef: new THREE.CylinderGeometry(0.2, 0.17, 0.3, 8),
-  hood: flat(new THREE.ConeGeometry(0.3, 0.45, 6)), apron: new THREE.BoxGeometry(0.36, 0.42, 0.06), pack: flat(new THREE.SphereGeometry(0.22, 6, 4))
+  hood: flat(new THREE.ConeGeometry(0.3, 0.45, 6)), bodyF: flat(new THREE.CylinderGeometry(0.21, 0.4, 0.7, 8)), hairBack: flat(new THREE.BoxGeometry(0.4, 0.42, 0.12)), braid: flat(new THREE.CylinderGeometry(0.05, 0.035, 0.42, 5)), knot: flat(new THREE.SphereGeometry(0.11, 6, 4)), apron: new THREE.BoxGeometry(0.36, 0.42, 0.06), pack: flat(new THREE.SphereGeometry(0.22, 6, 4))
 };
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
@@ -3537,7 +3554,7 @@ const APRON = { bakery: '#f3efe4', smithy: '#4a3a2c', tavern: '#d8c69a', joinery
 const pickables = [];
 function makeChar(opt) {
   const g = new THREE.Group();
-  const body = mesh(CG.body, opt.tunic, 0, 0.36, 0, g), head = mesh(CG.head, opt.skin, 0, 0.92, 0, g);
+  const body = mesh(opt.fem ? CG.bodyF : CG.body, opt.tunic, 0, 0.36, 0, g), head = mesh(CG.head, opt.skin, 0, 0.92, 0, g);
   const hl = mesh(CG.hand, opt.skin, -0.33, 0.42, 0, g), hr = mesh(CG.hand, opt.skin, 0.33, 0.42, 0, g);
   const sh = new THREE.Mesh(CG.shadow, shadowMat); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; g.add(sh);
   const hit = new THREE.Mesh(CG.hit, hitMat); hit.position.y = 0.9; g.add(hit);
@@ -3549,7 +3566,15 @@ function makeChar(opt) {
   else if (h === 'bun') mesh(CG.cap, '#b9b4ab', 0, 1.0, -0.05, g);
   if (opt.apron) mesh(CG.apron, opt.apron, 0, 0.42, 0.29, g);
   if (opt.chef) mesh(CG.chef, '#f3efe4', 0, 1.2, 0, g);
-  if (opt.player) { const r = new THREE.Mesh(CG.ring, mat('#e8b84a')); r.rotation.x = Math.PI / 2; r.position.y = 0.05; g.add(r); mesh(CG.cap, '#2b4a63', 0, 1.0, 0, g); }
+  if (opt.player) { const r = new THREE.Mesh(CG.ring, mat('#e8b84a')); r.rotation.x = Math.PI / 2; r.position.y = 0.05; g.add(r); }
+  if (opt.hair) {
+    const c = opt.hairColor || '#5a3a22', hs = opt.hair;
+    if (hs !== 'bald') { const cap = mesh(CG.cap, c, 0, 0.98, -0.01, g); cap.scale.set(1.04, hs === 'cropped' ? 0.7 : 1.05, 1.06); }
+    if (hs === 'long') mesh(CG.hairBack, c, 0, 0.82, -0.17, g);
+    if (hs === 'braid') { const b = mesh(CG.braid, c, 0, 0.72, -0.22, g); b.rotation.x = 0.25; mesh(CG.knot, c, 0, 0.96, -0.2, g).scale.setScalar(0.7); }
+    if (hs === 'bun') mesh(CG.knot, c, 0, 1.08, -0.18, g);
+    if (hs === 'beard') { const bd = mesh(CG.knot, c, 0, 0.8, 0.13, g); bd.scale.set(1.5, 1.2, 0.9); }
+  }
   const pack = mesh(CG.pack, '#c7b07c', 0, 0.62, -0.32, g); pack.visible = false;
   const sel = new THREE.Mesh(CG.ring, mat('#f3efe4')); sel.rotation.x = Math.PI / 2; sel.position.y = 0.06; sel.scale.setScalar(1.25); sel.visible = false; g.add(sel);
   g.userData = { body, head, hl, hr, icon, pack, sel, pick: opt.pick, phase: Math.random() * 6 };
@@ -3559,7 +3584,17 @@ function makeChar(opt) {
 }
 function dropChar(g) { scene.remove(g); const h = g.children.find(c => c.material === hitMat); const i = pickables.indexOf(h); if (i >= 0) pickables.splice(i, 1); }
 const ROLE = { field: { hat: 'straw' }, forest: { hat: 'cap', capColor: '#8e3b2a' }, pit: { hat: 'cap', capColor: '#4a4744' }, market: { hat: 'cap', capColor: '#2f5d55' }, well: { hat: 'bun' } };
-const playerMesh = makeChar({ tunic: '#2f5a7a', skin: '#e3b78f', player: true, pick: 'player' });
+const LOOKS = {
+  body: [['m', 'Man'], ['f', 'Woman']],
+  skin: ['#f0c9a2', '#e3b78f', '#c99470', '#a8714d', '#7a4e33'],
+  hair: [['short', 'Short'], ['long', 'Long'], ['braid', 'Braid'], ['bun', 'Bun'], ['cropped', 'Cropped'], ['beard', 'Beard'], ['bald', 'Bald']],
+  hairColor: ['#1f1712', '#3e2a1a', '#6b4426', '#8e3b22', '#c9a24a', '#9a958c'],
+  tunic: ['#2f5a7a', '#7a3b2a', '#4f6b3a', '#6d5a78', '#8a6a2a', '#3e3a36']
+};
+const DEFAULT_LOOK = { body: 'm', skin: 1, hair: 'short', hairColor: 1, tunic: 0 };
+const lookOpts = l => { l = Object.assign({}, DEFAULT_LOOK, l || {}); return { tunic: LOOKS.tunic[l.tunic] || LOOKS.tunic[0], skin: LOOKS.skin[l.skin] || LOOKS.skin[1], fem: l.body === 'f', hair: l.hair, hairColor: LOOKS.hairColor[l.hairColor] || LOOKS.hairColor[1], player: true, pick: 'player' }; };
+let playerMesh = makeChar(lookOpts());
+function rebuildPlayer(look) { const pos = playerMesh.position.clone(), ry = playerMesh.rotation.y; dropChar(playerMesh); playerMesh = makeChar(lookOpts(look)); playerMesh.position.copy(pos); playerMesh.rotation.y = ry; }
 const workerMeshes = new Map(), agentMeshes = new Map();
 function placeChar(g, a, t, opts) {
   const u = g.userData;
@@ -3580,7 +3615,7 @@ function animChar(g, t, opts) {
 }
 function syncChars(s, t) {
   const p = s.player, carry = Sim.carried(s);
-  placeChar(playerMesh, p, t, { moving: !!p.moving, working: !!p.action || p.working, pack: carry ? 0.7 + carry / 30 : 0, selected: UI.sel === 'player' });
+  placeChar(playerMesh, p, t, { moving: !!UI.walking || (!!p.dest && !!p.moving), working: !!p.action || p.working, pack: 0.62 + Math.min(0.5, carry / 40), selected: UI.sel === 'player' });
   const seenW = new Set();
   for (const shop of s.shops) {
     const w = shop.worker; if (!w) continue;
@@ -3867,7 +3902,7 @@ function walkPlayer(s, dt) {
   my += (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
   const m = Math.hypot(mx, my);
   const p = s.player;
-  if (m < 0.15) { if (!p.dest) p.moving = false; return; }
+  if (m < 0.15) { UI.walking = false; if (!p.dest) p.moving = false; return; }
   if (m > 1) { mx /= m; my /= m; }
   if (p.action || p.dest) { p.action = null; p.dest = null; }
   // forward is away from the camera
@@ -3884,7 +3919,7 @@ function walkPlayer(s, dt) {
   for (const sh of s.shops) { const w = sh.worker; if (w && !w.indoors && Math.abs(w.x - p.x) < 4 && Math.abs(w.z - p.z) < 4) crowd.push({ c: 1, x: w.x, z: w.z, r: 0.3 }); }
   for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); if (crowd.length) collide(p, crowd); }
   s.rec.walked += Math.hypot(p.x - ox, p.z - oz);
-  p.face = Math.atan2(vx, vz); p.moving = true;
+  p.face = Math.atan2(vx, vz); p.moving = true; UI.walking = true;
   UI.loc = null;
 }
 
@@ -4115,7 +4150,7 @@ document.addEventListener('click', e => {
   const btn = e.target.closest('[data-c]');
   if (!btn || btn.disabled) return;
   const c = JSON.parse(btn.dataset.c);
-  if (c[0] === 'ui') { uiCmd(c[1], c[2]); return; }
+  if (c[0] === 'ui') { uiCmd(c[1], c[2], c[3]); return; }
   if (c[0] === 'goto') UI.sel = null;
   if (c[0] !== 'ui') UI.confirm = null;
   act(c);
@@ -4733,6 +4768,20 @@ function settingsHTML() {
 const CREST = `<svg class="crest" viewBox="0 0 512 512" aria-hidden="true"><path d="M136 176 H376 V292 C376 370 318 418 256 444 C194 418 136 370 136 292 Z" fill="#8c2e21" stroke="#a87d22" stroke-width="16" stroke-linejoin="round"/><path d="M196 380 V268 H212 V250 H230 V268 H244 V250 H268 V268 H282 V250 H300 V268 H316 V380 Z" fill="#e2b552"/><path d="M244 380 V340 A12 12 0 0 1 268 340 V380 Z" fill="#8c2e21"/><path d="M150 158 L136 72 L196 116 L256 52 L316 116 L376 72 L362 158 Z" fill="#e2b552" stroke="#7a4f12" stroke-width="8" stroke-linejoin="round"/><rect x="146" y="150" width="220" height="24" rx="6" fill="#e2b552" stroke="#7a4f12" stroke-width="8"/></svg>`;
 function slotLine(info) { if (!info) return 'Empty'; return `${esc(info.name)} · Day ${info.day} · ${info.coins}c · ${info.shops} ${info.shops === 1 ? 'shop' : 'shops'}${info.when ? ' · ' + ago(info.when) : ''}`; }
 function ago(t) { const m = Math.round((Date.now() - t) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 24) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; }
+// a small front-on portrait of your character for the creator
+function lookSVG(l) {
+  const o = lookOpts(l), hc = o.hairColor, sk = o.skin, tu = o.tunic, hs = l.hair;
+  const body = o.fem ? `<path d="M44,70 L76,70 L92,138 L28,138 Z" fill="${tu}" stroke="#2a1f16" stroke-width="2"/>` : `<path d="M42,70 L78,70 L84,136 L36,136 Z" fill="${tu}" stroke="#2a1f16" stroke-width="2"/><rect x="38" y="104" width="44" height="6" fill="#3e2c1d"/>`;
+  const back = hs === 'long' ? `<path d="M38,40 Q36,78 44,86 L76,86 Q84,78 82,40 Z" fill="${hc}" stroke="#2a1f16" stroke-width="2"/>` : hs === 'braid' ? `<path d="M76,48 Q90,70 82,98" stroke="${hc}" stroke-width="7" fill="none" stroke-linecap="round"/>` : '';
+  const top = hs === 'bald' ? '' : hs === 'cropped' ? `<path d="M40,40 Q60,18 80,40 Q60,32 40,40 Z" fill="${hc}"/>` : `<path d="M38,44 Q38,16 60,16 Q82,16 82,44 Q72,30 60,30 Q48,30 38,44 Z" fill="${hc}" stroke="#2a1f16" stroke-width="2"/>`;
+  const bun = hs === 'bun' ? `<circle cx="60" cy="14" r="9" fill="${hc}" stroke="#2a1f16" stroke-width="2"/>` : '';
+  const beard = hs === 'beard' ? `<path d="M46,50 Q60,74 74,50 Q60,58 46,50 Z" fill="${hc}" stroke="#2a1f16" stroke-width="1.5"/>` : '';
+  return `<svg viewBox="0 0 120 150" class="ccsvg" role="img" aria-label="Your character"><ellipse cx="60" cy="142" rx="34" ry="6" fill="rgba(0,0,0,.18)"/>${back}
+    <rect x="30" y="74" width="14" height="40" rx="6" fill="#8a6d48" stroke="#2a1f16" stroke-width="1.5"/>${body}
+    <circle cx="34" cy="108" r="7" fill="${sk}" stroke="#2a1f16" stroke-width="1.5"/><circle cx="86" cy="108" r="7" fill="${sk}" stroke="#2a1f16" stroke-width="1.5"/>
+    <circle cx="60" cy="44" r="22" fill="${sk}" stroke="#2a1f16" stroke-width="2"/>${top}${bun}${beard}
+    <circle cx="52" cy="46" r="2.2" fill="#2a1f16"/><circle cx="68" cy="46" r="2.2" fill="#2a1f16"/><path d="M54,56 Q60,60 66,56" stroke="#2a1f16" stroke-width="1.6" fill="none"/></svg>`;
+}
 function renderTitle() {
   // two leaves: stacked in portrait, an open book in landscape
   const pg = $('titlePage');
@@ -4749,11 +4798,21 @@ function renderTitle() {
   } else if (UI.titleView === 'new') {
     const infos = [1, 2, 3].map(n => slotInfo(n));
     if (UI.newSlot == null) UI.newSlot = (infos.findIndex(x => !x) + 1) || 1;
-    left = `${back}<h3>A new life</h3><p>You arrive in Hearthmoor with 5 coins. Find work, learn a trade, and build from there.</p>
-      <label for="newName">Your name</label><input type="text" id="newName" maxlength="18" value="${esc(UI.newName)}" autocomplete="off">`;
+    const L0 = UI.newLook = UI.newLook || Object.assign({}, DEFAULT_LOOK);
+    if (!UI.newStep) {
+      const sw = (key, list) => `<div class="swatches" role="group">${list.map((c, i) => `<button type="button" class="sw" aria-label="${key} ${i + 1}" aria-pressed="${L0[key] === i}" style="background:${c}" data-c='${JSON.stringify(['ui', 'look', key, i])}'></button>`).join('')}</div>`;
+      const sg = (key, list) => `<div class="seg" role="group">${list.map(([v, n]) => `<button type="button" aria-pressed="${L0[key] === v}" data-c='${JSON.stringify(['ui', 'look', key, v])}'>${n}</button>`).join('')}</div>`;
+      left = `${back}<h3>Who are you?</h3>
+        <label for="newName">Your name</label><input type="text" id="newName" maxlength="18" value="${esc(UI.newName)}" autocomplete="off">
+        <div class="cc"><span>Body</span>${sg('body', LOOKS.body)}<span>Skin</span>${sw('skin', LOOKS.skin)}<span>Hair</span>${sg('hair', LOOKS.hair)}<span>Hair colour</span>${sw('hairColor', LOOKS.hairColor)}<span>Clothes</span>${sw('tunic', LOOKS.tunic)}</div>`;
+      right = `<div class="ccprev">${lookSVG(L0)}<p><span id="ccName">${esc(UI.newName || 'Wren')}</span>, arriving in Hearthmoor with 5 coins and a backpack.</p></div>
+        <div class="tmenu"><button type="button" class="tbtn primary" data-c='["ui","newStep",1]'>Choose a save slot &rarr;</button></div>`;
+    } else {
+    left = `<button type="button" class="back" data-c='["ui","newStep",0]'>&larr; Back to your character</button><h3>A new life</h3><p>You arrive in Hearthmoor with 5 coins. Find work, learn a trade, and build from there.</p><div class="ccprev small">${lookSVG(L0)}<p><b>${esc(UI.newName || 'Wren')}</b></p></div>`;
     right = `<label>Save in</label><div class="tmenu">${infos.map((info, i) => `<button type="button" class="tbtn slotbtn ${UI.newSlot === i + 1 ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'newSlot', i + 1])}'>Slot ${i + 1}<small>${slotLine(info)}</small></button>`).join('')}</div>
       ${infos[UI.newSlot - 1] ? `<p class="warnline">Slot ${UI.newSlot} holds a game. Starting here replaces it.</p>` : ''}
       <div class="tmenu" style="margin-top:8px"><button type="button" class="tbtn primary" data-c='["ui","begin"]'>Begin</button></div>`;
+    }
   } else if (UI.titleView === 'load') {
     left = `${back}<h3>Load game</h3><label for="importBox">Or paste a save code</label><textarea id="importBox" placeholder="Paste a save code here"></textarea>
       <div class="tmenu" style="margin-top:6px"><button type="button" class="tbtn" data-c='["ui","import"]'>Load this code<small>into slot ${UI.newSlot || 1}${slotInfo(UI.newSlot || 1) ? ', replacing it' : ''}</small></button></div>${UI.importMsg ? `<p>${esc(UI.importMsg)}</p>` : ''}`;
@@ -4768,7 +4827,7 @@ function renderTitle() {
   pg.innerHTML = `<div class="spread"><div class="leaf">${left}</div><div class="leaf">${right}</div></div>`;
 }
 function enterGame(game, n) {
-  G = game; slot = n; UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
+  G = game; slot = n; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
   meta.lastSlot = n; saveMeta();
   resetMeshes(); focus.set(G.player.x, 0, G.player.z); solidKey = '';
   ['title', 'book', 'pause'].forEach(id => $(id).hidden = true);
@@ -4819,11 +4878,14 @@ function uiCmd(k, v) {
   }
   if (k === 'quitTitle') { toTitle(); return; }
   if (k === 'continue') { const n = meta.lastSlot, g = n && readSlot(n); if (g) enterGame(g, n); else { UI.titleView = 'load'; renderTitle(); } return; }
+  if (k === 'look') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newLook[v] = arguments[2]; renderTitle(); return; }
+  if (k === 'newStep') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newStep = v; renderTitle(); return; }
   if (k === 'newSlot') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newSlot = v; renderTitle(); return; }
   if (k === 'begin') {
-    const name = (($('newName') || {}).value || '').trim().slice(0, 18) || 'Wren';
+    const name = (UI.newName || '').trim().slice(0, 18) || 'Wren';
     UI.newName = name;
-    enterGame(Sim.newGame((Date.now() % 2147483647) | 0, name), UI.newSlot || 1); return;
+    const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); UI.newStep = 0;
+    enterGame(g, UI.newSlot || 1); return;
   }
   if (k === 'load') { const g = readSlot(v); if (g) enterGame(g, v); else { UI.importMsg = 'That slot could not be read.'; renderTitle(); } return; }
   if (k === 'erase') { store.del(KEY(v)); store.del(BAK(v)); store.del(KEY(v) + '.when'); if (meta.lastSlot === v) { meta.lastSlot = null; saveMeta(); } UI.confirm = null; renderTitle(); return; }
@@ -4840,7 +4902,7 @@ document.addEventListener('input', e => {
     Sim.cmd(G, 'setPrice', shop.id, +e.target.value);
     $('pv-' + shop.id).textContent = shop.price + 'c'; $('pw-' + shop.id).textContent = willText(shop);
   }
-  if (id === 'newName') UI.newName = e.target.value;
+  if (id === 'newName') { UI.newName = e.target.value; const c = $('ccName'); if (c) c.textContent = e.target.value || 'Wren'; }
 });
 document.addEventListener('change', e => { const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
@@ -5130,8 +5192,14 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.0238';
+const BUILD = '2026.11.04.0248';
 const NOTES = [
+  { v: '0.15', date: '3 November', title: 'Your own face, and smoother crowds', items: [
+    'A character creator when you start a new game: body, skin, hair style and colour, and clothes.',
+    'You wear a backpack, and anything you carry goes into it. Your arms swing as you walk, carrying or not.',
+    'Villagers step aside to their right when someone is in the way, so two people meeting head-on slip past each other instead of getting stuck.',
+    'If someone is already standing where a villager is heading, they stop close by instead of shoving forever, and crowds gather around the edge.'
+  ] },
   { v: '0.14', date: '3 November', title: 'The world map, and solid crowds', items: [
     'The map now has a World tab: an illustrated chart of Alderwyn and Valdoria across the Sundering Sea. Tap any town to read about it and when its road opens.',
     'People are solid. Villagers, workers and you can no longer walk through each other.',

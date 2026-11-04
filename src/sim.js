@@ -221,9 +221,10 @@
   const WALKX = 1.8;
   function moveTo(a, tx, tz, step, s) {
     step *= WALKX;
+    if (a.tx == null || Math.abs(a.tx - tx) + Math.abs(a.tz - tz) > 0.5) { a.tx = tx; a.tz = tz; a.settle = false; }
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
-    // close enough: someone else may be standing right on the spot, so don't keep shuffling into them
-    if (d < 0.45 && a.moving === false) return true;
+    // close enough: someone may be standing right on the spot, so stop here instead of shoving into them
+    if ((d < 0.45 && a.moving === false) || (a.settle === 2 && d < 6) || (a.settle && d < 1.2)) { a.moving = false; return true; }
     if (d <= step || d < 0.05) { if (s) s.rec.walked += d; a.x = tx; a.z = tz; a.moving = false; return true; }
     a.x += dx / d * step; a.z += dz / d * step; a.face = Math.atan2(dx, dz); a.moving = true;
     if (s) s.rec.walked += step;
@@ -2120,6 +2121,13 @@
           const d = Math.sqrt(dx * dx + dz * dz); if (d >= m) continue;
           const nx = d > 1e-6 ? dx / d : Math.cos(i * 2.4 + j), nz = d > 1e-6 ? dz / d : Math.sin(i * 2.4 + j), push = m - d, tw = Wt[i] + Wt[j];
           A.x -= nx * push * Wt[i] / tw; A.z -= nz * push * Wt[i] / tw; B.x += nx * push * Wt[j] / tw; B.z += nz * push * Wt[j] / tw;
+          // walkers step aside to their right when someone is in their way, so two people meeting head-on slip past each other
+          if (A.moving && A !== s.player) { const fx = Math.sin(A.face || 0), fz = Math.cos(A.face || 0); if (fx * nx + fz * nz > 0.2) { A.x += fz * push * 0.9; A.z -= fx * push * 0.9; } }
+          if (B.moving && B !== s.player) { const fx = Math.sin(B.face || 0), fz = Math.cos(B.face || 0); if (-(fx * nx + fz * nz) > 0.2) { B.x += fz * push * 0.9; B.z -= fx * push * 0.9; } }
+          // someone already standing on the spot you were heading for: stop close by instead
+          // or, if they're part of a crowd gathered at the same place you're going, join the edge of it
+          if (A.moving && !B.moving && A.tx != null) { if (Math.hypot(A.x - A.tx, A.z - A.tz) < 1.2) A.settle = true; else if (B.tx != null && Math.hypot(B.tx - A.tx, B.tz - A.tz) < 0.8) A.settle = 2; }
+          if (B.moving && !A.moving && B.tx != null) { if (Math.hypot(B.x - B.tx, B.z - B.tz) < 1.2) B.settle = true; else if (A.tx != null && Math.hypot(A.tx - B.tx, A.tz - B.tz) < 0.8) B.settle = 2; }
         }
       }
     }
@@ -2264,7 +2272,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    HOUSES, MILL, BIZ_SITES, relocate, cityLoad, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    HOUSES, MILL, BIZ_SITES, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
