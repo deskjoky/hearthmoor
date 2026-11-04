@@ -413,6 +413,7 @@
 
   function closeDay(s) {
     const st = s.stats;
+    if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
     if (s.people) { bizDay(s); peopleEvening(s); }
     if (s.gov) govEvening(s);
@@ -2044,6 +2045,45 @@
   const GH_JOBS = { ghfields: ['Field hand', 'Working the wheat fields'], ghfields2: ['Field hand', 'Hoeing the barley'], shepherd: ['Shepherd', 'Minding the sheep'], cowherd: ['Cowherd', 'Minding the cattle'], orchard: ['Orchard hand', 'Tending the orchard'], hedging: ['Hedger', 'Laying the hedges'] };
   Object.assign(BIZ_BASE, { dairy: 22, estate: 40 });
   const LAYOUT = { oakbridge: OAK, greenhaven: GH };
+  /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
+  const STAGE = {
+    hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
+    oakbridge: { x: OAK.square.x - 10, z: OAK.square.z + 24, face: 0, name: 'Oakbridge Stage Post' },
+    greenhaven: { x: GH.entry.x - 6, z: GH.entry.z - 9, face: 0, name: 'Greenhaven Stage Post' }
+  };
+  // in the towns, the stage post takes the nearest clear ground to where the road comes in, facing the nearest street
+  const segDist0 = (x, z, pts) => { let b = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); b = Math.min(b, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return b; };
+  for (const [id, L, from] of [['oakbridge', OAK, OAK.gate], ['greenhaven', GH, GH.entry]]) {
+    const blds = L.houses.map(h => [h.x, h.z]).concat(L.biz.map(b => [b.x, b.z])), st = STAGE[id];
+    let best = null;
+    for (let r0 = 10; r0 < 70 && !best; r0 += 2) for (let k = 0; k < 36 && !best; k++) {
+      const a0 = k / 36 * Math.PI * 2, x = from.x + Math.cos(a0) * r0, z = from.z + Math.sin(a0) * r0;
+      if ((L.inside && !L.inside(x, z)) || (L.wall && segDist0(x, z, L.wall) < 12) || L.riverDist(x, z) < 16) continue;
+      if (blds.some(([bx, bz]) => Math.hypot(bx - x, bz - z) < 11.5)) continue;
+      if (L.streets.some(q => segDist0(x, z, q.pts) < q.w / 2 + 6) || L.plazas.some(q => Math.hypot(q.x - x, q.z - z) < (q.r1 || 4) + 8)) continue;
+      if (L.fields && L.fields.concat(L.pastures, [L.orchard]).some(f => Math.abs(x - f.x) < f.w / 2 + 6 && Math.abs(z - f.z) < f.d / 2 + 6)) continue;
+      best = { x, z };
+    }
+    if (best) { st.x = best.x; st.z = best.z; }
+    let nb = null, nd = 1e9; for (const q of L.streets) for (let i = 0; i < q.pts.length - 1; i++) { const [ax, az] = q.pts[i], [bx, bz] = q.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((st.x - ax) * dx + (st.z - az) * dz) / L2)), px = ax + t * dx, pz = az + t * dz, d = Math.hypot(st.x - px, st.z - pz); if (d < nd) { nd = d; nb = { x: px, z: pz }; } }
+    if (nb) st.face = Math.atan2(nb.x - st.x, nb.z - st.z);
+  }
+  for (const id in STAGE) LOCS['stage:' + id] = { x: STAGE[id].x, z: STAGE[id].z, r: 5, name: STAGE[id].name, town: id === 'hearthmoor' ? undefined : id, stage: id };
+  const polyLen = pts => { let L = 0; for (let i = 0; i < pts.length - 1; i++) L += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); return L; };
+  // distances by road: the east road to the fork at the waystation, then on east to Oakbridge or north to Greenhaven
+  const forkAt = ROADS.east.findIndex(p => p[0] === 240);
+  const LEG = { hearthmoor: polyLen(ROADS.east.slice(0, forkAt + 1)) + 75, oakbridge: polyLen(ROADS.east.slice(forkAt)) + 30, greenhaven: polyLen(ROADS.north) + 20 };
+  const roadDist = (a, b) => a === b ? 0 : LEG[a] + LEG[b];
+  const COACH_MPM = 15, WALK_MPM = 7.8, RIDE_MPM = 18;   // metres per game minute (walking is 6.5 m a second, and a game minute is 1.2 seconds)
+  const fare = (a, b) => Math.max(4, Math.round(roadDist(a, b) / 110));
+  const HORSE_PRICE = 140, HORSE_SELL = 80, STABLING = 1;
+  function travelTo(s, town, how) {
+    const from = townAt(s.player.x, s.player.z) || 'hearthmoor', d = roadDist(from, town), st = STAGE[town];
+    const mins = Math.round(d / (how === 'coach' ? COACH_MPM : how === 'ride' ? RIDE_MPM : WALK_MPM));
+    s.player.x = st.x + Math.sin(st.face) * 3; s.player.z = st.z + Math.cos(st.face) * 3; s.player.dest = null; s.player.action = null;
+    s.rec.walked += d;
+    return mins;
+  }
   Object.assign(BIZ_BASE, { butcher: 28, chandler: 22, tailor: 24, wheelwright: 24, cooper: 22, weaver: 24, tanner: 24, potter: 20, carter: 26, boatwright: 24, goldsmith: 34, apothecary: 26, mason: 26 });
   const TRADE_NAMES = { bakery: 'Bakery', tavern: 'Tavern', smithy: 'Smithy', joinery: 'Joinery', mill: 'Milling', butcher: 'Butchery', chandler: 'Chandlery', tailor: 'Tailoring', wheelwright: 'Wheelwright', cooper: 'Cooperage', dairy: 'Dairy', estate: 'Farming estate', weaver: 'Weaving', tanner: 'Tannery', potter: 'Pottery', carter: 'Carting', boatwright: 'Boatbuilding', goldsmith: 'Goldsmithing', apothecary: 'Apothecary', mason: 'Masonry' };
   const tradeName = t => TRADE_NAMES[t] || (TRADES[t] && TRADES[t].name) || t;
@@ -2612,6 +2652,40 @@
         return ok();
       }
       case 'stop': p.action = null; p.dest = null; return ok();
+      case 'coach': {
+        // a seat on the coach from this stage post to another town; coaches run from six in the morning till seven at night
+        const from = Object.keys(STAGE).find(id => atLoc(s, 'stage:' + id));
+        if (!from) return fail('Coaches leave from the stage post.');
+        if (!STAGE[a] || a === from) return fail('No coach goes there.');
+        const h = hourOf(s); if (h < 6 || h >= 19) return fail('The last coach has gone. The first leaves at six in the morning.');
+        const f = fare(from, a); if (s.coins < f) return fail('The fare is ' + f + 'c.');
+        spend(s, f); s.rec.fares = (s.rec.fares || 0) + f;
+        const mins = travelTo(s, a, 'coach'); p.riding = false;
+        event(s, 'You take the coach to ' + TOWNS[a].name + ' for ' + f + 'c. The journey takes ' + mins + ' minutes.', 'info');
+        return { ok: true, mins };
+      }
+      case 'journey': {
+        // walk or ride the roads to another town
+        if (!TOWNS[a] || !TOWNS[a].open) return fail('That road is not open yet.');
+        const how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
+        return { ok: true, mins, how };
+      }
+      case 'buyHorse': {
+        if (!Object.keys(STAGE).some(id => atLoc(s, 'stage:' + id))) return fail('Horses are sold at the stage posts.');
+        if (p.horse) return fail('You already have a horse.');
+        if (s.coins < HORSE_PRICE) return fail('A good horse costs ' + HORSE_PRICE + 'c.');
+        spend(s, HORSE_PRICE); s.rec.invested += HORSE_PRICE;
+        p.horse = { name: a || 'Bramble', since: s.day }; p.riding = true;
+        event(s, 'You buy ' + p.horse.name + ', a bay mare, for ' + HORSE_PRICE + 'c. Stabling costs ' + STABLING + 'c a night.', 'story');
+        return ok();
+      }
+      case 'sellHorse': {
+        if (!p.horse) return fail('You have no horse.');
+        if (!Object.keys(STAGE).some(id => atLoc(s, 'stage:' + id))) return fail('Sell your horse at a stage post.');
+        earn(s, HORSE_SELL); event(s, 'You sell ' + p.horse.name + ' to the ostler for ' + HORSE_SELL + 'c.', 'info'); p.horse = null; p.riding = false;
+        return ok();
+      }
+      case 'ride': if (!p.horse) return fail('You have no horse.'); p.riding = !p.riding; return ok();
     }
     return fail('Unknown command');
   }
@@ -2831,7 +2905,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;

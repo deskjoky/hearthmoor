@@ -513,5 +513,22 @@ console.log('16. Greenhaven: the farming town up the north road');
   const nb = Sim.deserialize(JSON.stringify(old));
   check(nb.v === Sim.VERSION && nb.towns.greenhaven && Sim.townFolk(nb, 'greenhaven').length >= 70, 'a save from before the north road opened gains Greenhaven');
 }
+
+console.log('17. Getting about: coaches, a horse, and the roads between towns');
+{
+  const s = Sim.newGame(103); s.coins = 400; const st = Sim.STAGE.hearthmoor;
+  check(Sim.cmd(s, 'coach', 'oakbridge').ok === false, 'coaches leave only from the stage post');
+  s.player.x = st.x; s.player.z = st.z; Sim.advance(s, 120);
+  const f = Sim.fare('hearthmoor', 'oakbridge'), r = Sim.cmd(s, 'coach', 'oakbridge');
+  check(r.ok && s.coins === 400 - f && Sim.townAt(s.player.x, s.player.z) === 'oakbridge' && r.mins > 20, 'the coach to Oakbridge costs ' + f + 'c and takes ' + r.mins + ' minutes');
+  const b = Sim.cmd(s, 'buyHorse', 'Bramble');
+  check(b.ok && s.player.horse && s.player.riding && s.coins === 400 - f - Sim.HORSE_PRICE, 'a horse costs ' + Sim.HORSE_PRICE + 'c at the stage post');
+  const c0 = s.coins; Sim.advance(s, 1440); check(s.coins <= c0 - Sim.STABLING, 'stabling costs ' + Sim.STABLING + 'c a night');
+  const j = Sim.cmd(s, 'journey', 'greenhaven');
+  check(j.ok && j.how === 'ride' && Sim.townAt(s.player.x, s.player.z) === 'greenhaven' && j.mins < Sim.roadDist('oakbridge', 'greenhaven') / Sim.WALK_MPM, 'riding to Greenhaven takes ' + j.mins + ' minutes, far quicker than walking');
+  s.t = Math.floor(s.t / 1440) * 1440 + 21 * 60; s.player.x = Sim.STAGE.greenhaven.x; s.player.z = Sim.STAGE.greenhaven.z;
+  check(!Sim.cmd(s, 'coach', 'hearthmoor').ok, 'no coaches run after seven at night');
+  check(Sim.cmd(s, 'sellHorse').ok && !s.player.horse, 'you can sell your horse back to the ostler');
+}
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

@@ -65,6 +65,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chip { background: rgba(32, 26, 20, .74); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
 .chip b { color: #f5cf73; font-weight: 700; }
 .chip.on { background: rgba(74, 102, 52, .9); }
+.chip.btn { pointer-events: auto; cursor: pointer; border: 1px solid rgba(226, 181, 82, .7); }
 .goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .goal em { font-family: var(--f-display); font-style: italic; color: #f5cf73; font-size: 14px; }
 
@@ -880,6 +881,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   function closeDay(s) {
     const st = s.stats;
+    if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
     if (s.people) { bizDay(s); peopleEvening(s); }
     if (s.gov) govEvening(s);
@@ -2511,6 +2513,45 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const GH_JOBS = { ghfields: ['Field hand', 'Working the wheat fields'], ghfields2: ['Field hand', 'Hoeing the barley'], shepherd: ['Shepherd', 'Minding the sheep'], cowherd: ['Cowherd', 'Minding the cattle'], orchard: ['Orchard hand', 'Tending the orchard'], hedging: ['Hedger', 'Laying the hedges'] };
   Object.assign(BIZ_BASE, { dairy: 22, estate: 40 });
   const LAYOUT = { oakbridge: OAK, greenhaven: GH };
+  /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
+  const STAGE = {
+    hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
+    oakbridge: { x: OAK.square.x - 10, z: OAK.square.z + 24, face: 0, name: 'Oakbridge Stage Post' },
+    greenhaven: { x: GH.entry.x - 6, z: GH.entry.z - 9, face: 0, name: 'Greenhaven Stage Post' }
+  };
+  // in the towns, the stage post takes the nearest clear ground to where the road comes in, facing the nearest street
+  const segDist0 = (x, z, pts) => { let b = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); b = Math.min(b, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return b; };
+  for (const [id, L, from] of [['oakbridge', OAK, OAK.gate], ['greenhaven', GH, GH.entry]]) {
+    const blds = L.houses.map(h => [h.x, h.z]).concat(L.biz.map(b => [b.x, b.z])), st = STAGE[id];
+    let best = null;
+    for (let r0 = 10; r0 < 70 && !best; r0 += 2) for (let k = 0; k < 36 && !best; k++) {
+      const a0 = k / 36 * Math.PI * 2, x = from.x + Math.cos(a0) * r0, z = from.z + Math.sin(a0) * r0;
+      if ((L.inside && !L.inside(x, z)) || (L.wall && segDist0(x, z, L.wall) < 12) || L.riverDist(x, z) < 16) continue;
+      if (blds.some(([bx, bz]) => Math.hypot(bx - x, bz - z) < 11.5)) continue;
+      if (L.streets.some(q => segDist0(x, z, q.pts) < q.w / 2 + 6) || L.plazas.some(q => Math.hypot(q.x - x, q.z - z) < (q.r1 || 4) + 8)) continue;
+      if (L.fields && L.fields.concat(L.pastures, [L.orchard]).some(f => Math.abs(x - f.x) < f.w / 2 + 6 && Math.abs(z - f.z) < f.d / 2 + 6)) continue;
+      best = { x, z };
+    }
+    if (best) { st.x = best.x; st.z = best.z; }
+    let nb = null, nd = 1e9; for (const q of L.streets) for (let i = 0; i < q.pts.length - 1; i++) { const [ax, az] = q.pts[i], [bx, bz] = q.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((st.x - ax) * dx + (st.z - az) * dz) / L2)), px = ax + t * dx, pz = az + t * dz, d = Math.hypot(st.x - px, st.z - pz); if (d < nd) { nd = d; nb = { x: px, z: pz }; } }
+    if (nb) st.face = Math.atan2(nb.x - st.x, nb.z - st.z);
+  }
+  for (const id in STAGE) LOCS['stage:' + id] = { x: STAGE[id].x, z: STAGE[id].z, r: 5, name: STAGE[id].name, town: id === 'hearthmoor' ? undefined : id, stage: id };
+  const polyLen = pts => { let L = 0; for (let i = 0; i < pts.length - 1; i++) L += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); return L; };
+  // distances by road: the east road to the fork at the waystation, then on east to Oakbridge or north to Greenhaven
+  const forkAt = ROADS.east.findIndex(p => p[0] === 240);
+  const LEG = { hearthmoor: polyLen(ROADS.east.slice(0, forkAt + 1)) + 75, oakbridge: polyLen(ROADS.east.slice(forkAt)) + 30, greenhaven: polyLen(ROADS.north) + 20 };
+  const roadDist = (a, b) => a === b ? 0 : LEG[a] + LEG[b];
+  const COACH_MPM = 15, WALK_MPM = 7.8, RIDE_MPM = 18;   // metres per game minute (walking is 6.5 m a second, and a game minute is 1.2 seconds)
+  const fare = (a, b) => Math.max(4, Math.round(roadDist(a, b) / 110));
+  const HORSE_PRICE = 140, HORSE_SELL = 80, STABLING = 1;
+  function travelTo(s, town, how) {
+    const from = townAt(s.player.x, s.player.z) || 'hearthmoor', d = roadDist(from, town), st = STAGE[town];
+    const mins = Math.round(d / (how === 'coach' ? COACH_MPM : how === 'ride' ? RIDE_MPM : WALK_MPM));
+    s.player.x = st.x + Math.sin(st.face) * 3; s.player.z = st.z + Math.cos(st.face) * 3; s.player.dest = null; s.player.action = null;
+    s.rec.walked += d;
+    return mins;
+  }
   Object.assign(BIZ_BASE, { butcher: 28, chandler: 22, tailor: 24, wheelwright: 24, cooper: 22, weaver: 24, tanner: 24, potter: 20, carter: 26, boatwright: 24, goldsmith: 34, apothecary: 26, mason: 26 });
   const TRADE_NAMES = { bakery: 'Bakery', tavern: 'Tavern', smithy: 'Smithy', joinery: 'Joinery', mill: 'Milling', butcher: 'Butchery', chandler: 'Chandlery', tailor: 'Tailoring', wheelwright: 'Wheelwright', cooper: 'Cooperage', dairy: 'Dairy', estate: 'Farming estate', weaver: 'Weaving', tanner: 'Tannery', potter: 'Pottery', carter: 'Carting', boatwright: 'Boatbuilding', goldsmith: 'Goldsmithing', apothecary: 'Apothecary', mason: 'Masonry' };
   const tradeName = t => TRADE_NAMES[t] || (TRADES[t] && TRADES[t].name) || t;
@@ -3079,6 +3120,40 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         return ok();
       }
       case 'stop': p.action = null; p.dest = null; return ok();
+      case 'coach': {
+        // a seat on the coach from this stage post to another town; coaches run from six in the morning till seven at night
+        const from = Object.keys(STAGE).find(id => atLoc(s, 'stage:' + id));
+        if (!from) return fail('Coaches leave from the stage post.');
+        if (!STAGE[a] || a === from) return fail('No coach goes there.');
+        const h = hourOf(s); if (h < 6 || h >= 19) return fail('The last coach has gone. The first leaves at six in the morning.');
+        const f = fare(from, a); if (s.coins < f) return fail('The fare is ' + f + 'c.');
+        spend(s, f); s.rec.fares = (s.rec.fares || 0) + f;
+        const mins = travelTo(s, a, 'coach'); p.riding = false;
+        event(s, 'You take the coach to ' + TOWNS[a].name + ' for ' + f + 'c. The journey takes ' + mins + ' minutes.', 'info');
+        return { ok: true, mins };
+      }
+      case 'journey': {
+        // walk or ride the roads to another town
+        if (!TOWNS[a] || !TOWNS[a].open) return fail('That road is not open yet.');
+        const how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
+        return { ok: true, mins, how };
+      }
+      case 'buyHorse': {
+        if (!Object.keys(STAGE).some(id => atLoc(s, 'stage:' + id))) return fail('Horses are sold at the stage posts.');
+        if (p.horse) return fail('You already have a horse.');
+        if (s.coins < HORSE_PRICE) return fail('A good horse costs ' + HORSE_PRICE + 'c.');
+        spend(s, HORSE_PRICE); s.rec.invested += HORSE_PRICE;
+        p.horse = { name: a || 'Bramble', since: s.day }; p.riding = true;
+        event(s, 'You buy ' + p.horse.name + ', a bay mare, for ' + HORSE_PRICE + 'c. Stabling costs ' + STABLING + 'c a night.', 'story');
+        return ok();
+      }
+      case 'sellHorse': {
+        if (!p.horse) return fail('You have no horse.');
+        if (!Object.keys(STAGE).some(id => atLoc(s, 'stage:' + id))) return fail('Sell your horse at a stage post.');
+        earn(s, HORSE_SELL); event(s, 'You sell ' + p.horse.name + ' to the ostler for ' + HORSE_SELL + 'c.', 'info'); p.horse = null; p.riding = false;
+        return ok();
+      }
+      case 'ride': if (!p.horse) return fail('You have no horse.'); p.riding = !p.riding; return ok();
     }
     return fail('Unknown command');
   }
@@ -3298,7 +3373,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -4259,6 +4334,26 @@ const CROPS = [
   flushBuild();
 })();
 
+/* ----- the stage posts: an office, a coach waiting, and fresh horses ----- */
+(function stagePosts() {
+  const horse = mergeColored([{ geo: new THREE.BoxGeometry(0.62, 0.62, 1.7), color: '#7a4a2a', m: M(0, 1.15, 0) }, { geo: new THREE.BoxGeometry(0.34, 0.8, 0.4), color: '#7a4a2a', m: M(0, 1.55, 0.85) }, { geo: new THREE.BoxGeometry(0.3, 0.32, 0.62), color: '#7a4a2a', m: M(0, 1.92, 1.22) }].concat([[-0.2, 0.62], [0.2, 0.62], [-0.2, -0.62], [0.2, -0.62]].map(([x, z]) => ({ geo: new THREE.BoxGeometry(0.14, 0.86, 0.14), color: '#6b4024', m: M(x, 0.43, z) }))));
+  for (const id in Sim.STAGE) {
+    const st = Sim.STAGE[id], f = fr(st.x, st.z, st.face);
+    // the office
+    box(f, '#7d776a', -4, 0.2, -2, 5.4, 0.5, 4.2); box(f, '#c9b48a', -4, 1.6, -2, 5, 2.6, 3.8); part(f, roofG(4.6, 5.6, 1.8), '#5e4a2c', -4, 2.9, -2);
+    box(f, '#3b2a1c', -4, 1.1, -0.08, 1, 1.9, 0.08); win(f, -5.6, 1.6, -0.08, 0.7, 0.6, 0.06); box(f, BEAMS, -1.2, 1.6, 0, 0.14, 3.2, 0.14); box(f, '#2f4f6a', -0.55, 2.6, 0, 1.1, 0.6, 0.06); box(f, '#e8d36a', -0.55, 2.6, 0.04, 0.5, 0.25, 0.02);
+    // the coach
+    const c = new THREE.Matrix4().copy(f).multiply(M(3, 0, 0.5, Math.PI / 2));
+    box(c, '#2f4f3a', 0, 1.5, 0, 1.7, 1.4, 2.6); box(c, '#1f2a22', 0, 2.3, 0, 1.8, 0.14, 2.7); box(c, '#d9b04a', 0, 1.5, 1.31, 1.72, 0.06, 0.04);
+    win(c, -0.86, 1.6, 0, 0.04, 0.6, 0.9); win(c, 0.86, 1.6, 0, 0.04, 0.6, 0.9); box(c, '#4a3424', 0, 1.0, 1.6, 1.2, 0.12, 0.8);
+    [[-0.95, 0.9], [0.95, 0.9], [-0.95, -0.9], [0.95, -0.9]].forEach(([x, z]) => part(c, new THREE.CylinderGeometry(0.55, 0.55, 0.1, 12), '#4a3424', x, 0.55, z, 0, 0, Math.PI / 2));
+    box(c, BEAMS, 0, 0.7, 2.6, 0.1, 0.1, 2.4);
+    [-0.5, 0.5].forEach(x => { const m = new THREE.Mesh(horse, vc); m.applyMatrix4(new THREE.Matrix4().copy(c).multiply(M(x, 0, 3.6))); scene.add(m); });
+    // a hitching rail and a trough
+    box(f, BEAMS, 1, 0.9, -3.4, 4, 0.12, 0.12); [-1, 3].forEach(x => box(f, BEAMS, x, 0.45, -3.4, 0.14, 0.9, 0.14)); box(f, '#6b4a2e', 1, 0.35, -2.6, 2.4, 0.5, 0.7); box(f, '#4f7d8c', 1, 0.58, -2.6, 2.2, 0.05, 0.5);
+  }
+  flushBuild();
+})();
 /* ----- the barnyard animals: a few hens pecking, two cows in the pen ----- */
 const hens = [];
 (function animals() {
@@ -4540,9 +4635,29 @@ function animChar(g, t, opts) {
   else if (opts.working) { const w = Math.sin(t * 7 + u.phase); u.body.position.y = 0.36; u.head.position.y = 0.92 + Math.max(0, w) * 0.04; u.hl.position.set(-0.28, 0.5 + Math.max(0, w) * 0.25, 0.22); u.hr.position.set(0.28, 0.5 + Math.max(0, -w) * 0.25, 0.22); }
   else { u.body.position.y = 0.36; u.head.position.y = 0.92; u.hl.position.set(-0.33, 0.42, 0); u.hr.position.set(0.33, 0.42, 0); }
 }
+// your horse: a bay mare, saddled, legs stepping as she goes
+function makeHorse() {
+  const g = new THREE.Group(), C0 = '#7a4a2a', D = '#3a2418';
+  mesh(new THREE.BoxGeometry(0.62, 0.62, 1.7), C0, 0, 1.15, 0, g);
+  const neck = mesh(new THREE.BoxGeometry(0.34, 0.8, 0.4), C0, 0, 1.55, 0.85, g); neck.rotation.x = 0.55;
+  mesh(new THREE.BoxGeometry(0.3, 0.32, 0.62), C0, 0, 1.92, 1.22, g); mesh(new THREE.BoxGeometry(0.1, 0.5, 0.5), D, 0, 1.72, 0.78, g).rotation.x = 0.55;
+  const tail = mesh(new THREE.BoxGeometry(0.14, 0.7, 0.14), D, 0, 1.0, -0.92, g); tail.rotation.x = -0.4;
+  mesh(new THREE.BoxGeometry(0.66, 0.12, 0.7), '#4a3424', 0, 1.5, 0.05, g); mesh(new THREE.BoxGeometry(0.7, 0.3, 0.06), '#8e2b22', 0, 1.3, 0.05, g);
+  const legs = [[-0.2, 0.62], [0.2, 0.62], [-0.2, -0.62], [0.2, -0.62]].map(([x, z]) => { const L0 = new THREE.Group(); L0.position.set(x, 0.86, z); g.add(L0); mesh(new THREE.BoxGeometry(0.14, 0.86, 0.14), C0, 0, -0.43, 0, L0); mesh(new THREE.BoxGeometry(0.16, 0.12, 0.18), '#2a1f16', 0, -0.84, 0.02, L0); return L0; });
+  const sh = new THREE.Mesh(new THREE.CircleGeometry(0.9, 12), shadowMat); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; sh.scale.set(0.7, 1.4, 1); g.add(sh);
+  g.userData.legs = legs; g.scale.setScalar(1.1); g.visible = false; scene.add(g); return g;
+}
+const horseMesh = makeHorse();
 function syncChars(s, t) {
-  const p = s.player, carry = Sim.carried(s);
-  placeChar(playerMesh, p, t, { moving: !!UI.walking || (!!p.dest && !!p.moving), working: !!p.action || p.working, pack: 0.62 + Math.min(0.5, carry / 40), selected: UI.sel === 'player' });
+  const p = s.player, carry = Sim.carried(s), riding = !!(p.riding && p.horse);
+  const moving = !!UI.walking || (!!p.dest && !!p.moving);
+  placeChar(playerMesh, p, t, { moving: moving && !riding, working: !riding && (!!p.action || p.working), pack: 0.62 + Math.min(0.5, carry / 40), selected: UI.sel === 'player' });
+  horseMesh.visible = riding;
+  if (riding) {
+    horseMesh.position.copy(playerMesh.position); horseMesh.rotation.y = playerMesh.rotation.y;
+    const ph = t * 9; horseMesh.userData.legs.forEach((L0, i) => { L0.rotation.x = moving ? Math.sin(ph + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.55 : 0; });
+    playerMesh.position.y += 1.12 + (moving ? Math.abs(Math.sin(ph)) * 0.08 : 0);
+  }
   const seenW = new Set();
   for (const shop of s.shops) {
     const w = shop.worker; if (!w) continue;
@@ -4745,8 +4860,9 @@ const GH_SOLIDS = (function () {
   [[-176, -840], [-202, -768], [-290, -800]].forEach(([x, z]) => C(x, z, 4.6));
   return out;
 })();
+const STAGE_SOLIDS = Object.values(Sim.STAGE).flatMap(st => { const ux = Math.cos(st.face), uz = -Math.sin(st.face), vx = Math.sin(st.face), vz = Math.cos(st.face), P = (u, v, r) => ({ c: 1, x: st.x + ux * u + vx * v, z: st.z + uz * u + vz * v, r }); return [P(-5, -2, 2.3), P(-3, -2, 2.3), P(3, 0.5, 1.6), P(3, -0.8, 1.4)]; });
 function solidsNow(s) {
-  const out = staticSolids.slice();
+  const out = staticSolids.slice(); out.push(...STAGE_SOLIDS);
   out.push(...tileSolidsNear(s.player.x, s.player.z));
   if (Math.hypot(s.player.x - TOWNS.greenhaven.x, s.player.z - TOWNS.greenhaven.z) < TOWNS.greenhaven.r + 60) out.push(...GH_SOLIDS, ...GH_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.oakbridge.x, s.player.z - TOWNS.oakbridge.z) < TOWNS.oakbridge.r + 40) out.push(...OAK_SOLIDS, ...OAK_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
@@ -4883,7 +4999,7 @@ function walkPlayer(s, dt) {
   // forward is away from the camera
   const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
   const vx = rx * mx + fx * -my, vz = rz * mx + fz * -my;
-  const speed = 6.5 * dt, ox = p.x, oz = p.z;
+  const speed = (p.riding && p.horse ? 15 : 6.5) * dt, ox = p.x, oz = p.z;
   const key = s.shops.map(x => x.plot + ':' + x.tier).join() + s.village.towerBuilt + (s.village.step >= 8) + ':' + tileVersion + ':' + Math.floor(s.player.x / TILE) + ',' + Math.floor(s.player.z / TILE);
   if (key !== solidKey) { solidCache = solidsNow(s); solidKey = key; }
   // small steps so a slow frame can never carry you through a wall
@@ -4912,6 +5028,7 @@ function act(c) {
   if (c[0] === 'open') UI.loc = 'plot' + c[1];
   const r = Sim.cmd(G, c[0], c[1], c[2], c[3]);
   if (r.msg) toast(r.msg, r.ok ? 'info' : 'bad', true);
+  if (c[0] === 'coach' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   drainEvents();
   renderCard(true);
   if (UI.overlay === 'book') renderBook();
@@ -5077,6 +5194,7 @@ function cardHTML(s) {
   if (here === 'ghhall') return oakHallCard(s, walking, 'greenhaven');
   if (here === 'ghgreen') { const T = s.towns && s.towns.greenhaven; return `<h2>Greenhaven Village Green</h2><div class="sub">The green: grazing for the town\u2019s geese, the maypole, the well, and room for the whole town at the harvest feast. The Plough, the bakehouse, the dairy and Fleece & Loom look onto it.${T ? ' Traders pay the reeve ' + Sim.FEES[T.fee].coin + 'c a day.' : ''}</div>${walking}<div class="acts">${B_('Moot hall', ['goto', 'ghhall'], 'alt')}${B_('Businesses', ['page', 'property'], 'alt')}</div>`; }
   if (here === 'ghbridge') return `<h2>The Green Bridge</h2><div class="sub">A stone bridge over the river Green, between the town and Ashcombe Hall. The mill race runs just upstream.</div>${walking}`;
+  if (Lh && Lh.stage) return stageCard(s, Lh.stage, walking);
   if (here === 'ghentry') return `<h2>Greenhaven</h2><div class="sub">A farming town of about eighty on the river Green: wheat and barley, sheep and cattle, and the Great Mill. The north road runs back down to the waystation fork and Hearthmoor.</div>${walking}<div class="acts">${B_('The village green', ['goto', 'ghgreen'], 'alt')}${B_('The moot hall', ['goto', 'ghhall'], 'alt')}</div>`;
   if (here === 'oaksq') {
     const T = s.towns && s.towns.oakbridge, open = Sim.OAK.biz.filter(b => s.biz[b.id] && !s.biz[b.id].closed && b.district === 'market').length;
@@ -5151,6 +5269,7 @@ function hud(s) {
   const inv = s.player.inv, chips = [];
   const carry = Sim.GOODS.filter(g => inv[g]).map(g => `<b>${inv[g]}</b> ${g}`);
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
+  if (s.player.horse) chips.push(`<span class="chip num btn" data-c='["ride"]' role="button" tabindex="0">${s.player.riding ? 'Riding ' + esc(s.player.horse.name) + ' · get down' : 'Mount ' + esc(s.player.horse.name)}</span>`);
   if (s.job) { const e = Sim.empById(s.job.emp), on = Sim.inShift(s); chips.push(`<span class="chip num ${on ? 'on' : ''}">${on ? 'On shift' : 'Job'}: ${esc(e.name)} ${shiftText(e)}</span>`); }
   if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
   s.shops.forEach(x => chips.push(`${TR[x.trade].name}: <b>${x.goods}</b> ${TR[x.trade].product}${x.worker ? ' · ' + esc(x.worker.name) : ''}`));
@@ -5368,6 +5487,13 @@ function pageProperty(s) {
   html += `<h4>${TOWN_NAMES[town]} businesses</h4><div class="grid2">${bizIn(town).map(b => bizBox(s, b)).join('')}</div>`;
   return html;
 }
+function stageCard(s, id, walking) {
+  const p = s.player, h = Sim.hourOf(s), running = h >= 6 && h < 19, acts = [];
+  for (const to of ['hearthmoor', 'oakbridge', 'greenhaven']) if (to !== id) { const f = Sim.fare(id, to), mins = Math.round(Sim.roadDist(id, to) / Sim.COACH_MPM); acts.push(B_(`Coach to ${TOWN_NAMES[to]} · ${f}c<small>about ${mins} min${running ? '' : ' · first coach at 6:00'}</small>`, ['coach', to], '', !running || s.coins < f)); }
+  if (!p.horse) acts.push(B_(`Buy a horse · ${Sim.HORSE_PRICE}c<small>three times faster than walking · stabling ${Sim.STABLING}c a night</small>`, ['buyHorse', 'Bramble'], 'alt', s.coins < Sim.HORSE_PRICE));
+  else { acts.push(B_(p.riding ? 'Dismount' : 'Ride ' + esc(p.horse.name), ['ride'], 'alt')); acts.push(B_(`Sell ${esc(p.horse.name)} · ${Sim.HORSE_SELL}c`, ['sellHorse'], 'alt')); }
+  return `<h2>${esc(Sim.STAGE[id].name)}</h2><div class="sub">Coaches leave for the other towns from six in the morning until seven at night, and the ostler keeps horses for sale. ${p.horse ? 'Your horse ' + esc(p.horse.name) + ' is stabled wherever you sleep.' : ''}</div>${walking}<div class="acts">${acts.join('')}</div>`;
+}
 function oakBizCard(s, Lh, walking) {
   const L = Sim.LAYOUT[Lh.town], b = s.biz[Lh.biz], site = L.biz.find(x => x.id === Lh.biz);
   if (!b) return `<h2>${esc(Lh.name)}</h2>${walking}`;
@@ -5460,7 +5586,7 @@ function travel(key) {
   Sim.cmd(G, 'goto', key);
   const d = p.dest; if (!d) return;
   p.dest = null; p.action = null; p.moving = false;
-  const dist = Math.hypot(d.x - ox, d.z - oz), mins = Math.round(dist / 1.5);
+  const dist = Math.hypot(d.x - ox, d.z - oz), mins = Math.round(dist / (p.riding ? Sim.RIDE_MPM : Sim.WALK_MPM));
   p.x = d.x; p.z = d.z; G.rec.walked += dist;
   if (mins > 0) Sim.advance(G, mins);
   UI.loc = key; UI.sel = null;
@@ -5513,13 +5639,13 @@ const PLACE_NOTE = {
   field: 'Free grain for anyone who gathers it.', forest: 'Free wood for anyone who cuts it.', pit: 'Free iron ore for anyone who digs it.',
   market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
-  granary: 'The village food store.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
+  granary: 'The village food store.', 'stage:hearthmoor': 'Coaches to Oakbridge and Greenhaven, and horses for sale.', 'stage:oakbridge': 'Coaches to Hearthmoor and Greenhaven, and horses for sale.', 'stage:greenhaven': 'Coaches to Hearthmoor and Oakbridge, and horses for sale.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
 };
 function renderMapCard() {
   buildPins();
   const k = UI.mapSel, el = $('mapcard');
   if (!k) { el.hidden = true; return; }
-  const Lk = L[k], d = Math.hypot(Lk.x - G.player.x, Lk.z - G.player.z), mins = Math.round(d / 1.5);
+  const Lk = L[k], d = Math.hypot(Lk.x - G.player.x, Lk.z - G.player.z), mins = Math.round(d / (G.player.riding ? Sim.RIDE_MPM : Sim.WALK_MPM));
   let note = PLACE_NOTE[k] || '';
   if (Lk.emp) { const e = Sim.empById(Lk.emp); note = `${e.boss}'s ${TR[e.trade].name.toLowerCase()}. Shifts ${shiftText(e)}, ${e.wage}c a shift.`; }
   if (Lk.plot != null) { const sh = Sim.shopOnPlot(G, Lk.plot); note = sh ? `${Sim.tierOf(sh).name}: ${Sim.goodsName(sh.trade, sh.goods)} on the shelf.` : Sim.PLOTS[Lk.plot].grant && !G.village.landGranted ? 'Council land. Only the council can grant it.' : 'An empty lot. Open any trade you have learned.'; }
@@ -5641,12 +5767,16 @@ function worldSVG(sel) {
   </svg>`;
 }
 const worldView = { s: 1, x: 0, y: 0 };
+function journeyButtons(to) {
+  const from = townHere(), d = Sim.roadDist(from, to), p = G.player, rid = !!(p.riding && p.horse);
+  return B_(`${rid ? 'Ride' : 'Walk'} there · ${Math.round(d / (rid ? Sim.RIDE_MPM : Sim.WALK_MPM))} min`, ['ui', 'journey', to]) + B_(`Coach · ${Sim.fare(from, to)}c<small>from the stage post</small>`, ['ui', 'travel', 'stage:' + from], 'alt');
+}
 function renderWorldCard() {
   const el = $('worldcard'), s = WORLD.find(w => w.id === UI.worldSel);
   if (!s) { el.hidden = true; return; }
   const here = s.id === townHere(), open = ['hearthmoor', 'oakbridge', 'greenhaven'].includes(s.id);
   const status = here ? 'You are here.' : open ? (s.id === 'greenhaven' ? 'The north road is open: it forks from the east road at the waystation.' : 'The road is open. Walk it, or travel from the map.') : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
-  el.innerHTML = `<div><b>${esc(s.name)}</b><span>${esc(KINGDOM[s.k])} &middot; ${esc(s.tier)}${s.pop ? ' &middot; about ' + s.pop.toLocaleString() + ' people' : ''}</span><p>${esc(s.why)} <i>${esc(status)}</i></p></div>${here ? B_('Village map', ['ui', 'mapMode', 'village']) : ''}`;
+  el.innerHTML = `<div><b>${esc(s.name)}</b><span>${esc(KINGDOM[s.k])} &middot; ${esc(s.tier)}${s.pop ? ' &middot; about ' + s.pop.toLocaleString() + ' people' : ''}</span><p>${esc(s.why)} <i>${esc(status)}</i></p></div>${here ? B_('Village map', ['ui', 'mapMode', 'village']) : open ? journeyButtons(s.id) : ''}`;
   el.hidden = false;
 }
 function renderWorld() {
@@ -5884,6 +6014,7 @@ function uiCmd(k, v) {
   if (k === 'mapMode') { setMapMode(v); return; }
   if (k === 'worldSel') { UI.worldSel = UI.worldSel === v ? null : v; renderWorld(); return; }
   if (k === 'travel') { travel(v); return; }
+  if (k === 'journey') { const r = Sim.cmd(G, 'journey', v); if (!r.ok) { toast(r.msg, 'warn'); return; } if (r.mins > 0) Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); if (UI.overlay) closeOverlay(); toast((r.how === 'ride' ? 'You ride to ' : 'You walk to ') + TOWN_NAMES[v] + ' (' + r.mins + ' min).', 'info', true); drainEvents(); renderCard(true); return; }
   if (k === 'mini') { openMini(); return; }
   if (k === 'miniClose') { closeMini(); return; }
   if (k === 'notes') { showNotes(); return; }
@@ -6221,8 +6352,14 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.0932';
+const BUILD = '2026.11.04.1330';
 const NOTES = [
+  { v: '0.22', date: '4 November', title: 'Coaches and horses', items: [
+    'Each town has a stage post: a coaching office with a coach and horses waiting. Coaches run to the other towns from six in the morning until seven at night, for a few coins.',
+    'Buy a horse at any stage post for 140c. Riding is more than twice as fast as walking. Mount and get down from the button at the top of the screen; stabling costs 1c a night.',
+    'Open the world map and tap a town to walk or ride there along the roads, or head to the stage post for a coach. Travel takes as long as the road is long.',
+    'Travel times on the map now match how fast you really walk.'
+  ] },
   { v: '0.21', date: '4 November', title: 'The north road and Greenhaven', items: [
     'The north road is open. It leaves the east road at the signpost by the waystation and climbs north-west to Greenhaven.',
     'Greenhaven is a farming town of about eighty on the river Green: cottages round a village green with a maypole and a well, the Plough inn, a bakehouse, a dairy, a forge, Fleece & Loom, a butcher and a wheelwright.',
