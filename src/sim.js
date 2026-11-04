@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 11;
+  const VERSION = 12;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -341,6 +341,7 @@
     setupOakbridge(s);
     setupGreenhaven(s);
     setupCrownmere(s);
+    generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
     event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. The four shops across the square are hiring.', 'story');
@@ -632,7 +633,7 @@
         if (!a) continue;
         if (a.mode === 'shop') { e.at = s.t + 60; insertSched(s, e); continue; }
         a.mode = 'shop'; a.phase = 'toShop';
-        a.wtp = clamp(normal(s, wtpMean(shop, false), T.sd) * (1 + 0.06 * (s.village.favor[a.name] || 0)), 1, T.wtp * 3);
+        a.wtp = clamp(normal(s, wtpMean(shop, false), T.sd) * (1 + 0.06 * (s.village.favor[firstName(a.name)] || s.village.favor[a.name] || 0)), 1, T.wtp * 3);
       }
       a.shop = shop.id;
       const r = rand(s);
@@ -1129,7 +1130,7 @@
   const villagers = s => living(s).filter(p => !p.town || p.town === 'hearthmoor');
   const adults = s => living(s).filter(p => !p.kid);
   const living = s => Object.values(s.people).filter(p => p.status === 'here');
-  function plog(s, p, text) { p.log.unshift({ day: s.day, text }); if (p.log.length > 14) p.log.length = 14; }
+  function plog(s, p, text) { p.log.unshift({ day: s.day, text }); const cap = p.status === 'you' ? 20 : (!p.town || p.town === 'hearthmoor') ? 10 : 5; if (p.log.length > cap) p.log.length = cap; }
   function houseById(s, id) { const h = indexOf(s.houses, 'id').get(id); return h && h.id === id ? h : s.houses.find(x => x.id === id); }
   function landlordName(s, owner) {
     if (owner === 'player') return s.name;
@@ -1146,6 +1147,7 @@
   function sexOf(p) { if (!p) return 'm'; if (p.sex) return p.sex; const w = String(p.name || '').split(' ')[0]; return FEMALE.has(w) || FEMALE.has(firstName(p.name)) ? 'f' : 'm'; }
   function newPerson(s, o) {
     const id = 'p' + (s.nextPid++);
+    if (o && o.skill == null) o.skill = Math.round((0.6 + rand(s) * 0.6) * 100) / 100;
     const p = Object.assign({ id, name: 'Someone', age: 30, purse: 20, skill: 0.6 + rand(s) * 0.6, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: [], palette: Math.floor(rand(s) * 10), ate: 0, retired: false }, o);
     p.id = id; s.people[id] = p; return p;
   }
@@ -1229,6 +1231,72 @@
   function makeHouses(s) {
     s.houses = HOUSES.map((h, i) => ({ id: 'h' + i, name: h.name, x: h.x, z: h.z, owner: 'office:lord', rent: h.cap >= 4 ? 3 : 2, cap: h.cap, tenants: [] }));
   }
+  // Hearthmoor's families and their surnames; a wife takes her husband's name, and her own is kept as her maiden name
+  const HM_FAMILIES = {
+    Aldric: ['Thatcher'], Rosamund: ['Thatcher', 'Fenn'], Pip: ['Thatcher'], Maren: ['Hale'], Hilda: ['Hale'], Tobin: ['Woodward'], Ida: ['Woodward', 'Reed'], Wat: ['Woodward'], Tilly: ['Woodward'],
+    Edda: ['Brook', 'Pike'], Rook: ['Brook'], Wynn: ['Marsh', 'Carter'], Corin: ['Marsh'], Brannoch: ['Ashe'], Sela: ['Ashe', 'Lowe'], Gerd: ['Baxter'], Hollin: ['Smith'], Ysolde: ['Tapper'],
+    Ash: ['Wright'], Tamsin: ['Miller'], Osric: ['Penn'], Linnet: ['Penn', 'Vale'], Cade: ['Tanner'], Freya: ['Tanner', 'Holt'], Bram: ['Fuller'], Elsie: ['Fuller'], Merrin: ['Dacre'], Pell: ['Roper'], Hobb: ['Stone']
+  };
+  function giveSurnames(s) {
+    const renamed = new Map();
+    for (const p of Object.values(s.people)) {
+      if (p.town && p.town !== 'hearthmoor') continue;
+      const w = p.name.split(' '), title = ['Old', 'Mother', 'Goodwife'].includes(w[0]) ? w[0] : null, first = title ? w[1] : w[0];
+      const f = HM_FAMILIES[first]; if (!f || (w.length > (title ? 2 : 1))) continue;
+      const old = p.name; p.name = (title && title !== 'Old' ? title + ' ' : '') + first + ' ' + f[0];
+      if (f[1]) p.maiden = first + ' ' + f[1];
+      renamed.set(first, f[0]); renamed.set(old, f[0]);
+    }
+    // children named after a parent's first name take the family's surname instead
+    for (const p of Object.values(s.people)) {
+      const w = p.name.split(' '); if (w.length !== 2) continue;
+      const par = (p.parents || []).map(id => s.people[id]).filter(Boolean), dad = par.find(q => sexOf(q) === 'm') || par[0];
+      if (dad && renamed.has(w[1]) && firstName(dad.name) === w[1]) p.name = w[0] + ' ' + renamed.get(w[1]);
+    }
+  }
+  // the generations before: every family gets its dead, so the world did not begin on the day you arrived
+  function generateAncestry(s) {
+    if (s.ancestry) return; s.ancestry = 1;
+    let sd = 8675309; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    const rate = s.ageRate || 4, FIRST_F = FIRST.filter(n => FEMALE.has(n)).concat(BABY_F), FIRST_M = FIRST.filter(n => !FEMALE.has(n)).concat(BABY_M);
+    const pick = L => L[Math.floor(r() * L.length)], SUR = FAMILY.concat(['Hale', 'Fenn', 'Reed', 'Pike', 'Lowe', 'Vale', 'Holt', 'Carter', 'Thatcher', 'Woodward', 'Brook', 'Ashe']);
+    const lastOf = n => { const w = String(n).split(' '); return w.length > 1 ? w[w.length - 1] : null; };
+    const dead = (name, sex, ageAt, yearsAgo, town, maiden) => {
+      const id = 'p' + (s.nextPid++), died = s.day - Math.max(1, Math.round(yearsAgo)) * rate;
+      const p = Object.assign({}, PERSON_TEMPLATE, { id, name, age: Math.round(ageAt), sex, status: 'dead', died, log: [{ day: died, text: 'Died, aged ' + Math.round(ageAt) + '.' }], ancestor: true });
+      if (town) p.town = town; if (maiden) p.maiden = maiden; s.people[id] = p; return p;
+    };
+    const couple = (sur, town, childAge) => {
+      // a father and mother, born some thirty years before their eldest; both have since died
+      const gap = 24 + r() * 12, fAge = 48 + r() * 34, mAge = 46 + r() * 36, born = childAge + gap;
+      const f = dead(pick(FIRST_M) + ' ' + sur, 'm', fAge, Math.max(1, born - fAge + r() * 3), town);
+      const mm = pick(SUR.filter(x => x !== sur)), mf = pick(FIRST_F), m = dead(mf + ' ' + sur, 'f', mAge, Math.max(1, born - 2 - mAge + r() * 3), town, mf + ' ' + mm);
+      f.spouse = m.id; m.spouse = f.id; f.gen = born; return { f, m, born };
+    };
+    // the living who have no parents on record, grouped into families by the name they were born with
+    const roots = Object.values(s.people).filter(p => p.status === 'here' && !p.kid && !(p.parents || []).length && lastOf(p.maiden || p.name) && !(p.job && p.job.type === 'office' && ['lord', 'steward', 'taxman', 'guard'].includes(p.job.office)));
+    const groups = new Map();
+    for (const p of roots) { const k = (p.town || 'hearthmoor') + '|' + lastOf(p.maiden || p.name); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
+    const fathersBySur = new Map(), mothersByMaiden = new Map();
+    for (const [k, ps] of groups) {
+      const [town, sur] = k.split('|'); ps.sort((a, b) => b.age - a.age);
+      // brothers and sisters: close in age, a handful at most
+      let set = [];
+      const flush = () => { if (!set.length) return; const c = couple(sur, town === 'hearthmoor' ? undefined : town, set[0].age); set.forEach(ch => { ch.parents = [c.f.id, c.m.id]; }); const fk = town + '|' + sur; if (!fathersBySur.has(fk)) fathersBySur.set(fk, []); fathersBySur.get(fk).push(c); const mk = town + '|' + lastOf(c.m.maiden); if (!mothersByMaiden.has(mk)) mothersByMaiden.set(mk, []); mothersByMaiden.get(mk).push(c); set = []; };
+      for (const p of ps) { if (set.length && (set.length >= 5 || set[0].age - p.age > 14 || r() < 0.3 || set.some(q => q.spouse === p.id))) flush(); set.push(p); }
+      flush();
+    }
+    // the grandparents: fathers who share a surname in a town were brothers; some mothers were sisters
+    const grand = (list, sur, town, viaMother) => {
+      for (let i = 0; i < list.length; i += 3) {
+        const sibs = list.slice(i, i + 3), eldest = Math.max(...sibs.map(c => c.born)), g = couple(sur, town, eldest);
+        sibs.forEach(c => { (viaMother ? c.m : c.f).parents = [g.f.id, g.m.id]; });
+        if (!viaMother && r() < 0.6) { const gg = couple(sur, town, g.born); g.f.parents = [gg.f.id, gg.m.id]; }
+      }
+    };
+    for (const [k, list] of fathersBySur) { const [town, sur] = k.split('|'); grand(list, sur, town === 'hearthmoor' ? undefined : town, false); }
+    for (const [k, list] of mothersByMaiden) { const [town, sur] = k.split('|'); if (r() < 0.7) grand(list, sur, town === 'hearthmoor' ? undefined : town, true); }
+  }
   function setupPeople(s) {
     s.people = {}; s.nextPid = 1; s.biz = {}; s.offices = {};
     makeHouses(s);
@@ -1272,6 +1340,7 @@
       const p = newPerson(s, { name, age, purse, job: { type: 'office', office }, home: 'manor', palette: 2 });
       s.offices[office] = p.id;
     });
+    giveSurnames(s);
     for (const p of living(s)) if (!['lord', 'steward', 'taxman'].includes(p.job && p.job.office)) addBody(s, p);
     s.agents.forEach(a => { if (a.job) a.spot = jobSpot(s, a.job); });
   }
@@ -1379,7 +1448,7 @@
       }
       // mood drifts with circumstances
       const target = (p.job || p.kid ? 60 : 30) + (p.home ? 15 : -20) + (p.kid ? 0 : p.purse > 30 ? 10 : p.purse < 5 ? -10 : 0) + (s.village.projects.well ? 5 : 0);
-      p.mood = clamp(p.mood + (target - p.mood) * 0.3, 0, 100);
+      p.mood = Math.round(clamp(p.mood + (target - p.mood) * 0.3, 0, 100));
       // debts grow: the Ashford moneylender takes 2% a day
       if (p.purse < 0) p.purse -= Math.max(1, Math.ceil(-p.purse * INTEREST));
       p.purse = Math.round(p.purse);
@@ -1461,7 +1530,7 @@
     return { spouse: sp, kids, sibs, first: sp || kids.find(c => !c.kid) || sibs[0] || kids[0] || null };
   }
   function dies(s, p) {
-    p.status = 'dead'; p.died = s.day; plog(s, p, 'Died, aged ' + p.age + '.'); p.log = p.log.slice(0, 8);
+    p.status = 'dead'; p.died = s.day; plog(s, p, 'Died, aged ' + p.age + '.'); p.log = p.log.slice(0, 3);
     const b = bodyOf(s, p); if (b) s.agents = s.agents.filter(x => x !== b);
     const H = heirsOf(s, p), heir = H.first, town = TOWNS[townOf(p)] ? TOWNS[townOf(p)].name : 'Hearthmoor';
     const said = [];
@@ -1493,6 +1562,8 @@
     if (H.spouse) { H.spouse.spouse = null; H.spouse.widowed = p.id; H.spouse.mood = clamp(H.spouse.mood - 30, 0, 100); plog(s, H.spouse, 'Widowed: ' + p.name + ' has died.'); }
     if (p.hh) { /* their household carries on under whoever is left */ }
     living(s).filter(q => q.hh === p.id).forEach(q => { q.hh = H.spouse ? H.spouse.id : null; });
+    for (const k of ['job', 'home', 'purse', 'mood', 'opinion', 'arrears', 'homeless', 'ate', 'retired', 'skill']) p[k] = PERSON_TEMPLATE[k];
+    for (const k of ['owed', 'hungry', 'tenure', 'hh']) delete p[k];
     event(s, p.name + ' of ' + town + ' has died, aged ' + p.age + '.' + (heir ? ' ' + heir.name + ' inherits' + (said.length ? ' ' + said.join(' and ') : '') + '.' : ''), townOf(p) === 'hearthmoor' ? 'story' : 'info');
   }
 
@@ -2560,10 +2631,10 @@
       houses.push({ x, z, face: Math.atan2(n.x - x, n.z - z), tall: r() < 0.4 }); taken.push({ x, z, r: rad + 0.4 });
     }
     const spots = {
-      cm_fish: { x: (quay.x0 + quay.x1) / 2, z: shoreZ((quay.x0 + quay.x1) / 2) - 4, rx: 80, rz: 1.5 }, cm_watch: { x: gate.x - Math.sin(gate.face) * 10, z: gate.z - Math.cos(gate.face) * 10, rx: 4, rz: 3 },
-      cm_castle: { x: castle.x + 30, z: castle.z + 34, rx: 8, rz: 5 }, cm_porter: { x: market.x + 10, z: market.z + 10, rx: 18, rz: 18 },
-      cm_mason: { x: cathedral.x + 18, z: cathedral.z + 14, rx: 6, rz: 6 }, cm_carter: { x: southSq.x + 26, z: southSq.z, rx: 5, rz: 5 },
-      cm_wash: { x: quay.x0 + 14, z: shoreZ(quay.x0 + 14) - 6, rx: 6, rz: 1 }, cm_labour: { x: C.x + 160, z: C.z + 120, rx: 10, rz: 8 }
+      cm_fish: { x: (quay.x0 + quay.x1) / 2, z: shoreZ((quay.x0 + quay.x1) / 2) - 9, rx: 90, rz: 2 }, cm_watch: { x: gate.x - Math.sin(gate.face) * 14, z: gate.z - Math.cos(gate.face) * 14, rx: 8, rz: 5 },
+      cm_castle: { x: castle.x + 34, z: castle.z + 44, rx: 14, rz: 8 }, cm_porter: { x: market.x, z: market.z, rx: 24, rz: 24 },
+      cm_mason: { x: cathedral.x + 20, z: cathedral.z + 16, rx: 10, rz: 8 }, cm_carter: { x: southSq.x + 30, z: southSq.z, rx: 8, rz: 10 },
+      cm_wash: { x: quay.x0 + 24, z: shoreZ(quay.x0 + 24) - 9, rx: 18, rz: 1.5 }, cm_labour: { x: C.x + 150, z: C.z + 130, rx: 30, rz: 22 }
     };
     const plazas = [
       { id: 'market', name: 'the Great Market', x: market.x, z: market.z, r0: 6, r1: market.r - 3, w: 6 },
@@ -2793,7 +2864,7 @@
         if (r() < 0.5) family(hand, h, hf, Math.floor(r() * 3));
       }
     }
-    const jobs = Object.keys(CM_JOBS);
+    const jobs = ['cm_fish', 'cm_fish', 'cm_porter', 'cm_porter', 'cm_labour', 'cm_labour', 'cm_carter', 'cm_mason', 'cm_wash', 'cm_castle', 'cm_watch'];
     let n = Object.values(s.people).filter(p => p.town === 'crownmere').length;
     while (n < 1140) {
       const fam = FAM[Math.floor(r() * FAM.length)], h = nextHouse();
@@ -2807,10 +2878,10 @@
     for (const p of Object.values(s.people)) if (p.town === 'crownmere') p.rep = Math.round(repTarget(s, p));
     const masters = Object.values(s.people).filter(p => p.town === 'crownmere' && p.job && p.job.role === 'owner').sort((a, b) => b.rep - a.rep || b.purse - a.purse);
     const mayor = masters[0];
-    s.towns.crownmere = { title: 'Lord Mayor', chest: 600, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
+    s.towns.crownmere = { title: 'Lord Mayor', chest: 1500, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen Lord Mayor of Crownmere by the guilds.');
   }
-  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 900 };
+  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
   function townFolk(s, id) { return living(s).filter(p => p.town === id); }
@@ -3111,7 +3182,7 @@
         if (!o) return fail('Pick a ruling.');
         if (o.chest && v.chest + o.chest < (s.offices && s.offices.elder === 'player' ? CHEST_FLOOR : 0)) return fail('The chest cannot cover that.');
         v.chest += o.chest || 0; v.chestDaily += o.chestDaily || 0;
-        for (const n in o.favor) v.favor[n] = clamp((v.favor[n] || 0) + o.favor[n], -2, 2);
+        for (const n in o.favor) { const k = firstName(n); v.favor[k] = clamp((v.favor[k] || 0) + o.favor[n], -2, 2); }
         v.dispute = null; v.disputeDay = s.day + 3; s.rec.disputesSettled++;
         addStanding(s, o.standing, 'the council rules: ' + o.label.toLowerCase() + '.');
         return ok();
@@ -3463,7 +3534,16 @@
   }
 
   /* ---------- saving ---------- */
-  function serialize(s) { return JSON.stringify(s); }
+  // saves leave out what every person has by default, and loading puts it back in the same order
+  const PERSON_TEMPLATE = { id: null, name: null, age: 0, purse: 0, skill: 0, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: null, palette: 0, ate: 0, retired: false };
+  const STRIP = ['purse', 'skill', 'job', 'home', 'mood', 'opinion', 'arrears', 'homeless', 'status', 'palette', 'ate', 'retired'];
+  function serialize(s) {
+    if (!s.people) return JSON.stringify(s);
+    const people = {};
+    for (const id in s.people) { const p = s.people[id], o = {}; for (const k in p) if (!(STRIP.includes(k) && p[k] === PERSON_TEMPLATE[k])) o[k] = p[k]; people[id] = o; }
+    return JSON.stringify(Object.assign({}, s, { people }));
+  }
+  function inflatePeople(s) { if (s.people) for (const id in s.people) { const p = Object.assign({}, PERSON_TEMPLATE, s.people[id]); if (!p.log) p.log = []; s.people[id] = p; } }
   function migrateV1(o) {
     const s = newGame(o.rng, 'Wren');
     s.t = o.t; s.day = o.day; s.coins = o.coins; s.trades.bakery = LEARN_SHIFTS;
@@ -3549,6 +3629,7 @@
   function deserialize(str) {
     let s = JSON.parse(str);
     if (!s || typeof s !== 'object' || typeof s.v !== 'number') throw new Error('Not a Hearthmoor save');
+    inflatePeople(s);
     if (s.v > VERSION) throw new Error('This save is from a newer version');
     if (s.v === 1) s = migrateV1(s);
     if (s.v === 2) {
@@ -3585,6 +3666,7 @@
     if (s.v === 8) { s.v = 9; setupGreenhaven(s); event(s, 'The north road is open. It leaves the east road at the waystation and climbs to Greenhaven, a farming town of eighty people with a great mill.', 'story'); }
     if (s.v === 9) { s.v = 10; s.ageRate = 4; event(s, 'Time now passes for everyone: people age a year every four days, marry, have children, grow old and die. Change the pace in Settings.', 'story'); }
     if (s.v === 10) { s.v = 11; setupCrownmere(s); event(s, 'The roads to the capital are open: north from Oakbridge, and north-east from Greenhaven, to Crownmere on its lake.', 'story'); }
+    if (s.v === 11) { s.v = 12; giveSurnames(s); generateAncestry(s); for (const a of s.agents) if (a.pid && s.people[a.pid]) a.name = s.people[a.pid].name; event(s, 'Every family now has a surname, and a married woman\u2019s maiden name is kept, so family trees show where everyone came from.', 'info'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }

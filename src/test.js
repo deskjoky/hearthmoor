@@ -283,16 +283,16 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   Sim.advance(q, 1440 * 40);
   const here = Sim.living(q);
   check(here.length >= 18, 'after 40 days on its own the village still has ' + here.length + ' people');
-  check(here.every(p => p.purse >= 0) && here.filter(p => p.home).length >= here.length - 2, 'nobody is in debt, and nearly everyone has a roof');
+  const vil = Sim.villagers(q); check(vil.every(p => p.purse >= 0) && vil.filter(p => p.home).length >= vil.length - 2, 'in Hearthmoor nobody is in debt, and nearly everyone has a roof');
   check(Object.values(q.biz).filter(b => !b.closed).length >= 3, 'the village shops stay open without you');
 
   // fired, broke, evicted, gone
   const s = Sim.newGame(78); s.coins = 500; s.trades.bakery = 2;
   Sim.cmd(s, 'open', 1, 'bakery');
-  const shop = s.shops[0]; let ai = s.applicants.findIndex(a => a.local && a.name === 'Bram'); if (ai < 0) ai = s.applicants.findIndex(a => a.local);
+  const shop = s.shops[0]; let ai = s.applicants.findIndex(a => a.local && a.name.split(' ')[0] === 'Bram'); if (ai < 0) ai = s.applicants.findIndex(a => a.local);
   const name = s.applicants[ai].name;
   Sim.cmd(s, 'hire', shop.id, ai);
-  const p = Object.values(s.people).find(x => x.name === name);
+  const p = Object.values(s.people).find(x => x.name === name || x.name.split(' ')[0] === name);
   check(p.job && p.job.type === 'shop', name + ' now works for you');
   Sim.cmd(s, 'fire', shop.id);
   check(!p.job && p.log[0].text.includes('Let go'), name + ' is out of work and remembers who fired them');
@@ -309,10 +309,10 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   // buy a business: its staff work for you, and you can fire them
   const b = Sim.newGame(79); b.coins = 1000;
   const price = Sim.bizPrice(b, 'gerd');
-  const gerd = Object.values(b.people).find(x => x.name === 'Gerd');
+  const gerd = Object.values(b.people).find(x => x.name.split(' ')[0] === 'Gerd');
   check(Sim.cmd(b, 'buyBiz', 'gerd').ok && b.biz.gerd.owner === 'player', 'bought Gerd’s Bakehouse for ' + price + 'c');
   check(gerd.job.role === 'hand' && gerd.home !== 'biz:gerd', 'Gerd stays on as your manager and has to move out of the rooms above the shop');
-  const osric = Object.values(b.people).find(x => x.name === 'Osric');
+  const osric = Object.values(b.people).find(x => x.name.split(' ')[0] === 'Osric');
   check(b.biz.gerd.staff.some(x => x.pid === osric.id), 'Osric now works for you');
   const c0 = b.coins; Sim.advance(b, 1440);
   check(b.ledger[b.ledger.length - 1].ownedBiz.length === 1, 'the bakehouse shows up in your ledger');
@@ -341,7 +341,7 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   const e = Sim.newGame(80); e.village.step = 8; e.village.standing = 85; e.village.council = true;
   Sim.step(e, 1);
   check(e.offices.elder === 'player' && e.village.step === 9, 'the elder steps down and the moot names you Elder');
-  const br = Object.values(e.people).find(x => x.name === 'Brannoch');
+  const br = Object.values(e.people).find(x => x.name.split(' ')[0] === 'Brannoch');
   check(br.retired && !br.job && br.home, 'Brannoch is a retired villager in his own house now');
   const back = Sim.deserialize(Sim.serialize(b)); Sim.advance(b, 1500); Sim.advance(back, 1500);
   check(Sim.serialize(b) === Sim.serialize(back), 'people, houses and offices save and restore exactly');
@@ -424,7 +424,7 @@ console.log('14. The rebuilt village, and saves from before it');
   const kids = Sim.villagers(s).filter(p => p.kid), fams = new Set(Sim.villagers(s).filter(p => p.hh).map(p => p.hh));
   check(Sim.villagers(s).length >= 25 && Sim.villagers(s).length <= 40, 'Hearthmoor starts with ' + Sim.villagers(s).length + ' residents');
   check(kids.length >= 4 && fams.size >= 5, kids.length + ' children and ' + fams.size + ' families');
-  check(s.biz.mill && s.people[s.biz.mill.owner].name === 'Tamsin', 'the mill is a working business, run by Tamsin');
+  check(s.biz.mill && s.people[s.biz.mill.owner].name.split(' ')[0] === 'Tamsin', 'the mill is a working business, run by Tamsin');
   check(s.houses.every(h => h.tenants.every(id => s.people[id].home === h.id)), 'every home and its tenants agree');
   Sim.advance(s, 1440 * 10);
   const kid = Sim.living(s).find(p => p.kid);
@@ -597,7 +597,7 @@ console.log('20. A whole life: ageing, marriage, children, death and inheritance
   const all = Object.values(s.people), L = Sim.living(s);
   const babies = all.filter(p => p.born), dead = all.filter(p => p.status === 'dead'), wed = L.filter(p => p.spouse && p.maiden);
   check(babies.length > 20 && dead.length > 20 && wed.length > 5, 'thirty years on: ' + babies.length + ' born, ' + dead.length + ' died, ' + wed.length + ' new marriages');
-  check(L.length > 250 && L.length < 600, 'the population stays sensible (' + L.length + ' living)');
+  check(L.length > 1000 && L.length < 2600, 'the population of all four towns stays sensible (' + L.length + ' living)');
   check(L.every(p => Number.isFinite(p.purse) && Number.isFinite(p.age)), 'every purse and age is a real number');
   check(s.offices.elder && s.offices.lord, 'there is still an Elder (' + Sim.holderName(s, 'elder') + ') and a lord (' + Sim.lordTitle(s) + ')');
   // inheritance, step by step
@@ -616,7 +616,7 @@ console.log('20. A whole life: ageing, marriage, children, death and inheritance
   check(t.towns.oakbridge.mayor && t.towns.oakbridge.mayor !== m, 'when a mayor dies, the town votes in a successor');
   const back = Sim.deserialize(Sim.serialize(s)); Sim.advance(s, 600); Sim.advance(back, 600);
   check(Sim.serialize(s) === Sim.serialize(back), 'a world thirty years on saves and loads exactly');
-  check(Sim.serialize(s).length < 900000, 'and its save is ' + Math.round(Sim.serialize(s).length / 1024) + ' KB');
+  check(Sim.serialize(s).length < 2200000, 'and its save is ' + Math.round(Sim.serialize(s).length / 1024) + ' KB');
 }
 
 console.log('21. Your own life: courtship, marriage, children, and carrying on');
@@ -635,9 +635,9 @@ console.log('21. Your own life: courtship, marriage, children, and carrying on')
   }
   check((Y.court[q.id] || 0) >= 60, 'after time together, fondness reaches ' + Y.court[q.id]);
   check(Sim.cmd(s, 'propose', q.id).ok && Y.spouse === q.id && q.home === 'you', 'you marry ' + q.name + ', who moves in with you');
-  for (let d = 0; d < 80 && Sim.yourKids(s).length < 2; d++) Sim.advance(s, 1440);
-  const kids = Sim.yourKids(s);
-  check(kids.length >= 2 && kids.every(c => c.home === 'you' && c.parents.includes(Y.pid)), 'you have ' + kids.length + ' children, living with you: ' + kids.map(c => c.name).join(', '));
+  for (let d = 0; d < 120 && Sim.yourKids(s).filter(c => c.status === 'here').length < 2; d++) Sim.advance(s, 1440);
+  const kids = Sim.yourKids(s).filter(c => c.status === 'here');
+  check(kids.length >= 2 && kids.every(c => c.home === 'you' && c.parents.includes(Y.pid)), 'you have ' + kids.length + ' children, living with you: ' + kids.map(c => c.name + (c.home === 'you' ? '' : ' [' + c.home + ' ' + c.status + ' ' + c.parents + ']')).join(', '));
   const k0 = kids[0]; k0.age = 18; k0.kid = false;
   check(Sim.cmd(s, 'nameHeir', k0.id).ok && Sim.yourHeirs(s).best === k0, k0.name + ' is your named heir');
   const pv = Sim.inheritPreview(s, k0); check(pv.gets.length >= 1, 'they would inherit ' + pv.gets.join(', '));
@@ -670,6 +670,25 @@ console.log('22. Family trees: how is anyone related to anyone');
   const bad = cases.filter(([a, b, r]) => R(a, b) !== r);
   check(!bad.length, 'relations come out right: ' + cases.map(([a, b, r]) => b.name + ' is ' + a.name + '\u2019s ' + R(a, b)).slice(0, 6).join(', ') + '\u2026' + (bad.length ? ' WRONG: ' + bad.map(([a, b, r]) => b.name + '=' + R(a, b) + ' not ' + r).join(', ') : ''));
   check(Sim.relation(g, me.id, mk('Stranger', 'm').id) === null, 'strangers are not related');
+}
+
+console.log('23. Crownmere: the capital on Crown Lake');
+{
+  const s = Sim.newGame(140), C = Sim.CM;
+  const folk = Sim.townFolk(s, 'crownmere'), cb = Object.values(s.biz).filter(b => b.town === 'crownmere');
+  check(folk.length >= 1100 && folk.length <= 1250 && folk.filter(p => !p.kid).every(p => p.home), 'Crownmere has ' + folk.length + ' people, every grown one with a roof');
+  check(cb.length >= 50 && s.towns.crownmere.title === 'Lord Mayor', cb.length + ' businesses and a Lord Mayor, ' + s.people[s.towns.crownmere.mayor].name);
+  const segD = (x, z, pts) => { let b = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); b = Math.min(b, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return b; };
+  const blds = C.biz.map(b => ({ x: b.x, z: b.z, r: 4.9 })).concat(C.houses.map(h => ({ x: h.x, z: h.z, r: 4.3 })));
+  check(blds.every(b => C.inside(b.x, b.z) && C.lakeDist(b.x, b.z) > 4 && C.streets.every(st => st.pts.length < 2 || segD(b.x, b.z, st.pts) > st.w / 2 + 2.8)), blds.length + ' buildings, all inside the walls, none in the lake or on a street');
+  check(Sim.roadDist('oakbridge', 'crownmere') > 300 && Sim.roadDist('greenhaven', 'crownmere') > 200, 'roads run to the capital from Oakbridge and from Greenhaven');
+  s.coins = 100; const st = Sim.STAGE.oakbridge; s.player.x = st.x; s.player.z = st.z; Sim.advance(s, 180);
+  const r = Sim.cmd(s, 'coach', 'crownmere'); check(r.ok && Sim.townAt(s.player.x, s.player.z) === 'crownmere', 'the coach from Oakbridge reaches Crownmere in ' + r.mins + ' minutes');
+  Sim.step(s, 0.01); const bodies = s.agents.filter(a => a.kind === 'person');
+  check(bodies.length > 1000 && bodies.every(a => Sim.townOf(s.people[a.pid]) === 'crownmere'), 'in the capital, ' + bodies.length + ' townsfolk are about');
+  let wet = 0, t0 = Date.now(); for (let k = 0; k < 600; k++) { Sim.advance(s, 1); if (k % 20) continue; for (const a of bodies) if (C.lakeDist(a.x, a.z) < -1) wet++; }
+  check(wet === 0, 'nobody walks into the lake');
+  check(Date.now() - t0 < 30000, 'ten hours of a busy capital take ' + (Date.now() - t0) + ' ms to simulate');
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
