@@ -447,6 +447,14 @@
         w.mood = clamp(w.mood, 0, 100);
         ss.workerPaid = full; ss.workerName = w.name; ss.workerMood = Math.round(w.mood);
       }
+      if (shop.hands && shop.hands.length) {
+        handsRound(s, shop, ss);
+        for (const h of shop.hands.slice()) {
+          spend(s, h.wage); ss.wages += h.wage; s.rec.wagesPaid += h.wage; const hp = h.pid && s.people && s.people[h.pid]; if (hp) hp.purse += h.wage;
+          h.mood = clamp(h.mood + (h.wage >= h.ask ? 5 : -(h.ask - h.wage) * 7) + (shop.manager ? 3 : 0), 0, 100);
+          if (h.mood < 15) { shop.hands = shop.hands.filter(x => x !== h); if (hp) { hp.job = null; plog(s, hp, 'Quit as a hand at your ' + TRADES[shop.trade].name.toLowerCase() + ': the pay was too low.'); } event(s, h.name + ' has quit as a hand at your ' + TRADES[shop.trade].name.toLowerCase() + '. The pay was too low.', 'bad'); }
+        }
+      }
       const up = Ti.upkeep;
       spend(s, up); ss.upkeep = up; ss.upkeepUnpaid = 0;
       const e = Object.assign({}, ss, { label: shopLabel(shop), tierName: Ti.name });
@@ -577,6 +585,11 @@
   };
   function explainShop(s, shop, e) {
     const notes = [], T = TRADES[shop.trade], Ti = tierOf(shop);
+    if (shop.hands && shop.hands.length) {
+      const hw = shop.hands.reduce((a, h) => a + h.wage, 0);
+      if ((e.rounds || 0) < (e.roundsWanted || 0) * 0.6) notes.push({ text: 'Your hands could have sold ' + e.roundsWanted + ' ' + T.product + ' round the town but there were only ' + (e.rounds || 0) + ' to take: they cost ' + hw + 'c and brought in ' + (e.roundsCoin || 0) + 'c. Keep more in storage, or let one go.' });
+      else notes.push({ text: 'Your hands sold ' + e.rounds + ' ' + T.product + ' beyond the counter for ' + (e.roundsCoin || 0) + 'c, against ' + hw + 'c in wages.' });
+    } else if (shop.worker && handRoom(shop) > 0 && e.soldOut === 0 && shop.goods >= Ti.out) notes.push({ text: 'Your shelf ended the day with goods to spare. A hand could take some round the town.', fix: { label: 'Hire a hand', cmd: ['page', 'staff'] } });
     const mean = wtpMean(shop, false), lo = Math.round(mean - T.sd * 0.7), hi = Math.round(mean + T.sd * 0.3);
     const cust = n => n + (n === 1 ? ' customer' : ' customers');
     if (e.soldOut > 0) {
@@ -821,7 +834,28 @@
   }
   /* a manager on the floor lends a hand at the bench and the counter: up to half again as fast */
   const mgrBoost = shop => shop && shop.manager ? 1 + 0.25 * Math.min(1.3, shop.manager.skill || 1) : 1;
-  function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop); }
+  function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop) * handBoost(shop); }
+  /* ---------- hands: extra staff for a bigger shop ----------
+     A stall is one pair of hands. A timber building has room for a second, a stone one for a third, and
+     from the timber building up, a manager. Hands help at the bench and the counter, and each one takes
+     goods out to sell beyond the counter (round the houses, to the inns, to carters for Oakbridge) at a
+     little under the shop price. That trade is real but limited: the first hand sells the most, the next
+     less, and a hand with nothing on the shelf to take out is a wage for nothing. */
+  const HAND_ROOM = [0, 1, 2];
+  const handRoom = shop => HAND_ROOM[shop.tier || 0] || 0;
+  const handBoost = shop => 1 + 0.3 * ((shop && shop.hands) || []).reduce((a, h) => a + Math.min(1.3, h.skill || 1) * (h.mood < 30 ? 0.6 : 1), 0);
+  const ROUND_SALE = [1, 0.65, 0.4];
+  // how many a hand can sell round the town in a day: enough to clear about 12c over the cost of making them
+  function roundQuota(shop) { const T = TRADES[shop.trade], cost = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Math.max(1, T.tiers[0].out), margin = Math.max(1, T.price * 0.85 - cost); return Math.max(1, Math.round(12 / margin)); }
+  function handsRound(s, shop, st) {
+    const hs = shop.hands || []; if (!hs.length) return null;
+    const T = TRADES[shop.trade], q = roundQuota(shop), price = Math.max(1, Math.round(shop.price * 0.85));
+    let want = 0; hs.forEach((h, i) => { want += Math.round(q * (ROUND_SALE[i] || 0.3) * Math.min(1.2, h.skill || 1) * (h.mood < 30 ? 0.6 : 1)); });
+    const keep = Math.min(shop.goods, Math.ceil(tierOf(shop).out / 2)), sold = Math.max(0, Math.min(want, shop.goods - keep));
+    shop.goods -= sold; const coin = sold * price; earn(s, coin);
+    st.revenue += coin; st.sold += sold; st.rounds = (st.rounds || 0) + sold; st.roundsWanted = (st.roundsWanted || 0) + want; st.roundsCoin = (st.roundsCoin || 0) + coin;
+    return { sold, want, coin };
+  }
 
   function updateCounter(s, shop, dt) {
     const pa = playerAttending(s, shop), wa = workerAttending(shop), st = shopStats(s, shop);
@@ -991,7 +1025,7 @@
     st.workerMin += dt;
     const sp = workerSpeed(w, shop);
     const low = !shop.work.loaded && !canProduce(shop);
-    const target = Math.min(Ti.cap - Ti.out, Ti.out * 2);
+    const target = Math.min(Ti.cap - Ti.out, Ti.out * (2 + ((shop.hands || []).length)));
     const missingCost = Object.keys(T.recipe).reduce((a, g) => a + Math.max(0, T.recipe[g] - shop.stock[g]) * buyPrice(s, 'hearthmoor', g), 0);
     if (shop.policy.supplyRuns && low && s.coins >= missingCost && h < H.end - 1 && !(w.supWait > s.t)) {
       w.task = 'supply'; w.sup = { phase: 'go' };
@@ -1484,7 +1518,7 @@
     return out;
   }
   function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : 1; return (b.staff.length + own) * E.perWorker * (b.disrepair ? 0.7 : 1); }
-  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 0.5 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
+  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 0.5 : 0) + ((sh.hands || []).length * 0.1)) * [1, 1.5, 2][sh.tier || 0]; }
   function townDemand(s, t, trade) {
     const E = ECON[trade]; if (!E) return 0;
     const folk = living(s).filter(p => townOf(p) === t && !p.kid && p.age >= 14);
@@ -3885,6 +3919,32 @@
         return ok();
       }
       case 'setWage': if (shop && shop.worker) shop.worker.wage = clamp(Math.round(b), 1, 40); return ok();
+      case 'hireHand': {
+        if (!shop) return fail('No such shop.');
+        if (!shop.worker) return fail('Hire a worker to run it first.');
+        shop.hands = shop.hands || [];
+        if (shop.hands.length >= handRoom(shop)) return fail(handRoom(shop) ? 'There is no room for more hands in a ' + tierOf(shop).name + '.' : 'A ' + tierOf(shop).name + ' has room for one worker only. Upgrade it to take on hands.');
+        const ap = s.applicants[b]; if (!ap) return fail('That applicant has gone.');
+        const wage = clamp(Math.round(c || ap.ask), 1, 40);
+        let wp = ap.pid && s.people ? s.people[ap.pid] : null;
+        if (!wp && s.people) { wp = newPerson(s, { name: ap.name, age: 18 + Math.floor(rand(s) * 20), purse: 10, skill: (ap.skill - 0.7) / 0.6 }); const h = vacancy(s, 4); if (h) moveIn(s, wp, h); }
+        shop.hands.push({ pid: wp ? wp.id : null, name: ap.name, skill: ap.skill, ask: ap.ask, wage, mood: 60, since: s.day });
+        s.applicants.splice(b, 1); s.rec.workersHired++;
+        if (wp) { wp.job = { type: 'shop', shop: shop.id, hand: true }; plog(s, wp, 'Taken on as a hand by ' + s.name + ' at ' + wage + 'c a day.'); wp.opinion = clamp(wp.opinion + 12, -100, 100); const ag = bodyOf(s, wp); if (ag) s.agents = s.agents.filter(x => x !== ag); }
+        event(s, ap.name + ' joins your ' + TRADES[shop.trade].name.toLowerCase() + ' as a hand at ' + wage + 'c a day.', 'info');
+        return ok();
+      }
+      case 'fireHand': {
+        if (!shop || !shop.hands) return fail('No such hand.');
+        const h = shop.hands[b]; if (!h) return fail('No such hand.');
+        shop.hands.splice(b, 1); s.rec.staffFired++;
+        const hp = h.pid && s.people && s.people[h.pid]; if (hp) { hp.job = null; hp.opinion = clamp(hp.opinion - 20, -100, 100); plog(s, hp, 'Let go as a hand by ' + s.name + '.'); }
+        event(s, 'You let ' + h.name + ' go.', 'info'); return ok();
+      }
+      case 'setHandWage': {
+        if (!shop || !shop.hands || !shop.hands[b]) return fail('No such hand.');
+        shop.hands[b].wage = clamp(Math.round(c), 1, 40); return ok();
+      }
       case 'fire': {
         if (!shop || !shop.worker) return fail('No worker to let go.');
         const w = shop.worker; shop.worker = null; s.rec.workersLetGo++; s.rec.staffFired++; approveHolder(s, 'player', -3);
@@ -4045,6 +4105,7 @@
         if (!shop) return fail('No such shop.');
         const refund = Math.floor(TRADES[shop.trade].tiers.slice(0, shop.tier + 1).reduce((t, x) => t + (x.cost.coin || 0), 0) / 2);
         if (shop.worker) { s.rec.workersLetGo++; const w = shop.worker; if (w.pid && s.people && s.people[w.pid]) { const wp = s.people[w.pid]; wp.job = null; plog(s, wp, 'Lost their job when ' + s.name + ' sold the shop.'); addBody(s, wp, { x: w.x, z: w.z }); } }
+        (shop.hands || []).forEach(h => { const hp = h.pid && s.people && s.people[h.pid]; if (hp) { hp.job = null; plog(s, hp, 'Lost their place as a hand when ' + s.name + ' sold the shop.'); } }); shop.hands = [];
         shop.queue.slice().forEach(id => { const ag = agentById(s, id); if (ag) leaveShop(s, ag, null, null); });
         s.shops = s.shops.filter(x => x !== shop);
         s.schedule = s.schedule.filter(e => e.shop !== shop.id);
@@ -4442,6 +4503,7 @@
         // a: 'shop' or 'biz', b: its id, c: the person
         const o = a === 'shop' ? shopById(s, b) : s.biz[b];
         if (o && o.lease) return fail('It is let: the tenant runs it.');
+        if (a === 'shop' && o && !(o.tier > 0)) return fail('A ' + tierOf(o).name + ' is too small for a manager. Upgrade it first.');
         if (!o || (a === 'biz' && o.owner !== 'player')) return fail('That is not your business.');
         if (o.manager) return fail('It already has a manager.');
         const cand = managerCandidates(s, a, b).find(x => x.pid === c); if (!cand) return fail('They cannot take the post.');
@@ -4696,7 +4758,7 @@
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,

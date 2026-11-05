@@ -2258,6 +2258,16 @@ function syncChars(s, t) {
     if (!g) { const fem = Sim.sexOf({ name: w.name }) === 'f'; g = makeChar({ tunic: '#b8a079', skin: SKIN[w.name.length % SKIN.length], apron: APRON[shop.trade], chef: shop.trade === 'bakery', pick: 'w:' + shop.id, fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[w.name.length % 5] }); workerMeshes.set(key, g); }
     placeChar(g, w, t, { moving: w.moving, working: w.task === 'craft' && !w.moving, pack: w.carry ? 1 : 0, hidden: w.indoors, selected: UI.sel === 'w:' + shop.id });
   }
+  for (const shop of s.shops) {
+    const hs = shop.hands || [], H = Sim.workerHours(shop), hr = Sim.hourOf(s), on = hr >= H.start && hr < H.end;
+    hs.forEach((h, i) => {
+      const key = shop.id + ':h:' + h.name; seenW.add(key);
+      let g = workerMeshes.get(key);
+      if (!g) { const fem = Sim.sexOf({ name: h.name }) === 'f'; g = makeChar({ tunic: '#a89a7a', skin: SKIN[h.name.length % SKIN.length], apron: APRON[shop.trade], fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[(h.name.length + 2) % 5] }); workerMeshes.set(key, g); }
+      const st = Sim.plotPt(shop, i ? 'store' : 'station'), a = { x: st.x + (i ? -0.9 : 0.9), z: st.z + 0.4, face: Math.PI };
+      g.visible = on; if (on) placeChar(g, a, t, { moving: false, working: true });
+    });
+  }
   for (const [k, g] of workerMeshes) if (!seenW.has(k)) { dropChar(g); workerMeshes.delete(k); }
   const seen = new Set();
   const fx = focus.x, fz = focus.z, far = 80 + Math.min(60, cam.dist);
@@ -2785,7 +2795,7 @@ function cardHTML(s) {
     if (Object.keys(T.recipe).some(g => p.inv[g])) acts.push(B_('Store what I carry', ['store', shop.id], 'alt'));
     acts.push(B_('Manage', ['ui', 'manage', ['shop', shop.id]], 'alt'));
     const stock = Object.keys(T.recipe).map(g => shop.stock[g] + ' ' + g).join(', ');
-    const status = `${Ti.name} · ${Sim.goodsName(shop.trade, shop.goods)} on the shelf · storage ${stock} (max ${Ti.cap}) · ${shop.price}c each${q ? ` · <b>${q} waiting</b>` : ''}${shop.worker ? ' · ' + esc(shop.worker.name) + ' works here' : ''}`;
+    const status = `${Ti.name} · ${Sim.goodsName(shop.trade, shop.goods)} on the shelf · storage ${stock} (max ${Ti.cap}) · ${shop.price}c each${q ? ` · <b>${q} waiting</b>` : ''}${shop.worker ? ' · ' + esc(shop.worker.name) + ((shop.hands || []).length ? ' and ' + shop.hands.map(h => esc(h.name.split(' ')[0])).join(' and ') + ' work' : ' works') + ' here' : ''}`;
     const busy = crafting || shop.work.loaded ? `<div class="sub">${T.crafting}: ${Math.round(shop.work.progress / Math.max(1, shop.work.need) * 100)}%</div>${progressBar(shop.work.progress / Math.max(1, shop.work.need))}` : '';
     const tip = !shop.worker && !crafting && Sim.dist(p, Sim.plotPt(shop, 'serve')) < 0.8 ? '<div class="why">You are minding the counter. Customers are served while you stand here.</div>' : '';
     return `<h2>Your ${T.name.toLowerCase()}</h2><div class="sub num">${status}</div>${busy}${walking}${tip}<div class="acts">${acts.join('')}</div>`;
@@ -2980,7 +2990,7 @@ function rankWatch(s) {
 }
 function myBusinesses(s) {
   const here = townHere(), out = [];
-  s.shops.forEach(x => { const T = TR[x.trade]; out.push({ town: 'hearthmoor', ref: ['shop', x.id], name: Sim.tierOf(x).name + ' \u00b7 ' + T.name, go: here === 'hearthmoor' ? 'plot' + x.plot : null, line: `<b>${x.goods}</b> ${esc(T.product)} on the shelf${x.manager ? ' \u00b7 run by ' + esc(x.manager.name.split(' ')[0]) : x.worker ? ' \u00b7 ' + esc(x.worker.name.split(' ')[0]) : ''}${(() => { const e = s.ledger.length && s.ledger[s.ledger.length - 1].shops.find(q => q.id === x.id); return e ? ' \u00b7 <b>' + money(e.profit) + '</b> last day' : ''; })()}` }); });
+  s.shops.forEach(x => { const T = TR[x.trade]; out.push({ town: 'hearthmoor', ref: ['shop', x.id], name: Sim.tierOf(x).name + ' \u00b7 ' + T.name, go: here === 'hearthmoor' ? 'plot' + x.plot : null, line: `<b>${x.goods}</b> ${esc(T.product)} on the shelf${x.manager ? ' \u00b7 run by ' + esc(x.manager.name.split(' ')[0]) : x.worker ? ' \u00b7 ' + esc(x.worker.name.split(' ')[0]) : ''}${(x.hands || []).length ? ' +' + x.hands.length + (x.hands.length === 1 ? ' hand' : ' hands') : ''}${(() => { const e = s.ledger.length && s.ledger[s.ledger.length - 1].shops.find(q => q.id === x.id); return e ? ' \u00b7 <b>' + money(e.profit) + '</b> last day' : ''; })()}` }); });
   Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => {
     const town = b.town || 'hearthmoor', key = Object.keys(Sim.LOCS).find(k => Sim.LOCS[k].biz === b.id || Sim.LOCS[k].emp === b.id);
     const last = b.lastProfit != null ? b.lastProfit : null;
@@ -3140,7 +3150,7 @@ function pageShops(s, only) {
     if (next) {
       const can = Sim.canPay(s, next.cost, shop);
       html += `<div class="box"><h5>Upgrade to ${esc(next.name)}</h5><dl class="kv"><dt>Cost</dt><dd>${Sim.costText(next.cost)}</dd><dt>You have</dt><dd>${s.coins}c${Sim.GOODS.filter(g => next.cost[g]).map(g => ', ' + (s.player.inv[g] + shop.stock[g]) + ' ' + g).join('')}</dd>
-        <dt>Batch</dt><dd>${Ti.out} → ${next.out}</dd><dt>Time</dt><dd>${Ti.min} → ${next.min} min</dd><dt>Storage</dt><dd>${Ti.cap} → ${next.cap}</dd><dt>Travelers</dt><dd>${Ti.travelers} → ${next.travelers} a day</dd><dt>Upkeep</dt><dd>${Ti.upkeep} → ${next.upkeep}c</dd></dl>
+        <dt>Batch</dt><dd>${Ti.out} → ${next.out}</dd><dt>Time</dt><dd>${Ti.min} → ${next.min} min</dd><dt>Storage</dt><dd>${Ti.cap} → ${next.cap}</dd><dt>Travelers</dt><dd>${Ti.travelers} → ${next.travelers} a day</dd><dt>Upkeep</dt><dd>${Ti.upkeep} → ${next.upkeep}c</dd><dt>Staff</dt><dd>${1 + Sim.handRoom(shop)} → ${2 + Sim.handRoom(shop)}${shop.tier === 0 ? ', and a manager' : ''}</dd></dl>
         <div class="acts">${B_('Build the ' + esc(next.name), ['upgrade', shop.id], '', !can)}</div>${can ? '' : '<p>Goods you carry and goods in this shop\'s storage both count.</p>'}</div>`;
     } else html += `<p>This is the finest ${T.name.toLowerCase()} in Hearthmoor.</p>`;
     const refund = Math.floor(T.tiers.slice(0, shop.tier + 1).reduce((t, x) => t + (x.cost.coin || 0), 0) / 2);
@@ -3163,6 +3173,7 @@ function managerBox(s, kind, ref, title) {
       ${o.disrepair ? `<p class="why">Needs mending: takings are down by a third. ${B_('Mend it · ' + (o.repairCost || 30) + 'c', ['repairBiz', ref], '', s.coins < (o.repairCost || 30))}</p>` : ''}
       <div class="acts">${UI.confirm === 'mgr' + kind + ref ? B_('Yes, let ' + esc(m.name) + ' go', ['fireManager', kind, ref], 'warn') + B_('Keep them', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'mgr' + kind + ref], 'alt')}</div></div>`;
   }
+  if (kind === 'shop' && !(o.tier > 0)) return `<div class="box"><h5>${esc(title)}: no manager</h5><p>A ${esc(Sim.tierOf(o).name)} is too small for a manager. Upgrade it and you can put someone in charge.</p></div>`;
   const cands = Sim.managerCandidates(s, kind, ref);
   return `<div class="box"><h5>${esc(title)}: no manager</h5><p>${kind === 'shop' ? 'A manager draws in regulars and travellers, about a third more customers, and works beside your worker, so goods are made and customers served up to half again as fast. They order supplies overnight at a tenth off so storage never runs dry, keep your worker content, hire a new one if they quit, and set prices by what sold.' : 'A manager counts as one more pair of hands, haggles a tenth off supplies, hires and keeps staff, pays fair wages and small repairs, and reports to you each evening.'}</p>
     ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}</span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
@@ -3180,6 +3191,20 @@ function pageManage(s) {
     return `<h3>${esc(Sim.empById(b.id).name)}</h3><p class="lead">${esc(TOWN_NAMES[b.town || 'hearthmoor'])} · just this business.</p><div class="acts">${all}</div><div class="grid2">${bizBox(s, b)}${b.lease ? '' : managerBox(s, 'biz', b.id, 'Manager')}</div>`;
   }
   return pageShops(s);
+}
+function handsBox(s, shop) {
+  const T = TR[shop.trade], room = Sim.handRoom(shop), hs = shop.hands || [], Ti = Sim.tierOf(shop), q = Sim.roundQuota(shop);
+  let h = `<div class="box"><h5>Hands at your ${esc(T.name.toLowerCase())} · ${hs.length} of ${room}</h5>`;
+  if (!room) return h + `<p>A ${esc(Ti.name)} has room for one worker and no manager. Upgrade it to take on a hand and a manager.</p></div>`;
+  h += `<p>Each hand helps at the bench and the counter, and takes ${T.product} round the town to sell at a little under your price: the first about ${q} a day, the next fewer. A hand with nothing on the shelf to take out is a wage for nothing.</p>`;
+  const st = G && G.ledger.length ? G.ledger[G.ledger.length - 1].shops.find(x => x.id === shop.id) : null;
+  if (st && hs.length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c, against ${hs.reduce((a, x) => a + x.wage, 0)}c in wages.</p>`;
+  hs.forEach((x, i) => {
+    h += `<div class="staffrow"><span><b>${esc(x.name)}</b> · ${Sim.skillLabel(x.skill)} · mood ${Math.round(x.mood)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${x.wage}c</output><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'hand' + shop.id + ':' + i ? B_('Yes, let go', ['fireHand', shop.id, i], 'warn') + B_('Keep', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'hand' + shop.id + ':' + i], 'alt')}</div>`;
+    if (x.wage < x.ask) h += `<p class="why">${esc(x.name.split(' ')[0])} asked for ${x.ask}c: their mood falls each day.</p>`;
+  });
+  if (hs.length < room) h += s.applicants.length ? `<p>Take on a hand:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Take on ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
+  return h + `</div>`;
 }
 function pageStaff(s, only) {
   let html = only ? '' : `<h3>Staff</h3><p class="lead">Hire help, set pay, and see what they are doing.</p>`;
@@ -3201,6 +3226,7 @@ function pageStaff(s, only) {
       <p>${w.wage < w.ask ? 'Below what they asked. Mood drops each day.' : w.wage > w.ask ? 'Above the asking wage. Mood rises faster.' : 'Matches the asking wage.'} Paid at 21:00. Below 30 mood they work slower, and a miserable worker quits after a warning.</p>
       <div class="acts">${UI.confirm === 'fire' + shop.id ? `<div class="confirm">Let ${esc(w.name)} go? ${B_('Yes, let them go', ['fire', shop.id], 'warn')} ${B_('Keep them', ['ui', 'confirm', null], 'alt')}</div>` : B_('Let go&hellip;', ['ui', 'confirm', 'fire' + shop.id], 'alt')}</div></div>`;
   }
+  for (const shop of s.shops.filter(x => x.worker && (!only || x.id === only))) html += handsBox(s, shop);
   const open = s.shops.filter(x => !x.worker && (!only || x.id === only));
   if (open.length) {
     html += `<h4>Looking for work today</h4><p>Pick someone and set a daily wage. Paying below what they ask saves coin but makes them unhappy. New faces come each morning.</p><div class="grid2">`;
@@ -5010,6 +5036,7 @@ function judge() {
 const BUILD = '/*BUILD*/';
 const NOTES = [
   { v: '0.36', date: '5 November', title: 'Good years and bad', items: [
+    'Bigger shops take more staff. A stall has one worker and no manager; a timber building has room for a hand and a manager; a stone one for two hands. Hands help at the bench and the counter and sell round the town, the first the most. Too many hands, or hands with an empty shelf, cost more than they bring in: the ledger tells you which.',
     'Markets now stay short or glutted for a week or two. Now and then a blight, a flood, a flooded mine or a bumper year shakes one town\u2019s grain, wood or ore, and you hear about it, so hauling goods there pays.',
     'Businesses no longer all thrive. A sharp owner sells more than a dull one, and any place can hit a bad spell for a few weeks. One that keeps losing money closes, and before long someone (one of its old hands, or a newcomer from Ashford) reopens it.',
     'Hearthmoor no longer slowly empties: when there is a roof free, a worker or a young family arrives from Ashford.',

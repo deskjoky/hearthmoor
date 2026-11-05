@@ -538,6 +538,9 @@ console.log('18. Managers: someone you trust runs the place while you are away')
 {
   const s = Sim.newGame(7); s.coins = 3000; s.trades.bakery = 5;
   Sim.cmd(s, 'buyBiz', 'o_bell'); Sim.cmd(s, 'open', 1, 'bakery'); const sh = s.shops[0];
+  check(!Sim.cmd(s, 'hireManager', 'shop', sh.id, (Sim.managerCandidates(s, 'shop', sh.id)[0] || {}).pid).ok, 'a stall is too small for a manager');
+  sh.tier = 1;
+  s.applicants.push({ name: 'Tam Reeve', skill: 1, ask: 7 }); check(Sim.cmd(s, 'hireHand', sh.id, s.applicants.length - 1, 7).ok === false, 'no hand without a worker to lead');
   const cb = Sim.managerCandidates(s, 'biz', 'o_bell'), cs = Sim.managerCandidates(s, 'shop', sh.id);
   check(cb.length && cb.every(c => Sim.townOf(s.people[c.pid]) === 'oakbridge') && cs.every(c => Sim.townOf(s.people[c.pid]) === 'hearthmoor'), 'managers come from the town where the business is');
   check(Sim.cmd(s, 'hireManager', 'biz', 'o_bell', cb[0].pid).ok && Sim.cmd(s, 'hireManager', 'shop', sh.id, cs[0].pid).ok, 'hired ' + cb[0].name + ' for The Bell and ' + cs[0].name + ' for your bakery');
