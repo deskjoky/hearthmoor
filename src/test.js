@@ -1045,6 +1045,24 @@ console.log('34. Silence that wears off, mercy with true reasons, and preparing 
   check(s.ledger.slice(1).every(e => !e.unexplained), 'audits have their own line in your books');
 }
 
+console.log('35. Petitions to the crown, and markets that draw traders when short');
+{
+  const s = newGameRaw(36); s.ageRate = 0; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440);
+  const R = s.realm, X = (...a) => Sim.cmd(s, ...a);
+  const folk = Sim.living(s).filter(p => p.town === 'oakbridge' && !p.kid); folk.slice(0, 8).forEach(p => p.hungry = true);
+  R.treasury = 500; const t0 = R.treasury, ap0 = s.towns.oakbridge.approval;
+  R.petitions = [{ id: 1, kind: 'relief', town: 'oakbridge', cost: 92, day: s.day, until: s.day + 6, text: 'x' }];
+  check(X('petition', 1, 0).ok && R.treasury === t0 - 92 && s.towns.oakbridge.approval > ap0 && !folk[0].hungry, 'sending grain to a hungry town costs the treasury and feeds them');
+  const lordId = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).find(l => l && l !== 'player' && s.people[l]), L = s.people[lordId], op = L.opinion || 0;
+  R.petitions = [{ id: 2, kind: 'defiance', lord: lordId, region: 'x', day: s.day, until: s.day + 1, text: 'x' }]; const f0 = R.favour;
+  Sim.advance(s, 1440 * 2);
+  check(!R.petitions.some(q => q.id === 2) && R.favour < f0 + 1, 'a defiance left unanswered answers itself, and the silence costs you');
+  const g0 = s.goods.hearthmoor.grain; s.goods.hearthmoor.grain = 5; Sim.advance(s, 1440 * 3);
+  check(s.goods.hearthmoor.grain > 15, 'a market run dry draws traders: Hearthmoor grain back to ' + s.goods.hearthmoor.grain + ' in three days');
+  let noble = 0; for (let d = 0; d < 60 && !noble; d++) { Sim.advance(s, 1440); noble = s.courts.crownmere.cases.concat(s.courts.crownmere.closed).filter(c => c.requested && s.people[c.accused] && s.people[c.accused].noble).length; }
+  check(noble > 0, 'within two months a noble is accused, and the case comes to the crown’s court');
+}
+
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

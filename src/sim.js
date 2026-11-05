@@ -592,7 +592,8 @@
         const r = T.recipe, Ti = tierOf(shop), want = {};
         // before and through winter, a manager lays in a reserve of what the shop uses, if you allow it and can spare the coin
         const reserve = shop.policy.reserve !== false && (seasonOf(s) === 'autumn' || seasonOf(s) === 'winter') && s.coins > 120;
-        for (const g of Object.keys(r)) want[g] = Math.max(0, Math.min(Ti.cap, r[g] * (reserve && goodsPrice(s, 'hearthmoor', g) <= GOODS_BASE[g] ? 10 : 4)) - shop.stock[g]);   // only while it is cheap: a sensible manager does not corner the market
+        // a sensible manager buys a reserve only while it is cheap, and when supplies are dear buys only what the next batches need
+        for (const g of Object.keys(r)) { const pr = goodsPrice(s, 'hearthmoor', g) / GOODS_BASE[g], days = reserve && pr <= 1 ? 10 : pr > 2.2 ? 1 : pr > 1.6 ? 2 : 4; want[g] = Math.max(0, Math.min(Ti.cap, r[g] * days) - shop.stock[g]); }   // only while it is cheap: a sensible manager does not corner the market
         const price = g => Math.ceil(buyPrice(s, 'hearthmoor', g, want[g]) * 0.9), cost = () => Object.keys(want).reduce((a, g) => a + (want[g] ? price(g) : 0), 0);
         while ((cost() > Math.max(0, s.coins - 20) || (reserve && cost() > 60 + budget * 4)) && Object.values(want).some(v => v > 0)) { const g = Object.keys(want).sort((a, b) => want[b] / r[b] - want[a] / r[a])[0]; want[g]--; }
         const c = cost(), got = Object.keys(want).filter(g => want[g]);
@@ -1592,7 +1593,9 @@
       // the season moves what the land gives and what the town burns; carts make up only half the difference,
       // so grain is dear by late winter and cheap after the harvest
       const T = TOWN_GOODS[t], st = s.goods[t][g], fx = seasonFx(s), mk = T.make[g] * (fx[g] || 1), us = T.use[g] * (g === 'wood' ? fx.fuel : 1);
-      const carts = 0.8 * (T.use[g] - T.make[g]) + 0.5 * ((us - mk) - (T.use[g] - T.make[g])) + 0.1 * (goodsTarget(t, g) - st);
+      // when a market runs badly short the price draws traders from the other towns, faster the worse it gets
+      const short = Math.max(0, goodsTarget(t, g) * 0.5 - st);
+      const carts = 0.8 * (T.use[g] - T.make[g]) + 0.5 * ((us - mk) - (T.use[g] - T.make[g])) + 0.1 * (goodsTarget(t, g) - st) + 0.25 * short;
       s.goods[t][g] = Math.max(4, Math.round(st + mk * (0.85 + rand(s) * 0.3) - us * (0.85 + rand(s) * 0.3) + carts));
     }
     // now and then a blight, a flood, a lost convoy or a bumper year shakes one market
@@ -3609,10 +3612,61 @@
     event(s, text, 'bad'); return text;
   }
   // a day at court
+  /* ---------- petitions to the crown: the few decisions only a ruler makes ---------- */
+  // Most of the realm runs itself. Now and then something comes that only the crown can answer: a town in a hard winter,
+  // a lord who defies the crown's court, a noble accused by a commoner, the guilds asking for relief. Each has a real cost
+  // either way, and unanswered ones answer themselves after six days.
+  function petitionsDay(s) {
+    const R = s.realm; if (!isRuler(s)) return;
+    R.petitions = (R.petitions || []).filter(q => { if (s.day < q.until) return true; answerPetition(s, q, -1); return false; });
+    if (R.petitions.length >= 2 || rand(s) > 0.11) return;
+    const kinds = [], winter = seasonOf(s) === 'winter' || calendar(s).month === 0;
+    const hungryTown = Object.keys(TOWNS).map(t => ({ t, n: living(s).filter(p => townOf(p) === t && !p.kid && p.hungry).length })).sort((a, b) => b.n - a.n)[0];
+    if (hungryTown && hungryTown.n >= 6 && (winter || hungryTown.n >= 12)) kinds.push('relief');
+    const lords = Object.keys(R.regions).map(id => ({ id, l: regionLord(s, id) })).filter(x => x.l && x.l !== 'player' && s.people[x.l] && (s.people[x.l].opinion || 0) < 30);
+    if (lords.length) kinds.push('defiance');
+    const nobles = living(s).filter(p => p.noble && p.status === 'here' && !p.held && s.courts && s.courts[townOf(p)]);
+    if (nobles.length) kinds.push('noble');
+    if (R.tariff > 1 || winter) kinds.push('guilds');
+    if (!kinds.length) return;
+    const k = kinds[Math.floor(rand(s) * kinds.length)], id = (R.nextPetition = (R.nextPetition || 0) + 1), base = { id, kind: k, day: s.day, until: s.day + 6 };
+    if (k === 'relief') { const t = hungryTown.t; R.petitions.push(Object.assign(base, { town: t, cost: 60 + hungryTown.n * 4, text: 'The people of ' + REGIONS[t].replace(/^the /, '') + ' are going hungry: ' + hungryTown.n + ' grown folk had no bread last night. Their council asks the crown for grain.' })); }
+    else if (k === 'defiance') { const x = lords[Math.floor(rand(s) * lords.length)], L = s.people[x.l]; R.petitions.push(Object.assign(base, { lord: x.l, region: x.id, text: L.name + ', who holds ' + REGIONS[x.id] + ', has set free a man your judges sent to his gaol, and says the crown’s court has no business in his lands.' })); }
+    else if (k === 'noble') {
+      const N = nobles[Math.floor(rand(s) * nobles.length)], C = s.courts.crownmere, vict = townFolk(s, townOf(N)).filter(p => !p.kid && !p.noble && p.status === 'here')[0]; if (!vict) return;
+      const guilty = rand(s) < 0.65, c = newCase(s, 'assault', { accused: N.id, accuser: vict.id, victim: vict.id, value: 20, where: C.name, truth: guilty ? 'guilty' : 'lie', what: vict.name + ' says ' + N.name + ' had them beaten for blocking the road', claim: vict.name + ' says ' + N.name + '’s men beat them on their master’s word.' }, C);
+      c.hidden = evidencePool(s, c); c.requested = true; c.delegated = false;
+      realmLog(s, 'A commoner of ' + REGIONS[townOf(N)] + ' accuses ' + N.name + ', a noble, of assault. Nobles answer to the crown\u2019s court in Crownmere.', 'info'); return;
+    }
+    else R.petitions.push(Object.assign(base, { text: 'The guilds of Alderwyn ask the crown to lower the tariff' + (winter ? ' through the winter, while trade is thin' : '') + '. They say the roads are emptying of merchants.' }));
+    realmLog(s, 'A petition to the crown: ' + R.petitions[R.petitions.length - 1].text, 'info');
+  }
+  const PETITION_CHOICES = {
+    relief: q => ['Send ' + q.cost + 'c of grain from the treasury', 'Let the town see to its own'],
+    defiance: q => ['Summon the lord and fine him 80c', 'Let it pass, this once'],
+    guilds: q => ['Lower the tariff by a quarter', 'Keep the tariff']
+  };
+  // choice -1 means no answer came in time: it counts as the second choice, and a little worse for the silence
+  function answerPetition(s, q, choice) {
+    const R = s.realm, quiet = choice === -1, c = quiet ? 1 : choice;
+    if (q.kind === 'relief') {
+      const folk = living(s).filter(p => townOf(p) === q.town && !p.kid);
+      if (c === 0) { R.treasury -= q.cost; folk.forEach(p => { if (p.hungry) { p.ate = (p.ate || 0) + 6; p.hungry = false; } p.opinion = clamp((p.opinion || 0) + 4, -100, 100); }); const T = s.towns && s.towns[q.town]; if (T) T.approval = clamp((T.approval || 50) + 6, 0, 100); realmLog(s, 'Crown grain reaches ' + REGIONS[q.town] + '. The town will remember it.', 'good'); }
+      else { folk.forEach(p => p.opinion = clamp((p.opinion || 0) - (quiet ? 4 : 3), -100, 100)); const T = s.towns && s.towns[q.town]; if (T) T.approval = clamp((T.approval || 50) - 4, 0, 100); realmLog(s, quiet ? 'No answer comes from the crown, and ' + REGIONS[q.town] + ' goes hungry.' : 'The crown tells ' + REGIONS[q.town] + ' to see to its own.', 'bad'); }
+    } else if (q.kind === 'defiance') {
+      const L = s.people[q.lord], others = Object.keys(R.regions).map(id => regionLord(s, id)).filter(l => l && l !== 'player' && l !== q.lord && s.people[l]).map(l => s.people[l]);
+      if (c === 0) { R.treasury += 80; if (L) { L.opinion = clamp((L.opinion || 0) - 25, -100, 100); L.purse -= 80; } others.forEach(o => o.opinion = clamp((o.opinion || 0) + 3, -100, 100)); R.favour = clamp(R.favour + 2, 0, 100); realmLog(s, (L ? L.name : 'The lord') + ' is summoned to the Great Hall and fined. The other lords take note.', 'info'); }
+      else { if (L) L.opinion = clamp((L.opinion || 0) + 5, -100, 100); others.forEach(o => o.opinion = clamp((o.opinion || 0) - (quiet ? 6 : 4), -100, 100)); R.favour = clamp(R.favour - 2, 0, 100); realmLog(s, (L ? L.name : 'The lord') + '’s defiance goes unanswered. Other lords wonder what else they can get away with.', 'bad'); }
+    } else if (q.kind === 'guilds') {
+      const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').map(b => s.people[b.owner]).filter(Boolean);
+      if (c === 0) { R.tariff = Math.max(0.5, R.tariff - 0.25); owners.forEach(o => o.opinion = clamp((o.opinion || 0) + 4, -100, 100)); realmLog(s, 'The crown lowers the tariff to ' + R.tariff + '×. The guilds are pleased; the treasury will feel it.', 'good'); }
+      else { owners.forEach(o => o.opinion = clamp((o.opinion || 0) - (quiet ? 3 : 2), -100, 100)); realmLog(s, quiet ? 'The guilds’ petition goes unanswered.' : 'The crown keeps the tariff. The guilds grumble.', 'info'); }
+    }
+  }
   function realmDay(s) {
     const R = s.realm; if (!R) return;
     setupFigures(s);
-    banditDay(s); contractDay(s); promiseDay(s); goodRuleDay(s); treasuryWatch(s);
+    banditDay(s); contractDay(s); promiseDay(s); goodRuleDay(s); treasuryWatch(s); petitionsDay(s);
     if (s.day % 7 === 3) figuresWeek(s);
     { const m = (R.figures || []).find(f => f.kind === 'merchant'); if (m && m.ally) { const n = Object.values(s.biz).filter(b => b.owner === m.pid).length; if (n) { earn(s, n * 2); s.stats.partner = (s.stats.partner || 0) + n * 2; } } }
     // the old king's standing drifts; hard times and raids wear it down
@@ -5280,6 +5334,12 @@
         s.player.councilPath = COUNCIL_PATH[a]; s.player.seatsHeld = Array.from(new Set((s.player.seatsHeld || []).concat(a)));
         realmLog(s, 'The King names you ' + COUNCIL[a] + ' of Alderwyn. You sit on the royal council, on ' + PATH_NAME[COUNCIL_PATH[a]] + '.', 'story'); return ok();
       }
+      case 'petition': {
+        const R = s.realm; if (!R || !isRuler(s)) return fail('Only the crown answers petitions.');
+        const q = (R.petitions || []).find(x => x.id === a); if (!q) return fail('That petition has been answered.');
+        if (q.kind === 'relief' && b === 0 && R.treasury < q.cost) return fail('The treasury has ' + R.treasury + 'c; the grain costs ' + q.cost + 'c.');
+        R.petitions = R.petitions.filter(x => x !== q); answerPetition(s, q, b === 0 ? 0 : 1); return ok();
+      }
       case 'resignSeat': {
         const R = s.realm; if (!R) return fail('Not now.'); const k = Object.keys(COUNCIL).find(x => R.council[x] === 'player'); if (!k) return fail('You hold no council seat.');
         R.council[k] = noble(s, { name: nameForNoble(s), age: 45, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' when ' + s.name + ' resigned.' }).id;
@@ -5745,7 +5805,7 @@
   }
 
   const api = {
-    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
+    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
