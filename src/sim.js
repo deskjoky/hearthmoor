@@ -375,9 +375,9 @@
       const T = TRADES[shop.trade], Ti = tierOf(shop);
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
-      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15);
+      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15) * (shop.manager ? 1.3 : 1);
       villagers(s).filter(p => p.purse >= shop.price && !p.kid && !(p.job && ['guard', 'lord', 'steward', 'taxman'].includes(p.job.office))).forEach(p => { if (rand(s) < vr) sched.push({ at: when(), pid: p.id, shop: shop.id }); });
-      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
+      const n = Math.max(0, Math.round((Ti.travelers + (shop.manager ? 1 : 0) + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
       for (let i = 0; i < Math.round(n * Math.min(1, share * 1.15 + 0.2)); i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
@@ -518,6 +518,19 @@
       let budget = m.budget, did = [];
       const ss = shopStats(s, shop), T = TRADES[shop.trade], floor = Math.ceil(Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * buyPrice(s, 'hearthmoor', g), 0) / Math.max(1, tierOf(shop).out) * 1.1);
       if (!shop.policy.supplyRuns) { shop.policy.supplyRuns = true; did.push('set the worker to buy supplies'); }
+      { /* the manager orders supplies in bulk overnight, a little cheaper, so the worker never has to leave the counter */
+        const r = T.recipe, Ti = tierOf(shop), want = {};
+        for (const g of Object.keys(r)) want[g] = Math.max(0, Math.min(Ti.cap, r[g] * 4) - shop.stock[g]);
+        const price = g => Math.ceil(buyPrice(s, 'hearthmoor', g, want[g]) * 0.9), cost = () => Object.keys(want).reduce((a, g) => a + (want[g] ? price(g) : 0), 0);
+        while (cost() > Math.max(0, s.coins - 20) && Object.values(want).some(v => v > 0)) { const g = Object.keys(want).sort((a, b) => want[b] / r[b] - want[a] / r[a])[0]; want[g]--; }
+        const c = cost(), got = Object.keys(want).filter(g => want[g]);
+        if (got.length && c > 0) {
+          spend(s, c); ss.supplies = (ss.supplies || 0) + c;
+          for (const g of got) { shop.stock[g] += want[g]; if (s.goods && s.goods.hearthmoor) s.goods.hearthmoor[g] = Math.max(0, (s.goods.hearthmoor[g] || 0) - want[g]); }
+          did.push('ordered ' + got.map(g => want[g] + ' ' + g).join(' and ') + ' for ' + c + 'c');
+        }
+      }
+      if (shop.worker) shop.worker.mood = clamp(shop.worker.mood + 4, 0, 100);
       if (!shop.worker && s.applicants && s.applicants.length) {
         const pick = s.applicants.map((a, i) => ({ a, i })).filter(x => x.a.ask <= budget + 9).sort((x, y) => y.a.skill / y.a.ask - x.a.skill / x.a.ask)[0];
         if (pick) { const r = cmd(s, 'hire', shop.id, pick.i, pick.a.ask); if (r.ok) did.push('hired ' + pick.a.name + ' at ' + pick.a.ask + 'c'); }
@@ -525,7 +538,7 @@
       if (shop.worker && shop.worker.wage < shop.worker.ask && shop.worker.ask - shop.worker.wage <= budget) { budget -= shop.worker.ask - shop.worker.wage; shop.worker.wage = shop.worker.ask; did.push('raised ' + shop.worker.name + '\u2019s pay to ' + shop.worker.ask + 'c'); }
       if (ss.tooExpensive > Math.max(2, ss.sold * 0.25) && shop.price > floor) { shop.price--; did.push('lowered the price to ' + shop.price + 'c (' + ss.tooExpensive + ' turned away)'); }
       else if (ss.soldOut > 0 && ss.tooExpensive <= 1 && shop.price < Math.round(T.wtp * 1.4)) { shop.price++; did.push('raised the price to ' + shop.price + 'c (sold out)'); }
-      if (rand(s) < (1.15 - m.skill) * 0.22) { const loss = 2 + Math.floor(rand(s) * 5); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
+      if (m.skill < 0.85 && rand(s) < (1.15 - m.skill) * 0.2) { const loss = 1 + Math.floor(rand(s) * 4); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
       const e = entry.shops.find(x => x.id === shop.id);
       report(s, managedName(s, 'shop', shop.id).replace(/^your/, 'Your') + ' (' + m.name + '): ' + (e ? e.revenue + 'c in, ' + e.profit + 'c profit' : 'quiet day') + (did.length ? '. ' + did.join('; ') + '.' : '.'));
     }
@@ -803,7 +816,9 @@
     const w = shop.worker;
     return !!w && (w.task === 'serve' || w.task === 'tend') && dist(w, plotPt(shop, 'serve')) < 0.8;
   }
-  function workerSpeed(w) { return w.skill * (w.mood < 30 ? 0.7 : 1); }
+  /* a manager on the floor lends a hand at the bench and the counter: up to half again as fast */
+  const mgrBoost = shop => shop && shop.manager ? 1 + 0.45 * Math.min(1.3, shop.manager.skill || 1) : 1;
+  function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop); }
 
   function updateCounter(s, shop, dt) {
     const pa = playerAttending(s, shop), wa = workerAttending(shop), st = shopStats(s, shop);
@@ -812,7 +827,7 @@
     const front = agentById(s, shop.queue[0]);
     if (!front) { shop.queue.shift(); return; }
     if (front.phase !== 'queue' || dist(front, plotPt(shop, 'queue0')) > 0.6 || shop.goods <= 0) return;
-    const speed = Math.max(pa ? 1 : 0, wa ? workerSpeed(shop.worker) : 0);
+    const speed = Math.max(pa ? 1 : 0, wa ? workerSpeed(shop.worker, shop) : 0);
     if (speed <= 0) return;
     shop.serveProgress += dt * speed;
     if (shop.serveProgress >= SERVE_MIN) {
@@ -971,7 +986,7 @@
     if (h >= H.lunch && h < H.lunch + 0.5) { const b = plotPt(shop, 'bench'); w.task = 'lunch'; moveTo(w, b.x, b.z, 1.1 * dt); w.why = 'Short break until ' + clock(H.lunch * 60 + 30); return; }
 
     st.workerMin += dt;
-    const sp = workerSpeed(w);
+    const sp = workerSpeed(w, shop);
     const low = !shop.work.loaded && !canProduce(shop);
     const target = Math.min(Ti.cap - Ti.out, Ti.out * 2);
     const missingCost = Object.keys(T.recipe).reduce((a, g) => a + Math.max(0, T.recipe[g] - shop.stock[g]) * buyPrice(s, 'hearthmoor', g), 0);
@@ -1452,7 +1467,7 @@
     return out;
   }
   function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : 1; return (b.staff.length + own) * E.perWorker * (b.disrepair ? 0.7 : 1); }
-  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
+  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 1 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
   function townDemand(s, t, trade) {
     const E = ECON[trade]; if (!E) return 0;
     const folk = living(s).filter(p => townOf(p) === t && !p.kid && p.age >= 14);
@@ -1486,7 +1501,7 @@
         if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
       }
       const premises = { hearthmoor: 3, greenhaven: 4, ironcrest: 6, oakbridge: 8, eastwatch: 9, crownmere: 11 }[t0] || 3;
-      const supplies = Math.round(E.flat ? revenue * 0.35 : inputCost(s, t0, b.trade, sold) + sold * E.price * 0.08), profit = revenue - supplies - wages - premises;
+      const supplies = Math.round((E.flat ? revenue * 0.35 : inputCost(s, t0, b.trade, sold) + sold * E.price * 0.08) * (mine && b.manager ? 0.9 : 1)), profit = revenue - supplies - wages - premises;
       b.lastRevenue = revenue; b.lastProfit = profit; b.lastWages = wages;
       b.profits.push(profit); if (b.profits.length > 5) b.profits.shift();
       if (mine) {

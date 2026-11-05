@@ -49,7 +49,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .task-btn { background: #6b5636; margin-right: 6px; } .task-btn span { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--gold, #c9962b); color: #2a1d12; font: 700 12px/18px var(--f-body); }
 .task-btn span:empty { display: none; }
 .book-btn { border: 0; background: var(--leather); color: var(--parch); border-radius: 4px; padding: 8px 12px; font-family: var(--f-display); font-size: 16px; min-height: 40px; }
-.subhud { pointer-events: none; display: flex; flex-wrap: wrap; gap: 6px; max-width: 720px; margin: 6px auto 0; }
+.subhud { pointer-events: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 720px; margin: 6px auto 0; }
 .chip { background: rgba(32, 26, 20, .74); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
 .chip b { color: #f5cf73; font-weight: 700; }
 .chip.on { background: rgba(74, 102, 52, .9); }
@@ -68,7 +68,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .bizrow .bi .nm { display: block; font-size: 14px; color: #f1e3c2; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bizrow button { flex: none; border: 1px solid rgba(226, 181, 82, .7); background: transparent; color: #f1e3c2; border-radius: 6px; padding: 6px 10px; min-height: 36px; font-size: 13px; cursor: pointer; }
 .bizrow button.go { background: rgba(226, 181, 82, .18); }
-.chip.btn { pointer-events: auto; cursor: pointer; border: 1px solid rgba(226, 181, 82, .7); }
+.chip.btn { pointer-events: auto; cursor: pointer; border: 1px solid rgba(226, 181, 82, .7); min-height: 0; padding: 3px 10px; font-size: 13px; font-weight: 400; border-radius: 999px; background: rgba(32, 26, 20, .74); color: #f1e3c2; line-height: 1.35; }
 .goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .goal em { font-family: var(--f-display); font-style: italic; color: #f5cf73; font-size: 14px; }
 
@@ -3096,7 +3096,7 @@ function managerBox(s, kind, ref, title) {
       <div class="acts">${UI.confirm === 'mgr' + kind + ref ? B_('Yes, let ' + esc(m.name) + ' go', ['fireManager', kind, ref], 'warn') + B_('Keep them', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'mgr' + kind + ref], 'alt')}</div></div>`;
   }
   const cands = Sim.managerCandidates(s, kind, ref);
-  return `<div class="box"><h5>${esc(title)}: no manager</h5><p>${kind === 'shop' ? 'A manager keeps a worker on, orders supplies, sets prices and reports to you each evening.' : 'A manager hires and keeps staff, pays fair wages and small repairs, and reports to you each evening.'}</p>
+  return `<div class="box"><h5>${esc(title)}: no manager</h5><p>${kind === 'shop' ? 'A manager draws in regulars and travellers, about a third more customers, and works beside your worker, so goods are made and customers served up to half again as fast. They order supplies overnight at a tenth off so storage never runs dry, keep your worker content, hire a new one if they quit, and set prices by what sold.' : 'A manager counts as one more pair of hands, haggles a tenth off supplies, hires and keeps staff, pays fair wages and small repairs, and reports to you each evening.'}</p>
     ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}</span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
 }
 function pageManage(s) {
@@ -4835,6 +4835,7 @@ const NOTES = [
     'A lord holds one region at a time. You can move into its seat, which takes your family\u2019s name: Varrow Manor becomes your manor, Stane Keep your keep. The ruler lives in Crownmere castle.',
     'Choose a first and a family name for your character. And choose how you begin: from nothing, as a merchant with a Bread Stand, as the Elder of Hearthmoor, as lord of Greenhaven, or as ruler of Alderwyn.',
     'Manage at one of your shops or businesses now opens just that place: its prices, stock, upgrades, staff and manager. Show all businesses goes back to the full list.',
+    'Managers earn their wage. In a shop they bring in regulars and travellers (about a third more customers), work alongside your worker (up to half again as fast), order supplies overnight at a tenth off and keep your worker happy; in a town business they count as an extra hand and get supplies a tenth cheaper. Only careless managers make mistakes now.',
     'Your shop counters at the top are now one Businesses button. Tap it for a short list with Go and Manage on each. The Shops page is now Businesses, sorted into a tab for each town, with the ones you could buy folded away underneath.',
     'A Tasks button at the top shows everything you have been asked to do: the elder\u2019s errands, orders, contracts, promises, your shifts and your managers\u2019 decisions, each with a button to head there. The number on it counts what is waiting.',
     'Find people: on anyone\u2019s page in the Ledger, tap "Find them" for a gold light over them and a mark on the minimap. If they are in another town, the minimap points the way.',
