@@ -287,7 +287,7 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   check(Object.values(q.biz).filter(b => !b.closed).length >= 3, 'the village shops stay open without you');
 
   // fired, broke, evicted, gone
-  const s = Sim.newGame(78); s.coins = 500; s.trades.bakery = 2;
+  const s = Sim.newGame(78); s.coins = 500; s.trades.bakery = 2; Sim.setupJustice(s);   // the watch is already full, so it offers no work
   Sim.cmd(s, 'open', 1, 'bakery');
   const shop = s.shops[0]; let ai = s.applicants.findIndex(a => a.local && a.name.split(' ')[0] === 'Bram'); if (ai < 0) ai = s.applicants.findIndex(a => a.local);
   const name = s.applicants[ai].name;
