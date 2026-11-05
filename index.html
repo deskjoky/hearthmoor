@@ -811,7 +811,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     };
   }
   function freshStats(s) {
-    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, owned: 0, salaries: 0, interest: 0, seized: 0, notes: [] };
+    const st = { day: s.day, shops: {}, jobPay: 0, rawSales: 0, marketBuys: 0, rent: 0, tax: 0, contract: 0, given: 0, property: 0, owned: 0, salaries: 0, interest: 0, seized: 0, notes: [], coinsStart: s.coins };
     s.shops.forEach(x => { st.shops[x.id] = freshShopStats(x); });
     return st;
   }
@@ -934,6 +934,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function skillLabel(skill) { return skill < 0.85 ? 'Slow but cheap' : skill < 1.1 ? 'Steady' : 'Quick hands'; }
 
+  // the part of today's coin that already has its own line in the books
+  function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
+  const FLOW_LABEL = { buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare' };
   function closeDay(s) {
     const st = s.stats;
     if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
@@ -944,7 +947,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.people) propertyDay(s);
     goodsDay(s);
     if (s.realm) realmDay(s);
-    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, notes: st.notes.slice() };
+    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
@@ -977,14 +980,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.people) managersDay(s, entry);
     entry.managers = c0 - s.coins;
     entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers;
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling;
     if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of 2% a day is added every evening' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
     }
     entry.coinsEnd = s.coins;
-    { const prev = s.ledger[s.ledger.length - 1]; if (prev && prev.day === entry.day - 1) { const gap = (entry.coinsEnd - prev.coinsEnd) - entry.profit; if (gap) { entry.other = gap; if (gap > 0) entry.income += gap; else entry.costs -= gap; entry.profit = entry.income - entry.costs; } } }
+    { const prev = s.ledger[s.ledger.length - 1], start = prev && prev.day === entry.day - 1 ? prev.coinsEnd : st.coinsStart; if (start != null) { const gap = (entry.coinsEnd - start) - entry.profit; const fl = st.flows || {}; entry.otherItems = Object.keys(fl).filter(k => fl[k]).map(k => ({ label: FLOW_LABEL[k] || k, amount: fl[k] })); const named = entry.otherItems.reduce((a, x) => a + x.amount, 0); entry.unexplained = gap - named; if (gap) { entry.other = gap; if (gap > 0) entry.income += gap; else entry.costs -= gap; entry.profit = entry.income - entry.costs; } } }
     s.ledger.push(entry);
     if (s.ledger.length > 14) s.ledger.shift();
     s.rec.days++;
@@ -1098,7 +1101,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const notes = [], T = TRADES[shop.trade], Ti = tierOf(shop);
     if (shop.hands && shop.hands.length) {
       const hw = shop.hands.reduce((a, h) => a + h.wage, 0);
-      if ((e.rounds || 0) < (e.roundsWanted || 0) * 0.6) notes.push({ text: 'Your hands could have sold ' + e.roundsWanted + ' ' + T.product + ' round the town but there were only ' + (e.rounds || 0) + ' to take: they cost ' + hw + 'c and brought in ' + (e.roundsCoin || 0) + 'c. Keep more in storage, or let one go.' });
+      if ((e.rounds || 0) < (e.roundsWanted || 0) * 0.6) notes.push({ text: 'Your hands could have sold ' + e.roundsWanted + ' ' + T.product + ' round the village but sold ' + (e.rounds || 0) + (e.roundsRefused ? ' (' + e.roundsRefused + ' turned them down at ' + Math.max(1, Math.round(shop.price * 0.85)) + 'c)' : '') + ': they cost ' + hw + 'c and brought in ' + (e.roundsCoin || 0) + 'c. ' + (shop.goods < Ti.out ? 'Keep more on the shelf, or let one go.' : 'Most people had already bought: one fewer hand would do.') });
       else notes.push({ text: 'Your hands sold ' + e.rounds + ' ' + T.product + ' beyond the counter for ' + (e.roundsCoin || 0) + 'c, against ' + hw + 'c in wages.' });
     } else if (shop.worker && handRoom(shop) > 0 && e.soldOut === 0 && shop.goods >= Ti.out) notes.push({ text: 'Your shelf ended the day with goods to spare. A hand could take some round the town.', fix: { label: 'Hire a hand', cmd: ['page', 'staff'] } });
     const mean = wtpMean(shop, false), lo = Math.round(mean - T.sd * 0.7), hi = Math.round(mean + T.sd * 0.3);
@@ -1167,7 +1170,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
           const wtp = clamp(normal(s, wtpMean(shop, false), T.sd), 1, T.wtp * 3);
           if (shop.goods > 0 && workerAttending(shop) && wtp >= shop.price && buyer.purse >= shop.price) {
             const r0 = rand(s), q0 = r0 < T.qty3 ? 3 : r0 < T.qty3 + T.qty2 ? 2 : 1, qty = Math.max(0, Math.min(q0, shop.goods, Math.floor(buyer.purse / shop.price))), coin = qty * shop.price;
-            shop.goods -= qty; earn(s, coin); buyer.purse -= coin; if (shop.trade === 'bakery' || shop.trade === 'tavern') buyer.ate += Math.min(coin, FOOD);
+            shop.goods -= qty; earn(s, coin); buyer.purse -= coin; if (shop.trade === 'bakery' || shop.trade === 'tavern') buyer.ate += Math.min(coin, FOOD); boughtToday(s, buyer, shop.trade);
             st.sold += qty; st.revenue += coin; st.served++; st.servedBy.worker++;
             s.rec.sold[T.product] += qty; s.rec.goodsSold += qty; s.rec.salesRevenue += coin; s.rec.served++;
           } else st.noService++;
@@ -1358,15 +1361,36 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const ROUND_SALE = [1, 0.65, 0.4];
   // how many a hand can sell round the town in a day: enough to clear about 12c over the cost of making them
   function roundQuota(shop) { const T = TRADES[shop.trade], cost = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Math.max(1, T.tiers[0].out), margin = Math.max(1, T.price * 0.85 - cost); return Math.max(1, Math.round(12 / margin)); }
+  // who has already bought this trade today, at any of your counters
+  function boughtToday(s, p, trade) { const k = 'b:' + trade; s.stats[k] = s.stats[k] || {}; s.stats[k][p.id] = 1; }
+  /* Hands sell round the village to people who have not yet bought today. Each one judges the street price
+     (a little under the counter price) as any customer would, and pays from their own purse. When everyone who
+     wants bread already has it, there is nothing to sell, however many hands you send out. Rival bakers supply
+     about half the village, so only the other half is there for your hands. */
   function handsRound(s, shop, st) {
     const hs = shop.hands || []; if (!hs.length) return null;
-    const T = TRADES[shop.trade], q = roundQuota(shop), price = Math.max(1, Math.round(shop.price * 0.85));
-    let want = 0; hs.forEach((h, i) => { want += Math.round(q * (ROUND_SALE[i] || 0.3) * Math.min(1.2, h.skill || 1) * (h.mood < 30 ? 0.6 : 1)); });
-    const keep = Math.min(shop.goods, Math.ceil(tierOf(shop).out / 2)), sold = Math.max(0, Math.min(want, shop.goods - keep));
-    shop.goods -= sold; const coin = sold * price; earn(s, coin);
-    st.revenue += coin; st.sold += sold; st.rounds = (st.rounds || 0) + sold; st.roundsWanted = (st.roundsWanted || 0) + want; st.roundsCoin = (st.roundsCoin || 0) + coin;
-    return { sold, want, coin };
+    const T = TRADES[shop.trade], price = Math.max(1, Math.round(shop.price * 0.85));
+    let cap = 0; hs.forEach((h, i) => { cap += Math.round(roundQuota(shop) * (ROUND_SALE[i] || 0.3) * Math.min(1.2, h.skill || 1) * (h.mood < 30 ? 0.6 : 1)); });
+    const keep = Math.min(shop.goods, Math.ceil(tierOf(shop).out / 2)); let left = Math.max(0, Math.min(cap, shop.goods - keep));
+    const done = s.stats['b:' + shop.trade] || {}, mean = wtpMean(shop, false) * 0.97;
+    const pool = villagers(s).filter(p => !p.kid && p.status === 'here' && !done[p.id] && p.purse >= price);
+    let sold = 0, coin = 0, asked = 0, refused = 0;
+    for (const p of pool) {
+      if (left <= 0) break;
+      if (rand(s) > T.villagerRate * 0.5) continue;
+      asked++;
+      const wtp = clamp(normal(s, mean, T.sd), 1, T.wtp * 3);
+      if (wtp < price) { refused++; continue; }
+      const r0 = rand(s), q0 = r0 < T.qty3 ? 3 : r0 < T.qty3 + T.qty2 ? 2 : 1, q = Math.max(0, Math.min(q0, left, Math.floor(p.purse / price)));
+      if (!q) continue;
+      p.purse -= q * price; if (shop.trade === 'bakery' || shop.trade === 'tavern') p.ate += Math.min(q * price, FOOD);
+      left -= q; sold += q; coin += q * price; boughtToday(s, p, shop.trade);
+    }
+    shop.goods -= sold; earn(s, coin);
+    st.revenue += coin; st.sold += sold; st.rounds = (st.rounds || 0) + sold; st.roundsWanted = (st.roundsWanted || 0) + cap; st.roundsCoin = (st.roundsCoin || 0) + coin; st.roundsRefused = (st.roundsRefused || 0) + refused;
+    return { sold, cap, coin };
   }
+
 
   function updateCounter(s, shop, dt) {
     const pa = playerAttending(s, shop), wa = workerAttending(shop), st = shopStats(s, shop);
@@ -1384,7 +1408,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const qty = Math.max(0, Math.min(front.qty, shop.goods, buyer ? Math.floor(buyer.purse / shop.price) : 99)), coin = qty * shop.price;
       if (qty <= 0) { shop.serveProgress = 0; leaveShop(s, front, shop, 'broke'); return; }
       shop.goods -= qty; earn(s, coin);
-      if (buyer) { buyer.purse -= coin; if (shop.trade === 'bakery' || shop.trade === 'tavern') buyer.ate += Math.min(coin, FOOD); }
+      if (buyer) { buyer.purse -= coin; if (shop.trade === 'bakery' || shop.trade === 'tavern') buyer.ate += Math.min(coin, FOOD); boughtToday(s, buyer, shop.trade); }
       st.sold += qty; st.revenue += coin; st.served++; st.servedBy[pa ? 'player' : 'worker']++;
       s.rec.sold[T.product] += qty; s.rec.goodsSold += qty; s.rec.salesRevenue += coin; s.rec.served++;
       shop.serveProgress = 0;
@@ -4087,10 +4111,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     }
     R.contracts = R.contracts.filter(c => !c.done);
     if (R.contracts.filter(c => !c.taken).length < 3 && rand(s) < 0.6) {
-      const ids = Object.keys(R.regions), id = ids[Math.floor(rand(s) * ids.length)], who = regionLord(s, id) === 'player' ? (TOWNS[id] ? TOWNS[id].name + ' council' : 'the village') : lordName(s, id);
+      const short = (s.shocks || []).filter(x => !x.glut && s.day - x.day <= 10 && R.regions[x.town]).slice(-1)[0], useShort = short && rand(s) < 0.6;
+      const ids = Object.keys(R.regions), id = useShort ? short.town : ids[Math.floor(rand(s) * ids.length)], who = regionLord(s, id) === 'player' ? (TOWNS[id] ? TOWNS[id].name + ' council' : 'the village') : lordName(s, id);
       const k = rand(s), n0 = R.contractN = (R.contractN || 0) + 1;
       let c;
-      if (k < 0.45) { const g = rand(s) < 0.5 ? REGION_GOODS[id] : GOODS[Math.floor(rand(s) * 3)], n = 10 + Math.floor(rand(s) * 3) * 5; c = { n: n0, kind: 'supply', region: id, good: g, qty: n, reward: Math.round(n * goodsPrice(s, id, g) * 1.7 + 10), what: 'deliver ' + n + ' ' + (g === 'wood' ? 'timber' : g === 'ore' ? 'iron ore' : g) + ' to the market in ' + REGIONS[id] }; }
+      if (k < 0.45 || useShort) { const g = useShort ? short.good : rand(s) < 0.5 ? REGION_GOODS[id] : GOODS[Math.floor(rand(s) * 3)], n = 10 + Math.floor(rand(s) * 3) * 5; c = { n: n0, kind: 'supply', region: id, good: g, qty: n, reward: Math.round(n * goodsPrice(s, id, g) * 1.7 + 10), what: 'deliver ' + n + ' ' + (g === 'wood' ? 'timber' : g === 'ore' ? 'iron ore' : g) + ' to the market in ' + REGIONS[id] }; }
       else if (k < 0.75) { const w = 10 + Math.floor(rand(s) * 3) * 5, coin = 40 + Math.floor(rand(s) * 4) * 20; c = { n: n0, kind: 'repair', region: id, good: 'wood', qty: w, cost: coin, reward: Math.round(coin * 0.5 + w * 3), what: 'repair the ' + ['bridge', 'town walls', 'mill race', 'road', 'granary'][Math.floor(rand(s) * 5)] + ' in ' + REGIONS[id] + ' (' + coin + 'c and ' + w + ' timber)' }; }
       else { c = { n: n0, kind: 'clear', region: id, reward: 90, what: 'clear the bandits from the roads of ' + REGIONS[id] + ' (danger under 20)' }; if (((s.bandits || {})[id] || 0) < 25) c = null; }
       if (c) { c.who = who; c.until = s.day + 6; c.day = s.day; R.contracts.push(c); }
@@ -4202,6 +4227,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (mode === 'lord') { const old = s.people[R.regions.greenhaven.lord]; if (old) { old.retired = true; old.noble = null; } R.regions.greenhaven.lord = 'player'; cmd(s, 'moveToSeat', 'greenhaven'); const st = STAGE.greenhaven; s.player.x = st.x; s.player.z = st.z; }
     if (mode === 'ruler') { R.kept = 1; crownYou(s, 'King Aldwin, old and tired, names you his successor'); s.player.seat = 'crownmere'; bringFamily(s, 'Moved into Crownmere castle.'); const st = STAGE.crownmere; s.player.x = st.x; s.player.z = st.z; }
     event(s, STARTS[mode].say, 'story');
+    if (s.stats) s.stats.coinsStart = s.coins;
   }
   /* buying, renting and firing */
   /* ----- property: what it is worth, keeping it up, letting it, and selling it ----- */
@@ -4302,7 +4328,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return GOODS.every(g => !cost[g] || s.player.inv[g] + (shop ? shop.stock[g] : 0) >= cost[g]);
   }
   const REGENCY_BLOCK = new Set(['court', 'propose', 'apply', 'seekLordship', 'seekSeat', 'claimCrown', 'undermineKing', 'acceptLordship', 'buyBiz', 'buyHouse', 'listForSale', 'acceptOffer', 'leaseBiz', 'moveIn', 'hireManager', 'nameHeir', 'handOver']);
+  // every command's effect on your purse is noted, so the books can name each coin that is not a day's trade
   function cmd(s, name, a, b, c) {
+    const k0 = s.coins, n0 = s.stats ? trackedNet(s) : 0, r = cmd0(s, name, a, b, c), d = s.coins - k0 - (s.stats ? trackedNet(s) - n0 : 0);
+    if (d && s.stats) { const f = s.stats.flows = s.stats.flows || {}; f[name] = (f[name] || 0) + d; }
+    return r;
+  }
+  function cmd0(s, name, a, b, c) {
     const p = s.player;
     if (s.you && s.you.regent && REGENCY_BLOCK.has(name)) return fail('You are still a child. ' + s.you.regent.name.charAt(0).toUpperCase() + s.you.regent.name.slice(1) + ' acts for you until you are 16.');
     const shop = typeof a === 'number' ? shopById(s, a) : null;
@@ -4861,6 +4893,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (c.kind === 'repair' && s.coins < c.cost) return fail('The repair needs ' + c.cost + 'c as well as the timber.');
         const n = Math.min(p.inv[c.good] || 0, c.qty - (c.delivered || 0)); if (n <= 0) return fail('You have no ' + (c.good === 'wood' ? 'timber' : c.good) + ' with you.');
         p.inv[c.good] -= n; c.delivered = (c.delivered || 0) + n;
+        if (c.kind === 'supply') { setupGoods(s); s.goods[c.region][c.good] += n; }   // what you bring goes on the market's stalls and eases a shortage
         if (c.delivered < c.qty) return ok('Delivered ' + n + '. ' + (c.qty - c.delivered) + ' more to go.');
         if (c.kind === 'repair') spend(s, c.cost);
         completeContract(s, c); return ok();
@@ -7875,7 +7908,11 @@ function pageLedger(s) {
     if (e.salaries) rows.push(['Salaries for the lord’s household', -e.salaries]);
     if (e.interest) rows.push(['Interest to the Ashford moneylender', -e.interest]);
     if (e.managers) rows.push(['Managers (wages and supplies they bought)', -e.managers]);
-    if (e.other) rows.push([e.other > 0 ? 'Other money in' : 'Other spending (purchases, fees, gifts)', e.other]);
+    if (e.family) rows.push(['Food for your household', -e.family]);
+    if (e.stabling) rows.push(['Stabling your horse', -e.stabling]);
+    (e.otherItems || []).forEach(x => rows.push([esc(x.label), x.amount]));
+    if (e.unexplained) rows.push(['Unrecorded', e.unexplained]);
+    else if (e.other && !(e.otherItems || []).length) rows.push([e.other > 0 ? 'Other money in' : 'Other spending', e.other]);
     if (e.seized) rows.push(['Property seized and sold by creditors', e.seized]);
     html += `<div class="day"><div class="dayhead"><strong>Day ${e.day}</strong><span class="seal ${e.profit < 0 ? 'neg' : ''} num">${e.profit < 0 ? 'Down ' : 'Up '}${Math.abs(e.profit)}c</span></div>${dayTable(rows, e.profit, 'The day')}`;
     if (e.notes.length) html += notesHTML(e.notes);
@@ -9822,8 +9859,13 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0338';
+const BUILD = '2026.11.05.0352';
 const NOTES = [
+  { v: '0.37', date: '5 November', title: 'Honest books', items: [
+    'Hands now sell only to villagers who have not bought that day, and each one weighs the street price as any customer would and pays from their own purse. When everyone has what they need, there is nothing to sell: more hands, or a higher price, no longer means guaranteed takings.',
+    'The ledger names every coin: houses and businesses bought, building work, gifts to the crown, food for your household and stabling each get their own line. Anything it cannot name shows as Unrecorded (and fails the game\u2019s own tests).',
+    'Goods you deliver for a contract go onto that town\u2019s market and ease its shortage, and towns hit by a shortage are the likeliest to post a contract for the good they lack.'
+  ] },
   { v: '0.36', date: '5 November', title: 'Good years and bad', items: [
     'Bigger shops take more staff. A stall has one worker and no manager; a timber building has room for a hand and a manager; a stone one for two hands. Hands help at the bench and the counter and sell round the town, the first the most. Too many hands, or hands with an empty shelf, cost more than they bring in: the ledger tells you which.',
     'Markets now stay short or glutted for a week or two. Now and then a blight, a flood, a flooded mine or a bumper year shakes one town\u2019s grain, wood or ore, and you hear about it, so hauling goods there pays.',

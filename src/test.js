@@ -826,6 +826,22 @@ console.log('29. One fair economy, and how you begin');
   const kid = Sim.living(g3).find(q => q.kid && q.age >= 6 && q.age <= 10); kid.parents = [Y.pid]; kid.home = 'you'; g3.pendingDeath = { day: 1, age: 70 };
   Sim.cmd(g3, 'carryOn', kid.id); const Y3 = Sim.you(g3);
   check(Y3.age < 16 && Y3.regent && !g3.village.council && !Sim.cmd(g3, 'buyBiz', 'o_bell').ok, 'carrying on as a ' + Y3.age + '-year-old: ' + Y3.regent.name + ' is regent, the council seat falls vacant, and you cannot sign for a business yet');
+console.log('30. The books add up: every coin has a named line');
+{
+  const s = Sim.newGame(77); s.coins = 3000; s.trades.bakery = 99; s.player.inv = { grain: 10, wood: 10, ore: 10 };
+  Sim.cmd(s, 'open', 0, 'bakery'); const sh = s.shops[0]; if (s.applicants.length) Sim.cmd(s, 'hire', sh.id, 0, s.applicants[0].ask);
+  const bz = Object.values(s.biz).find(b => b.town === 'oakbridge'); Sim.cmd(s, 'buyBiz', bz.id);
+  const h = s.houses.find(x => !x.town && x.owner === 'office:lord'); Sim.cmd(s, 'buyHouse', h.id);
+  sh.tier = 1; s.applicants.push({ name: 'Tam Reeve', skill: 1, ask: 7 }); Sim.cmd(s, 'hireHand', sh.id, s.applicants.length - 1, 7);
+  Sim.advance(s, 1440);
+  Sim.cmd(s, 'improveHome', h.id); Sim.cmd(s, 'giftCrown', 30);
+  for (let d = 0; d < 6; d++) Sim.advance(s, 1440);
+  const later = s.ledger.slice(1), bad = later.filter(e => e.unexplained);
+  check(later.length >= 5 && bad.length === 0, 'over ' + later.length + ' days no coin goes unrecorded' + (bad.length ? ' (day ' + bad[0].day + ': ' + bad[0].unexplained + 'c)' : ''));
+  check(later.some(e => (e.otherItems || []).some(x => /Gift to the crown/.test(x.label))), 'a gift to the crown shows as its own line');
+  check(later.every(e => { const p = s.ledger[s.ledger.indexOf(e) - 1]; return !p || e.coinsEnd - p.coinsEnd === e.profit; }), 'each day’s profit is exactly the change in your coins');
+}
+
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

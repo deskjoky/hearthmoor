@@ -3086,7 +3086,11 @@ function pageLedger(s) {
     if (e.salaries) rows.push(['Salaries for the lord’s household', -e.salaries]);
     if (e.interest) rows.push(['Interest to the Ashford moneylender', -e.interest]);
     if (e.managers) rows.push(['Managers (wages and supplies they bought)', -e.managers]);
-    if (e.other) rows.push([e.other > 0 ? 'Other money in' : 'Other spending (purchases, fees, gifts)', e.other]);
+    if (e.family) rows.push(['Food for your household', -e.family]);
+    if (e.stabling) rows.push(['Stabling your horse', -e.stabling]);
+    (e.otherItems || []).forEach(x => rows.push([esc(x.label), x.amount]));
+    if (e.unexplained) rows.push(['Unrecorded', e.unexplained]);
+    else if (e.other && !(e.otherItems || []).length) rows.push([e.other > 0 ? 'Other money in' : 'Other spending', e.other]);
     if (e.seized) rows.push(['Property seized and sold by creditors', e.seized]);
     html += `<div class="day"><div class="dayhead"><strong>Day ${e.day}</strong><span class="seal ${e.profit < 0 ? 'neg' : ''} num">${e.profit < 0 ? 'Down ' : 'Up '}${Math.abs(e.profit)}c</span></div>${dayTable(rows, e.profit, 'The day')}`;
     if (e.notes.length) html += notesHTML(e.notes);
@@ -5035,6 +5039,11 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.37', date: '5 November', title: 'Honest books', items: [
+    'Hands now sell only to villagers who have not bought that day, and each one weighs the street price as any customer would and pays from their own purse. When everyone has what they need, there is nothing to sell: more hands, or a higher price, no longer means guaranteed takings.',
+    'The ledger names every coin: houses and businesses bought, building work, gifts to the crown, food for your household and stabling each get their own line. Anything it cannot name shows as Unrecorded (and fails the game\u2019s own tests).',
+    'Goods you deliver for a contract go onto that town\u2019s market and ease its shortage, and towns hit by a shortage are the likeliest to post a contract for the good they lack.'
+  ] },
   { v: '0.36', date: '5 November', title: 'Good years and bad', items: [
     'Bigger shops take more staff. A stall has one worker and no manager; a timber building has room for a hand and a manager; a stone one for two hands. Hands help at the bench and the counter and sell round the town, the first the most. Too many hands, or hands with an empty shelf, cost more than they bring in: the ledger tells you which.',
     'Markets now stay short or glutted for a week or two. Now and then a blight, a flood, a flooded mine or a bumper year shakes one town\u2019s grain, wood or ore, and you hear about it, so hauling goods there pays.',
