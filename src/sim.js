@@ -3622,12 +3622,12 @@
     if (R.petitions.length >= 2 || rand(s) > 0.11) return;
     const kinds = [], winter = seasonOf(s) === 'winter' || calendar(s).month === 0;
     const hungryTown = Object.keys(TOWNS).map(t => ({ t, n: living(s).filter(p => townOf(p) === t && !p.kid && p.hungry).length })).sort((a, b) => b.n - a.n)[0];
-    if (hungryTown && hungryTown.n >= 6 && (winter || hungryTown.n >= 12)) kinds.push('relief');
-    const lords = Object.keys(R.regions).map(id => ({ id, l: regionLord(s, id) })).filter(x => x.l && x.l !== 'player' && s.people[x.l] && (s.people[x.l].opinion || 0) < 30);
+    if (hungryTown && hungryTown.n >= (winter ? 3 : 6)) kinds.push('relief');
+    const lords = Object.keys(R.regions).map(id => ({ id, l: regionLord(s, id) })).filter(x => x.l && x.l !== 'player' && s.people[x.l] && (s.people[x.l].opinion || 0) < 45);
     if (lords.length) kinds.push('defiance');
     const nobles = living(s).filter(p => p.noble && p.status === 'here' && !p.held && s.courts && s.courts[townOf(p)]);
     if (nobles.length) kinds.push('noble');
-    if (R.tariff > 1 || winter) kinds.push('guilds');
+    if (R.tariff > 1 || winter || seasonOf(s) === 'autumn') kinds.push('guilds');
     if (!kinds.length) return;
     const k = kinds[Math.floor(rand(s) * kinds.length)], id = (R.nextPetition = (R.nextPetition || 0) + 1), base = { id, kind: k, day: s.day, until: s.day + 6 };
     if (k === 'relief') { const t = hungryTown.t; R.petitions.push(Object.assign(base, { town: t, cost: 60 + hungryTown.n * 4, text: 'The people of ' + REGIONS[t].replace(/^the /, '') + ' are going hungry: ' + hungryTown.n + ' grown folk had no bread last night. Their council asks the crown for grain.' })); }
