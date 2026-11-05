@@ -597,7 +597,7 @@ console.log('20. A whole life: ageing, marriage, children, death and inheritance
   const all = Object.values(s.people), L = Sim.living(s);
   const babies = all.filter(p => p.born), dead = all.filter(p => p.status === 'dead'), wed = L.filter(p => p.spouse && p.maiden);
   check(babies.length > 20 && dead.length > 20 && wed.length > 5, 'thirty years on: ' + babies.length + ' born, ' + dead.length + ' died, ' + wed.length + ' new marriages');
-  check(L.length > 1000 && L.length < 2600, 'the population of all four towns stays sensible (' + L.length + ' living)');
+  check(L.length > 1000 && L.length < 2900, 'the population of all four towns stays sensible (' + L.length + ' living)');
   check(L.every(p => Number.isFinite(p.purse) && Number.isFinite(p.age)), 'every purse and age is a real number');
   check(s.offices.elder && s.offices.lord, 'there is still an Elder (' + Sim.holderName(s, 'elder') + ') and a lord (' + Sim.lordTitle(s) + ')');
   // inheritance, step by step

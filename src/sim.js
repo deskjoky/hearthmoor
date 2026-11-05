@@ -2357,6 +2357,8 @@
       // no one on the council: the most respected owner stands
       const alt = villagers(s).filter(p => p.id !== exclude && !isHousehold(p) && !p.retired && p.job && p.job.role === 'owner' && (p.rep || 0) >= 30).sort((a, b) => (b.rep || 0) - (a.rep || 0))[0];
       if (alt) cands.push(alt);
+      // failing that, the most respected grown villager is talked into standing
+      if (!cands.length) { const any = villagers(s).filter(p => p.id !== exclude && !isHousehold(p) && !p.kid && p.age >= 25 && p.age <= 70 && p.status === 'here').sort((a, b) => (b.rep || 0) - (a.rep || 0) || (b.opinion || 0) - (a.opinion || 0))[0]; if (any) cands.push(any); }
     }
     if (!cands.length && !youRun) { govLog(s, prefix + 'No one with the standing to lead puts their name forward. The Elder’s chair stays empty until someone earns it.', 'bad'); return null; }
     const tally = new Map(); cands.forEach(c => tally.set(c.id, 0)); if (youRun) tally.set('player', 1);
