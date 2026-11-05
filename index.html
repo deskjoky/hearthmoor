@@ -4141,14 +4141,15 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (R.petitions.length >= 2 || rand(s) > 0.11) return;
     const kinds = [], winter = seasonOf(s) === 'winter' || calendar(s).month === 0;
     const hungryTown = Object.keys(TOWNS).map(t => ({ t, n: living(s).filter(p => townOf(p) === t && !p.kid && p.hungry).length })).sort((a, b) => b.n - a.n)[0];
-    if (hungryTown && hungryTown.n >= 6 && (winter || hungryTown.n >= 12)) kinds.push('relief');
-    const lords = Object.keys(R.regions).map(id => ({ id, l: regionLord(s, id) })).filter(x => x.l && x.l !== 'player' && s.people[x.l] && (s.people[x.l].opinion || 0) < 30);
+    if (hungryTown && hungryTown.n >= (winter ? 3 : 6)) kinds.push('relief');
+    const lords = Object.keys(R.regions).map(id => ({ id, l: regionLord(s, id) })).filter(x => x.l && x.l !== 'player' && s.people[x.l] && (s.people[x.l].opinion || 0) < 45);
     if (lords.length) kinds.push('defiance');
     const nobles = living(s).filter(p => p.noble && p.status === 'here' && !p.held && s.courts && s.courts[townOf(p)]);
     if (nobles.length) kinds.push('noble');
-    if (R.tariff > 1 || winter) kinds.push('guilds');
-    if (!kinds.length) return;
-    const k = kinds[Math.floor(rand(s) * kinds.length)], id = (R.nextPetition = (R.nextPetition || 0) + 1), base = { id, kind: k, day: s.day, until: s.day + 6 };
+    if (R.tariff > 1 || winter || seasonOf(s) === 'autumn') kinds.push('guilds');
+    // the same kind of petition does not come twice within fifteen days
+    R.lastPet = R.lastPet || {}; const fresh = kinds.filter(x => !(R.lastPet[x] != null && s.day - R.lastPet[x] < 15)); if (!fresh.length) return;
+    const k = fresh[Math.floor(rand(s) * fresh.length)]; R.lastPet[k] = s.day; const id = (R.nextPetition = (R.nextPetition || 0) + 1), base = { id, kind: k, day: s.day, until: s.day + 6 };
     if (k === 'relief') { const t = hungryTown.t; R.petitions.push(Object.assign(base, { town: t, cost: 60 + hungryTown.n * 4, text: 'The people of ' + REGIONS[t].replace(/^the /, '') + ' are going hungry: ' + hungryTown.n + ' grown folk had no bread last night. Their council asks the crown for grain.' })); }
     else if (k === 'defiance') { const x = lords[Math.floor(rand(s) * lords.length)], L = s.people[x.l]; R.petitions.push(Object.assign(base, { lord: x.l, region: x.id, text: L.name + ', who holds ' + REGIONS[x.id] + ', has set free a man your judges sent to his gaol, and says the crown’s court has no business in his lands.' })); }
     else if (k === 'noble') {
@@ -11122,8 +11123,14 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.1848';
+const BUILD = '2026.11.05.1911';
 const NOTES = [
+  { v: '0.42', date: '5 November', title: 'Petitions to the crown', items: [
+    'As ruler, now and then something comes that only the crown can answer: a town gone hungry asks for grain from the treasury; a lord frees a man your judges sent to his gaol and says your court has no business in his lands; the guilds ask for lower tariffs through a hard season. Each choice costs something either way. Answer on the Realm page (they also appear in Tasks); left six days, a petition counts as refused and the silence is noticed. The same kind will not come twice within fifteen days.',
+    'Nobles answer to the crown’s court: when a commoner accuses one, the case is brought to you in Crownmere, whatever your delegation setting.',
+    'Markets recover from a shortage: when a town runs badly short of something, the price draws traders from the other towns, faster the worse it gets.',
+    'Managers buy more carefully: when supplies are dear they order only what the next batch or two needs, instead of draining the market. A managed bakery no longer pushes Hearthmoor’s grain to its highest price all winter.',
+  ] },
   { v: '0.41', date: '5 November', title: 'Fair warning', items: [
     'People now age a year every season (15 days) by default, so a child grows up in about 240 days and you can play your heirs. The slow calendar ageing (a year every 60 days) is still in Settings. When an heir is grown, you can hand everything over and retire from the Family page.',
     'Winter is seen coming. The clock and the pause screen say how many days until the next season; the Ledger and the Shops page have a season box: what this season and the next will do, the last fifteen days of prices at the Trading Post, and what your shops have in storage. A manager can lay in a reserve in autumn and winter, but only while supplies are at or below their usual price, and within a daily limit.',
