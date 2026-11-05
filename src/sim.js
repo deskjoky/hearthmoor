@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 14;
+  const VERSION = 15;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -366,7 +366,7 @@
     initGov(s);
     setupOakbridge(s);
     setupGreenhaven(s);
-    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupNewTown(s, 'dawnport'); setupRealm(s); setupValdoria(s);
+    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupNewTown(s, 'dawnport'); setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRealm(s); setupValdoria(s);
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
@@ -1547,7 +1547,10 @@
     crownmere: { make: { grain: 25, wood: 15, ore: 0 }, use: { grain: 150, wood: 90, ore: 40 }, travellers: 120 },
     ironcrest: { make: { grain: 2, wood: 35, ore: 90 }, use: { grain: 40, wood: 30, ore: 20 }, travellers: 15 },
     eastwatch: { make: { grain: 10, wood: 5, ore: 0 }, use: { grain: 70, wood: 60, ore: 15 }, travellers: 60 },
-    dawnport: { make: { grain: 40, wood: 4, ore: 0 }, use: { grain: 60, wood: 45, ore: 10 }, travellers: 55 }
+    dawnport: { make: { grain: 40, wood: 4, ore: 0 }, use: { grain: 60, wood: 45, ore: 10 }, travellers: 55 },
+    goldmeadow: { make: { grain: 75, wood: 4, ore: 0 }, use: { grain: 22, wood: 14, ore: 3 }, travellers: 10 },
+    thornwick: { make: { grain: 4, wood: 70, ore: 0 }, use: { grain: 20, wood: 12, ore: 4 }, travellers: 8 },
+    stonewatch: { make: { grain: 6, wood: 6, ore: 30 }, use: { grain: 45, wood: 30, ore: 20 }, travellers: 25 }
   };
   // per trade: how often a grown person buys (visits a day), how much each time, the usual price,
   // the goods used per unit sold, and how many units one pair of hands can make in a day
@@ -3155,6 +3158,75 @@
   LOCS.dppalace = { x: 2064, z: -300, r: 6, name: 'the Consul’s Palace', town: 'dawnport' };
   LOCS.dpplaza = { x: 2010, z: -300, r: 10, name: 'the Plaza Mayor', town: 'dawnport' };
   DP.biz.forEach(b0 => { LOCS['db:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'dawnport' }; });
+  // Valdoria's other towns: Goldmeadow on the plains to the south-east, Thornwick at the forest's edge to the east,
+  // and Stonewatch, the walled fortress guarding the northern pass. Roads run to each from Dawnport.
+  const GM = makeTown({
+    id: 'goldmeadow', C: { x: 2210, z: 168 }, seed: 31337, R: 62, maxHouses: 26, tall: 0.15,
+    streets: [
+      { name: 'the Harvest Road', w: 4.4, pts: [[2194, 108], [2203, 140], [2210, 170], [2218, 214]] },
+      { name: 'Paddock Lane', w: 3.4, pts: [[2158, 172], [2210, 170], [2262, 174]] }
+    ],
+    plazas: [{ id: 'green', name: 'the Green', x: 2210, z: 170, r0: 3, r1: 10, w: 3 }],
+    marks: [{ x: 2262, z: 140, r: 9 }],
+    biz: [['g_sheaf', 'tavern', 'The Golden Sheaf', 'Constanza Fuster', 0, 0.42, 1, 'green'], ['g_oven', 'bakery', 'Goldmeadow Ovens', 'Martí Prats', 0, 0.7, -1, 'green'], ['g_butch', 'butcher', 'Horse Fair Butchers', 'Sancha Valls', 1, 0.25, 1, 'paddock'], ['g_cart', 'carter', 'Horse Fair Carters', 'Esteve Soler', 1, 0.75, -1, 'paddock'], ['g_cooper', 'cooper', 'Ale Coopers', 'Oriol Mirall', 0, 0.2, -1, 'road']],
+    spots: { gm_field: { x: 2150, z: 230, rx: 26, rz: 10 }, gm_horse: { x: 2270, z: 200, rx: 12, rz: 10 }, gm_harvest: { x: 2140, z: 120, rx: 18, rz: 8 }, gm_watch: { x: 2196, z: 116, rx: 3, rz: 3 } },
+    board: { x: 2216, z: 160 }, entry: { x: 2194, z: 108 },
+    extra: { windmill: { x: 2262, z: 140 } }
+  });
+  const TW = makeTown({
+    id: 'thornwick', C: { x: 2385, z: -186 }, seed: 40404, R: 52, maxHouses: 20, tall: 0.1,
+    streets: [
+      { name: 'Timber Street', w: 4.2, pts: [[2326, -186], [2360, -186], [2400, -187], [2436, -190]] },
+      { name: 'Sawpit Lane', w: 3.2, pts: [[2386, -187], [2389, -226]] },
+      { name: 'Ridge Lane', w: 3.2, pts: [[2386, -187], [2382, -150]] }
+    ],
+    plazas: [{ id: 'yard', name: 'the Timber Yard', x: 2386, z: -187, r0: 3, r1: 9, w: 3 }],
+    marks: [{ x: 2430, z: -222, r: 10 }],
+    biz: [['t_oak', 'tavern', 'The Felled Oak', 'Gaspar Cabrera', 0, 0.45, 1, 'yard'], ['t_join', 'joinery', 'Thornwick Joiners', 'Pilar Fuster', 0, 0.7, -1, 'timber'], ['t_axe', 'smithy', 'Axe and Wedge', 'Nuno Prats', 0, 0.25, -1, 'timber'], ['t_cart', 'carter', 'Log Carters', 'Rosalind Valls', 1, 0.6, 1, 'sawpit'], ['t_chand', 'chandler', 'Pitch and Tallow', 'Lope Soler', 2, 0.6, -1, 'ridge']],
+    spots: { tw_fell: { x: 2440, z: -140, rx: 20, rz: 12 }, tw_saw: { x: 2430, z: -222, rx: 6, rz: 5 }, tw_char: { x: 2460, z: -230, rx: 6, rz: 6 }, tw_watch: { x: 2330, z: -190, rx: 3, rz: 3 } },
+    board: { x: 2392, z: -178 }, entry: { x: 2326, z: -186 },
+    extra: { sawmill: { x: 2430, z: -222 } }
+  });
+  const SW = (function () {
+    const C = { x: 2232, z: -732 }, R = 82;
+    const wall = []; for (let a = 0; a < 360.1; a += 9) { const t0 = a * Math.PI / 180; wall.push([C.x + Math.cos(t0) * R, C.z + Math.sin(t0) * R]); }
+    const gate = { x: C.x - 6, z: C.z + R, face: 0 };
+    const T = makeTown({
+      id: 'stonewatch', C, seed: 50505, R: R - 8, maxHouses: 56, tall: 0.5,
+      inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 4,
+      avoid: (x, z, rad) => Math.hypot(x - 2240, z + 800) < 20 + rad,
+      streets: [
+        { name: 'Gate Street', w: 4.6, pts: [[2226, -656], [2228, -700], [2232, -735], [2236, -778]] },
+        { name: 'the Ramparts Road', w: 3.8, pts: [[2168, -732], [2232, -735], [2296, -738]] },
+        { name: 'Armourers’ Row', w: 3.4, pts: [[2228, -700], [2272, -692]] },
+        { name: 'Quarry Lane', w: 3.4, pts: [[2232, -760], [2186, -772]] }
+      ],
+      plazas: [{ id: 'parade', name: 'the Parade Ground', x: 2232, z: -735, r0: 3, r1: 12, w: 4 }],
+      marks: [{ x: 2240, z: -800, r: 20 }],
+      biz: [['s_gate', 'tavern', 'The Iron Gate', 'Fernan Torres', 0, 0.3, 1, 'gate'], ['s_arm1', 'smithy', 'The King’s Armourers', 'Gonzalo Puig', 2, 0.5, 1, 'armourers'], ['s_arm2', 'smithy', 'Shield and Sword', 'Urraca Serra', 2, 0.8, -1, 'armourers'], ['s_bake', 'bakery', 'Garrison Ovens', 'Juana Rius', 0, 0.55, -1, 'gate'], ['s_butch', 'butcher', 'Rampart Butchers', 'Diego Soler', 1, 0.25, 1, 'ramparts'], ['s_mason', 'mason', 'Stonewatch Masons', 'Alvaro Castell', 3, 0.6, 1, 'quarry'], ['s_tan', 'tanner', 'Saddlers and Tanners', 'Mencia Oliver', 1, 0.8, -1, 'ramparts'], ['s_cart', 'carter', 'Pass Carters', 'Bernat Prats', 0, 0.12, -1, 'gate'], ['s_apoth', 'apothecary', 'The Surgeon’s House', 'Elvira Mirall', 1, 0.7, 1, 'ramparts']],
+      spots: { sw_garrison: { x: 2232, z: -735, rx: 10, rz: 8 }, sw_quarry: { x: 2180, z: -830, rx: 10, rz: 6 }, sw_wall: { x: 2300, z: -735, rx: 3, rz: 20 }, sw_watch: { x: gate.x, z: gate.z - 8, rx: 3, rz: 2 } },
+      board: { x: 2240, z: -724 }, entry: { x: gate.x, z: gate.z + 6 },
+      extra: { wall, gate, keep: { x: 2240, z: -800, face: 0 } }
+    });
+    return T;
+  })();
+  const VAL_JOBS = {
+    gm_field: ['Field hand', 'Working the wheat fields'], gm_horse: ['Horse breeder', 'Tending the horses in the paddocks'], gm_harvest: ['Harvester', 'Bringing in the sheaves'], gm_watch: ['Reeve’s man', 'Keeping the road into Goldmeadow'],
+    tw_fell: ['Woodcutter', 'Felling timber in the forest'], tw_saw: ['Sawyer', 'Working the saw pit'], tw_char: ['Charcoal burner', 'Burning charcoal'], tw_watch: ['Forest warden', 'Watching the forest road'],
+    sw_garrison: ['Soldier', 'Drilling with the garrison'], sw_quarry: ['Quarryman', 'Cutting stone in the quarry'], sw_wall: ['Wall mason', 'Mending the walls'], sw_watch: ['Gate guard', 'Keeping the south gate']
+  };
+  for (const L0 of [GM, TW, SW]) L0.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  TOWNS.goldmeadow = { name: 'Goldmeadow', x: GM.C.x, z: GM.C.z, r: 66, open: true, foreign: 'valdoria' };
+  TOWNS.thornwick = { name: 'Thornwick', x: TW.C.x, z: TW.C.z, r: 56, open: true, foreign: 'valdoria' };
+  TOWNS.stonewatch = { name: 'Stonewatch', x: SW.C.x, z: SW.C.z, r: 86, open: true, foreign: 'valdoria' };
+  LOCS.gmgreen = { x: 2210, z: 170, r: 9, name: 'the Green', town: 'goldmeadow' };
+  LOCS.twyard = { x: 2386, z: -187, r: 8, name: 'the Timber Yard', town: 'thornwick' };
+  LOCS.swparade = { x: 2232, z: -735, r: 10, name: 'the Parade Ground', town: 'stonewatch' };
+  LOCS.swkeep = { x: 2240, z: -780, r: 6, name: 'the Castellan’s Keep', town: 'stonewatch' };
+  for (const [L0, town, pre] of [[GM, 'goldmeadow', 'gb:'], [TW, 'thornwick', 'tb:'], [SW, 'stonewatch', 'sb:']]) L0.biz.forEach(b0 => { LOCS[pre + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town }; });
+  ROADS.vgold = [[1996, -214], [2040, -150], [2100, -60], [2150, 30], [2186, 92], [2194, 108]];
+  ROADS.vthorn = [[2050, -240], [2140, -222], [2240, -204], [2326, -186]];
+  ROADS.vstone = [[1996, -386], [2030, -460], [2090, -560], [2160, -630], [2220, -652], [2226, -656]];
   // the passage: ships sail from Eastwatch's quay, call at Stormrest Isle, and on to Dawnport. Anyone who can pay may go.
   const PORTS = {
     eastwatch: { x: 1128, z: -330, face: -Math.PI / 2, name: 'Eastwatch Quay' },
@@ -3189,8 +3261,8 @@
   IC.biz.forEach(b0 => { LOCS['ib:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'ironcrest' }; });
   EW.biz.forEach(b0 => { LOCS['eb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'eastwatch' }; });
   const CM_JOBS = { cm_fish: ['Fisher', 'Fishing from the quay'], cm_watch: ['City watchman', 'Keeping the King\u2019s Gate'], cm_castle: ['Castle servant', 'Serving at the castle'], cm_porter: ['Market porter', 'Carrying in the Great Market'], cm_mason: ['Mason', 'Working on the Great Hall'], cm_carter: ['Carter', 'Loading carts in the South Ward'], cm_wash: ['Washer', 'Washing linen at the lake'], cm_labour: ['Labourer', 'Labouring in the Old Town'] };
-  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW, dawnport: DP };
-  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS, DP_JOBS);
+  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW, dawnport: DP, goldmeadow: GM, thornwick: TW, stonewatch: SW };
+  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS, DP_JOBS, VAL_JOBS);
   /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
   const STAGE = {
     hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
@@ -3217,12 +3289,19 @@
     let nb = null, nd = 1e9; for (const q of L.streets) for (let i = 0; i < q.pts.length - 1; i++) { const [ax, az] = q.pts[i], [bx, bz] = q.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((st.x - ax) * dx + (st.z - az) * dz) / L2)), px = ax + t * dx, pz = az + t * dz, d = Math.hypot(st.x - px, st.z - pz); if (d < nd) { nd = d; nb = { x: px, z: pz }; } }
     if (nb) st.face = Math.atan2(nb.x - st.x, nb.z - st.z);
   }
+  Object.assign(STAGE, {
+    dawnport: { x: 2046, z: -232, face: Math.PI, name: 'Dawnport Coach House' },
+    goldmeadow: { x: 2180, z: 116, face: Math.PI / 2, name: 'Goldmeadow Coach House' },
+    thornwick: { x: 2334, z: -174, face: Math.PI, name: 'Thornwick Coach House' },
+    stonewatch: { x: 2206, z: -640, face: Math.PI / 2, name: 'Stonewatch Coach House' }
+  });
   for (const id in STAGE) LOCS['stage:' + id] = { x: STAGE[id].x, z: STAGE[id].z, r: 5, name: STAGE[id].name, town: id === 'hearthmoor' ? undefined : id, stage: id };
   const polyLen = pts => { let L = 0; for (let i = 0; i < pts.length - 1; i++) L += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); return L; };
   // distances by road: the east road to the fork at the waystation, then on east to Oakbridge or north to Greenhaven
   const forkAt = ROADS.east.findIndex(p => p[0] === 240);
   const LEG = { hearthmoor: polyLen(ROADS.east.slice(0, forkAt + 1)) + 75, oakbridge: polyLen(ROADS.east.slice(forkAt)) + 30, greenhaven: polyLen(ROADS.north) + 20 };
-  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40]];
+  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40], ['dawnport', 'goldmeadow', polyLen(ROADS.vgold) + 60], ['dawnport', 'thornwick', polyLen(ROADS.vthorn) + 60], ['dawnport', 'stonewatch', polyLen(ROADS.vstone) + 70]];
+  const kingdomOf = id => (TOWNS[id] && TOWNS[id].foreign) || 'alderwyn';
   const roadDist = (a, b) => { if (a === b) return 0; const D = { [a]: 0 }, Q = [a]; while (Q.length) { Q.sort((x, y) => D[x] - D[y]); const u = Q.shift(); for (const [x, y, w] of EDGES) { const v = x === u ? y : y === u ? x : null; if (v && (D[v] == null || D[u] + w < D[v])) { D[v] = D[u] + w; Q.push(v); } } } return D[b] || 0; };
   const COACH_MPM = 15, WALK_MPM = 7.8, RIDE_MPM = 18;   // metres per game minute (walking is 6.5 m a second, and a game minute is 1.2 seconds)
   const fare = (a, b) => Math.max(4, Math.round(roadDist(a, b) / 110));
@@ -3366,7 +3445,9 @@
   // Ironcrest and Eastwatch: families, businesses, common work and a town council, as in the other towns
   function setupNewTown(s, id) {
     if (!s.towns || s.towns[id]) return;
-    const L = LAYOUT[id], cfg = id === 'dawnport' ? { seed: 717171, pop: 450, jobs: ['dp_dock', 'dp_dock', 'dp_dock', 'dp_fish', 'dp_fish', 'dp_salt', 'dp_salt', 'dp_sail', 'dp_vine', 'dp_vine', 'dp_watch'], title: 'Consul', chest: 650, rent: [5, 3], pre: 'd', fam: VAL_FAMILY, first: [VAL_F, VAL_M] } : id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
+    const VCFG = { goldmeadow: { seed: 818181, pop: 85, jobs: ['gm_field', 'gm_field', 'gm_field', 'gm_horse', 'gm_harvest', 'gm_watch'], title: 'Reeve', chest: 160, rent: [3, 2], pre: 'gm' }, thornwick: { seed: 828282, pop: 65, jobs: ['tw_fell', 'tw_fell', 'tw_fell', 'tw_saw', 'tw_char', 'tw_watch'], title: 'Warden', chest: 120, rent: [3, 2], pre: 'tw' }, stonewatch: { seed: 838383, pop: 210, jobs: ['sw_garrison', 'sw_garrison', 'sw_garrison', 'sw_quarry', 'sw_quarry', 'sw_wall', 'sw_watch'], title: 'Castellan', chest: 400, rent: [4, 3], pre: 'sw' } };
+    if (VCFG[id]) Object.assign(VCFG[id], { fam: VAL_FAMILY, first: [VAL_F, VAL_M] });
+    const L = LAYOUT[id], cfg = VCFG[id] ? VCFG[id] : id === 'dawnport' ? { seed: 717171, pop: 450, jobs: ['dp_dock', 'dp_dock', 'dp_dock', 'dp_fish', 'dp_fish', 'dp_salt', 'dp_salt', 'dp_sail', 'dp_vine', 'dp_vine', 'dp_watch'], title: 'Consul', chest: 650, rent: [5, 3], pre: 'd', fam: VAL_FAMILY, first: [VAL_F, VAL_M] } : id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
       : { seed: 616161, pop: 480, jobs: ['ew_dock', 'ew_dock', 'ew_dock', 'ew_fish', 'ew_fish', 'ew_net', 'ew_sail', 'ew_sail', 'ew_yard', 'ew_watch'], title: 'Harbourmaster', chest: 700, rent: [5, 3], pre: 'e', fam: ['Penhale', 'Trask', 'Brine', 'Keel', 'Tolley', 'Hook', 'Marchant', 'Rowe', 'Polgrean', 'Nance', 'Tremayne', 'Kitto', 'Jago', 'Pascoe', 'Rescorla'] };
     let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
     const used = new Set(Object.values(s.people).map(p => p.name));
@@ -3434,22 +3515,36 @@
   // Valdoria: its own crown and its own customs. For now it is a place to go and to trade; its queen, its laws and its
   // dealings with Alderwyn come in the next part of the stage
   function setupValdoria(s) {
-    if (s.valdoria) return;
+    if (s.valdoria) { setupRoyals(s); return; }
     s.valdoria = { name: 'Valdoria', ruler: 'Queen Ximena II', capital: 'Valdor', duty: 1.2, relation: 50, standing: 0, charter: false, embargo: 0, log: [] };
+    setupRoyals(s);
   }
+  // the royal house of Valdoria: the Queen's son and daughter, of an age to marry, who live at the Consul's palace when in Dawnport
+  function setupRoyals(s) {
+    const V = s.valdoria; if (!V || V.royals) return;
+    const h = s.houses.find(x => x.town === 'dawnport' && x.tenants.length === 0) || s.houses.find(x => x.town === 'dawnport');
+    const mk = (name, sex, age) => { const p = newPerson(s, { name, sex, age, town: 'dawnport', purse: 400, palette: 7, rep: 80, mood: 70 }); p.royal = 'valdoria'; p.log = [{ day: s.day, text: 'Of the royal house of Valdoria.' }]; if (h) moveIn(s, p, h); return p.id; };
+    V.royals = [mk('Infanta Leonor', 'f', 20), mk('Infante Rodrigo', 'm', 22)];
+  }
+  // treaties and marriages between the crowns: only the ruler of Alderwyn can make them
+  const TREATY = { trade: { name: 'a trade pact', need: 55, duty: 1.05 }, alliance: { name: 'an alliance', need: 70, duty: 1.0 } };
   function valLog(s, text, kind) { const V = s.valdoria; if (!V) return; V.log.unshift({ day: s.day, text }); if (V.log.length > 20) V.log.length = 20; event(s, 'From Valdoria: ' + text, kind || 'info'); }
   // the Queen of Valdoria rules for her own people: she answers Alderwyn's tariffs with her own duty, closes the port when
   // relations sour, and now and then a decree or a bad season changes what Dawnport will pay
   function valdoriaDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
+    // a treaty binds both crowns: raising Alderwyn's tariff past the pact breaks it
+    if (V.treaty && R && R.tariff > 1.1) { valLog(s, 'Alderwyn has raised its tariff in breach of ' + TREATY[V.treaty.kind].name + '. The Queen tears it up.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); }
     if (s.day % 7 !== 5) return;
     const tariff = R ? R.tariff : 1;
+    if (V.treaty) V.relation = clamp(V.relation + (V.treaty.kind === 'alliance' ? 3 : 1.5), 0, 100);
+    if (V.wed) V.relation = Math.max(V.relation, 45);
     V.relation = clamp(V.relation + (1.1 - tariff) * 12 + (rand(s) - 0.5) * 4, 0, 100);
-    const want = clamp(1.1 + Math.max(0, tariff - 1) * 0.8 + (V.relation < 40 ? 0.15 : 0) - (V.relation > 70 ? 0.05 : 0), 1.05, 1.8);
+    const want = V.treaty ? TREATY[V.treaty.kind].duty : clamp(1.1 + Math.max(0, tariff - 1) * 0.8 + (V.relation < 40 ? 0.15 : 0) - (V.relation > 70 ? 0.05 : 0), 1.05, 1.8);
     if (Math.abs(want - V.duty) >= 0.05) { const old = V.duty; V.duty = Math.round((V.duty + Math.sign(want - V.duty) * 0.05) * 100) / 100; valLog(s, 'Queen Ximena ' + (V.duty > old ? 'raises' : 'lowers') + ' the duty on goods from Alderwyn to ' + Math.round((V.duty - 1) * 100) + '%' + (V.duty > old && tariff > 1 ? ', answering Alderwyn’s tariffs.' : '.'), V.duty > old ? 'bad' : 'good'); }
     if (V.embargo && s.day >= V.embargo) { V.embargo = 0; valLog(s, 'Dawnport is open again to goods from Alderwyn.', 'good'); }
-    else if (!V.embargo && V.relation < 25 && rand(s) < 0.5) { V.embargo = s.day + 10; valLog(s, 'Relations with Alderwyn have soured. The Queen closes Dawnport to Alderwyn’s goods for ten days.', 'bad'); }
+    else if (!V.embargo && !V.treaty && V.relation < 25 && rand(s) < 0.5) { V.embargo = s.day + 10; valLog(s, 'Relations with Alderwyn have soured. The Queen closes Dawnport to Alderwyn’s goods for ten days.', 'bad'); }
     if (rand(s) < 0.3) {
       const M = setupSeaMarket(s), ev = Math.floor(rand(s) * 3);
       if (ev === 0) { M.dawnport.wine = Math.round(M.dawnport.wine * 0.35); valLog(s, 'Hail in the vineyards: wine is scarce in Dawnport this week.', 'info'); }
@@ -3507,7 +3602,7 @@
     s.towns.crownmere = { title: 'Lord Mayor', chest: 1500, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen Lord Mayor of Crownmere by the guilds.');
   }
-  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150, dawnport: 80 };
+  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150, dawnport: 80, goldmeadow: 30, thornwick: 26, stonewatch: 70 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
   function townFolk(s, id) { return living(s).filter(p => p.town === id); }
@@ -3542,7 +3637,7 @@
   function townLog(s, T, text) { T.log.unshift({ day: s.day, text }); if (T.log.length > 20) T.log.length = 20; event(s, (TOWNS[T.id || 'oakbridge'] || TOWNS.oakbridge).name + ': ' + text, 'info'); }
   /* every town keeps a watch in proportion to its size: about one for every forty people, never fewer than two,
      and the capital a little more. They are townsfolk in a watchman's job, paid from the town chest. */
-  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch', dawnport: 'dp_watch' };
+  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch', dawnport: 'dp_watch', goldmeadow: 'gm_watch', thornwick: 'tw_watch', stonewatch: 'sw_watch' };
   function watchTarget(s, id) { const pop = id === 'hearthmoor' ? villagers(s).length : townFolk(s, id).length, T = s.towns && s.towns[id]; return Math.max(2, Math.round(pop / (id === 'crownmere' ? 35 : 40) * ((T && T.watchMul) || 1))); }
   function townWatch(s, id, T) {
     const job = TOWN_WATCH_JOB[id]; if (!job) return;
@@ -3618,7 +3713,7 @@
   /* ================= the kingdom of Alderwyn: lords, court, council, crown, and the bandits on its roads =================
      Six regions, each held by a lord under the crown. Your standing with the lords, the guilds, the court and the
      towns is your support; with enough of it, and a lordship and a council seat, the crown itself can be yours. */
-  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport' };   // Dawnport is Valdoria's, named here only so messages can say where
+  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch' };   // Dawnport is Valdoria's, named here only so messages can say where
   const COUNCIL = { treasury: 'Lord Treasurer', trade: 'Master of Trade', war: 'Marshal', law: 'Lord Justice' };
   /* the council is three careers, and you follow one. The road of coin runs from Master of Trade up to Lord
      Treasurer; the road of arms leads to Marshal; the road of law to Lord Justice. Once you have taken a seat on
@@ -5623,6 +5718,7 @@
         const from = Object.keys(STAGE).find(id => atLoc(s, 'stage:' + id));
         if (!from) return fail('Coaches leave from the stage post.');
         if (!STAGE[a] || a === from) return fail('No coach goes there.');
+        if (kingdomOf(a) !== kingdomOf(from)) return fail('No coach crosses the sea. Ships sail between Eastwatch and Dawnport.');
         const h = hourOf(s); if (h < 6 || h >= 19) return fail('The last coach has gone. The first leaves at six in the morning.');
         const f = fare(from, a); if (s.coins < f) return fail('The fare is ' + f + 'c.');
         spend(s, f); s.rec.fares = (s.rec.fares || 0) + f;
@@ -5703,10 +5799,37 @@
         if (V.charter) return fail('You already hold a charter.'); if (V.standing < 40) return fail('The Consul does not know you well enough. Trade honestly in Dawnport first (your name here is ' + Math.round(V.standing) + ' of 40).');
         if (s.coins < 200) return fail('The charter costs 200c.'); spend(s, 200); V.charter = true; valLog(s, 'The Consul grants you a merchant’s charter: you pay half the duty on what you land at Dawnport.', 'good'); return ok();
       }
+      case 'treaty': {
+        // a: 'trade' | 'alliance' | 'break'
+        const V = s.valdoria, R = s.realm; if (!V || !isRuler(s)) return fail('Only the ruler of Alderwyn treats with Valdoria.');
+        if (a === 'break') { if (!V.treaty) return fail('There is no treaty.'); valLog(s, 'Alderwyn breaks ' + TREATY[V.treaty.kind].name + ' with Valdoria.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); return ok(); }
+        const T0 = TREATY[a]; if (!T0) return fail('Unknown treaty.');
+        if (a === 'alliance' && !(V.treaty && V.treaty.kind === 'trade' && s.day - V.treaty.since >= 20)) return fail('An alliance needs a trade pact kept for twenty days first.');
+        if (V.treaty && V.treaty.kind === a) return fail('You already have ' + T0.name + '.');
+        if (R.tariff > 1.1) return fail('The Queen will not treat while Alderwyn’s tariff is above 1.1×. Lower it first.');
+        if (V.relation < T0.need) return fail('Relations are not warm enough for ' + T0.name + ' (' + Math.round(V.relation) + ' of ' + T0.need + ').');
+        V.treaty = { kind: a, since: s.day }; V.duty = T0.duty; V.embargo = 0; V.relation = clamp(V.relation + 8, 0, 100); R.favour = clamp(R.favour + (a === 'alliance' ? 5 : 2), 0, 100);
+        valLog(s, 'Alderwyn and Valdoria sign ' + T0.name + '. The duty at Dawnport falls to ' + Math.round((T0.duty - 1) * 100) + '%, and Alderwyn keeps its tariff low.', 'good'); return ok();
+      }
+      case 'royalMatch': {
+        // a: the person to marry into Valdoria's royal house: 'self' or one of your grown children
+        const V = s.valdoria, Y = you(s); if (!V || !isRuler(s)) return fail('Only the ruler of Alderwyn can make a royal match.');
+        setupRoyals(s); if (V.wed) return fail('The houses are already joined by marriage.');
+        if (V.relation < 60) return fail('Relations are not warm enough for a royal match (' + Math.round(V.relation) + ' of 60).');
+        if (s.coins < 300) return fail('A royal wedding costs 300c.');
+        const self = a === 'self', q = self ? null : s.people[a];
+        if (self ? !!Y.spouse : !(q && yourKids(s).includes(q) && !q.kid && q.age >= 16 && !q.spouse && q.status === 'here')) return fail(self ? 'You are already married.' : 'Choose an unmarried grown child of yours.');
+        const sex = self ? Y.sex : sexOf(q), R0 = V.royals.map(id => s.people[id]).find(r => r && r.status === 'here' && !r.spouse && sexOf(r) !== sex); if (!R0) return fail('There is no royal of Valdoria free to marry.');
+        spend(s, 300); moveOut(s, R0, 'Left Dawnport to marry into Alderwyn.');
+        if (self) wedYou(s, R0); else { R0.spouse = q.id; q.spouse = R0.id; R0.home = q.home; R0.town = q.town; plog(s, R0, 'Married ' + q.name + ' of Alderwyn.'); plog(s, q, 'Married ' + R0.name + ' of Valdoria.'); }
+        V.wed = { day: s.day, royal: R0.id, to: self ? 'you' : q.id }; V.relation = clamp(V.relation + 20, 0, 100); s.realm.favour = clamp(s.realm.favour + 5, 0, 100);
+        valLog(s, R0.name + ' of Valdoria marries ' + (self ? s.name : q.name) + ' of Alderwyn. The two royal houses are joined.', 'good'); return ok();
+      }
       case 'journey': {
         // walk or ride the roads to another town
         if (!TOWNS[a] || !TOWNS[a].open) return fail('That road is not open yet.');
-        const from = townAt(p.x, p.z) || 'hearthmoor', how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
+        const from = townAt(p.x, p.z) || 'hearthmoor'; if (kingdomOf(a) !== kingdomOf(from)) return fail('No road crosses the Sundering Sea. Take a ship.');
+        const how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
         const ambush = roadAmbush(s, from, a, mins);
         return { ok: true, mins, how, ambush };
       }
@@ -5991,11 +6114,13 @@
     if (s.v === 11) { s.v = 12; giveSurnames(s); generateAncestry(s); for (const a of s.agents) if (a.pid && s.people[a.pid]) a.name = s.people[a.pid].name; event(s, 'Every family now has a surname, and a married woman\u2019s maiden name is kept, so family trees show where everyone came from.', 'info'); }
     if (s.v === 12) { s.v = 13; setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s); event(s, 'Two more roads are open: east from Oakbridge to the port of Eastwatch, and from Crownmere up into the mountains to Ironcrest. The kingdom of Alderwyn has lords, a court and a crown, and bandits on its roads.', 'story'); }
     if (s.v === 13) { s.v = 14; setupNewTown(s, 'dawnport'); setupValdoria(s); event(s, 'Ships now sail from Eastwatch across the Sundering Sea, by way of Stormrest Isle, to Dawnport in Valdoria. Anyone who can pay the passage may go.', 'story'); }
+    if (s.v === 14) { s.v = 15; setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRoyals(s); event(s, 'The roads of Valdoria are open: from Dawnport south-east to Goldmeadow, east to Thornwick, and north to the fortress of Stonewatch. Coaches run between them.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
 
   const api = {
+    GM, TW, SW, VAL_JOBS, kingdomOf, TREATY, setupRoyals,
     SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,

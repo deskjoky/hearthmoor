@@ -59,7 +59,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .clock { font-family: var(--f-display); font-size: 18px; white-space: nowrap; }
 .coins { margin-left: auto; font-weight: 700; font-size: 17px; color: var(--gold); white-space: nowrap; }
 .coins.debt { color: #e0806e; }
-.coins::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f0cf6a, #9c7414); margin-right: 5px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+:root { --coin-crown: url("data:image/webp;base64,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"); --coin-oak: url("data:image/webp;base64,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"); }
+/* the coin of Alderwyn: the crown on one face, Hearthmoor's oak on the other. It turns over when money comes in */
+.coins::before { content: ""; display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: var(--coin-crown) center / contain no-repeat; margin-right: 6px; vertical-align: -4px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+.coins.gain::before { animation: coinFlip .8s ease-in-out; }
+@keyframes coinFlip { 0% { transform: rotateY(0); background-image: var(--coin-crown); } 49% { background-image: var(--coin-crown); } 50% { transform: rotateY(180deg); background-image: var(--coin-oak); } 99% { background-image: var(--coin-oak); } 100% { transform: rotateY(360deg); background-image: var(--coin-crown); } }
+@media (prefers-reduced-motion: reduce) { .coins.gain::before { animation: none; } }
+.toast.coin::before { content: ""; display: inline-block; width: 18px; height: 18px; margin-right: 7px; vertical-align: -4px; background: var(--coin-oak) center / contain no-repeat; }
 .task-btn { background: #6b5636; margin-right: 6px; } .task-btn span { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--gold, #c9962b); color: #2a1d12; font: 700 12px/18px var(--f-body); }
 .task-btn span:empty { display: none; }
 .book-btn { border: 0; background: var(--leather); color: var(--parch); border-radius: 4px; padding: 8px 12px; font-family: var(--f-display); font-size: 16px; min-height: 40px; }
@@ -384,6 +390,19 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .tome-page { background: radial-gradient(ellipse at 50% 0%, #f4e7cb, var(--parch) 55%, var(--parch-2)); border-radius: 3px 8px 8px 3px; padding: 22px 20px 18px; position: relative; }
 .tome-page::before { content: ""; position: absolute; inset: 8px; border: 1px solid rgba(140,46,33,.35); border-radius: 2px 6px 6px 2px; pointer-events: none; }
 .crest { display: block; width: 64px; height: 64px; margin: 0 auto 6px; }
+/* the title's coin: the crown of Alderwyn and the oak of Hearthmoor, turning slowly in the light */
+.tcoin { width: 88px; height: 88px; margin: 0 auto 8px; perspective: 500px; }
+.tcoin .spin { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; animation: tcoinSpin 7s linear infinite; }
+.tcoin .face, .tcoin .rim { position: absolute; inset: 0; border-radius: 50%; }
+.tcoin .face { background: var(--coin-crown) center / contain no-repeat; transform: translateZ(3.5px); animation: tcoinFace 7s linear infinite; }
+.tcoin .rim { inset: 3%; background: radial-gradient(circle, #8a5f2c 60%, #5e3d1a 100%); }
+.tcoin .shadow { width: 64px; height: 8px; margin: 6px auto 0; border-radius: 50%; background: radial-gradient(ellipse, rgba(42,31,22,.35), rgba(42,31,22,0) 70%); animation: tcoinShadow 7s linear infinite; }
+/* the face turns edge-on, the other side comes round, and it settles: crown, then oak, never shown backwards */
+@keyframes tcoinSpin { 0% { transform: rotateY(0); } 20% { transform: rotateY(90deg); } 20.01% { transform: rotateY(-90deg); } 40%, 50% { transform: rotateY(0); } 70% { transform: rotateY(90deg); } 70.01% { transform: rotateY(-90deg); } 90%, 100% { transform: rotateY(0); } }
+@keyframes tcoinFace { 0%, 20% { background-image: var(--coin-crown); } 20.01%, 70% { background-image: var(--coin-oak); } 70.01%, 100% { background-image: var(--coin-crown); } }
+@keyframes tcoinShadow { 0%, 40%, 50%, 90%, 100% { transform: scaleX(1); } 20%, 70% { transform: scaleX(.35); } }
+@media (prefers-reduced-motion: reduce) { .tcoin .spin, .tcoin .shadow, .tcoin .face { animation: none; } }
+@media (orientation: landscape) and (max-height: 520px) { .tcoin { width: 64px; height: 64px; margin-bottom: 4px; } .tcoin .shadow { width: 48px; margin-top: 3px; } }
 .tname { font-family: var(--f-caps); font-size: clamp(40px, 12vw, 54px); line-height: 1; text-align: center; margin: 0; color: var(--ink); letter-spacing: .01em; }
 .tsub { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 6px 0 16px; font-size: 16px; }
 .rule { height: 10px; margin: 0 auto 14px; width: 70%; background: radial-gradient(circle, var(--seal) 0 3px, transparent 3.5px) center/14px 10px no-repeat, linear-gradient(var(--line), var(--line)) center/100% 1px no-repeat; }
@@ -523,7 +542,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 (function (root) {
   'use strict';
 
-  const VERSION = 14;
+  const VERSION = 15;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -885,7 +904,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     initGov(s);
     setupOakbridge(s);
     setupGreenhaven(s);
-    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupNewTown(s, 'dawnport'); setupRealm(s); setupValdoria(s);
+    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupNewTown(s, 'dawnport'); setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRealm(s); setupValdoria(s);
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
@@ -2066,7 +2085,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     crownmere: { make: { grain: 25, wood: 15, ore: 0 }, use: { grain: 150, wood: 90, ore: 40 }, travellers: 120 },
     ironcrest: { make: { grain: 2, wood: 35, ore: 90 }, use: { grain: 40, wood: 30, ore: 20 }, travellers: 15 },
     eastwatch: { make: { grain: 10, wood: 5, ore: 0 }, use: { grain: 70, wood: 60, ore: 15 }, travellers: 60 },
-    dawnport: { make: { grain: 40, wood: 4, ore: 0 }, use: { grain: 60, wood: 45, ore: 10 }, travellers: 55 }
+    dawnport: { make: { grain: 40, wood: 4, ore: 0 }, use: { grain: 60, wood: 45, ore: 10 }, travellers: 55 },
+    goldmeadow: { make: { grain: 75, wood: 4, ore: 0 }, use: { grain: 22, wood: 14, ore: 3 }, travellers: 10 },
+    thornwick: { make: { grain: 4, wood: 70, ore: 0 }, use: { grain: 20, wood: 12, ore: 4 }, travellers: 8 },
+    stonewatch: { make: { grain: 6, wood: 6, ore: 30 }, use: { grain: 45, wood: 30, ore: 20 }, travellers: 25 }
   };
   // per trade: how often a grown person buys (visits a day), how much each time, the usual price,
   // the goods used per unit sold, and how many units one pair of hands can make in a day
@@ -3674,6 +3696,75 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   LOCS.dppalace = { x: 2064, z: -300, r: 6, name: 'the Consul’s Palace', town: 'dawnport' };
   LOCS.dpplaza = { x: 2010, z: -300, r: 10, name: 'the Plaza Mayor', town: 'dawnport' };
   DP.biz.forEach(b0 => { LOCS['db:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'dawnport' }; });
+  // Valdoria's other towns: Goldmeadow on the plains to the south-east, Thornwick at the forest's edge to the east,
+  // and Stonewatch, the walled fortress guarding the northern pass. Roads run to each from Dawnport.
+  const GM = makeTown({
+    id: 'goldmeadow', C: { x: 2210, z: 168 }, seed: 31337, R: 62, maxHouses: 26, tall: 0.15,
+    streets: [
+      { name: 'the Harvest Road', w: 4.4, pts: [[2194, 108], [2203, 140], [2210, 170], [2218, 214]] },
+      { name: 'Paddock Lane', w: 3.4, pts: [[2158, 172], [2210, 170], [2262, 174]] }
+    ],
+    plazas: [{ id: 'green', name: 'the Green', x: 2210, z: 170, r0: 3, r1: 10, w: 3 }],
+    marks: [{ x: 2262, z: 140, r: 9 }],
+    biz: [['g_sheaf', 'tavern', 'The Golden Sheaf', 'Constanza Fuster', 0, 0.42, 1, 'green'], ['g_oven', 'bakery', 'Goldmeadow Ovens', 'Martí Prats', 0, 0.7, -1, 'green'], ['g_butch', 'butcher', 'Horse Fair Butchers', 'Sancha Valls', 1, 0.25, 1, 'paddock'], ['g_cart', 'carter', 'Horse Fair Carters', 'Esteve Soler', 1, 0.75, -1, 'paddock'], ['g_cooper', 'cooper', 'Ale Coopers', 'Oriol Mirall', 0, 0.2, -1, 'road']],
+    spots: { gm_field: { x: 2150, z: 230, rx: 26, rz: 10 }, gm_horse: { x: 2270, z: 200, rx: 12, rz: 10 }, gm_harvest: { x: 2140, z: 120, rx: 18, rz: 8 }, gm_watch: { x: 2196, z: 116, rx: 3, rz: 3 } },
+    board: { x: 2216, z: 160 }, entry: { x: 2194, z: 108 },
+    extra: { windmill: { x: 2262, z: 140 } }
+  });
+  const TW = makeTown({
+    id: 'thornwick', C: { x: 2385, z: -186 }, seed: 40404, R: 52, maxHouses: 20, tall: 0.1,
+    streets: [
+      { name: 'Timber Street', w: 4.2, pts: [[2326, -186], [2360, -186], [2400, -187], [2436, -190]] },
+      { name: 'Sawpit Lane', w: 3.2, pts: [[2386, -187], [2389, -226]] },
+      { name: 'Ridge Lane', w: 3.2, pts: [[2386, -187], [2382, -150]] }
+    ],
+    plazas: [{ id: 'yard', name: 'the Timber Yard', x: 2386, z: -187, r0: 3, r1: 9, w: 3 }],
+    marks: [{ x: 2430, z: -222, r: 10 }],
+    biz: [['t_oak', 'tavern', 'The Felled Oak', 'Gaspar Cabrera', 0, 0.45, 1, 'yard'], ['t_join', 'joinery', 'Thornwick Joiners', 'Pilar Fuster', 0, 0.7, -1, 'timber'], ['t_axe', 'smithy', 'Axe and Wedge', 'Nuno Prats', 0, 0.25, -1, 'timber'], ['t_cart', 'carter', 'Log Carters', 'Rosalind Valls', 1, 0.6, 1, 'sawpit'], ['t_chand', 'chandler', 'Pitch and Tallow', 'Lope Soler', 2, 0.6, -1, 'ridge']],
+    spots: { tw_fell: { x: 2440, z: -140, rx: 20, rz: 12 }, tw_saw: { x: 2430, z: -222, rx: 6, rz: 5 }, tw_char: { x: 2460, z: -230, rx: 6, rz: 6 }, tw_watch: { x: 2330, z: -190, rx: 3, rz: 3 } },
+    board: { x: 2392, z: -178 }, entry: { x: 2326, z: -186 },
+    extra: { sawmill: { x: 2430, z: -222 } }
+  });
+  const SW = (function () {
+    const C = { x: 2232, z: -732 }, R = 82;
+    const wall = []; for (let a = 0; a < 360.1; a += 9) { const t0 = a * Math.PI / 180; wall.push([C.x + Math.cos(t0) * R, C.z + Math.sin(t0) * R]); }
+    const gate = { x: C.x - 6, z: C.z + R, face: 0 };
+    const T = makeTown({
+      id: 'stonewatch', C, seed: 50505, R: R - 8, maxHouses: 56, tall: 0.5,
+      inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 4,
+      avoid: (x, z, rad) => Math.hypot(x - 2240, z + 800) < 20 + rad,
+      streets: [
+        { name: 'Gate Street', w: 4.6, pts: [[2226, -656], [2228, -700], [2232, -735], [2236, -778]] },
+        { name: 'the Ramparts Road', w: 3.8, pts: [[2168, -732], [2232, -735], [2296, -738]] },
+        { name: 'Armourers’ Row', w: 3.4, pts: [[2228, -700], [2272, -692]] },
+        { name: 'Quarry Lane', w: 3.4, pts: [[2232, -760], [2186, -772]] }
+      ],
+      plazas: [{ id: 'parade', name: 'the Parade Ground', x: 2232, z: -735, r0: 3, r1: 12, w: 4 }],
+      marks: [{ x: 2240, z: -800, r: 20 }],
+      biz: [['s_gate', 'tavern', 'The Iron Gate', 'Fernan Torres', 0, 0.3, 1, 'gate'], ['s_arm1', 'smithy', 'The King’s Armourers', 'Gonzalo Puig', 2, 0.5, 1, 'armourers'], ['s_arm2', 'smithy', 'Shield and Sword', 'Urraca Serra', 2, 0.8, -1, 'armourers'], ['s_bake', 'bakery', 'Garrison Ovens', 'Juana Rius', 0, 0.55, -1, 'gate'], ['s_butch', 'butcher', 'Rampart Butchers', 'Diego Soler', 1, 0.25, 1, 'ramparts'], ['s_mason', 'mason', 'Stonewatch Masons', 'Alvaro Castell', 3, 0.6, 1, 'quarry'], ['s_tan', 'tanner', 'Saddlers and Tanners', 'Mencia Oliver', 1, 0.8, -1, 'ramparts'], ['s_cart', 'carter', 'Pass Carters', 'Bernat Prats', 0, 0.12, -1, 'gate'], ['s_apoth', 'apothecary', 'The Surgeon’s House', 'Elvira Mirall', 1, 0.7, 1, 'ramparts']],
+      spots: { sw_garrison: { x: 2232, z: -735, rx: 10, rz: 8 }, sw_quarry: { x: 2180, z: -830, rx: 10, rz: 6 }, sw_wall: { x: 2300, z: -735, rx: 3, rz: 20 }, sw_watch: { x: gate.x, z: gate.z - 8, rx: 3, rz: 2 } },
+      board: { x: 2240, z: -724 }, entry: { x: gate.x, z: gate.z + 6 },
+      extra: { wall, gate, keep: { x: 2240, z: -800, face: 0 } }
+    });
+    return T;
+  })();
+  const VAL_JOBS = {
+    gm_field: ['Field hand', 'Working the wheat fields'], gm_horse: ['Horse breeder', 'Tending the horses in the paddocks'], gm_harvest: ['Harvester', 'Bringing in the sheaves'], gm_watch: ['Reeve’s man', 'Keeping the road into Goldmeadow'],
+    tw_fell: ['Woodcutter', 'Felling timber in the forest'], tw_saw: ['Sawyer', 'Working the saw pit'], tw_char: ['Charcoal burner', 'Burning charcoal'], tw_watch: ['Forest warden', 'Watching the forest road'],
+    sw_garrison: ['Soldier', 'Drilling with the garrison'], sw_quarry: ['Quarryman', 'Cutting stone in the quarry'], sw_wall: ['Wall mason', 'Mending the walls'], sw_watch: ['Gate guard', 'Keeping the south gate']
+  };
+  for (const L0 of [GM, TW, SW]) L0.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  TOWNS.goldmeadow = { name: 'Goldmeadow', x: GM.C.x, z: GM.C.z, r: 66, open: true, foreign: 'valdoria' };
+  TOWNS.thornwick = { name: 'Thornwick', x: TW.C.x, z: TW.C.z, r: 56, open: true, foreign: 'valdoria' };
+  TOWNS.stonewatch = { name: 'Stonewatch', x: SW.C.x, z: SW.C.z, r: 86, open: true, foreign: 'valdoria' };
+  LOCS.gmgreen = { x: 2210, z: 170, r: 9, name: 'the Green', town: 'goldmeadow' };
+  LOCS.twyard = { x: 2386, z: -187, r: 8, name: 'the Timber Yard', town: 'thornwick' };
+  LOCS.swparade = { x: 2232, z: -735, r: 10, name: 'the Parade Ground', town: 'stonewatch' };
+  LOCS.swkeep = { x: 2240, z: -780, r: 6, name: 'the Castellan’s Keep', town: 'stonewatch' };
+  for (const [L0, town, pre] of [[GM, 'goldmeadow', 'gb:'], [TW, 'thornwick', 'tb:'], [SW, 'stonewatch', 'sb:']]) L0.biz.forEach(b0 => { LOCS[pre + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town }; });
+  ROADS.vgold = [[1996, -214], [2040, -150], [2100, -60], [2150, 30], [2186, 92], [2194, 108]];
+  ROADS.vthorn = [[2050, -240], [2140, -222], [2240, -204], [2326, -186]];
+  ROADS.vstone = [[1996, -386], [2030, -460], [2090, -560], [2160, -630], [2220, -652], [2226, -656]];
   // the passage: ships sail from Eastwatch's quay, call at Stormrest Isle, and on to Dawnport. Anyone who can pay may go.
   const PORTS = {
     eastwatch: { x: 1128, z: -330, face: -Math.PI / 2, name: 'Eastwatch Quay' },
@@ -3708,8 +3799,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   IC.biz.forEach(b0 => { LOCS['ib:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'ironcrest' }; });
   EW.biz.forEach(b0 => { LOCS['eb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'eastwatch' }; });
   const CM_JOBS = { cm_fish: ['Fisher', 'Fishing from the quay'], cm_watch: ['City watchman', 'Keeping the King\u2019s Gate'], cm_castle: ['Castle servant', 'Serving at the castle'], cm_porter: ['Market porter', 'Carrying in the Great Market'], cm_mason: ['Mason', 'Working on the Great Hall'], cm_carter: ['Carter', 'Loading carts in the South Ward'], cm_wash: ['Washer', 'Washing linen at the lake'], cm_labour: ['Labourer', 'Labouring in the Old Town'] };
-  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW, dawnport: DP };
-  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS, DP_JOBS);
+  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW, dawnport: DP, goldmeadow: GM, thornwick: TW, stonewatch: SW };
+  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS, DP_JOBS, VAL_JOBS);
   /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
   const STAGE = {
     hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
@@ -3736,12 +3827,19 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     let nb = null, nd = 1e9; for (const q of L.streets) for (let i = 0; i < q.pts.length - 1; i++) { const [ax, az] = q.pts[i], [bx, bz] = q.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((st.x - ax) * dx + (st.z - az) * dz) / L2)), px = ax + t * dx, pz = az + t * dz, d = Math.hypot(st.x - px, st.z - pz); if (d < nd) { nd = d; nb = { x: px, z: pz }; } }
     if (nb) st.face = Math.atan2(nb.x - st.x, nb.z - st.z);
   }
+  Object.assign(STAGE, {
+    dawnport: { x: 2046, z: -232, face: Math.PI, name: 'Dawnport Coach House' },
+    goldmeadow: { x: 2180, z: 116, face: Math.PI / 2, name: 'Goldmeadow Coach House' },
+    thornwick: { x: 2334, z: -174, face: Math.PI, name: 'Thornwick Coach House' },
+    stonewatch: { x: 2206, z: -640, face: Math.PI / 2, name: 'Stonewatch Coach House' }
+  });
   for (const id in STAGE) LOCS['stage:' + id] = { x: STAGE[id].x, z: STAGE[id].z, r: 5, name: STAGE[id].name, town: id === 'hearthmoor' ? undefined : id, stage: id };
   const polyLen = pts => { let L = 0; for (let i = 0; i < pts.length - 1; i++) L += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); return L; };
   // distances by road: the east road to the fork at the waystation, then on east to Oakbridge or north to Greenhaven
   const forkAt = ROADS.east.findIndex(p => p[0] === 240);
   const LEG = { hearthmoor: polyLen(ROADS.east.slice(0, forkAt + 1)) + 75, oakbridge: polyLen(ROADS.east.slice(forkAt)) + 30, greenhaven: polyLen(ROADS.north) + 20 };
-  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40]];
+  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40], ['dawnport', 'goldmeadow', polyLen(ROADS.vgold) + 60], ['dawnport', 'thornwick', polyLen(ROADS.vthorn) + 60], ['dawnport', 'stonewatch', polyLen(ROADS.vstone) + 70]];
+  const kingdomOf = id => (TOWNS[id] && TOWNS[id].foreign) || 'alderwyn';
   const roadDist = (a, b) => { if (a === b) return 0; const D = { [a]: 0 }, Q = [a]; while (Q.length) { Q.sort((x, y) => D[x] - D[y]); const u = Q.shift(); for (const [x, y, w] of EDGES) { const v = x === u ? y : y === u ? x : null; if (v && (D[v] == null || D[u] + w < D[v])) { D[v] = D[u] + w; Q.push(v); } } } return D[b] || 0; };
   const COACH_MPM = 15, WALK_MPM = 7.8, RIDE_MPM = 18;   // metres per game minute (walking is 6.5 m a second, and a game minute is 1.2 seconds)
   const fare = (a, b) => Math.max(4, Math.round(roadDist(a, b) / 110));
@@ -3885,7 +3983,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   // Ironcrest and Eastwatch: families, businesses, common work and a town council, as in the other towns
   function setupNewTown(s, id) {
     if (!s.towns || s.towns[id]) return;
-    const L = LAYOUT[id], cfg = id === 'dawnport' ? { seed: 717171, pop: 450, jobs: ['dp_dock', 'dp_dock', 'dp_dock', 'dp_fish', 'dp_fish', 'dp_salt', 'dp_salt', 'dp_sail', 'dp_vine', 'dp_vine', 'dp_watch'], title: 'Consul', chest: 650, rent: [5, 3], pre: 'd', fam: VAL_FAMILY, first: [VAL_F, VAL_M] } : id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
+    const VCFG = { goldmeadow: { seed: 818181, pop: 85, jobs: ['gm_field', 'gm_field', 'gm_field', 'gm_horse', 'gm_harvest', 'gm_watch'], title: 'Reeve', chest: 160, rent: [3, 2], pre: 'gm' }, thornwick: { seed: 828282, pop: 65, jobs: ['tw_fell', 'tw_fell', 'tw_fell', 'tw_saw', 'tw_char', 'tw_watch'], title: 'Warden', chest: 120, rent: [3, 2], pre: 'tw' }, stonewatch: { seed: 838383, pop: 210, jobs: ['sw_garrison', 'sw_garrison', 'sw_garrison', 'sw_quarry', 'sw_quarry', 'sw_wall', 'sw_watch'], title: 'Castellan', chest: 400, rent: [4, 3], pre: 'sw' } };
+    if (VCFG[id]) Object.assign(VCFG[id], { fam: VAL_FAMILY, first: [VAL_F, VAL_M] });
+    const L = LAYOUT[id], cfg = VCFG[id] ? VCFG[id] : id === 'dawnport' ? { seed: 717171, pop: 450, jobs: ['dp_dock', 'dp_dock', 'dp_dock', 'dp_fish', 'dp_fish', 'dp_salt', 'dp_salt', 'dp_sail', 'dp_vine', 'dp_vine', 'dp_watch'], title: 'Consul', chest: 650, rent: [5, 3], pre: 'd', fam: VAL_FAMILY, first: [VAL_F, VAL_M] } : id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
       : { seed: 616161, pop: 480, jobs: ['ew_dock', 'ew_dock', 'ew_dock', 'ew_fish', 'ew_fish', 'ew_net', 'ew_sail', 'ew_sail', 'ew_yard', 'ew_watch'], title: 'Harbourmaster', chest: 700, rent: [5, 3], pre: 'e', fam: ['Penhale', 'Trask', 'Brine', 'Keel', 'Tolley', 'Hook', 'Marchant', 'Rowe', 'Polgrean', 'Nance', 'Tremayne', 'Kitto', 'Jago', 'Pascoe', 'Rescorla'] };
     let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
     const used = new Set(Object.values(s.people).map(p => p.name));
@@ -3953,22 +4053,36 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   // Valdoria: its own crown and its own customs. For now it is a place to go and to trade; its queen, its laws and its
   // dealings with Alderwyn come in the next part of the stage
   function setupValdoria(s) {
-    if (s.valdoria) return;
+    if (s.valdoria) { setupRoyals(s); return; }
     s.valdoria = { name: 'Valdoria', ruler: 'Queen Ximena II', capital: 'Valdor', duty: 1.2, relation: 50, standing: 0, charter: false, embargo: 0, log: [] };
+    setupRoyals(s);
   }
+  // the royal house of Valdoria: the Queen's son and daughter, of an age to marry, who live at the Consul's palace when in Dawnport
+  function setupRoyals(s) {
+    const V = s.valdoria; if (!V || V.royals) return;
+    const h = s.houses.find(x => x.town === 'dawnport' && x.tenants.length === 0) || s.houses.find(x => x.town === 'dawnport');
+    const mk = (name, sex, age) => { const p = newPerson(s, { name, sex, age, town: 'dawnport', purse: 400, palette: 7, rep: 80, mood: 70 }); p.royal = 'valdoria'; p.log = [{ day: s.day, text: 'Of the royal house of Valdoria.' }]; if (h) moveIn(s, p, h); return p.id; };
+    V.royals = [mk('Infanta Leonor', 'f', 20), mk('Infante Rodrigo', 'm', 22)];
+  }
+  // treaties and marriages between the crowns: only the ruler of Alderwyn can make them
+  const TREATY = { trade: { name: 'a trade pact', need: 55, duty: 1.05 }, alliance: { name: 'an alliance', need: 70, duty: 1.0 } };
   function valLog(s, text, kind) { const V = s.valdoria; if (!V) return; V.log.unshift({ day: s.day, text }); if (V.log.length > 20) V.log.length = 20; event(s, 'From Valdoria: ' + text, kind || 'info'); }
   // the Queen of Valdoria rules for her own people: she answers Alderwyn's tariffs with her own duty, closes the port when
   // relations sour, and now and then a decree or a bad season changes what Dawnport will pay
   function valdoriaDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
+    // a treaty binds both crowns: raising Alderwyn's tariff past the pact breaks it
+    if (V.treaty && R && R.tariff > 1.1) { valLog(s, 'Alderwyn has raised its tariff in breach of ' + TREATY[V.treaty.kind].name + '. The Queen tears it up.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); }
     if (s.day % 7 !== 5) return;
     const tariff = R ? R.tariff : 1;
+    if (V.treaty) V.relation = clamp(V.relation + (V.treaty.kind === 'alliance' ? 3 : 1.5), 0, 100);
+    if (V.wed) V.relation = Math.max(V.relation, 45);
     V.relation = clamp(V.relation + (1.1 - tariff) * 12 + (rand(s) - 0.5) * 4, 0, 100);
-    const want = clamp(1.1 + Math.max(0, tariff - 1) * 0.8 + (V.relation < 40 ? 0.15 : 0) - (V.relation > 70 ? 0.05 : 0), 1.05, 1.8);
+    const want = V.treaty ? TREATY[V.treaty.kind].duty : clamp(1.1 + Math.max(0, tariff - 1) * 0.8 + (V.relation < 40 ? 0.15 : 0) - (V.relation > 70 ? 0.05 : 0), 1.05, 1.8);
     if (Math.abs(want - V.duty) >= 0.05) { const old = V.duty; V.duty = Math.round((V.duty + Math.sign(want - V.duty) * 0.05) * 100) / 100; valLog(s, 'Queen Ximena ' + (V.duty > old ? 'raises' : 'lowers') + ' the duty on goods from Alderwyn to ' + Math.round((V.duty - 1) * 100) + '%' + (V.duty > old && tariff > 1 ? ', answering Alderwyn’s tariffs.' : '.'), V.duty > old ? 'bad' : 'good'); }
     if (V.embargo && s.day >= V.embargo) { V.embargo = 0; valLog(s, 'Dawnport is open again to goods from Alderwyn.', 'good'); }
-    else if (!V.embargo && V.relation < 25 && rand(s) < 0.5) { V.embargo = s.day + 10; valLog(s, 'Relations with Alderwyn have soured. The Queen closes Dawnport to Alderwyn’s goods for ten days.', 'bad'); }
+    else if (!V.embargo && !V.treaty && V.relation < 25 && rand(s) < 0.5) { V.embargo = s.day + 10; valLog(s, 'Relations with Alderwyn have soured. The Queen closes Dawnport to Alderwyn’s goods for ten days.', 'bad'); }
     if (rand(s) < 0.3) {
       const M = setupSeaMarket(s), ev = Math.floor(rand(s) * 3);
       if (ev === 0) { M.dawnport.wine = Math.round(M.dawnport.wine * 0.35); valLog(s, 'Hail in the vineyards: wine is scarce in Dawnport this week.', 'info'); }
@@ -4026,7 +4140,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     s.towns.crownmere = { title: 'Lord Mayor', chest: 1500, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen Lord Mayor of Crownmere by the guilds.');
   }
-  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150, dawnport: 80 };
+  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150, dawnport: 80, goldmeadow: 30, thornwick: 26, stonewatch: 70 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
   function townFolk(s, id) { return living(s).filter(p => p.town === id); }
@@ -4061,7 +4175,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function townLog(s, T, text) { T.log.unshift({ day: s.day, text }); if (T.log.length > 20) T.log.length = 20; event(s, (TOWNS[T.id || 'oakbridge'] || TOWNS.oakbridge).name + ': ' + text, 'info'); }
   /* every town keeps a watch in proportion to its size: about one for every forty people, never fewer than two,
      and the capital a little more. They are townsfolk in a watchman's job, paid from the town chest. */
-  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch', dawnport: 'dp_watch' };
+  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch', dawnport: 'dp_watch', goldmeadow: 'gm_watch', thornwick: 'tw_watch', stonewatch: 'sw_watch' };
   function watchTarget(s, id) { const pop = id === 'hearthmoor' ? villagers(s).length : townFolk(s, id).length, T = s.towns && s.towns[id]; return Math.max(2, Math.round(pop / (id === 'crownmere' ? 35 : 40) * ((T && T.watchMul) || 1))); }
   function townWatch(s, id, T) {
     const job = TOWN_WATCH_JOB[id]; if (!job) return;
@@ -4137,7 +4251,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   /* ================= the kingdom of Alderwyn: lords, court, council, crown, and the bandits on its roads =================
      Six regions, each held by a lord under the crown. Your standing with the lords, the guilds, the court and the
      towns is your support; with enough of it, and a lordship and a council seat, the crown itself can be yours. */
-  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport' };   // Dawnport is Valdoria's, named here only so messages can say where
+  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch' };   // Dawnport is Valdoria's, named here only so messages can say where
   const COUNCIL = { treasury: 'Lord Treasurer', trade: 'Master of Trade', war: 'Marshal', law: 'Lord Justice' };
   /* the council is three careers, and you follow one. The road of coin runs from Master of Trade up to Lord
      Treasurer; the road of arms leads to Marshal; the road of law to Lord Justice. Once you have taken a seat on
@@ -6142,6 +6256,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const from = Object.keys(STAGE).find(id => atLoc(s, 'stage:' + id));
         if (!from) return fail('Coaches leave from the stage post.');
         if (!STAGE[a] || a === from) return fail('No coach goes there.');
+        if (kingdomOf(a) !== kingdomOf(from)) return fail('No coach crosses the sea. Ships sail between Eastwatch and Dawnport.');
         const h = hourOf(s); if (h < 6 || h >= 19) return fail('The last coach has gone. The first leaves at six in the morning.');
         const f = fare(from, a); if (s.coins < f) return fail('The fare is ' + f + 'c.');
         spend(s, f); s.rec.fares = (s.rec.fares || 0) + f;
@@ -6222,10 +6337,37 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (V.charter) return fail('You already hold a charter.'); if (V.standing < 40) return fail('The Consul does not know you well enough. Trade honestly in Dawnport first (your name here is ' + Math.round(V.standing) + ' of 40).');
         if (s.coins < 200) return fail('The charter costs 200c.'); spend(s, 200); V.charter = true; valLog(s, 'The Consul grants you a merchant’s charter: you pay half the duty on what you land at Dawnport.', 'good'); return ok();
       }
+      case 'treaty': {
+        // a: 'trade' | 'alliance' | 'break'
+        const V = s.valdoria, R = s.realm; if (!V || !isRuler(s)) return fail('Only the ruler of Alderwyn treats with Valdoria.');
+        if (a === 'break') { if (!V.treaty) return fail('There is no treaty.'); valLog(s, 'Alderwyn breaks ' + TREATY[V.treaty.kind].name + ' with Valdoria.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); return ok(); }
+        const T0 = TREATY[a]; if (!T0) return fail('Unknown treaty.');
+        if (a === 'alliance' && !(V.treaty && V.treaty.kind === 'trade' && s.day - V.treaty.since >= 20)) return fail('An alliance needs a trade pact kept for twenty days first.');
+        if (V.treaty && V.treaty.kind === a) return fail('You already have ' + T0.name + '.');
+        if (R.tariff > 1.1) return fail('The Queen will not treat while Alderwyn’s tariff is above 1.1×. Lower it first.');
+        if (V.relation < T0.need) return fail('Relations are not warm enough for ' + T0.name + ' (' + Math.round(V.relation) + ' of ' + T0.need + ').');
+        V.treaty = { kind: a, since: s.day }; V.duty = T0.duty; V.embargo = 0; V.relation = clamp(V.relation + 8, 0, 100); R.favour = clamp(R.favour + (a === 'alliance' ? 5 : 2), 0, 100);
+        valLog(s, 'Alderwyn and Valdoria sign ' + T0.name + '. The duty at Dawnport falls to ' + Math.round((T0.duty - 1) * 100) + '%, and Alderwyn keeps its tariff low.', 'good'); return ok();
+      }
+      case 'royalMatch': {
+        // a: the person to marry into Valdoria's royal house: 'self' or one of your grown children
+        const V = s.valdoria, Y = you(s); if (!V || !isRuler(s)) return fail('Only the ruler of Alderwyn can make a royal match.');
+        setupRoyals(s); if (V.wed) return fail('The houses are already joined by marriage.');
+        if (V.relation < 60) return fail('Relations are not warm enough for a royal match (' + Math.round(V.relation) + ' of 60).');
+        if (s.coins < 300) return fail('A royal wedding costs 300c.');
+        const self = a === 'self', q = self ? null : s.people[a];
+        if (self ? !!Y.spouse : !(q && yourKids(s).includes(q) && !q.kid && q.age >= 16 && !q.spouse && q.status === 'here')) return fail(self ? 'You are already married.' : 'Choose an unmarried grown child of yours.');
+        const sex = self ? Y.sex : sexOf(q), R0 = V.royals.map(id => s.people[id]).find(r => r && r.status === 'here' && !r.spouse && sexOf(r) !== sex); if (!R0) return fail('There is no royal of Valdoria free to marry.');
+        spend(s, 300); moveOut(s, R0, 'Left Dawnport to marry into Alderwyn.');
+        if (self) wedYou(s, R0); else { R0.spouse = q.id; q.spouse = R0.id; R0.home = q.home; R0.town = q.town; plog(s, R0, 'Married ' + q.name + ' of Alderwyn.'); plog(s, q, 'Married ' + R0.name + ' of Valdoria.'); }
+        V.wed = { day: s.day, royal: R0.id, to: self ? 'you' : q.id }; V.relation = clamp(V.relation + 20, 0, 100); s.realm.favour = clamp(s.realm.favour + 5, 0, 100);
+        valLog(s, R0.name + ' of Valdoria marries ' + (self ? s.name : q.name) + ' of Alderwyn. The two royal houses are joined.', 'good'); return ok();
+      }
       case 'journey': {
         // walk or ride the roads to another town
         if (!TOWNS[a] || !TOWNS[a].open) return fail('That road is not open yet.');
-        const from = townAt(p.x, p.z) || 'hearthmoor', how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
+        const from = townAt(p.x, p.z) || 'hearthmoor'; if (kingdomOf(a) !== kingdomOf(from)) return fail('No road crosses the Sundering Sea. Take a ship.');
+        const how = p.riding && p.horse ? 'ride' : 'walk', mins = travelTo(s, a, how);
         const ambush = roadAmbush(s, from, a, mins);
         return { ok: true, mins, how, ambush };
       }
@@ -6510,11 +6652,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.v === 11) { s.v = 12; giveSurnames(s); generateAncestry(s); for (const a of s.agents) if (a.pid && s.people[a.pid]) a.name = s.people[a.pid].name; event(s, 'Every family now has a surname, and a married woman\u2019s maiden name is kept, so family trees show where everyone came from.', 'info'); }
     if (s.v === 12) { s.v = 13; setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s); event(s, 'Two more roads are open: east from Oakbridge to the port of Eastwatch, and from Crownmere up into the mountains to Ironcrest. The kingdom of Alderwyn has lords, a court and a crown, and bandits on its roads.', 'story'); }
     if (s.v === 13) { s.v = 14; setupNewTown(s, 'dawnport'); setupValdoria(s); event(s, 'Ships now sail from Eastwatch across the Sundering Sea, by way of Stormrest Isle, to Dawnport in Valdoria. Anyone who can pay the passage may go.', 'story'); }
+    if (s.v === 14) { s.v = 15; setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRoyals(s); event(s, 'The roads of Valdoria are open: from Dawnport south-east to Goldmeadow, east to Thornwick, and north to the fortress of Stonewatch. Coaches run between them.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
 
   const api = {
+    GM, TW, SW, VAL_JOBS, kingdomOf, TREATY, setupRoyals,
     SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
@@ -6688,6 +6832,13 @@ function worldH(x, z) {
   h += Math.pow(Math.max(0, (-z - 1050) / 40), 1.7);
   return h;
 }
+// Valdoria's land before towns level it: low by the coast, rising into hills inland
+function valLand(x, z, sy) {
+  let land = sy + 2.4 + 0.35 * Math.sin(x * 0.05) * Math.cos(z * 0.04) + 0.3 * Math.sin((x + z) * 0.09);
+  land += smooth01((x - 2120) / 260) * 9 * (0.6 + 0.4 * Math.sin(z / 140));            // the hills of Valdoria rising inland
+  land += 3.2 * Math.exp(-((x - 2084) ** 2 + (z + 300) ** 2) / 700);                  // the rise under the Consul's palace
+  return land;
+}
 function groundH(x, z) {
   let h = 0.38 * Math.sin(x * 0.07 + 1) * Math.cos(z * 0.06) + 0.22 * Math.sin((x + z) * 0.11);
   h *= clamp(Math.hypot(x / 64, (z - 4) / 52), 0.22, 1);          // the village itself sits nearly level
@@ -6718,10 +6869,10 @@ function groundH(x, z) {
     const edgeV = inPort ? 1909 : vs;
     if (x > edgeV - 16) {
       const dD = Math.hypot(x - Sim.DP.C.x, z - Sim.DP.C.z);
-      let land = sy + 2.4 + 0.35 * Math.sin(x * 0.05) * Math.cos(z * 0.04) + 0.3 * Math.sin((x + z) * 0.09);
-      land += smooth01((x - 2120) / 260) * 9 * (0.6 + 0.4 * Math.sin(z / 140));            // the hills of Valdoria rising inland
-      land += 3.2 * Math.exp(-((x - 2084) ** 2 + (z + 300) ** 2) / 700);                  // the rise under the Consul's palace
+      let land = valLand(x, z, sy);
       if (dD < 150) { const f = smooth01((dD - 100) / 50); land = land * f + (sy + 2.4 + (x > 2070 ? 3.2 * Math.exp(-((x - 2084) ** 2 + (z + 300) ** 2) / 700) : 0)) * (1 - f); }
+      // Valdoria's inland towns sit on level ground, as Alderwyn's do
+      for (const id of ['goldmeadow', 'thornwick', 'stonewatch']) { const T = TOWNS[id], d = Math.hypot(x - T.x, z - T.z) / T.r; if (d < 1.9) { const base = valLand(T.x, T.z, sy), f = smooth01((d - 1.1) / 0.8); land = land * f + base * (1 - f); } }
       const k = smooth01((x - edgeV + 16) / 14); h = floor * (1 - k) + land * k;
     }
   }
@@ -7950,6 +8101,10 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
   // the fountain in the Plaza Mayor, with orange trees round it
   later(2010, -300, () => { const c = fr(2010, -300); part(c, new THREE.CylinderGeometry(3.4, 3.6, 0.9, 16), SAND2, 0, 0.45, 0); part(c, new THREE.CylinderGeometry(3.1, 3.1, 0.06, 16), '#4f8c9c', 0, 0.86, 0); part(c, new THREE.CylinderGeometry(0.5, 0.7, 2.6, 8), SAND, 0, 1.8, 0); part(c, new THREE.CylinderGeometry(1.4, 0.9, 0.4, 10), SAND, 0, 3.1, 0); valBanner(c, 0, 3.4, 0, 0, 2.2);
     [[7, 7], [-7, 7], [7, -7], [-7, -7]].forEach(([x, z]) => { box(c, '#6b4a2e', x, 0.9, z, 0.3, 1.8, 0.3); part(c, G_HEMI, '#3f6b34', x, 1.6, z, 0, 0, 0, 1.5, 1.6, 1.5); for (let k = 0; k < 5; k++) part(c, G_HEMI, '#e8862c', x + Math.cos(k * 1.3) * 1.1, 2.1 + (k % 2) * 0.4, z + Math.sin(k * 1.3) * 1.1, 0, 0, 0, 0.16, 0.16, 0.16); }); });
+  // the arcades: a colonnade with a tiled roof along two sides of the Plaza Mayor, where the market stalls shelter
+  later(2010, -300, () => { const sides = [[0, -1], [1, 0]]; for (const [ax, az] of sides) { const cx = 2010 + ax * 15.5, cz = -300 + az * 15.5, along = ax ? [0, 1] : [1, 0];
+    for (let k = -12; k <= 12; k += 4) { const x = cx + along[0] * k, z = cz + along[1] * k; if (!ax && Math.abs(k) < 3) continue; box(fr(x, z), SAND, 0, 1.7, 0, 0.6, 3.4, 0.6); }
+    const g = fr(cx + ax * 1.2, cz + az * 1.2, ax ? Math.PI / 2 : 0); box(g, SAND2, 0, 3.55, 0, 26, 0.4, 2.8); box(g, RED2, 0, 3.85, 0.2, 26.4, 0.22, 3.2, 0, 0.12); } });
   later(1934, -300, () => { const c = fr(1934, -300); box(c, SAND2, 0, 2.4, 0, 0.6, 4.8, 0.6); valBanner(c, 0, 4.6, 0, 0, 2.4); });
   // homes: sandstone and limewash under red tiles
   O.houses.forEach((h, i) => later(h.x, h.z, () => townHouse(at(h.x, h.z, h.face), h, i + 51, { stone: SAND, stone2: SAND2, slate: RED, tile: RED, roofs: [RED, RED2, '#94432a', RED], walls: ['#ecdcbc', '#e2c9a0', '#f2e6cf', '#d8b88c', '#e9cfa8', '#f0dcc0'] })));
@@ -7990,6 +8145,45 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
     if (k % 3) part(g, new THREE.DodecahedronGeometry(1, 0), STONE2, 0, 0.4, 0, rr(), rr(), rr(), 1 + rr() * 2, 0.6 + rr(), 1 + rr() * 2); else { box(g, '#4a3a2a', 0, 1.6, 0, 0.4, 3.2, 0.4); part(g, new THREE.ConeGeometry(1.6, 4, 7), '#2f4a3a', 0.4, 4.2, 0, 0, 0, -0.25); } }
   flushBuild();
 })();
+/* ----- Valdoria inland: the roads from Dawnport, Goldmeadow on the plains, Thornwick in the forest, and walled Stonewatch ----- */
+const VAL_TREES = [];
+(function buildValdoriaInland() {
+  const SAND = '#d9c3a0', SAND2 = '#c4ab84', RED = '#a84a2c', RED2 = '#b8603c', STONE = '#a7a091', STONE2 = '#8f897c', dirt = '#a8916c';
+  const at = (x, z, ry) => fr(x, z, ry), rr = tileRand(97, 23);
+  // the roads, of beaten earth
+  scene.add(new THREE.Mesh(mergeColored(['vgold', 'vthorn', 'vstone'].map(k => ({ geo: ribbon(Sim.ROADS[k], i => 3.6 + 0.3 * Math.sin(i * 0.9), (x, z) => groundH(x, z) + 0.09, 2), color: dirt }))), vc));
+  const town = (O, seed, o) => {
+    O.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: o.street, m: new THREE.Matrix4() }));
+    O.plazas.forEach(q => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), o.plaza, 0, 0.06, 0));
+    O.houses.forEach((h, i) => townHouse(at(h.x, h.z, h.face), h, i + seed, o.house));
+    O.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i + seed, Object.assign({}, o.house, { sign: o.sign[b.trade] || '#a8322a' })));
+    flushBuild();
+  };
+  const SIGN = { bakery: '#c48a3f', tavern: '#a8322a', smithy: '#4a4744', butcher: '#8e2b22', chandler: '#e8d36a', joinery: '#6b4a2e', cooper: '#6b4a2e', carter: '#5b4029', mason: '#8b877c', tanner: '#6b4a2e', apothecary: '#4f6b3a' };
+  // Goldmeadow: a farming town of whitewashed houses on the plain, a windmill, wheat fields and horse paddocks
+  town(Sim.GM, 71, { street: '#a8916c', plaza: '#b7a27a', sign: SIGN, house: { stone: SAND, stone2: SAND2, slate: RED, tile: RED, roofs: [RED, RED2, '#9a7a3a'], walls: ['#f2ead6', '#ecdcbc', '#f4ecdc', '#e6d4b0'] } });
+  { const w = Sim.GM.windmill, f = at(w.x, w.z); part(f, new THREE.CylinderGeometry(2.4, 3.2, 9, 10), '#f0e8d6', 0, 4.5, 0); part(f, new THREE.ConeGeometry(3, 3, 10), RED, 0, 10.5, 0);
+    for (let k = 0; k < 4; k++) box(f, '#6b4a2e', 0, 8.5, 3.2, 0.3, 11, 0.12, 0, 0, k * Math.PI / 2 + 0.3); valBanner(f, 0, 11.5, 0, 0, 1.6); }
+  for (let row = 0; row < 3; row++) for (let k = 0; k < 4; k++) { const x = 2120 + k * 26, z = 210 + row * 22, f = at(x, z); box(f, row % 2 ? '#d9b54a' : '#c9a63e', 0, 0.35, 0, 24, 0.7, 20); }
+  { const f = at(2270, 200); for (let k = -10; k <= 10; k += 2.5) { box(f, '#6b4a2e', k, 0.6, -9, 0.15, 1.2, 0.15); box(f, '#6b4a2e', k, 0.6, 9, 0.15, 1.2, 0.15); } box(f, '#6b4a2e', 0, 1, -9, 21, 0.1, 0.1); box(f, '#6b4a2e', 0, 1, 9, 21, 0.1, 0.1);
+    for (let k = 0; k < 5; k++) { const g = at(2262 + k * 4, 196 + (k % 2) * 6, k); box(g, ['#6b4a2e', '#3a2a1c', '#a87a4a'][k % 3], 0, 1.1, 0, 0.6, 0.7, 1.7); box(g, '#3a2a1c', 0, 1.5, 0.9, 0.3, 0.6, 0.4); } }
+  flushBuild();
+  // Thornwick: timber houses at the forest's edge, the sawmill and the charcoal clamps, and the forest all round
+  town(Sim.TW, 83, { street: '#8a7454', plaza: '#9a8462', sign: SIGN, house: { stone: STONE, stone2: STONE2, slate: '#5e4a2c', tile: '#6b4a2e', roofs: ['#5e4a2c', '#6b4a2e', RED2], walls: ['#c9b48a', '#b99f74', '#d1bf96', '#a88e64'] } });
+  { const m = Sim.TW.sawmill, f = at(m.x, m.z, 0.4); box(f, '#7a5634', 0, 2, 0, 8, 4, 6); part(f, roofG(6.6, 8.6, 2), '#5e4a2c', 0, 4, 0); for (let k = 0; k < 10; k++) part(f, GEO.log, '#9a7650', -6 + (k % 5) * 0.5, 0.2 + Math.floor(k / 5) * 0.4, 5, 0, Math.PI / 2, 0, 1.2, 5, 1.2);
+    [[30, -8], [36, -2]].forEach(([dx, dz]) => part(at(m.x + dx, m.z + dz), new THREE.ConeGeometry(2.4, 2, 9), '#3a3632', 0, 1, 0)); }
+  flushBuild();
+  for (let k = 0, n = 0; k < 4000 && n < 220; k++) { const a = rr() * Math.PI * 2, d = 60 + rr() * 170, x = Sim.TW.C.x + 30 + Math.cos(a) * d, z = Sim.TW.C.z + Math.sin(a) * d; if (segDist(x, z, Sim.ROADS.vthorn) < 7 || Math.hypot(x - Sim.TW.C.x, z - Sim.TW.C.z) < 58) continue; n++; VAL_TREES.push([x, z]); const g = fr(x, z, rr() * 6), sc = 0.8 + rr() * 0.6;
+    if (rr() < 0.55) { box(g, '#4a3a2a', 0, 2 * sc, 0, 0.5 * sc, 4 * sc, 0.5 * sc); part(g, new THREE.ConeGeometry(1.8 * sc, 6 * sc, 7), '#2f4a2a', 0, 6 * sc, 0); } else { box(g, '#5b4029', 0, 1.6 * sc, 0, 0.5 * sc, 3.2 * sc, 0.5 * sc); part(g, G_HEMI, '#4f6b34', 0, 3 * sc, 0, 0, 0, 0, 2.6 * sc, 2.4 * sc, 2.6 * sc); } }
+  flushBuild();
+  // Stonewatch: a fortress town inside a round curtain wall, a south gate, and the Castellan's keep on the north side
+  { const O = Sim.SW, Y = groundH(O.C.x, O.C.z), W = O.wall, between = (x0, z0, x1, z1, y, w, h, color) => box(new THREE.Matrix4().compose(new THREE.Vector3((x0 + x1) / 2, y, (z0 + z1) / 2), new THREE.Quaternion().setFromEuler(RX.set(0, Math.atan2(x1 - x0, z1 - z0), 0)), new THREE.Vector3(1, 1, 1)), color, 0, 0, 0, w, h, Math.hypot(x1 - x0, z1 - z0) + 0.6);
+    for (let i = 0; i < W.length - 1; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], mx = (ax + bx) / 2, mz = (az + bz) / 2; if (Math.hypot(mx - O.gate.x, mz - O.gate.z) < 8) continue; between(ax, az, bx, bz, Y + 3.4, 2, 6.8, STONE); if (i % 4 === 0) { const f = at(ax, az); part(f, new THREE.CylinderGeometry(2.6, 2.9, 10, 10), STONE2, 0, 5, 0); part(f, new THREE.ConeGeometry(3.2, 3.4, 10), RED, 0, 11.7, 0); } }
+    { const f = at(O.gate.x, O.gate.z); [-5.4, 5.4].forEach(x => { box(f, STONE2, x, 5, 0, 4, 10, 4.4); box(f, STONE, x, 10.4, 0, 4.4, 0.8, 4.8); }); box(f, STONE2, 0, 8.6, 0, 7.2, 2.6, 3.6); valBanner(f, -5.4, 10.8, 2.4, 0, 2.6); valBanner(f, 5.4, 10.8, 2.4, 0, 2.6); }
+    { const k = O.keep, f = at(k.x, k.z, k.face); box(f, STONE, 0, 9, 0, 16, 18, 14); box(f, STONE2, 0, 18.4, 0, 17, 0.8, 15); [[-8, -7], [8, -7], [-8, 7], [8, 7]].forEach(([x, z]) => { part(f, new THREE.CylinderGeometry(2.6, 2.8, 22, 10), STONE2, x, 11, z); part(f, new THREE.ConeGeometry(3.2, 4, 10), RED, x, 24, z); }); for (let q = -6; q <= 6; q += 3) win(f, q, 12, 7.04, 0.8, 1.6, 0.06); box(f, '#3b2a1c', 0, 2, 7.1, 3, 4, 0.1); valBanner(f, 0, 19, 7.4, 0, 3.4); }
+    town(O, 91, { street: '#8f8676', plaza: '#9e9584', sign: SIGN, house: { stone: STONE, stone2: STONE2, slate: RED, tile: RED, roofs: [RED, '#8a3a24', RED2], walls: ['#c9c0ae', '#b8ae9a', '#d4cab6', '#a8a08e'] } });
+    { const f = at(2180, -836); box(f, '#9a9384', 0, 1.5, 0, 22, 3, 12); for (let k = 0; k < 8; k++) box(at(2170 + k * 3, -826), '#b5ad9c', 0, 0.5, 0, 1.6, 1, 1.2); } flushBuild(); }
+})();
 /* ----- skylines: from far off, each town is a shape on the horizon above the haze ----- */
 const SKYLINES = (function () {
   const out = [];
@@ -8002,6 +8196,9 @@ const SKYLINES = (function () {
   add('oakbridge', [[BX, OK.keep.x, oy + 9, OK.keep.z, 12, 18, 12], [BX, OK.C.x, oy + 4, OK.C.z, 130, 8, 130], [BX, OK.hall.x, oy + 10, OK.hall.z, 4, 20, 4]]);
   add('ironcrest', [[BX, Sim.IC.keep.x, IC_Y + 7, Sim.IC.keep.z, 10, 14, 10], [CY, 784, IC_Y + 5, -1250, 2.6, 10, 2.6], [CY, 796, IC_Y + 5, -1262, 2.6, 10, 2.6], [BX, 700, IC_Y + 3, -1265, 120, 6, 110]]);
   { const D = Sim.DP, dy = SEA_Y + 2.4; add('dawnport', [[BX, D.palace.x, dy + 9, D.palace.z, 16, 18, 28], [CY, D.palace.x - 7, dy + 10, D.palace.z - 13, 2.5, 20, 2.5], [CY, D.palace.x - 7, dy + 10, D.palace.z + 13, 2.5, 20, 2.5], [BX, D.C.x, dy + 4, D.C.z, 180, 8, 200], [BX, 1878, SEA_Y + 7, -357, 0.4, 14, 0.4]]); }
+  { const S0 = Sim.SW, y0 = worldH(0, 0) * 0 + groundH(S0.C.x, S0.C.z); add('stonewatch', [[BX, S0.keep.x, y0 + 11, S0.keep.z, 16, 22, 14], [CY, S0.C.x, y0 + 4, S0.C.z, 82, 8, 82], [CY, S0.keep.x - 8, y0 + 13, S0.keep.z - 7, 2.6, 26, 2.6], [CY, S0.keep.x + 8, y0 + 13, S0.keep.z - 7, 2.6, 26, 2.6]]); }
+  { const g = Sim.GM, y1 = groundH(g.C.x, g.C.z); add('goldmeadow', [[CY, g.windmill.x, y1 + 6, g.windmill.z, 3, 12, 3], [BX, g.C.x, y1 + 3, g.C.z, 90, 6, 90]]); }
+  { const w = Sim.TW, y2 = groundH(w.C.x, w.C.z); add('thornwick', [[BX, w.C.x, y2 + 3, w.C.z, 80, 6, 70]]); }
   add('eastwatch', [[CY, 1170, SEA_Y + 11, -442, 3, 22, 3], [BX, Sim.EW.keep.x, EW_Y + 8, Sim.EW.keep.z, 12, 18, 12], [BX, 1060, EW_Y + 4, -300, 220, 8, 240], [BX, 1158, SEA_Y + 7, -357, 0.4, 14, 0.4], [BX, 1158, SEA_Y + 7, -293, 0.4, 14, 0.4]]);
   return out;
 })();
@@ -8543,6 +8740,13 @@ function applySeason(season) {
   }
   if (snow) snow.visible = season === 'winter';
 }
+// your own ship, riding at its berth in whichever port it was last sailed to
+const MY_SHIP = (function () {
+  const n0 = PARTS.solid.length; seaShip(0, 0, 0, true, ['#c9962b', '#8e2b22']); const parts = PARTS.solid.splice(n0);
+  const me = new THREE.Mesh(mergeColored(parts), vc); me.visible = false; scene.add(me); return { me, at: null };
+})();
+const MY_BERTH = { eastwatch: [1190, -300, 0], stormrest: [Sim.ISLE.x - 46, Sim.ISLE.z - 8, 0.3], dawnport: [1880, -308, Math.PI] };
+function syncMyShip(s) { const port = s && s.ship ? s.ship.port : null; if (port === MY_SHIP.at) return; MY_SHIP.at = port; MY_SHIP.me.visible = !!port; if (port) { const b = MY_BERTH[port]; MY_SHIP.me.position.set(b[0], 0, b[1]); MY_SHIP.me.rotation.y = b[2]; } }
 function stepSnow(dt) {
   if (!snow || !snow.visible) return;
   const a = snow.geometry.attributes.position, arr = a.array;
@@ -8688,6 +8892,13 @@ const DP_SOLIDS = (function () {
   for (let z = -900; z < 400; z += 2) { const x = Math.abs(z + 300) < 92 ? 1908.5 : Sim.VSHORE(z) - 1; C(x, z, 1.4); }
   return out;
 })();
+const VAL_SOLIDS = (function () {
+  const out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
+  for (const O of [Sim.GM, Sim.TW, Sim.SW]) { O.houses.forEach(h => C(h.x, h.z, h.tall ? 3.3 : 2.8)); O.biz.forEach(b => C(b.x - Math.sin(b.face) * 0.3, b.z - Math.cos(b.face) * 0.3, 3.5)); }
+  const W = Sim.SW.wall, G0 = Sim.SW.gate; for (let i = 0; i < W.length - 1; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], L0 = Math.hypot(bx - ax, bz - az); for (let d = 0; d <= L0; d += 1.5) { const x = ax + (bx - ax) * d / L0, z = az + (bz - az) * d / L0; if (Math.hypot(x - G0.x, z - G0.z) < 6.5) continue; C(x, z, 1.4); } }
+  C(Sim.SW.keep.x, Sim.SW.keep.z, 10); C(Sim.GM.windmill.x, Sim.GM.windmill.z, 3.4); C(Sim.TW.sawmill.x, Sim.TW.sawmill.z, 5);
+  return out;
+})();
 const ISLE_SOLIDS = (function () { const I = Sim.ISLE, out = []; for (let a = 0; a < Math.PI * 2; a += 0.05) out.push({ c: 1, x: I.x + Math.cos(a) * 50, z: I.z + Math.sin(a) * 50 / 1.3, r: 1.6 }); out.push({ c: 1, x: I.x - 12, z: I.z, r: 5.6 }, { c: 1, x: I.x + 30, z: I.z - 22, r: 3 }); return out; })();
 function solidsNow(s) {
   const out = staticSolids.slice(); out.push(...STAGE_SOLIDS);
@@ -8696,7 +8907,7 @@ function solidsNow(s) {
   if (Math.hypot(s.player.x - TOWNS.crownmere.x, s.player.z - TOWNS.crownmere.z) < TOWNS.crownmere.r + 40) { const px = s.player.x, pz = s.player.z; out.push(...CM_SOLIDS.filter(o => Math.abs(o.x - px) < 60 && Math.abs(o.z - pz) < 60), ...CM_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
   if (Math.hypot(s.player.x - TOWNS.ironcrest.x, s.player.z - TOWNS.ironcrest.z) < TOWNS.ironcrest.r + 60) out.push(...IC_SOLIDS, ...IC_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.eastwatch.x, s.player.z - TOWNS.eastwatch.z) < TOWNS.eastwatch.r + 120) { const px = s.player.x, pz = s.player.z; out.push(...EW_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70)); }
-  if (s.player.x > 1300) { const px = s.player.x, pz = s.player.z; out.push(...DP_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...ISLE_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...DP_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
+  if (s.player.x > 1300) { const px = s.player.x, pz = s.player.z; out.push(...DP_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...ISLE_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...DP_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 })), ...VAL_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...VAL_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.6 }))); }
   if (Math.hypot(s.player.x - TOWNS.oakbridge.x, s.player.z - TOWNS.oakbridge.z) < TOWNS.oakbridge.r + 40) out.push(...OAK_SOLIDS, ...OAK_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
   if (s.village.towerBuilt) out.push({ c: 1, x: L.tower.x, z: L.tower.z, r: 2 });
@@ -9050,6 +9261,10 @@ function cardHTML(s) {
   if (here === 'icsquare') return oakHallCard(s, walking, 'ironcrest');
   if (here === 'ewharbour') return oakHallCard(s, walking, 'eastwatch');
   if (here === 'dpharbour') return oakHallCard(s, walking, 'dawnport');
+  if (here === 'gmgreen') return oakHallCard(s, walking, 'goldmeadow');
+  if (here === 'twyard') return oakHallCard(s, walking, 'thornwick');
+  if (here === 'swparade') return oakHallCard(s, walking, 'stonewatch');
+  if (here === 'swkeep') return `<h2>The Castellan\u2019s Keep</h2><div class="sub">The fortress that guards Valdoria\u2019s northern pass. ${s.towns && s.towns.stonewatch && s.people[s.towns.stonewatch.mayor] ? 'The Castellan is ' + esc(s.people[s.towns.stonewatch.mayor].name) + '.' : ''} Soldiers drill on the Parade Ground below.</div>${walking}`;
   if (Lh && Lh.port) return portCard(s, Lh.port, walking);
   if (here === 'dpcustoms') return `<h2>The Customs House</h2><div class="sub">Where the Queen of Valdoria\u2019s clerks weigh and seal everything landed at Dawnport. Goods from Alderwyn pay a duty of ${Math.round(((s.valdoria && s.valdoria.duty) || 1.2) * 100 - 100)}% here.</div>${walking}`;
   if (here === 'dppalace') return `<h2>The Consul\u2019s Palace</h2><div class="sub">The seat of the Consul of Dawnport, who governs the port for ${esc((s.valdoria && s.valdoria.ruler) || 'the Queen')}. ${s.towns && s.towns.dawnport && s.people[s.towns.dawnport.mayor] ? 'The Consul is ' + esc(s.people[s.towns.dawnport.mayor].name) + '.' : ''} You are a foreigner here: Alderwyn\u2019s titles mean little, though its coin spends the same.</div>${walking}${s.valdoria ? `<dl class="kv"><dt>Your name in Valdoria</dt><dd>${Math.round(s.valdoria.standing || 0)} of 100</dd><dt>Duty on Alderwyn goods</dt><dd>${Math.round((s.valdoria.duty - 1) * 100)}%${s.valdoria.charter ? ' (half for you)' : ''}</dd></dl>${s.valdoria.charter ? '<p>You hold a merchant\u2019s charter.</p>' : `<div class="acts">${B_('Ask for a merchant\u2019s charter · 200c', ['charter'], 'alt', (s.valdoria.standing || 0) < 40 || s.coins < 200)}</div><p class="why">A charter halves the duty on everything you land here. The Consul grants one to a foreigner who has traded honestly in Dawnport (40).</p>`}` : ''}`;
@@ -9205,6 +9420,7 @@ function hud(s) {
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
   { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year + '. ' + c.next.charAt(0).toUpperCase() + c.next.slice(1) + ' in ' + c.daysLeft + (c.daysLeft === 1 ? ' day.' : ' days.'); }
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
+  if (UI.lastCoins != null && s.coins > UI.lastCoins) { const el = $('coins'); el.classList.remove('gain'); void el.offsetWidth; el.classList.add('gain'); clearTimeout(UI.coinT); UI.coinT = setTimeout(() => el.classList.remove('gain'), 850); } UI.lastCoins = s.coins;
   const inv = s.player.inv, chips = [];
   rankWatch(s);
   { const r = rankOf(s); chips.push(`<span class="chip num rank r-${r.key}">${esc(r.title)}</span>`); }
@@ -9510,7 +9726,7 @@ function personDetail(s, pr) {
     <div class="acts">${pr.status === 'here' ? B_('Find them', ['ui', 'findPerson', pr.id]) : ''}${Sim.youJudge(s) && pr.status === 'here' && !pr.kid && !pr.held && (!pr.town || pr.town === 'hearthmoor') ? (UI.confirm === 'hold' + pr.id ? B_('Yes, have them held', ['jArrestOnWord', pr.id], 'warn') + B_('No', ['ui', 'confirm', null], 'alt') : B_('Have the watch hold them&hellip;', ['ui', 'confirm', 'hold' + pr.id], 'alt')) : ''}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
-const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport' };
+const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch' };
 const townHere = () => { const t = Sim.townAt(G.player.x, G.player.z); return t && TOWN_NAMES[t] && (t === 'hearthmoor' || Math.hypot(G.player.x - TOWNS[t].x, G.player.z - TOWNS[t].z) < TOWNS[t].r + 70) ? t : 'hearthmoor'; };
 function townPick(s) {
   const t = UI.ptown || townHere();
@@ -9746,7 +9962,7 @@ function shipPanel(s, id) {
 }
 function stageCard(s, id, walking) {
   const p = s.player, h = Sim.hourOf(s), running = h >= 6 && h < 19, acts = [];
-  for (const to of ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere']) if (to !== id) { const f = Sim.fare(id, to), mins = Math.round(Sim.roadDist(id, to) / Sim.COACH_MPM); acts.push(B_(`Coach to ${TOWN_NAMES[to]} · ${f}c<small>about ${mins} min${running ? '' : ' · first coach at 6:00'}</small>`, ['coach', to], '', !running || s.coins < f)); }
+  for (const to of Object.keys(Sim.STAGE)) if (to !== id && Sim.kingdomOf(to) === Sim.kingdomOf(id)) { const f = Sim.fare(id, to), mins = Math.round(Sim.roadDist(id, to) / Sim.COACH_MPM); acts.push(B_(`Coach to ${TOWN_NAMES[to]} · ${f}c<small>about ${mins} min${running ? '' : ' · first coach at 6:00'}</small>`, ['coach', to], '', !running || s.coins < f)); }
   if (!p.horse) acts.push(B_(`Buy a horse · ${Sim.HORSE_PRICE}c<small>three times faster than walking · stabling ${Sim.STABLING}c a night</small>`, ['buyHorse', 'Bramble'], 'alt', s.coins < Sim.HORSE_PRICE));
   else { acts.push(B_(p.riding ? 'Dismount' : 'Ride ' + esc(p.horse.name), ['ride'], 'alt')); acts.push(B_(`Sell ${esc(p.horse.name)} · ${Sim.HORSE_SELL}c`, ['sellHorse'], 'alt')); }
   return `<h2>${esc(Sim.STAGE[id].name)}</h2><div class="sub">Coaches leave for the other towns from six in the morning until seven at night, and the ostler keeps horses for sale. ${p.horse ? 'Your horse ' + esc(p.horse.name) + ' is stabled wherever you sleep.' : ''}</div>${walking}<div class="acts">${acts.join('')}</div>`;
@@ -9883,7 +10099,7 @@ function oakBizCard(s, Lh, walking) {
 }
 function oakHallCard(s, walking, id) {
   id = id || 'oakbridge';
-  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'dawnport' ? 'The Harbour Plaza, Dawnport' : id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : 'Oakbridge Town Hall';
+  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'dawnport' ? 'The Harbour Plaza, Dawnport' : id === 'goldmeadow' ? 'The Green, Goldmeadow' : id === 'thornwick' ? 'The Timber Yard, Thornwick' : id === 'stonewatch' ? 'The Parade Ground, Stonewatch' : id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : 'Oakbridge Town Hall';
   if (!T) return `<h2>${HN}</h2>${walking}`;
   const m = s.people[T.mayor], who = id => s.people[id] ? esc(s.people[id].name) : '';
   const mTrade = m && m.job && s.biz[m.job.biz] ? Sim.tradeName(s.biz[m.job.biz].trade).toLowerCase() : 'merchant';
@@ -9930,6 +10146,21 @@ function taskList(s) {
 function pageTasks(s) {
   const t = taskList(s);
   return `<h3>Tasks</h3><p class="lead">Everything you have been asked to do, and who asked. Tap a button to head there.</p>${t.length ? t.map(x => `<div class="box"><h5>${esc(x.title)}</h5><p><span class="pill">${esc(x.who)}</span> ${esc(x.note || '')}</p><div class="acts">${x.act || ''}</div></div>`).join('') : '<p>Nothing is asked of you just now. Take a contract on the Realm page, or talk to the elder.</p>'}`;
+}
+// what the ruler can offer Valdoria: a trade pact, then an alliance, and a royal marriage
+function diplomacy(s, V) {
+  const R = s.realm, acts = [], Y = Sim.you(s);
+  const pactBlock = R.tariff > 1.1 ? ' (lower your tariff to 1.1× first)' : '';
+  if (!V.treaty) acts.push(B_('Propose a trade pact<small>needs relations of 55' + pactBlock + '</small>', ['treaty', 'trade'], 'alt', V.relation < 55 || R.tariff > 1.1));
+  else if (V.treaty.kind === 'trade') acts.push(B_('Propose an alliance<small>needs relations of 70 and the pact kept 20 days (day ' + (V.treaty.since + 20) + ')</small>', ['treaty', 'alliance'], 'alt', V.relation < 70 || s.day - V.treaty.since < 20 || R.tariff > 1.1));
+  if (V.treaty) acts.push(UI.confirm === 'breakTreaty' ? B_('Yes, break it', ['treaty', 'break'], 'warn') + B_('Keep it', ['ui', 'confirm', null], 'alt') : B_('Break the treaty&hellip;', ['ui', 'confirm', 'breakTreaty'], 'alt'));
+  if (!V.wed) {
+    const kids = Sim.yourKids(s).filter(c => c.status === 'here' && !c.kid && c.age >= 16 && !c.spouse), royals = (V.royals || []).map(id => s.people[id]).filter(r => r && r.status === 'here' && !r.spouse);
+    const match = q => royals.find(r => Sim.sexOf(r) !== (q ? Sim.sexOf(q) : Y.sex));
+    if (!Y.spouse && match(null)) acts.push(B_('Marry ' + esc(match(null).name) + ' yourself · 300c<small>needs relations of 60</small>', ['royalMatch', 'self'], 'alt', V.relation < 60 || s.coins < 300));
+    kids.forEach(q => { const r = match(q); if (r) acts.push(B_('Marry ' + esc(q.name.split(' ')[0]) + ' to ' + esc(r.name) + ' · 300c<small>needs relations of 60</small>', ['royalMatch', q.id], 'alt', V.relation < 60 || s.coins < 300)); });
+  }
+  return acts.length ? `<p><b>Diplomacy</b></p><div class="acts">${acts.join('')}</div><p class="why">A trade pact brings Valdoria’s duty down to 5% while you keep Alderwyn’s tariff low; an alliance takes it to nothing and ends the closing of the port. A royal marriage joins the houses: relations never fall below 45 again.</p>` : '';
 }
 function pageRealm(s) {
   const R = s.realm; if (!R) return '<h3>The Realm</h3><p>Not yet.</p>';
@@ -9987,7 +10218,8 @@ function pageRealm(s) {
   const V = s.valdoria;
   if (V) { const rel = V.relation >= 70 ? 'warm' : V.relation >= 45 ? 'cordial' : V.relation >= 25 ? 'cool' : 'hostile';
     h += `<h4>Valdoria, across the sea</h4><div class="box"><dl class="kv"><dt>Its ruler</dt><dd>${esc(V.ruler)}, from ${esc(V.capital)}</dd><dt>Relations with Alderwyn</dt><dd>${rel} (${Math.round(V.relation)})</dd><dt>Duty at Dawnport</dt><dd>${Math.round((V.duty - 1) * 100)}% on Alderwyn goods${V.embargo ? ' · <b>port closed to them until day ' + V.embargo + '</b>' : ''}</dd><dt>Your name there</dt><dd>${Math.round(V.standing || 0)}${V.charter ? ' · merchant\u2019s charter' : ''}</dd></dl>
-      <p class="why">The Queen answers Alderwyn\u2019s tariffs with her own duty, and closes Dawnport when relations sour. ${Sim.isRuler(s) ? 'Your tariff on trade sets the tone: lower it and she warms to Alderwyn.' : ''}</p>${V.log.length ? V.log.slice(0, 5).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') : ''}</div>`; }
+      ${V.treaty ? `<p><b>${V.treaty.kind === 'alliance' ? 'Alliance' : 'Trade pact'}</b> since day ${V.treaty.since}: the duty at Dawnport is ${Math.round((V.duty - 1) * 100)}%, and Alderwyn keeps its tariff at 1.1\u00d7 or below. Raise it and the treaty is broken.</p>` : ''}${V.wed ? `<p>The royal houses are joined: ${esc((s.people[V.wed.royal] || {}).name || 'a Valdorian royal')} married ${V.wed.to === 'you' ? 'you' : esc((s.people[V.wed.to] || {}).name || 'your child')} on day ${V.wed.day}.</p>` : ''}
+      <p class="why">The Queen answers Alderwyn\u2019s tariffs with her own duty, and closes Dawnport when relations sour. ${Sim.isRuler(s) ? 'Your tariff on trade sets the tone: lower it and she warms to Alderwyn.' : 'Treaties and royal marriages are made by the ruler of Alderwyn.'}</p>${Sim.isRuler(s) ? diplomacy(s, V) : ''}${V.log.length ? V.log.slice(0, 5).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') : ''}</div>`; }
   return h;
 }
 function bizBox(s, b) {
@@ -10272,7 +10504,7 @@ const WORLD = [
 ];
 const KINGDOM = { A: 'Kingdom of Alderwyn', V: 'Kingdom of Valdoria', S: 'The Sundering Sea' };
 const W_ROADS = [['hearthmoor', 'oakbridge'], ['hearthmoor', 'greenhaven'], ['oakbridge', 'crownmere'], ['oakbridge', 'eastwatch'], ['crownmere', 'greenhaven'], ['crownmere', 'ironcrest'],
-  ['dawnport', 'valdor'], ['valdor', 'stonewatch'], ['valdor', 'thornwick'], ['valdor', 'goldmeadow']];
+  ['dawnport', 'goldmeadow'], ['dawnport', 'thornwick'], ['dawnport', 'stonewatch'], ['dawnport', 'valdor'], ['valdor', 'stonewatch'], ['valdor', 'thornwick'], ['valdor', 'goldmeadow']];
 function worldSVG(sel) {
   let sd = 9001; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
   const W = 1600, H = 900, f = n => n.toFixed(1);
@@ -10366,9 +10598,9 @@ function journeyButtons(to) {
 function renderWorldCard() {
   const el = $('worldcard'), s = WORLD.find(w => w.id === UI.worldSel);
   if (!s) { el.hidden = true; return; }
-  const here = s.id === townHere(), open = ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere', 'ironcrest', 'eastwatch'].includes(s.id);
-  const bySea = s.id === 'dawnport' || s.id === 'stormrest';
-  const status = here ? 'You are here.' : bySea ? 'By sea: ships sail from the passage office on Eastwatch\u2019s quay, ' + (s.id === 'dawnport' ? 'by way of Stormrest Isle, for 40c.' : 'for 18c.') : open ? (s.id === 'ironcrest' ? 'The mountain road is open: up from Crownmere\u2019s King\u2019s Gate, over the Alder bridge.' : s.id === 'eastwatch' ? 'The coast road is open: east from Oakbridge, over the Alder bridge.' : s.id === 'crownmere' ? 'The roads are open: north from Oakbridge, or north-east from Greenhaven.' : s.id === 'greenhaven' ? 'The north road is open: it forks from the east road at the waystation.' : 'The road is open. Walk it, or travel from the map.') : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
+  const inVal = Sim.kingdomOf(townHere()) === 'valdoria', valTown = ['dawnport', 'goldmeadow', 'thornwick', 'stonewatch'].includes(s.id), here = s.id === townHere(), open = ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere', 'ironcrest', 'eastwatch'].includes(s.id) && !inVal || (valTown && inVal && s.id !== 'dawnport') || (s.id === 'dawnport' && inVal);
+  const bySea = (s.id === 'dawnport' && !inVal) || s.id === 'stormrest' || (valTown && !inVal);
+  const status = here ? 'You are here.' : bySea ? (valTown && s.id !== 'dawnport' ? 'Across the sea: sail to Dawnport from Eastwatch\u2019s quay, then take the road or the coach.' : 'By sea: ships sail from the passage office on Eastwatch\u2019s quay, ' + (s.id === 'dawnport' ? 'by way of Stormrest Isle, for 40c.' : 'for 18c.')) : open ? (s.id === 'ironcrest' ? 'The mountain road is open: up from Crownmere\u2019s King\u2019s Gate, over the Alder bridge.' : s.id === 'eastwatch' ? 'The coast road is open: east from Oakbridge, over the Alder bridge.' : s.id === 'crownmere' ? 'The roads are open: north from Oakbridge, or north-east from Greenhaven.' : s.id === 'greenhaven' ? 'The north road is open: it forks from the east road at the waystation.' : 'The road is open. Walk it, or travel from the map.') : s.stage ? `The road is not yet open. ${s.name} is built in Stage ${s.stage} of the plan.` : '';
   el.innerHTML = `<div><b>${esc(s.name)}</b><span>${esc(KINGDOM[s.k])} &middot; ${esc(s.tier)}${s.pop ? ' &middot; about ' + s.pop.toLocaleString() + ' people' : ''}</span><p>${esc(s.why)} <i>${esc(status)}</i></p></div>${here ? B_(s.id === 'hearthmoor' ? 'Village map' : 'Town map', ['ui', 'mapTown', s.id]) : open ? B_(s.id === 'hearthmoor' ? 'Village map' : 'Town map', ['ui', 'mapTown', s.id], 'alt') + journeyButtons(s.id) : ''}`;
   el.hidden = false;
 }
@@ -10519,6 +10751,7 @@ function settingsHTML() {
 }
 
 /* ----- title screen ----- */
+const COIN_LOGO = `<div class="tcoin" aria-hidden="true"><div class="spin">${[-2.5, -1.5, -0.5, 0.5, 1.5, 2.5].map(z => `<div class="rim" style="transform:translateZ(${z}px)"></div>`).join('')}<div class="face"></div></div><div class="shadow"></div></div>`;
 const CREST = `<svg class="crest" viewBox="0 0 512 512" aria-hidden="true"><path d="M136 176 H376 V292 C376 370 318 418 256 444 C194 418 136 370 136 292 Z" fill="#8c2e21" stroke="#a87d22" stroke-width="16" stroke-linejoin="round"/><path d="M196 380 V268 H212 V250 H230 V268 H244 V250 H268 V268 H282 V250 H300 V268 H316 V380 Z" fill="#e2b552"/><path d="M244 380 V340 A12 12 0 0 1 268 340 V380 Z" fill="#8c2e21"/><path d="M150 158 L136 72 L196 116 L256 52 L316 116 L376 72 L362 158 Z" fill="#e2b552" stroke="#7a4f12" stroke-width="8" stroke-linejoin="round"/><rect x="146" y="150" width="220" height="24" rx="6" fill="#e2b552" stroke="#7a4f12" stroke-width="8"/></svg>`;
 function slotLine(info) { if (!info) return 'Empty'; return `${esc(info.name)} · Day ${info.day} · ${info.coins}c · ${info.shops} ${info.shops === 1 ? 'shop' : 'shops'}${info.when ? ' · ' + ago(info.when) : ''}`; }
 function ago(t) { const m = Math.round((Date.now() - t) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 24) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; }
@@ -10543,7 +10776,7 @@ function renderTitle() {
   let left, right;
   if (UI.titleView === 'main') {
     const last = meta.lastSlot && slotInfo(meta.lastSlot);
-    left = `${CREST}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tfoot">Chapters One and Two<br>A Place in the Village</div><button type="button" class="tnews" data-c='["ui","notes"]'>What\u2019s new in version ${NOTES[0].v}</button>`;
+    left = `${COIN_LOGO}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tfoot">Chapters One and Two<br>A Place in the Village</div><button type="button" class="tnews" data-c='["ui","notes"]'>What\u2019s new in version ${NOTES[0].v}</button>`;
     right = `<div class="tmenu">
       ${last ? `<button type="button" class="tbtn primary" data-c='["ui","continue"]'>Continue<small>${slotLine(last)}</small></button>` : ''}
       <button type="button" class="tbtn ${last ? '' : 'primary'}" data-c='["ui","tview","new"]'>New game<small>Arrive with 5 coins and nothing else</small></button>
@@ -10804,6 +11037,9 @@ const Mini = (function () {
   // the Sundering Sea out to Valdoria's shore, Stormrest Isle in the middle, and Dawnport
   for (let z = -1500; z < 1000; z += 20) { const a = 1140 + 16 * Math.sin(z / 95), b = Math.abs(z + 300) < 92 ? 1909 : Sim.VSHORE(z); rect(1, (a + b) / 2, z, b - a, 22, 0, COL.water); }
   circ(2, Sim.ISLE.x, Sim.ISLE.z, 48, '#8fa25e'); rect(4, Sim.ISLE.x - 12, Sim.ISLE.z, 7, 10, Math.PI / 2, COL.house);
+  ['vgold', 'vthorn', 'vstone'].forEach(k => line(2, Sim.ROADS[k], 4, COL.road));
+  for (const O of [Sim.GM, Sim.TW, Sim.SW]) { O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); }
+  line(5, Sim.SW.wall, 2, COL.wall); rect(4, Sim.SW.keep.x, Sim.SW.keep.z, 16, 14, 0, COL.big);
   { const O = Sim.DP; O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); rect(4, O.palace.x, O.palace.z, 14, 26, 0, COL.big); rect(4, O.customs.x, O.customs.z, 9, 20, 0, COL.big); [-350, -300, -250].forEach(z => line(3, [[1907, z], [1872, z]], 3, COL.road)); }
   for (const O of [Sim.IC, Sim.EW]) {
     O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street));
@@ -11189,6 +11425,7 @@ function frame(now) {
   if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { walkPlayer(G, dt); SignKit.step(G, t); } const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
+  syncMyShip(G && UI.mode !== 'title' ? G : null);
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
@@ -11450,8 +11687,16 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.2256';
+const BUILD = '2026.11.05.2324';
 const NOTES = [
+  { v: '0.45', date: '5 November', title: 'All of Valdoria, and the coin of the realm', items: [
+    'The coin of Alderwyn: the crown on one face and Hearthmoor’s oak on the other. It turns slowly on the title screen, sits beside your purse on the top bar, and flips over whenever money comes in.',
+    'Three more Valdorian towns, each with its own people, businesses, market, watch and head. Goldmeadow (about 85), on the plains south-east of Dawnport: wheat fields, horse paddocks and a windmill, under a Reeve. Thornwick (about 65), a timber town at the forest’s edge to the east, with a saw pit and charcoal clamps, under a Warden. Stonewatch (about 210), the walled fortress guarding the northern pass, with its garrison, armourers, quarry and the Castellan’s keep.',
+    'Roads run from Dawnport to each of them, and coaches run between Valdoria’s towns from their coach houses. No road or coach crosses the sea: for that you need a ship. Coach houses everywhere now offer every town in their own kingdom.',
+    'Treaties. As ruler of Alderwyn you can offer Valdoria a trade pact (relations of 55, and your tariff at 1.1× or below): the duty at Dawnport falls to 5%. Keep it twenty days and, with relations of 70, make it an alliance: no duty at all, and the port is never closed. Raise your tariff and the Queen tears the treaty up.',
+    'Royal marriages. The Queen’s son and daughter, Infante Rodrigo and Infanta Leonor, are of an age to marry. With relations of 60 and 300c for the wedding, marry one yourself or to a grown child of yours. The houses are joined, and relations never fall below 45 again.',
+    'Your ship now rides at its berth in whichever port you last sailed it to. Arcades line two sides of Dawnport’s Plaza Mayor.',
+  ] },
   { v: '0.44', date: '5 November', title: 'A ship of your own, and the Queen of Valdoria', items: [
     'Buy a merchant cog at Eastwatch’s Passage Office for 800c: 80 loads of cargo, and it sails when you say, by day or night. Crew and mooring cost 3c a day, and 6c a voyage. In a winter storm it waits unless you tell it to sail anyway, and then the sea may take a third of the cargo.',
     'Sea trade. Each kingdom makes what the other wants: salt and wine are cheap in Dawnport and dear in Eastwatch; wool and iron the other way round. Prices move as you buy and sell and recover over the following days, so one ship cannot empty a market. The port card shows what ten loads cost to buy and fetch to sell.',

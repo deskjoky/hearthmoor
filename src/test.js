@@ -1119,6 +1119,36 @@ console.log('37. Your own ship, sea trade, customs, and the Queen of Valdoria');
   check(s.ledger.slice(1).every(e => !e.unexplained), 'ships, cargo, duty and crew all have lines in your books');
 }
 
+console.log('38. Valdoria: Goldmeadow, Thornwick, Stonewatch, its roads, and treaties and marriages between the crowns');
+{
+  const s = newGameRaw(40); s.ageRate = 0; Sim.advance(s, 60); const X = (...a) => Sim.cmd(s, ...a), V = s.valdoria, R = s.realm;
+  const n = id => Sim.living(s).filter(p => p.town === id).length;
+  check(n('goldmeadow') >= 80 && n('thornwick') >= 60 && n('stonewatch') >= 200 && s.towns.stonewatch.title === 'Castellan', 'Goldmeadow (' + n('goldmeadow') + '), Thornwick (' + n('thornwick') + ') and Stonewatch (' + n('stonewatch') + ') are peopled, each with its own head');
+  check(Sim.roadDist('dawnport', 'stonewatch') > 300 && Sim.roadDist('goldmeadow', 'thornwick') > 0 && Sim.roadDist('dawnport', 'oakbridge') === 0, 'roads join Valdoria’s towns, and none crosses the sea');
+  const st = Sim.STAGE.dawnport; s.player.x = st.x; s.player.z = st.z; s.t = 9 * 60; s.coins = 3000;
+  check(!X('coach', 'oakbridge').ok, 'no coach from Dawnport to Alderwyn');
+  const r = X('coach', 'stonewatch'); check(r.ok && Sim.townAt(s.player.x, s.player.z) === 'stonewatch', 'the coach takes you from Dawnport to Stonewatch');
+  check(!X('journey', 'eastwatch').ok, 'you cannot walk home across the sea');
+  // treaties: only the ruler, and only when relations allow
+  check(!X('treaty', 'trade').ok, 'only the ruler of Alderwyn treats with Valdoria');
+  R.crown = 'player'; V.relation = 40; check(!X('treaty', 'trade').ok, 'cool relations: no pact');
+  V.relation = 60; R.tariff = 1.5; check(!X('treaty', 'trade').ok, 'no pact while Alderwyn’s tariff is high');
+  R.tariff = 1; check(X('treaty', 'trade').ok && V.treaty && V.duty === 1.05, 'a trade pact brings the duty at Dawnport down to 5%');
+  check(!X('treaty', 'alliance').ok, 'an alliance must wait until the pact has held twenty days');
+  V.treaty.since -= 21; V.relation = 75; check(X('treaty', 'alliance').ok && V.treaty.kind === 'alliance' && V.duty === 1, 'then an alliance takes the duty to nothing');
+  R.tariff = 1.5; Sim.valdoriaDay(s); check(!V.treaty && V.relation < 75, 'raising the tariff breaks the treaty, and the Queen is angry');
+  R.tariff = 1;
+  // a royal marriage
+  const kid = Sim.living(s).find(p => !p.kid && !p.spouse && !p.royal && p.age >= 18 && p.age < 40 && p.status === 'here'); kid.parents = [Sim.you(s).pid]; kid.home = 'you';
+  V.relation = 65; const kids = Sim.yourKids(s);
+  if (kids.includes(kid)) { check(X('royalMatch', kid.id).ok && kid.spouse && s.people[kid.spouse].royal === 'valdoria' && V.wed, kid.name + ' marries into Valdoria’s royal house'); V.relation = 10; s.day = 5; Sim.valdoriaDay(s); check(V.relation >= 45, 'once the houses are joined, relations never fall below 45'); }
+  // an old save gains the towns
+  const old = JSON.parse(Sim.serialize(newGameRaw(41))); old.v = 14; for (const id of ['goldmeadow', 'thornwick', 'stonewatch']) delete old.towns[id];
+  for (const id in old.people) if (['goldmeadow', 'thornwick', 'stonewatch'].includes(old.people[id].town) || old.people[id].royal) delete old.people[id];
+  old.houses = old.houses.filter(h => !['goldmeadow', 'thornwick', 'stonewatch'].includes(h.town)); for (const id in old.biz) if (['goldmeadow', 'thornwick', 'stonewatch'].includes(old.biz[id].town)) delete old.biz[id]; delete old.valdoria.royals;
+  const up = Sim.deserialize(JSON.stringify(old)); check(up.towns.stonewatch && up.valdoria.royals && Sim.living(up).filter(p => p.town === 'thornwick').length >= 60, 'an old save gains Valdoria’s towns and its royal house');
+}
+
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
