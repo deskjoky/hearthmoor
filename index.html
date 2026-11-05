@@ -60,6 +60,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .coins { margin-left: auto; font-weight: 700; font-size: 17px; color: var(--gold); white-space: nowrap; }
 .coins.debt { color: #e0806e; }
 .coins::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f0cf6a, #9c7414); margin-right: 5px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+.task-btn { background: #6b5636; margin-right: 6px; } .task-btn span { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--gold, #c9962b); color: #2a1d12; font: 700 12px/18px var(--f-body); }
+.task-btn span:empty { display: none; }
 .book-btn { border: 0; background: var(--leather); color: var(--parch); border-radius: 4px; padding: 8px 12px; font-family: var(--f-display); font-size: 16px; min-height: 40px; }
 .subhud { pointer-events: none; display: flex; flex-wrap: wrap; gap: 6px; max-width: 720px; margin: 6px auto 0; }
 .chip { background: rgba(32, 26, 20, .74); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
@@ -445,7 +447,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       <button class="fast" type="button" data-speed="1" aria-label="Normal speed" aria-pressed="true">1&times;</button><button class="fast" type="button" data-speed="2" aria-label="Twice as fast" aria-pressed="false">2&times;</button><button class="fast" type="button" data-speed="4" aria-label="Four times as fast" aria-pressed="false">4&times;</button><button class="fast" type="button" data-speed="8" aria-label="Eight times as fast" aria-pressed="false">8&times;</button>
     </div>
     <div class="coins num" id="coins">5c</div>
-    <button class="book-btn" id="bookBtn" type="button">Ledger</button>
+    <button class="book-btn task-btn" id="taskBtn" type="button">Tasks<span id="taskN"></span></button><button class="book-btn" id="bookBtn" type="button">Ledger</button>
   </div>
   <div class="subhud" id="subhud"></div>
   <div class="goal" id="goal"></div>
@@ -7533,6 +7535,7 @@ document.addEventListener('click', e => {
 });
 
 function hud(s) {
+  { const n = taskList(s).filter(x => !x.soft).length, el = $('taskN'); if (el && el.textContent !== String(n || '')) el.textContent = n || ''; }
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
   $('clock').textContent = `Day ${s.day} · ${Sim.clock(s.t)}`;
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
@@ -7556,7 +7559,7 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['realm', 'Realm'], ['goals', 'Goals']];
+const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['realm', 'Realm'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
@@ -7570,7 +7573,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -7864,6 +7867,32 @@ function oakHallCard(s, walking, id) {
   ${T.log.length ? `<div class="why">${T.log.slice(0, 3).map(e => `Day ${e.day}: ${esc(e.text)}`).join('<br>')}</div>` : ''}`;
 }
 /* ----- the Realm: the King, the lords, the council, your support, and the crown ----- */
+/* ----- Tasks: everything you have been asked to do, in one place ----- */
+function taskList(s) {
+  const v = s.village, out = [], go = (k, lab) => B_(lab || 'Take me there', ['goto', k]);
+  const STEP_ACT = { 0: go('hall', 'Go to the Village Hall'), 1: B_('Shops', ['page', 'shops']), 2: go('granary', 'Go to the granary'), 3: B_('Staff', ['page', 'staff']), 4: go('tower', 'Go to the watchtower'), 5: go('hall', 'Go to the Village Hall'), 6: go('hall', 'Go to the Village Hall'), 7: go('manor', 'Go to the manor gate'), 8: B_('Village', ['page', 'village']) };
+  if (Sim.STEPS[v.step] && v.step < 9) out.push({ who: Sim.elderTitle(s), title: Sim.STEPS[v.step], note: v.step === 8 ? 'Your standing is ' + v.standing + ' of 80.' : '', act: STEP_ACT[v.step] || '' });
+  if (v.shortage) out.push({ who: 'The village', title: 'Refill the granary: ' + v.granary + ' of ' + v.granaryNeed + ' grain', note: 'Until it is full, villagers buy less at every shop.', act: go('granary', 'Go to the granary') });
+  if (v.dispute != null && (v.council || s.offices.elder === 'player')) out.push({ who: 'The council', title: 'Settle the dispute before the council', note: Sim.DISPUTES[v.dispute].text, act: go('hall', 'Go to the Village Hall') });
+  if (v.contract) out.push({ who: v.contract.who, title: 'Deliver ' + Sim.goodsName(v.contract.trade, v.contract.qty) + ' to the Trading Post', note: 'By day ' + v.contract.until + ', for ' + v.contract.reward + 'c.', act: go('market', 'Go to the Trading Post') });
+  if (s.job) { const e = Sim.empById(s.job.emp); out.push({ who: e.boss, title: 'Your shift at ' + e.name, note: shiftText(e) + (Sim.inShift(s) ? ' · on now' : '') + ' · strikes ' + s.job.strikes + '/3', act: go('emp:' + e.id, 'Go to work') }); }
+  const R = s.realm;
+  if (R) {
+    for (const c of (R.contracts || []).filter(c => c.taken)) out.push({ who: c.who, title: c.what.charAt(0).toUpperCase() + c.what.slice(1), note: 'By day ' + c.until + ', for ' + c.reward + 'c.' + (c.qty ? ' Delivered ' + (c.delivered || 0) + ' of ' + c.qty + '.' : ' Danger now ' + Math.round((s.bandits || {})[c.region] || 0) + '.'), act: c.kind === 'clear' ? B_('The Realm', ['page', 'realm']) : go(Sim.MARKET_AT[c.region], 'Go to the market') });
+    for (const pr of (R.promises || []).filter(p => p.state === 'given' || p.state === 'asked')) { const q = s.people[pr.pid]; out.push({ who: q ? q.name : 'A lord', title: pr.state === 'asked' ? 'Answer: will you promise the roads of ' + Sim.REGIONS[pr.region] + ' stay safe?' : 'Keep the roads of ' + Sim.REGIONS[pr.region] + ' safe until day ' + pr.until, note: 'Danger now ' + Math.round((s.bandits || {})[pr.region] || 0) + ' (keep it under 30).', act: B_('The Realm', ['page', 'realm']) }); }
+    if (R.offer) out.push({ who: 'The King', title: 'Answer the offer of ' + Sim.REGIONS[R.offer.region], note: 'A fee of ' + R.offer.fee + 'c and your oath.', act: B_('The Realm', ['page', 'realm']) });
+    if (R.exile) out.push({ who: 'Your cause', title: 'Win your way back from exile', note: 'Allies ' + R.exile.allies.length + '/3 · war chest ' + (R.exile.fund || 0) + '/600c · towns ' + R.support.towns + '/55 · ruler’s standing ' + Math.round(R.kingSupport) + ' (under 50)', act: B_('The Realm', ['page', 'realm']) });
+    const open = (R.contracts || []).filter(c => !c.taken).length; if (open) out.push({ who: 'Lords and towns', title: open + ' contract' + (open > 1 ? 's' : '') + ' waiting to be taken', note: 'Deeds done win lordships and allies.', act: B_('See them', ['page', 'realm']), soft: true });
+  }
+  for (const d of (s.decisions || [])) out.push({ who: 'Your manager', title: d.text, note: '', act: B_('Property', ['page', 'property']) });
+  const offers = (s.offers || []).filter(o => s.people[o.pid]); if (offers.length) out.push({ who: 'Buyers', title: offers.length + ' offer' + (offers.length > 1 ? 's' : '') + ' for your property', note: '', act: B_('Property', ['page', 'property']) });
+  if (UI.waypoint && G.people[UI.waypoint]) out.push({ who: 'You', title: 'Find ' + G.people[UI.waypoint].name, note: 'Follow the gold light and the mark on the minimap.', act: B_('Stop looking', ['ui', 'clearWaypoint'], 'alt') });
+  return out;
+}
+function pageTasks(s) {
+  const t = taskList(s);
+  return `<h3>Tasks</h3><p class="lead">Everything you have been asked to do, and who asked. Tap a button to head there.</p>${t.length ? t.map(x => `<div class="box"><h5>${esc(x.title)}</h5><p><span class="pill">${esc(x.who)}</span> ${esc(x.note || '')}</p><div class="acts">${x.act || ''}</div></div>`).join('') : '<p>Nothing is asked of you just now. Take a contract on the Realm page, or talk to the elder.</p>'}`;
+}
 function pageRealm(s) {
   const R = s.realm; if (!R) return '<h3>The Realm</h3><p>Not yet.</p>';
   const sup = Sim.computeSupport(s), S = R.support, ruler = Sim.isRuler(s), K = s.people[R.king];
@@ -8608,6 +8637,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => { const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
+$('taskBtn').onclick = () => openBook('tasks');
 $('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, MAP_C.r === 300 ? 460 : 190); };
 $('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, MAP_C.r === 300 ? 460 : 190); };
 $('menuBtn').onclick = () => openPause();
@@ -9357,7 +9387,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0023';
+const BUILD = '2026.11.05.0031';
 const NOTES = [
   { v: '0.34', date: '5 November', title: 'Making it matter', items: [
     'One fair economy. Every business, yours or not, now sells into the same demand: a town\u2019s grown people and its travellers, shared between every seller of that trade by how many hands each has. Ingredients cost what the town\u2019s market charges that day, and bigger towns cost more to trade in but have more custom to win. Your Hearthmoor shops now share the village\u2019s custom with Gerd, Hollin, Ysolde and Ash.',
@@ -9369,6 +9399,7 @@ const NOTES = [
     'Exile is a chapter of its own: win back three sworn allies, raise a war chest, win over the towns and expose the new ruler\u2019s failings. Waiting alone no longer brings you back.',
     'A lord holds one region at a time. You can move into its seat, which takes your family\u2019s name: Varrow Manor becomes your manor, Stane Keep your keep. The ruler lives in Crownmere castle.',
     'Choose a first and a family name for your character. And choose how you begin: from nothing, as a merchant with a Bread Stand, as the Elder of Hearthmoor, as lord of Greenhaven, or as ruler of Alderwyn.',
+    'A Tasks button at the top shows everything you have been asked to do: the elder\u2019s errands, orders, contracts, promises, your shifts and your managers\u2019 decisions, each with a button to head there. The number on it counts what is waiting.',
     'Find people: on anyone\u2019s page in the Ledger, tap "Find them" for a gold light over them and a mark on the minimap. If they are in another town, the minimap points the way.',
     'If you die and carry on as a young child, a regent runs the family\u2019s affairs until they come of age at 16. Your village council seat now falls vacant at a death, and can be won back at a moot.'
   ] },
