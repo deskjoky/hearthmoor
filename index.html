@@ -7600,7 +7600,7 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Businesses'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['realm', 'Realm'], ['goals', 'Goals']];
+const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['realm', 'Realm'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
@@ -7698,7 +7698,7 @@ function businessTowns(s) {
   return html;
 }
 function pageShops(s, only) {
-  let html = only ? '' : `<h3>Your Businesses</h3><p class="lead">Pick a town, then tap Manage on the place you want to run.</p>`;
+  let html = only ? '' : `<h3>Your Shops and Businesses</h3><p class="lead">Pick a town, then tap Manage on the place you want to run.</p>`;
   if (!only) return html + businessTowns(s);
   if (!s.shops.length) {
     html += `<p>You own no shops yet. Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the four shops on the square, then open your own on an empty lot.</p><table class="trades"><thead><tr><th>Trade</th><th>Learn at</th><th>To open</th><th>Makes</th></tr></thead><tbody>
@@ -9469,7 +9469,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0105';
+const BUILD = '2026.11.05.0108';
 const NOTES = [
   { v: '0.34', date: '5 November', title: 'Making it matter', items: [
     'One fair economy. Every business, yours or not, now sells into the same demand: a town\u2019s grown people and its travellers, shared between every seller of that trade by how many hands each has. Ingredients cost what the town\u2019s market charges that day, and bigger towns cost more to trade in but have more custom to win. Your Hearthmoor shops now share the village\u2019s custom with Gerd, Hollin, Ysolde and Ash.',
@@ -9483,7 +9483,7 @@ const NOTES = [
     'Choose a first and a family name for your character. And choose how you begin: from nothing, as a merchant with a Bread Stand, as the Elder of Hearthmoor, as lord of Greenhaven, or as ruler of Alderwyn.',
     'Manage at one of your shops or businesses now opens just that place: its prices, stock, upgrades, staff and manager. Show all businesses goes back to the full list.',
     'Managers earn their wage. In a shop they bring in regulars and travellers (about a third more customers), work alongside your worker (up to half again as fast), order supplies overnight at a tenth off and keep your worker happy; in a town business they count as an extra hand and get supplies a tenth cheaper. Only careless managers make mistakes now.',
-    'Your shop counters at the top are now one Businesses button. Tap it for a short list with Go and Manage on each. The Shops page is now Businesses, sorted into a tab for each town, with the ones you could buy folded away underneath.',
+    'Your shop counters at the top are now one Businesses button. Tap it for a short list with Go and Manage on each. The Shops page is sorted into a tab for each town, with the ones you could buy folded away underneath.',
     'A Tasks button at the top shows everything you have been asked to do: the elder\u2019s errands, orders, contracts, promises, your shifts and your managers\u2019 decisions, each with a button to head there. The number on it counts what is waiting.',
     'Find people: on anyone\u2019s page in the Ledger, tap "Find them" for a gold light over them and a mark on the minimap. If they are in another town, the minimap points the way.',
     'If you die and carry on as a young child, a regent runs the family\u2019s affairs until they come of age at 16. Your village council seat now falls vacant at a death, and can be won back at a moot.'
