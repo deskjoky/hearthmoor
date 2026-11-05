@@ -1969,8 +1969,20 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function goodsDay(s) {
     setupGoods(s);
     for (const t in TOWN_GOODS) for (const g of GOODS) {
-      const T = TOWN_GOODS[t], st = s.goods[t][g], carts = 0.5 * (goodsTarget(t, g) - st);   // merchants' carts fill gaps and carry off gluts
+      // merchants' carts bring the town's usual imports (or carry off its usual surplus), and only slowly
+      // close a shortage or a glut, so a market that runs short stays short for a week or two: worth hauling to
+      const T = TOWN_GOODS[t], st = s.goods[t][g], carts = 0.8 * (T.use[g] - T.make[g]) + 0.1 * (goodsTarget(t, g) - st);
       s.goods[t][g] = Math.max(4, Math.round(st + T.make[g] * (0.85 + rand(s) * 0.3) - T.use[g] * (0.85 + rand(s) * 0.3) + carts));
+    }
+    // now and then a blight, a flood, a lost convoy or a bumper year shakes one market
+    if (rand(s) < 0.16) {
+      const towns = Object.keys(TOWN_GOODS), t = towns[Math.floor(rand(s) * towns.length)], g = GOODS[Math.floor(rand(s) * GOODS.length)];
+      if (goodsTarget(t, g) >= 20) {
+        const glut = rand(s) < 0.3, why = glut ? { grain: 'a bumper harvest', wood: 'a great felling in the woods', ore: 'a rich new seam' }[g] : { grain: 'blight in the fields', wood: 'floods on the timber road', ore: 'a flooded mine' }[g];
+        s.goods[t][g] = Math.max(Math.round(goodsTarget(t, g) * 0.18), Math.round(s.goods[t][g] * (glut ? 2.2 : 0.3)));
+        s.shocks = (s.shocks || []).concat({ day: s.day, town: t, good: g, glut }).slice(-12);
+        event(s, (glut ? 'Glut' : 'Shortage') + ' in ' + REGIONS[t].replace(/^the /, '') + ': ' + why + '. ' + g.charAt(0).toUpperCase() + g.slice(1) + (glut ? ' is cheap there now; it will take a week or two to clear.' : ' is dear there now; it will take a week or two to recover.'), glut ? 'info' : 'story');
+      }
     }
   }
   const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour' };
@@ -1997,7 +2009,21 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const pop = adults(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length), dem = {};
     for (const id in s.biz) {
       const b = s.biz[id];
-      if (b.closed) { b.lastProfit = 0; continue; }
+      if (b.closed) {
+        b.lastProfit = 0;
+        // an empty shop does not stay empty for ever: someone from outside takes it on
+        if (b.owner !== 'player' && b.closedOn != null && s.day - b.closedOn > 20 && b.trade !== 'estate' && rand(s) < 0.05) {
+          const SUR = ['Ashby', 'Brook', 'Carter', 'Fletcher', 'Mason', 'Wright', 'Cooper', 'Hayward', 'Fowler', 'Reeve', 'Webb', 'Lowe'], F = rand(s) < 0.5 ? BABY_F : BABY_M;
+          const nm = F[Math.floor(rand(s) * F.length)] + ' ' + SUR[Math.floor(rand(s) * SUR.length)];
+          if (!Object.values(s.people).some(q => q.name === nm)) {
+            const q = newPerson(s, { name: nm, age: 24 + Math.floor(rand(s) * 20), purse: 80, town: b.town, sex: F === BABY_F ? 'f' : 'm', job: { type: 'biz', biz: id, role: 'owner' }, home: 'biz:' + id });
+            q.log = [{ day: s.day, text: 'Came from Ashford and reopened ' + empById(id).name + '.' }];
+            b.owner = q.id; b.closed = false; b.profits = [3, 3, 3]; b.staff = []; b.lossDays = 0; b.closedOn = null;
+            event(s, q.name + ' has come from Ashford and reopened ' + empById(id).name + ' in ' + REGIONS[b.town || 'hearthmoor'].replace(/^the /, '') + '.', 'info');
+          }
+        }
+        continue;
+      }
       const lessee = b.owner === 'player' && b.lease ? person(s, b.lease.pid) : null, mine = b.owner === 'player' && !lessee;
       const own = lessee || (b.owner === 'player' ? null : person(s, b.owner));
       const workers = b.staff.length + (own ? 1 : 0);
@@ -2006,7 +2032,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
       const cap = bizCap(s, b), D0 = dem[key], sold = E.flat ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap : 0);
-      const revenue = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
+      const revenue0 = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
+      // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
+      // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
+      if (!b.slump && !E.flat && rand(s) < 0.012) { const why = ['a price war with a rival', 'a spoiled batch and a bad name', 'sickness in the house', 'a fire in the back room', 'a feud with the guild'][Math.floor(rand(s) * 5)]; b.slump = { until: s.day + 10 + Math.floor(rand(s) * 16), why }; if (b.owner === 'player') event(s, empById(id).name + ' has hit a bad spell: ' + why + '. Takings will be down for a few weeks.', 'bad'); else if (own) plog(s, own, empById(id).name + ' hit a bad spell: ' + why + '.'); }
+      if (b.slump && s.day >= b.slump.until) b.slump = null;
+      const knack = own && !lessee ? 0.55 + 0.5 * Math.min(1.2, own.skill || 0.9) : b.manager ? 0.6 + 0.4 * Math.min(1.3, b.manager.skill || 1) : 1;
+      const revenue = Math.round(revenue0 * (E.flat ? 1 : knack * (b.slump ? 0.45 : 1)));
       b.lastSold = Math.round(sold);
       let wages = 0;
       for (const st of b.staff) {
@@ -2040,13 +2072,15 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const seek = pop.find(p => idleAdult(p) && p.status === 'here' && townOf(p) === (b.town || 'hearthmoor'));
         if (seek) { seek.job = { type: 'biz', biz: id, role: 'hand' }; b.staff.push({ pid: seek.id, wage: 7 }); plog(s, seek, 'Hired by ' + own.name + ' at ' + empById(id).name + '.'); event(s, own.name + ' hired ' + seek.name + ' at ' + empById(id).name + '.', 'info'); }
       }
-      if (own.purse <= 0 && b.profits.every(x => x < 0)) {
+      b.lossDays = avg(b.profits) < 0 ? (b.lossDays || 0) + 1 : Math.max(0, (b.lossDays || 0) - 2);
+      if ((own.purse <= 0 && b.profits.every(x => x < 0)) || (b.lossDays >= 18 && own.purse < 120) || b.lossDays >= 30) {
         b.closed = true;
         b.staff.slice().forEach(st => loseJob(s, person(s, st.pid), empById(id).name + ' closed its doors.'));
         loseJob(s, own, 'Their business, ' + empById(id).name + ', failed.');
         own.purse = Math.max(own.purse, 0);
         if (own.home === 'biz:' + id) { own.home = null; plog(s, own, 'Had to leave the rooms above the shop.'); }
-        event(s, empById(id).name + ' has closed. ' + own.name + ' is out of work and out of a home.', 'bad');
+        b.closedOn = s.day; b.lossDays = 0; b.slump = null; s.rec.bizClosed = (s.rec.bizClosed || 0) + 1;
+        event(s, empById(id).name + ' has closed. ' + own.name + ' is out of work' + (own.home ? '.' : ' and out of a home.'), 'bad');
       }
     }
   }
@@ -2411,7 +2445,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         }
       }
       if (p.job && p.job.type === 'biz' && p.job.role === 'hand' && (p.tenure || 0) >= 12 && p.purse >= 70 && (p.rep || 0) >= 25) {
-        const shut = Object.values(s.biz).find(b => b.closed && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(b => b.closed);
+        const here = townOf(p), shut = Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player' && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player');
         if (shut) {
           loseJob(s, p, 'Left to run a shop of their own.');
           p.purse -= 60; shut.owner = p.id; shut.closed = false; shut.profits = [4, 4, 4]; shut.staff = []; p.job = { type: 'biz', biz: shut.id, role: 'owner' };
@@ -2430,13 +2464,26 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         event(s, p.name + ' has left Hearthmoor, homeless and out of work.', 'bad');
       }
     }
-    // newcomers arrive when there is a roof and work to be had
-    const jobless = villagers(s).filter(idleAdult).length;
-    if (jobless === 0 && vacancy(s, 3) && rand(s) < 0.3) {
-      const names = ['Rowan', 'Elsbeth', 'Tam', 'Hesper', 'Wat', 'Mabel', 'Odo', 'Gwen', 'Alard', 'Juliana'];
-      const used = new Set(Object.values(s.people).map(p => p.name));
-      const name = names.find(n => !used.has(n));
-      if (name) { const p = newPerson(s, { name, age: 20 + Math.floor(rand(s) * 25), purse: 15 }); moveIn(s, p, vacancy(s, 3)); p.log.push({ day: s.day, text: 'Arrived from Ashford looking for work.' }); addBody(s, p, P.road); event(s, name + ' has arrived from Ashford looking for work.', 'info'); }
+    // newcomers arrive when there is a roof to be had: a lone worker, or a young family from Ashford.
+    // A village that is shrinking draws them in faster; a crowded one, hardly at all.
+    const jobless = villagers(s).filter(idleAdult).length, pop = villagers(s).length, roof = vacancy(s, 4);
+    if (roof && jobless <= 2 && rand(s) < (pop < 32 ? 0.35 : pop < 40 ? 0.1 : 0.02)) {
+      const SUR = ['Ashby', 'Brook', 'Carter', 'Fletcher', 'Mason', 'Wright', 'Cooper', 'Hayward', 'Fowler', 'Reeve', 'Webb', 'Lowe', 'Pike', 'Thorne', 'Woodall', 'Rook'];
+      const used = new Set(Object.values(s.people).map(p => p.name)), pickName = (L, fam) => { for (let k = 0; k < 12; k++) { const n = L[Math.floor(rand(s) * L.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } return null; };
+      const fam = SUR[Math.floor(rand(s) * SUR.length)], family = roof.cap - roof.tenants.length >= 2 && rand(s) < 0.65;
+      const a = pickName(BABY_M, fam), b = family ? pickName(BABY_F, fam) : null;
+      if (a) {
+        const man = newPerson(s, { name: a, age: 20 + Math.floor(rand(s) * 12), purse: 20, sex: 'm' }); moveIn(s, man, roof); man.log.push({ day: s.day, text: 'Arrived from Ashford looking for work.' }); addBody(s, man, P.road);
+        let who = a;
+        if (b) {
+          const wife = newPerson(s, { name: b, age: man.age - 2 + Math.floor(rand(s) * 4), purse: 10, sex: 'f' }); wife.spouse = man.id; man.spouse = wife.id; moveIn(s, wife, roof); wife.log.push({ day: s.day, text: 'Came to Hearthmoor with her husband ' + a + '.' }); addBody(s, wife, P.road);
+          const kids = Math.min(roof.cap - roof.tenants.length, Math.floor(rand(s) * 3));
+          for (let k = 0; k < kids; k++) { const f = rand(s) < 0.5, n = pickName(f ? BABY_F : BABY_M, fam); if (!n) break; const c = newPerson(s, { name: n, age: 1 + Math.floor(rand(s) * 9), purse: 0, sex: f ? 'f' : 'm' }); c.kid = true; c.parents = [wife.id, man.id]; c.hh = man.id; moveIn(s, c, roof); c.log.push({ day: s.day, text: 'Came to Hearthmoor with the family.' }); addBody(s, c, P.road); }
+          who = 'The ' + fam + ' family';
+        }
+        s.rec.newcomers = (s.rec.newcomers || 0) + 1;
+        event(s, who + (b ? ' have' : ' has') + ' arrived from Ashford and moved into ' + roof.name + '.', 'info');
+      }
     }
   }
 
@@ -4133,7 +4180,16 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const m = s.market[t] || 1; s.market[t] = Math.round(clamp(m + pull + raid + (rand(s) - 0.5) * 0.02 + (1 - m) * 0.03, 0.7, 1.45) * 1000) / 1000;
     }
   }
-  function houseValue(s, h) { return Math.round((40 + h.rent * 45) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
+  /* where a building stands sets its price: a richer town costs more, and so does the heart of town by the market */
+  const LAND = { hearthmoor: 1, greenhaven: 1.1, ironcrest: 1.2, eastwatch: 1.4, oakbridge: 1.45, crownmere: 2 };
+  const TOWN_R = { hearthmoor: 60, greenhaven: 60, oakbridge: 110, ironcrest: 80, eastwatch: 110, crownmere: 180 };
+  function areaOf(town, x, z) {
+    town = town || 'hearthmoor'; const L = LOCS[MARKET_AT[town]]; if (!L) return { k: 1, name: '' };
+    const d = Math.hypot(x - L.x, z - L.z), f = Math.max(0, 1 - d / (TOWN_R[town] || 80)), k = Math.round((0.85 + 0.5 * f) * 100) / 100;
+    return { k, name: f > 0.7 ? 'in the heart of town' : f > 0.4 ? 'near the market' : f > 0.15 ? 'a quiet street' : 'on the edge of town' };
+  }
+  const placeFactor = (town, x, z) => (LAND[town || 'hearthmoor'] || 1) * areaOf(town, x, z).k;
+  function houseValue(s, h) { return Math.round((40 + h.rent * 45) * placeFactor(h.town, h.x, h.z) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
   function propertyDay(s) {
     propertyMarket(s);
     for (const h of s.houses) if (h.owner === 'player') h.wear = Math.min(100, (h.wear || 0) + 0.4);
@@ -4168,7 +4224,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return living(s).filter(p => !p.kid && p.age >= 20 && townOf(p) === town && p.purse >= 20 && !(p.job && (p.job.type === 'office' || p.job.type === 'manage' || (p.job.type === 'biz' && p.job.role === 'owner'))) && p.home !== 'you')
       .map(p => ({ pid: p.id, name: p.name, offer: Math.max(4, Math.round(BIZ_BASE[b.trade] * 0.3 * (0.8 + (p.skill || 1) * 0.3))), skill: p.skill || 1 })).sort((a, c) => c.offer - a.offer).slice(0, 4);
   }
-  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1) * marketOf(s, b.town) * (b.disrepair ? 0.85 : 1)); }
+  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1) * marketOf(s, b.town) * (b.disrepair ? 0.85 : 1) * (() => { const e = empById(id); return e && e.x != null ? (1 + ((LAND[b.town || 'hearthmoor'] || 1) - 1) * 0.9) * areaOf(b.town, e.x, e.z).k : 1; })()); }
   function housePrice(s, h) { return houseValue(s, h); }
   function sellerWilling(s, ownerPid) { const o = s.people[ownerPid]; return !o || o.opinion > -40; }
 
@@ -5136,7 +5192,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
@@ -7398,6 +7454,7 @@ function cardHTML(s) {
   const walking = p.dest ? `<div class="sub">Walking&hellip;</div>` : '';
   const Lh = here && L[here];
   // a shop you work at
+  if (Lh && Lh.emp && s.biz && s.biz[Lh.emp] && s.biz[Lh.emp].owner === 'player' && !(s.job && s.job.emp === Lh.emp)) return ownedBizCard(s, s.biz[Lh.emp], walking);
   if (Lh && Lh.emp) {
     const e = Sim.empById(Lh.emp), mine = s.job && s.job.emp === e.id, T = TR[e.trade];
     const learnt = Sim.learned(s, e.trade), shifts = s.trades[e.trade];
@@ -7416,6 +7473,7 @@ function cardHTML(s) {
       info += `<div class="why">${esc(e.boss)} needs a hand. Show up for each shift to get paid. Miss three and you're let go.</div>`;
       acts.push(B_(`Ask ${esc(e.boss)} for work`, ['apply', e.id]));
     }
+    { const b = s.biz && s.biz[e.id]; if (b && b.owner !== 'player' && s.people[b.owner]) { const pr = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + pr + 'c', ['buyBiz', b.id], 'alt', s.coins < pr)); } }
     return info + `<div class="acts">${acts.join('')}</div>`;
   }
   // a lot: empty or your shop
@@ -7591,7 +7649,7 @@ function renderCard(force) {
   // a door you can go through
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
-  const mineHere = Lh && ((Lh.emp && G.job && G.job.emp === Lh.emp) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
+  const mineHere = Lh && ((Lh.emp && ((G.job && G.job.emp === Lh.emp) || (G.biz && G.biz[Lh.emp] && G.biz[Lh.emp].owner === 'player'))) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
   const tab = html && here && Lh && UI.openLoc !== here && !mineHere && meta.settings.cards !== 'open';
   if (tab) { const m = html.match(/<h2>([\s\S]*?)<\/h2>/); html = `<button type="button" class="cardtab" data-c='["ui","openCard"]'>${m ? m[1] : 'This place'}<small>tap to open</small></button>`; }
   else if (html && here && Lh && !mineHere) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
@@ -7634,11 +7692,11 @@ function rankWatch(s) {
 }
 function myBusinesses(s) {
   const here = townHere(), out = [];
-  s.shops.forEach(x => { const T = TR[x.trade]; out.push({ town: 'hearthmoor', ref: ['shop', x.id], name: Sim.tierOf(x).name + ' \u00b7 ' + T.name, go: here === 'hearthmoor' ? 'plot' + x.plot : null, line: `<b>${x.goods}</b> ${esc(T.product)} on the shelf${x.manager ? ' \u00b7 run by ' + esc(x.manager.name.split(' ')[0]) : x.worker ? ' \u00b7 ' + esc(x.worker.name.split(' ')[0]) : ''}` }); });
+  s.shops.forEach(x => { const T = TR[x.trade]; out.push({ town: 'hearthmoor', ref: ['shop', x.id], name: Sim.tierOf(x).name + ' \u00b7 ' + T.name, go: here === 'hearthmoor' ? 'plot' + x.plot : null, line: `<b>${x.goods}</b> ${esc(T.product)} on the shelf${x.manager ? ' \u00b7 run by ' + esc(x.manager.name.split(' ')[0]) : x.worker ? ' \u00b7 ' + esc(x.worker.name.split(' ')[0]) : ''}${(() => { const e = s.ledger.length && s.ledger[s.ledger.length - 1].shops.find(q => q.id === x.id); return e ? ' \u00b7 <b>' + money(e.profit) + '</b> last day' : ''; })()}` }); });
   Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => {
-    const town = b.town || 'hearthmoor', key = Object.keys(Sim.LOCS).find(k => Sim.LOCS[k].biz === b.id);
+    const town = b.town || 'hearthmoor', key = Object.keys(Sim.LOCS).find(k => Sim.LOCS[k].biz === b.id || Sim.LOCS[k].emp === b.id);
     const last = b.lastProfit != null ? b.lastProfit : null;
-    out.push({ town, ref: ['biz', b.id], name: Sim.empById(b.id).name, go: key && town === here ? key : null, line: `${esc(TOWN_NAMES[town] || town)}${b.lease ? ' \u00b7 let out' : ' \u00b7 ' + b.staff.length + ' staff'}${last != null ? ' \u00b7 <b>' + money(last) + '</b> last day' : ''}${b.closed ? ' \u00b7 closed' : ''}` });
+    out.push({ town, ref: ['biz', b.id], name: Sim.empById(b.id).name, go: key && town === here ? key : null, line: `${esc(TOWN_NAMES[town] || town)}${b.lease ? ' \u00b7 let out' : ' \u00b7 ' + b.staff.length + ' staff'}${b.lastSold ? ' \u00b7 sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + (b.lastSold === 1 ? ' sale' : ' sales')) : ''}${last != null ? ' \u00b7 <b>' + money(last) + '</b> last day' : ''}${b.slump ? ' \u00b7 bad spell' : ''}${b.closed ? ' \u00b7 closed' : ''}` });
   });
   return out;
 }
@@ -8001,7 +8059,7 @@ function houseSignCard(s, Lh, walking) {
   const h = s.houses.find(x => x.id === Lh.sign); if (!h) return `<h2>${esc(Lh.name)}</h2>${walking}`;
   const sale = houseSale(s, h), ts = h.tenants.map(id => s.people[id]).filter(Boolean), live = s.player.house === h.id;
   const lv = h.comfort || 0, wear = h.wear || 0, cond = Sim.COMFORT[lv].name + (wear > 10 ? ', needs repairs' : wear > 4 ? ', a little worn' : ', in good repair');
-  const town = TOWN_NAMES[h.town || 'hearthmoor'];
+  const town = TOWN_NAMES[h.town || 'hearthmoor'] + ', ' + Sim.areaOf(h.town, h.x, h.z).name;
   let html = `<h2>${esc(h.name)}${sale.mine ? ` <span class="pill yes">${live ? 'your home' : 'yours'}</span>` : sale.price != null ? ' <span class="pill">for sale</span>' : ''}</h2>`;
   html += `<div class="sub">${esc(town)} · ${sale.mine ? 'Yours' : 'Owned by ' + esc(Sim.landlordName(s, h.owner))} · ${live ? 'you live here' : ts.length ? 'lived in by ' + esc(ts.map(q => q.name).join(', ')) : 'standing empty'} · rent ${h.rent}c a day · room for ${h.cap || 4} · ${esc(cond.toLowerCase())}.</div>${walking}`;
   const acts = [];
@@ -8094,9 +8152,20 @@ const SignKit = (function () {
   const step0 = step;
   return { step: (s, t) => { const before = lastT; step0(s, t); if (lastT !== before) { stepDeco(s); greet(s); } }, hideAll };
 })();
+function ownedBizCard(s, b, walking) {
+  const e = Sim.empById(b.id), town = b.town || 'hearthmoor', m = b.manager, ar = e && e.x != null ? Sim.areaOf(town, e.x, e.z).name : '';
+  const staff = b.staff.map(st => s.people[st.pid]).filter(Boolean);
+  let html = `<h2>${esc(e.name)} <span class="pill yes">yours</span>${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${esc(TOWN_NAMES[town])}${ar ? ', ' + ar : ''} · ${b.lease ? 'let to ' + esc((s.people[b.lease.pid] || {}).name || 'a tenant') + ' for ' + b.lease.rent + 'c a day' : (m ? 'run by your manager ' + esc(m.name) : 'no manager') + ' · ' + (staff.length ? staff.length + ' staff: ' + esc(staff.map(q => q.name.split(' ')[0]).join(', ')) : 'no staff')} · last day ${b.lastSold ? 'sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + ' lots') + ', ' : ''}${b.lastRevenue || 0}c in, ${money(b.lastProfit || 0)} profit${b.slump ? ' (a bad spell: ' + esc(b.slump.why) + ')' : ''} · worth about ${Sim.bizPrice(s, b.id)}c.</div>${walking}`;
+  if (b.disrepair) html += `<div class="why">Needs mending: takings are down by a third.</div>`;
+  const acts = [B_('Manage', ['ui', 'manage', ['biz', b.id]])];
+  if (b.disrepair) acts.push(B_('Mend it · ' + (b.repairCost || 30) + 'c', ['repairBiz', b.id], 'alt', s.coins < (b.repairCost || 30)));
+  acts.push(B_('All businesses', ['ui', 'btown', town], 'alt'));
+  return html + `<div class="acts">${acts.join('')}</div>`;
+}
 function oakBizCard(s, Lh, walking) {
   const L = Sim.LAYOUT[Lh.town], b = s.biz[Lh.biz], site = L.biz.find(x => x.id === Lh.biz);
   if (!b) return `<h2>${esc(Lh.name)}</h2>${walking}`;
+  if (b.owner === 'player') return ownedBizCard(s, b, walking);
   const own = b.owner === 'player', owner = own ? null : s.people[b.owner];
   const rivals = L.biz.filter(x => x.trade === b.trade && x.id !== b.id).map(x => x.name);
   const dist = { market: 'Market Square', guild: 'Guild Quarter', riverside: 'Riverside', east: 'East Bank', green: 'on the green', river: 'on the river Green', south: Lh.town === 'crownmere' ? 'South Ward' : 'South Lane', estate: 'across the river', court: 'Court Quarter', lake: 'Lakeside', old: 'Old Town', west: 'West Gate Road' }[site.district] || '';
@@ -9649,7 +9718,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0227';
+const BUILD = '2026.11.05.0240';
 const NOTES = [
   { v: '0.35', date: '5 November', title: 'Signs and seals', items: [
     'Every house you can buy has a FOR SALE sign by its door. Walk up to it to see who owns it, who lives there, the rent and its condition, and buy it on the spot.',

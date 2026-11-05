@@ -1458,8 +1458,20 @@
   function goodsDay(s) {
     setupGoods(s);
     for (const t in TOWN_GOODS) for (const g of GOODS) {
-      const T = TOWN_GOODS[t], st = s.goods[t][g], carts = 0.5 * (goodsTarget(t, g) - st);   // merchants' carts fill gaps and carry off gluts
+      // merchants' carts bring the town's usual imports (or carry off its usual surplus), and only slowly
+      // close a shortage or a glut, so a market that runs short stays short for a week or two: worth hauling to
+      const T = TOWN_GOODS[t], st = s.goods[t][g], carts = 0.8 * (T.use[g] - T.make[g]) + 0.1 * (goodsTarget(t, g) - st);
       s.goods[t][g] = Math.max(4, Math.round(st + T.make[g] * (0.85 + rand(s) * 0.3) - T.use[g] * (0.85 + rand(s) * 0.3) + carts));
+    }
+    // now and then a blight, a flood, a lost convoy or a bumper year shakes one market
+    if (rand(s) < 0.16) {
+      const towns = Object.keys(TOWN_GOODS), t = towns[Math.floor(rand(s) * towns.length)], g = GOODS[Math.floor(rand(s) * GOODS.length)];
+      if (goodsTarget(t, g) >= 20) {
+        const glut = rand(s) < 0.3, why = glut ? { grain: 'a bumper harvest', wood: 'a great felling in the woods', ore: 'a rich new seam' }[g] : { grain: 'blight in the fields', wood: 'floods on the timber road', ore: 'a flooded mine' }[g];
+        s.goods[t][g] = Math.max(Math.round(goodsTarget(t, g) * 0.18), Math.round(s.goods[t][g] * (glut ? 2.2 : 0.3)));
+        s.shocks = (s.shocks || []).concat({ day: s.day, town: t, good: g, glut }).slice(-12);
+        event(s, (glut ? 'Glut' : 'Shortage') + ' in ' + REGIONS[t].replace(/^the /, '') + ': ' + why + '. ' + g.charAt(0).toUpperCase() + g.slice(1) + (glut ? ' is cheap there now; it will take a week or two to clear.' : ' is dear there now; it will take a week or two to recover.'), glut ? 'info' : 'story');
+      }
     }
   }
   const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour' };
@@ -1486,7 +1498,21 @@
     const pop = adults(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length), dem = {};
     for (const id in s.biz) {
       const b = s.biz[id];
-      if (b.closed) { b.lastProfit = 0; continue; }
+      if (b.closed) {
+        b.lastProfit = 0;
+        // an empty shop does not stay empty for ever: someone from outside takes it on
+        if (b.owner !== 'player' && b.closedOn != null && s.day - b.closedOn > 20 && b.trade !== 'estate' && rand(s) < 0.05) {
+          const SUR = ['Ashby', 'Brook', 'Carter', 'Fletcher', 'Mason', 'Wright', 'Cooper', 'Hayward', 'Fowler', 'Reeve', 'Webb', 'Lowe'], F = rand(s) < 0.5 ? BABY_F : BABY_M;
+          const nm = F[Math.floor(rand(s) * F.length)] + ' ' + SUR[Math.floor(rand(s) * SUR.length)];
+          if (!Object.values(s.people).some(q => q.name === nm)) {
+            const q = newPerson(s, { name: nm, age: 24 + Math.floor(rand(s) * 20), purse: 80, town: b.town, sex: F === BABY_F ? 'f' : 'm', job: { type: 'biz', biz: id, role: 'owner' }, home: 'biz:' + id });
+            q.log = [{ day: s.day, text: 'Came from Ashford and reopened ' + empById(id).name + '.' }];
+            b.owner = q.id; b.closed = false; b.profits = [3, 3, 3]; b.staff = []; b.lossDays = 0; b.closedOn = null;
+            event(s, q.name + ' has come from Ashford and reopened ' + empById(id).name + ' in ' + REGIONS[b.town || 'hearthmoor'].replace(/^the /, '') + '.', 'info');
+          }
+        }
+        continue;
+      }
       const lessee = b.owner === 'player' && b.lease ? person(s, b.lease.pid) : null, mine = b.owner === 'player' && !lessee;
       const own = lessee || (b.owner === 'player' ? null : person(s, b.owner));
       const workers = b.staff.length + (own ? 1 : 0);
@@ -1495,7 +1521,13 @@
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
       const cap = bizCap(s, b), D0 = dem[key], sold = E.flat ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap : 0);
-      const revenue = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
+      const revenue0 = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
+      // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
+      // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
+      if (!b.slump && !E.flat && rand(s) < 0.007) { const why = ['a price war with a rival', 'a spoiled batch and a bad name', 'sickness in the house', 'a fire in the back room', 'a feud with the guild'][Math.floor(rand(s) * 5)]; b.slump = { until: s.day + 10 + Math.floor(rand(s) * 16), why }; if (b.owner === 'player') event(s, empById(id).name + ' has hit a bad spell: ' + why + '. Takings will be down for a few weeks.', 'bad'); else if (own) plog(s, own, empById(id).name + ' hit a bad spell: ' + why + '.'); }
+      if (b.slump && s.day >= b.slump.until) b.slump = null;
+      const knack = own && !lessee ? 0.72 + 0.3 * Math.min(1.2, own.skill || 0.9) : b.manager ? 0.6 + 0.4 * Math.min(1.3, b.manager.skill || 1) : 1;
+      const revenue = Math.round(revenue0 * (E.flat ? 1 : knack * (b.slump ? 0.55 : 1)));
       b.lastSold = Math.round(sold);
       let wages = 0;
       for (const st of b.staff) {
@@ -1529,13 +1561,15 @@
         const seek = pop.find(p => idleAdult(p) && p.status === 'here' && townOf(p) === (b.town || 'hearthmoor'));
         if (seek) { seek.job = { type: 'biz', biz: id, role: 'hand' }; b.staff.push({ pid: seek.id, wage: 7 }); plog(s, seek, 'Hired by ' + own.name + ' at ' + empById(id).name + '.'); event(s, own.name + ' hired ' + seek.name + ' at ' + empById(id).name + '.', 'info'); }
       }
-      if (own.purse <= 0 && b.profits.every(x => x < 0)) {
+      b.lossDays = avg(b.profits) < 0 ? (b.lossDays || 0) + 1 : Math.max(0, (b.lossDays || 0) - 2);
+      if ((own.purse <= 0 && b.profits.every(x => x < 0)) || (b.lossDays >= 20 && own.purse < 80) || b.lossDays >= 40) {
         b.closed = true;
         b.staff.slice().forEach(st => loseJob(s, person(s, st.pid), empById(id).name + ' closed its doors.'));
         loseJob(s, own, 'Their business, ' + empById(id).name + ', failed.');
         own.purse = Math.max(own.purse, 0);
         if (own.home === 'biz:' + id) { own.home = null; plog(s, own, 'Had to leave the rooms above the shop.'); }
-        event(s, empById(id).name + ' has closed. ' + own.name + ' is out of work and out of a home.', 'bad');
+        b.closedOn = s.day; b.lossDays = 0; b.slump = null; s.rec.bizClosed = (s.rec.bizClosed || 0) + 1;
+        event(s, empById(id).name + ' has closed. ' + own.name + ' is out of work' + (own.home ? '.' : ' and out of a home.'), 'bad');
       }
     }
   }
@@ -1900,7 +1934,7 @@
         }
       }
       if (p.job && p.job.type === 'biz' && p.job.role === 'hand' && (p.tenure || 0) >= 12 && p.purse >= 70 && (p.rep || 0) >= 25) {
-        const shut = Object.values(s.biz).find(b => b.closed && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(b => b.closed);
+        const here = townOf(p), shut = Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player' && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player');
         if (shut) {
           loseJob(s, p, 'Left to run a shop of their own.');
           p.purse -= 60; shut.owner = p.id; shut.closed = false; shut.profits = [4, 4, 4]; shut.staff = []; p.job = { type: 'biz', biz: shut.id, role: 'owner' };
@@ -1919,13 +1953,26 @@
         event(s, p.name + ' has left Hearthmoor, homeless and out of work.', 'bad');
       }
     }
-    // newcomers arrive when there is a roof and work to be had
-    const jobless = villagers(s).filter(idleAdult).length;
-    if (jobless === 0 && vacancy(s, 3) && rand(s) < 0.3) {
-      const names = ['Rowan', 'Elsbeth', 'Tam', 'Hesper', 'Wat', 'Mabel', 'Odo', 'Gwen', 'Alard', 'Juliana'];
-      const used = new Set(Object.values(s.people).map(p => p.name));
-      const name = names.find(n => !used.has(n));
-      if (name) { const p = newPerson(s, { name, age: 20 + Math.floor(rand(s) * 25), purse: 15 }); moveIn(s, p, vacancy(s, 3)); p.log.push({ day: s.day, text: 'Arrived from Ashford looking for work.' }); addBody(s, p, P.road); event(s, name + ' has arrived from Ashford looking for work.', 'info'); }
+    // newcomers arrive when there is a roof to be had: a lone worker, or a young family from Ashford.
+    // A village that is shrinking draws them in faster; a crowded one, hardly at all.
+    const jobless = villagers(s).filter(idleAdult).length, pop = villagers(s).length, roof = vacancy(s, 4);
+    if (roof && (jobless <= 2 || pop < 30) && rand(s) < (pop < 32 ? 0.35 : pop < 40 ? 0.1 : 0.02)) {
+      const SUR = ['Ashby', 'Brook', 'Carter', 'Fletcher', 'Mason', 'Wright', 'Cooper', 'Hayward', 'Fowler', 'Reeve', 'Webb', 'Lowe', 'Pike', 'Thorne', 'Woodall', 'Rook'];
+      const used = new Set(Object.values(s.people).map(p => p.name)), pickName = (L, fam) => { for (let k = 0; k < 12; k++) { const n = L[Math.floor(rand(s) * L.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } return null; };
+      const fam = SUR[Math.floor(rand(s) * SUR.length)], family = roof.cap - roof.tenants.length >= 2 && rand(s) < 0.65;
+      const a = pickName(BABY_M, fam), b = family ? pickName(BABY_F, fam) : null;
+      if (a) {
+        const man = newPerson(s, { name: a, age: 20 + Math.floor(rand(s) * 12), purse: 20, sex: 'm' }); moveIn(s, man, roof); man.log.push({ day: s.day, text: 'Arrived from Ashford looking for work.' }); addBody(s, man, P.road);
+        let who = a;
+        if (b) {
+          const wife = newPerson(s, { name: b, age: man.age - 2 + Math.floor(rand(s) * 4), purse: 10, sex: 'f' }); wife.spouse = man.id; man.spouse = wife.id; moveIn(s, wife, roof); wife.log.push({ day: s.day, text: 'Came to Hearthmoor with her husband ' + a + '.' }); addBody(s, wife, P.road);
+          const kids = Math.min(roof.cap - roof.tenants.length, Math.floor(rand(s) * 3));
+          for (let k = 0; k < kids; k++) { const f = rand(s) < 0.5, n = pickName(f ? BABY_F : BABY_M, fam); if (!n) break; const c = newPerson(s, { name: n, age: 1 + Math.floor(rand(s) * 9), purse: 0, sex: f ? 'f' : 'm' }); c.kid = true; c.parents = [wife.id, man.id]; c.hh = man.id; moveIn(s, c, roof); c.log.push({ day: s.day, text: 'Came to Hearthmoor with the family.' }); addBody(s, c, P.road); }
+          who = 'The ' + fam + ' family';
+        }
+        s.rec.newcomers = (s.rec.newcomers || 0) + 1;
+        event(s, who + (b ? ' have' : ' has') + ' arrived from Ashford and moved into ' + roof.name + '.', 'info');
+      }
     }
   }
 
@@ -3622,7 +3669,16 @@
       const m = s.market[t] || 1; s.market[t] = Math.round(clamp(m + pull + raid + (rand(s) - 0.5) * 0.02 + (1 - m) * 0.03, 0.7, 1.45) * 1000) / 1000;
     }
   }
-  function houseValue(s, h) { return Math.round((40 + h.rent * 45) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
+  /* where a building stands sets its price: a richer town costs more, and so does the heart of town by the market */
+  const LAND = { hearthmoor: 1, greenhaven: 1.1, ironcrest: 1.2, eastwatch: 1.4, oakbridge: 1.45, crownmere: 2 };
+  const TOWN_R = { hearthmoor: 60, greenhaven: 60, oakbridge: 110, ironcrest: 80, eastwatch: 110, crownmere: 180 };
+  function areaOf(town, x, z) {
+    town = town || 'hearthmoor'; const L = LOCS[MARKET_AT[town]]; if (!L) return { k: 1, name: '' };
+    const d = Math.hypot(x - L.x, z - L.z), f = Math.max(0, 1 - d / (TOWN_R[town] || 80)), k = Math.round((0.85 + 0.5 * f) * 100) / 100;
+    return { k, name: f > 0.7 ? 'in the heart of town' : f > 0.4 ? 'near the market' : f > 0.15 ? 'a quiet street' : 'on the edge of town' };
+  }
+  const placeFactor = (town, x, z) => (LAND[town || 'hearthmoor'] || 1) * areaOf(town, x, z).k;
+  function houseValue(s, h) { return Math.round((40 + h.rent * 45) * placeFactor(h.town, h.x, h.z) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
   function propertyDay(s) {
     propertyMarket(s);
     for (const h of s.houses) if (h.owner === 'player') h.wear = Math.min(100, (h.wear || 0) + 0.4);
@@ -3657,7 +3713,7 @@
     return living(s).filter(p => !p.kid && p.age >= 20 && townOf(p) === town && p.purse >= 20 && !(p.job && (p.job.type === 'office' || p.job.type === 'manage' || (p.job.type === 'biz' && p.job.role === 'owner'))) && p.home !== 'you')
       .map(p => ({ pid: p.id, name: p.name, offer: Math.max(4, Math.round(BIZ_BASE[b.trade] * 0.3 * (0.8 + (p.skill || 1) * 0.3))), skill: p.skill || 1 })).sort((a, c) => c.offer - a.offer).slice(0, 4);
   }
-  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1) * marketOf(s, b.town) * (b.disrepair ? 0.85 : 1)); }
+  function bizPrice(s, id) { const b = s.biz[id]; return Math.round((b.closed ? 100 : 150 + 25 * Math.max(0, avg(b.profits))) * (b.trade === 'estate' ? 3 : b.trade === 'mill' && b.town === 'greenhaven' ? 1.5 : 1) * marketOf(s, b.town) * (b.disrepair ? 0.85 : 1) * (() => { const e = empById(id); return e && e.x != null ? (1 + ((LAND[b.town || 'hearthmoor'] || 1) - 1) * 0.9) * areaOf(b.town, e.x, e.z).k : 1; })()); }
   function housePrice(s, h) { return houseValue(s, h); }
   function sellerWilling(s, ownerPid) { const o = s.people[ownerPid]; return !o || o.opinion > -40; }
 
@@ -4625,7 +4681,7 @@
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
