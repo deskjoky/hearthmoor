@@ -3628,8 +3628,9 @@
     const nobles = living(s).filter(p => p.noble && p.status === 'here' && !p.held && s.courts && s.courts[townOf(p)]);
     if (nobles.length) kinds.push('noble');
     if (R.tariff > 1 || winter || seasonOf(s) === 'autumn') kinds.push('guilds');
-    if (!kinds.length) return;
-    const k = kinds[Math.floor(rand(s) * kinds.length)], id = (R.nextPetition = (R.nextPetition || 0) + 1), base = { id, kind: k, day: s.day, until: s.day + 6 };
+    // the same kind of petition does not come twice within fifteen days
+    R.lastPet = R.lastPet || {}; const fresh = kinds.filter(x => !(R.lastPet[x] != null && s.day - R.lastPet[x] < 15)); if (!fresh.length) return;
+    const k = fresh[Math.floor(rand(s) * fresh.length)]; R.lastPet[k] = s.day; const id = (R.nextPetition = (R.nextPetition || 0) + 1), base = { id, kind: k, day: s.day, until: s.day + 6 };
     if (k === 'relief') { const t = hungryTown.t; R.petitions.push(Object.assign(base, { town: t, cost: 60 + hungryTown.n * 4, text: 'The people of ' + REGIONS[t].replace(/^the /, '') + ' are going hungry: ' + hungryTown.n + ' grown folk had no bread last night. Their council asks the crown for grain.' })); }
     else if (k === 'defiance') { const x = lords[Math.floor(rand(s) * lords.length)], L = s.people[x.l]; R.petitions.push(Object.assign(base, { lord: x.l, region: x.id, text: L.name + ', who holds ' + REGIONS[x.id] + ', has set free a man your judges sent to his gaol, and says the crown’s court has no business in his lands.' })); }
     else if (k === 'noble') {
