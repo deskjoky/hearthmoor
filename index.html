@@ -67,6 +67,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chip { background: rgba(32, 26, 20, .74); color: #f1e3c2; border-radius: 999px; padding: 4px 10px; font-size: 13px; white-space: nowrap; }
 .chip b { color: #f5cf73; font-weight: 700; }
 .chip.on { background: rgba(74, 102, 52, .9); }
+.chip.rank { font-weight: 600; }
+.signrent { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.signrent > span:first-child { font-weight: 600; }
+.chip.rank.r-councillor { box-shadow: inset 0 0 0 1px #c9c6bc; }
+.chip.rank.r-elder { background: rgba(52, 78, 48, .9); box-shadow: inset 0 0 0 1px #c9c6bc; }
+.chip.rank.r-lord { background: rgba(90, 34, 48, .92); box-shadow: inset 0 0 0 1px #d9aa3a; }
+.chip.rank.r-ruler { background: rgba(142, 31, 34, .94); color: #fff3d6; box-shadow: inset 0 0 0 1px #f5cf73; }
 .treewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; padding-bottom: 6px; background: radial-gradient(ellipse at center, rgba(255,248,226,.6), rgba(0,0,0,0)); border-radius: 8px; }
 .tree { display: block; margin: 0 auto; font-family: var(--f-body); }
 .tree .tname { font-family: var(--f-display); font-size: 14px; fill: #2a1f16; }
@@ -879,9 +886,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const T = TRADES[shop.trade], Ti = tierOf(shop);
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
-      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15) * (shop.manager ? 1.3 : 1);
+      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15) * (shop.manager ? 1.2 : 1);
       villagers(s).filter(p => p.purse >= shop.price && !p.kid && !(p.job && ['guard', 'lord', 'steward', 'taxman'].includes(p.job.office))).forEach(p => { if (rand(s) < vr) sched.push({ at: when(), pid: p.id, shop: shop.id }); });
-      const n = Math.max(0, Math.round((Ti.travelers + (shop.manager ? 1 : 0) + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
+      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
       for (let i = 0; i < Math.round(n * Math.min(1, share * 1.15 + 0.2)); i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
@@ -958,14 +965,18 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       e.notes = explainShop(s, shop, e);
       entry.shops.push(e);
     }
+    const c0 = s.coins;
+    if (s.people) managersDay(s, entry);
+    entry.managers = c0 - s.coins;
     entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest;
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers;
     if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of 2% a day is added every evening' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
     }
     entry.coinsEnd = s.coins;
+    { const prev = s.ledger[s.ledger.length - 1]; if (prev && prev.day === entry.day - 1) { const gap = (entry.coinsEnd - prev.coinsEnd) - entry.profit; if (gap) { entry.other = gap; if (gap > 0) entry.income += gap; else entry.costs -= gap; entry.profit = entry.income - entry.costs; } } }
     s.ledger.push(entry);
     if (s.ledger.length > 14) s.ledger.shift();
     s.rec.days++;
@@ -973,7 +984,6 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (!s.rec.worstDay || entry.profit < s.rec.worstDay.profit) s.rec.worstDay = { profit: entry.profit, day: entry.day };
     event(s, 'Books closed for Day ' + entry.day + ': ' + (entry.profit >= 0 ? 'up ' : 'down ') + Math.abs(entry.profit) + 'c. Open the ledger to see why.', entry.profit >= 0 ? 'good' : 'bad');
 
-    if (s.people) managersDay(s, entry);
     for (const shop of s.shops) {
       const w = shop.worker;
       if (!w) continue;
@@ -1040,7 +1050,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (pick) { const r = cmd(s, 'hire', shop.id, pick.i, pick.a.ask); if (r.ok) did.push('hired ' + pick.a.name + ' at ' + pick.a.ask + 'c'); }
       }
       if (shop.worker && shop.worker.wage < shop.worker.ask && shop.worker.ask - shop.worker.wage <= budget) { budget -= shop.worker.ask - shop.worker.wage; shop.worker.wage = shop.worker.ask; did.push('raised ' + shop.worker.name + '\u2019s pay to ' + shop.worker.ask + 'c'); }
-      if (ss.tooExpensive > Math.max(2, ss.sold * 0.25) && shop.price > floor) { shop.price--; did.push('lowered the price to ' + shop.price + 'c (' + ss.tooExpensive + ' turned away)'); }
+      if (ss.tooExpensive > Math.max(3, ss.sold * 0.5) && shop.goods >= tierOf(shop).out && shop.price > floor) { shop.price--; did.push('lowered the price to ' + shop.price + 'c (' + ss.tooExpensive + ' turned away)'); }
       else if (ss.soldOut > 0 && ss.tooExpensive <= 1 && shop.price < Math.round(T.wtp * 1.4)) { shop.price++; did.push('raised the price to ' + shop.price + 'c (sold out)'); }
       if (m.skill < 0.85 && rand(s) < (1.15 - m.skill) * 0.2) { const loss = 1 + Math.floor(rand(s) * 4); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
       const e = entry.shops.find(x => x.id === shop.id);
@@ -1321,7 +1331,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return !!w && (w.task === 'serve' || w.task === 'tend') && dist(w, plotPt(shop, 'serve')) < 0.8;
   }
   /* a manager on the floor lends a hand at the bench and the counter: up to half again as fast */
-  const mgrBoost = shop => shop && shop.manager ? 1 + 0.45 * Math.min(1.3, shop.manager.skill || 1) : 1;
+  const mgrBoost = shop => shop && shop.manager ? 1 + 0.25 * Math.min(1.3, shop.manager.skill || 1) : 1;
   function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop); }
 
   function updateCounter(s, shop, dt) {
@@ -1951,9 +1961,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     for (const t in TOWN_GOODS) { s.goods[t] = {}; for (const g of GOODS) { const T = TOWN_GOODS[t]; s.goods[t][g] = Math.round(goodsTarget(t, g) + 2 * (T.make[g] - T.use[g])); } }
     for (const t in TOWN_GOODS) for (const g of GOODS) s.goods[t][g] = Math.max(8, s.goods[t][g]);
   }
-  function goodsPrice(s, t, g) { setupGoods(s); const st = Math.max(1, s.goods[t || 'hearthmoor'][g]); return GOODS_BASE[g] * clamp(Math.pow(goodsTarget(t || 'hearthmoor', g) / st, 0.6), 0.4, 3.2); }
-  const buyPrice = (s, t, g, n) => Math.max(n || 1, Math.round(goodsPrice(s, t, g) * 1.1 * (n || 1)));
-  const sellPrice = (s, t, g, n) => Math.max(0, Math.floor(goodsPrice(s, t, g) * 0.75 * (n || 1)));
+  function goodsPrice(s, t, g, shift) { setupGoods(s); const st = Math.max(1, s.goods[t || 'hearthmoor'][g] + (shift || 0)); return GOODS_BASE[g] * clamp(Math.pow(goodsTarget(t || 'hearthmoor', g) / st, 0.6), 0.4, 3.2); }
+  /* a load is priced unit by unit: each one bought makes the next dearer, each one sold makes the next cheaper */
+  function loadPrice(s, t, g, n, dir) { let sum = 0; for (let k = 0; k < n; k++) sum += goodsPrice(s, t, g, dir * k); return sum; }
+  const buyPrice = (s, t, g, n) => { n = n || 1; return Math.max(n, Math.round(loadPrice(s, t, g, n, -1) * 1.1)); };
+  const sellPrice = (s, t, g, n) => { n = n || 1; return Math.max(0, Math.floor(loadPrice(s, t, g, n, 1) * 0.75)); };
   function goodsDay(s) {
     setupGoods(s);
     for (const t in TOWN_GOODS) for (const g of GOODS) {
@@ -1971,7 +1983,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return out;
   }
   function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : 1; return (b.staff.length + own) * E.perWorker * (b.disrepair ? 0.7 : 1); }
-  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 1 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
+  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 0.5 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
   function townDemand(s, t, trade) {
     const E = ECON[trade]; if (!E) return 0;
     const folk = living(s).filter(p => townOf(p) === t && !p.kid && p.age >= 14);
@@ -2094,6 +2106,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       p.mood = Math.round(clamp(p.mood + (target - p.mood) * 0.3, 0, 100));
       // debts grow: the Ashford moneylender takes 2% a day
       if (p.purse < 0) p.purse -= Math.max(1, Math.ceil(-p.purse * INTEREST));
+      // savings get spent: clothes, tools, ale, tithes and feast days keep coin from piling up for ever
+      else if (!p.kid && p.purse > 80) p.purse -= Math.round((p.purse - 80) * 0.03);
       p.purse = Math.round(p.purse);
       if (j && j.type === 'biz' && j.role === 'hand') p.tenure = (p.tenure || 0) + 1;
     }
@@ -3713,7 +3727,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function townMorning1(s, id, T) {
     T.id = id;
     const fee = FEES[T.fee].coin;
-    for (const b of Object.values(s.biz)) if (b.town === id && !b.closed) { const o = b.owner === 'player' ? null : s.people[b.owner]; if (o) { o.purse -= fee; T.chest += fee; } else if (b.owner === 'player') { spend(s, fee); T.chest += fee; } }
+    for (const b of Object.values(s.biz)) if (b.town === id && !b.closed) { const o = b.owner === 'player' ? null : s.people[b.owner]; if (o) { o.purse -= fee; T.chest += fee; } else if (b.owner === 'player') { spend(s, fee); T.chest += fee; s.stats.tax = (s.stats.tax || 0) + fee; } }
     const up = UPKEEP[id] || 40; T.chest -= up;
     // a full chest is spent on the town: paving, the watch, the walls, a feast day
     const capC = id === 'crownmere' ? 1500 : id === 'oakbridge' ? 400 : 150;
@@ -3739,6 +3753,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function townEvening(s) { for (const id in (s.towns || {})) townEvening1(s, id, s.towns[id]); }
   function townEvening1(s, id, T) {
     T.id = id;
+    // a full chest gets spent on walls, wells, the watch and the poor
+    if (T.chest > 600 && !(T.mayor === 'player')) T.chest -= Math.round((T.chest - 600) * 0.06);
     // a hungry household sends someone out to find day work: on the quay, in the fields, wherever there is some
     const jobsHere = Object.keys(id === 'greenhaven' ? GH_JOBS : id === 'crownmere' ? CM_JOBS : OAK_JOBS);
     const famHungry = new Set(townFolk(s, id).filter(p => p.kid && p.hungry).flatMap(p => p.parents || []));
@@ -5120,7 +5136,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
@@ -6739,6 +6755,39 @@ const CG = {
   brim: new THREE.CylinderGeometry(0.42, 0.42, 0.04, 10), crown: flat(new THREE.ConeGeometry(0.22, 0.25, 7)), chef: new THREE.CylinderGeometry(0.2, 0.17, 0.3, 8),
   hood: flat(new THREE.ConeGeometry(0.3, 0.45, 6)), bodyF: flat(new THREE.CylinderGeometry(0.21, 0.4, 0.7, 8)), hairBack: flat(new THREE.BoxGeometry(0.4, 0.42, 0.12)), braid: flat(new THREE.CylinderGeometry(0.05, 0.035, 0.42, 5)), knot: flat(new THREE.SphereGeometry(0.11, 6, 4)), apron: new THREE.BoxGeometry(0.36, 0.42, 0.06), pack: flat(new THREE.SphereGeometry(0.22, 6, 4))
 };
+/* what you wear says what you are: a purse for a merchant, a chain for the council, robe and staff for the Elder,
+   cloak and plumed cap for a lord, crown and ermine for the ruler */
+const RG = {
+  pouch: flat(new THREE.BoxGeometry(0.14, 0.14, 0.08)), chain: new THREE.TorusGeometry(0.2, 0.025, 4, 14), medal: flat(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 8)),
+  robe: flat(new THREE.CylinderGeometry(0.3, 0.42, 0.5, 8)), staff: flat(new THREE.CylinderGeometry(0.03, 0.03, 1.35, 5)), knob: flat(new THREE.SphereGeometry(0.06, 5, 3)),
+  cloak: flat(new THREE.BoxGeometry(0.62, 0.78, 0.05)), collar: flat(new THREE.TorusGeometry(0.24, 0.07, 4, 12)), velvet: flat(new THREE.CylinderGeometry(0.25, 0.22, 0.12, 9)), plume: flat(new THREE.ConeGeometry(0.045, 0.3, 4)),
+  circlet: new THREE.CylinderGeometry(0.235, 0.235, 0.09, 10, 1, true), point: flat(new THREE.ConeGeometry(0.05, 0.12, 4)), jewel: flat(new THREE.OctahedronGeometry(0.035))
+};
+function dressRank(g, rank, opt) {
+  const u = { hr: null };
+  if (!rank || rank === 'newcomer' || rank === 'hand') return;
+  const gold = '#d9aa3a', at = (geo, c, x, y, z, parent) => mesh(geo, c, x, y, z, parent || g);
+  const chain = c => { const ch = at(RG.chain, c, 0, 0.7, 0.05); ch.rotation.x = Math.PI / 2 - 0.35; at(RG.medal, c, 0, 0.56, 0.27).rotation.x = Math.PI / 2 - 0.2; };
+  if (rank === 'merchant') { at(RG.pouch, '#6b4a2a', 0.2, 0.3, 0.24); return; }
+  if (rank === 'exile') { mesh(CG.hood, '#4a4440', 0, 1.12, -0.02, g); at(RG.cloak, '#4a4440', 0, 0.42, -0.3); return; }
+  if (rank === 'councillor') { chain('#c9c6bc'); at(RG.pouch, '#6b4a2a', 0.2, 0.3, 0.24); return; }
+  if (rank === 'elder') {
+    at(RG.robe, '#3f5a3a', 0, 0.25, 0); chain('#c9c6bc');
+    const hr = g.userData.hr; if (hr) { const st = mesh(RG.staff, '#7a5634', 0, 0.35, 0.02, hr); mesh(RG.knob, '#7a5634', 0, 1.02, 0.02, hr); st.userData.staff = 1; }
+    return;
+  }
+  if (rank === 'lord') {
+    at(RG.cloak, '#5a2230', 0, 0.42, -0.31); at(RG.collar, '#5a2230', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
+    at(RG.velvet, '#2a2238', 0, 1.1, 0); const pl = at(RG.plume, '#efe6d2', 0.12, 1.26, -0.06); pl.rotation.z = -0.5;
+    return;
+  }
+  if (rank === 'ruler') {
+    at(RG.cloak, '#8e1f22', 0, 0.4, -0.31).scale.set(1.15, 1.05, 1); at(RG.collar, '#f3efe4', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
+    at(RG.circlet, gold, 0, 1.11, 0);
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; at(RG.point, gold, Math.sin(a) * 0.225, 1.2, Math.cos(a) * 0.225); }
+    at(RG.jewel, '#b0203a', 0, 1.12, 0.24);
+  }
+}
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 const ICON = { wait: mat('#e6ab3a'), happy: mat('#6fa34a'), angry: mat('#c2412d') };
@@ -6798,6 +6847,7 @@ function makeChar(opt) {
   const pack = mesh(CG.pack, '#c7b07c', 0, 0.62, -0.32, g); pack.visible = false;
   const sel = new THREE.Mesh(CG.ring, mat('#f3efe4')); sel.rotation.x = Math.PI / 2; sel.position.y = 0.06; sel.scale.setScalar(1.25); sel.visible = false; g.add(sel);
   g.userData = { body, head, hl, hr, icon, pack, sel, pick: opt.pick, phase: Math.random() * 6 };
+  if (opt.rank) dressRank(g, opt.rank, opt);
   g.scale.setScalar(opt.fem ? 1.02 : 1.1);
   hit.userData.owner = g; pickables.push(hit);
   scene.add(g); return g;
@@ -6814,7 +6864,7 @@ const LOOKS = {
 const DEFAULT_LOOK = { body: 'm', skin: 1, hair: 'short', hairColor: 1, tunic: 0 };
 const lookOpts = l => { l = Object.assign({}, DEFAULT_LOOK, l || {}); return { tunic: LOOKS.tunic[l.tunic] || LOOKS.tunic[0], skin: LOOKS.skin[l.skin] || LOOKS.skin[1], fem: l.body === 'f', hair: l.hair, hairColor: LOOKS.hairColor[l.hairColor] || LOOKS.hairColor[1], player: true, pick: 'player' }; };
 let playerMesh = makeChar(lookOpts());
-function rebuildPlayer(look) { const pos = playerMesh.position.clone(), ry = playerMesh.rotation.y; dropChar(playerMesh); playerMesh = makeChar(lookOpts(look)); playerMesh.position.copy(pos); playerMesh.rotation.y = ry; }
+function rebuildPlayer(look) { const pos = playerMesh.position.clone(), ry = playerMesh.rotation.y; dropChar(playerMesh); playerMesh = makeChar(Object.assign(lookOpts(look), { rank: G ? rankOf(G).key : null })); UI.rankKey = G ? rankOf(G).key : null; playerMesh.position.copy(pos); playerMesh.rotation.y = ry; }
 const workerMeshes = new Map(), agentMeshes = new Map();
 function placeChar(g, a, t, opts) {
   const u = g.userData;
@@ -7443,6 +7493,7 @@ function cardHTML(s) {
   if (here === 'waystation') return `<h2>The Waystation</h2><div class="sub">A drovers\u2019 rest halfway along the road to Oakbridge: a stable, a water trough, and a room for anyone caught out by the dark. Carriages will stop here once they run.</div>${walking}`;
   if (here === 'ruin') return `<h2>Old Barrow Keep</h2><div class="sub">A tower that guarded this road long before the Varrows held Hearthmoor. Its stones have been carted off for barns and walls. Nobody lives here now.</div>${walking}`;
   if (here === 'oakgate') return `<h2>Oakbridge Gate</h2><div class="sub">The south gate of Oakbridge, the market city where the south road meets the coast road. The gates stand open from dawn to dusk; the watch keeps the toll.</div>${walking}<div class="acts">${B_('The market square', ['goto', 'oaksq'], 'alt')}${B_('The town hall', ['goto', 'oakhall'], 'alt')}</div>`;
+  if (Lh && Lh.sign) return houseSignCard(s, Lh, walking);
   if (Lh && Lh.town && Lh.biz) return oakBizCard(s, Lh, walking);
   if (here === 'oakhall') return oakHallCard(s, walking);
   if (here === 'cmhall') return oakHallCard(s, walking, 'crownmere');
@@ -7561,6 +7612,26 @@ document.addEventListener('click', e => {
   act(c);
 });
 
+function rankOf(s) {
+  const f = s.look && s.look.body === 'f', R = s.realm, v = s.village;
+  if (Sim.isRuler(s)) return { key: 'ruler', title: f ? 'Queen of Alderwyn' : 'King of Alderwyn' };
+  if (R && R.exile) return { key: 'exile', title: 'Exiled claimant' };
+  const ls = Sim.yourLordships(s).filter(id => id !== 'crownmere');
+  if (ls.length) return { key: 'lord', title: (f ? 'Lady of ' : 'Lord of ') + (Sim.REGIONS[ls[0]] || ls[0]) };
+  if (s.offices && s.offices.elder === 'player') return { key: 'elder', title: 'Elder of Hearthmoor' };
+  if (v && v.council) return { key: 'councillor', title: 'Councillor' };
+  if (s.shops.length || Object.values(s.biz || {}).some(b => b.owner === 'player')) return { key: 'merchant', title: 'Merchant' };
+  if (s.job) return { key: 'hand', title: 'Hired hand' };
+  return { key: 'newcomer', title: 'Newcomer' };
+}
+const RANK_ORDER = ['newcomer', 'hand', 'merchant', 'councillor', 'elder', 'lord', 'ruler'];
+function rankWatch(s) {
+  const r = rankOf(s);
+  if (r.key === UI.rankKey) return;
+  const was = UI.rankKey; UI.rankKey = r.key;
+  rebuildPlayer(s.look);
+  if (was && RANK_ORDER.indexOf(r.key) > RANK_ORDER.indexOf(was) && RANK_ORDER.indexOf(r.key) >= 2) { toast('You are now ' + r.title + '. Your clothes show it.', 'good', true); Snd.play && Snd.play('page'); }
+}
 function myBusinesses(s) {
   const here = townHere(), out = [];
   s.shops.forEach(x => { const T = TR[x.trade]; out.push({ town: 'hearthmoor', ref: ['shop', x.id], name: Sim.tierOf(x).name + ' \u00b7 ' + T.name, go: here === 'hearthmoor' ? 'plot' + x.plot : null, line: `<b>${x.goods}</b> ${esc(T.product)} on the shelf${x.manager ? ' \u00b7 run by ' + esc(x.manager.name.split(' ')[0]) : x.worker ? ' \u00b7 ' + esc(x.worker.name.split(' ')[0]) : ''}` }); });
@@ -7577,6 +7648,8 @@ function hud(s) {
   $('clock').textContent = `Day ${s.day} · ${Sim.clock(s.t)}`;
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
   const inv = s.player.inv, chips = [];
+  rankWatch(s);
+  { const r = rankOf(s); chips.push(`<span class="chip num rank r-${r.key}">${esc(r.title)}</span>`); }
   const carry = Sim.GOODS.filter(g => inv[g]).map(g => `<b>${inv[g]}</b> ${g}`);
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
   if (s.player.horse) chips.push(`<span class="chip num btn" data-c='["ride"]' role="button" tabindex="0">${s.player.riding ? 'Riding ' + esc(s.player.horse.name) + ' · get down' : 'Mount ' + esc(s.player.horse.name)}</span>`);
@@ -7656,6 +7729,8 @@ function pageLedger(s) {
     (e.ownedBiz || []).forEach(o => rows.push([esc(o.name) + ' (yours)', o.profit]));
     if (e.salaries) rows.push(['Salaries for the lord’s household', -e.salaries]);
     if (e.interest) rows.push(['Interest to the Ashford moneylender', -e.interest]);
+    if (e.managers) rows.push(['Managers (wages and supplies they bought)', -e.managers]);
+    if (e.other) rows.push([e.other > 0 ? 'Other money in' : 'Other spending (purchases, fees, gifts)', e.other]);
     if (e.seized) rows.push(['Property seized and sold by creditors', e.seized]);
     html += `<div class="day"><div class="dayhead"><strong>Day ${e.day}</strong><span class="seal ${e.profit < 0 ? 'neg' : ''} num">${e.profit < 0 ? 'Down ' : 'Up '}${Math.abs(e.profit)}c</span></div>${dayTable(rows, e.profit, 'The day')}`;
     if (e.notes.length) html += notesHTML(e.notes);
@@ -7914,6 +7989,111 @@ function stageCard(s, id, walking) {
   else { acts.push(B_(p.riding ? 'Dismount' : 'Ride ' + esc(p.horse.name), ['ride'], 'alt')); acts.push(B_(`Sell ${esc(p.horse.name)} · ${Sim.HORSE_SELL}c`, ['sellHorse'], 'alt')); }
   return `<h2>${esc(Sim.STAGE[id].name)}</h2><div class="sub">Coaches leave for the other towns from six in the morning until seven at night, and the ostler keeps horses for sale. ${p.horse ? 'Your horse ' + esc(p.horse.name) + ' is stabled wherever you sleep.' : ''}</div>${walking}<div class="acts">${acts.join('')}</div>`;
 }
+/* ---------- property signs: walk up to a house's sign to buy it, and once it is yours, to run it ---------- */
+function houseSale(s, h) {
+  if (h.owner === 'player') return { mine: true };
+  if (h.owner && h.owner !== 'office:lord' && !String(h.owner).startsWith('town:') && h.tenants.includes(h.owner)) return { no: (s.people[h.owner] ? s.people[h.owner].name : 'The owner') + ' lives here and will not sell their home.' };
+  if (h.owner && s.people[h.owner] && !Sim.sellerWilling(s, h.owner)) return { no: s.people[h.owner].name + ' will not sell to you.' };
+  return { price: Sim.housePrice(s, h) };
+}
+function signPos(h) { const f = Sim.houseShape(h).face, d = Sim.doorOf(h); return { x: d.x + Math.cos(f) * 1.7 + Math.sin(f) * 0.6, z: d.z - Math.sin(f) * 1.7 + Math.cos(f) * 0.6, face: f }; }
+function houseSignCard(s, Lh, walking) {
+  const h = s.houses.find(x => x.id === Lh.sign); if (!h) return `<h2>${esc(Lh.name)}</h2>${walking}`;
+  const sale = houseSale(s, h), ts = h.tenants.map(id => s.people[id]).filter(Boolean), live = s.player.house === h.id;
+  const lv = h.comfort || 0, wear = h.wear || 0, cond = Sim.COMFORT[lv].name + (wear > 10 ? ', needs repairs' : wear > 4 ? ', a little worn' : ', in good repair');
+  const town = TOWN_NAMES[h.town || 'hearthmoor'];
+  let html = `<h2>${esc(h.name)}${sale.mine ? ` <span class="pill yes">${live ? 'your home' : 'yours'}</span>` : sale.price != null ? ' <span class="pill">for sale</span>' : ''}</h2>`;
+  html += `<div class="sub">${esc(town)} · ${sale.mine ? 'Yours' : 'Owned by ' + esc(Sim.landlordName(s, h.owner))} · ${live ? 'you live here' : ts.length ? 'lived in by ' + esc(ts.map(q => q.name).join(', ')) : 'standing empty'} · rent ${h.rent}c a day · room for ${h.cap || 4} · ${esc(cond.toLowerCase())}.</div>${walking}`;
+  const acts = [];
+  if (!sale.mine) {
+    if (sale.no) html += `<div class="why">${esc(sale.no)}</div>`;
+    else { acts.push(B_('Buy it · ' + sale.price + 'c', ['buyHouse', h.id], '', s.coins < sale.price)); html += `<div class="why">${ts.length ? 'Its tenants stay on and pay their rent to you.' : 'It stands empty: live in it yourself, or set a rent and wait for a tenant.'}</div>`; }
+    return html + (acts.length ? `<div class="acts">${acts.join('')}</div>` : '');
+  }
+  if (!live && !ts.length) acts.push(B_('Move in', ['moveIn', h.id]));
+  if (live) acts.push(B_('Go inside', ['ui', 'enter', 'myhome']));
+  if (lv < 3) acts.push(B_('Improve to ' + Sim.COMFORT[lv + 1].name.toLowerCase() + ' · ' + Sim.COMFORT[lv + 1].cost + 'c', ['improveHome', h.id], 'alt', s.coins < Sim.COMFORT[lv + 1].cost));
+  if (wear * 0.5 >= 2) acts.push(B_('Repair · ' + Math.round(wear * 0.5) + 'c', ['repairHouse', h.id], 'alt', s.coins < Math.round(wear * 0.5)));
+  if (!live) {
+    html += `<div class="signrent"><span>Rent</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent - 1])}' aria-label="Lower rent">&minus;</button><output class="num">${h.rent}c</output><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent + 1])}' aria-label="Raise rent">+</button></div><span class="why">${h.rent ? (ts.length ? 'a day. Raising it upsets tenants.' : 'a day. A tenant may move in.') : 'Free: nobody pays, nobody will move in.'}</span></div>`;
+    ts.forEach(q => acts.push(UI.confirm === 'evict' + q.id ? B_('Yes, evict ' + esc(q.name.split(' ')[0]), ['evict', h.id, q.id], 'warn') + B_('Keep them', ['ui', 'confirm', null], 'alt') : B_('Evict ' + esc(q.name.split(' ')[0]) + '&hellip;', ['ui', 'confirm', 'evict' + q.id], 'alt')));
+    const val = Sim.houseValue(s, h);
+    acts.push(h.forSale ? B_('Take it off the market', ['listForSale', 'house', h.id, 0], 'alt') : B_('Put up for sale · ' + val + 'c', ['listForSale', 'house', h.id, val], 'alt'));
+  }
+  return html + `<div class="acts">${acts.join('')}</div>`;
+}
+const SignKit = (function () {
+  const tex = (word, bg, fg) => { const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, 128, 64); x.strokeStyle = fg; x.lineWidth = 4; x.strokeRect(5, 5, 118, 54); x.fillStyle = fg; x.font = 'bold 22px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(word, 64, 33); const t = new THREE.CanvasTexture(c); return new THREE.MeshLambertMaterial({ map: t }); };
+  const M = { sale: tex('FOR SALE', '#efe3c4', '#8e2a22'), mine: tex('YOURS', '#2f3a5a', '#f5cf73'), home: tex('HOME', '#2f3a5a', '#f5cf73'), selling: tex('SELLING', '#efe3c4', '#2f5a3a') };
+  const post = flat(new THREE.BoxGeometry(0.1, 1.6, 0.1)), arm = flat(new THREE.BoxGeometry(0.8, 0.07, 0.07)), board = new THREE.BoxGeometry(0.96, 0.5, 0.04), wood = mat('#6b4a2a');
+  const pool = [];
+  function get(i) {
+    if (pool[i]) return pool[i];
+    const g = new THREE.Group(); mesh(post, wood, -0.4, 0.8, 0, g); mesh(arm, wood, 0, 1.55, 0, g);
+    const b = new THREE.Mesh(board, M.sale); b.position.set(0.04, 1.22, 0); g.add(b); g.userData.board = b; scene.add(g); pool[i] = g; return g;
+  }
+  let lastT = -9, shown = new Set();
+  function step(s, t) {
+    if (t - lastT < 0.7) return; lastT = t;
+    const p = s.player, near = [];
+    if (!UI.inside) for (const h of s.houses) {
+      const dx = h.x - p.x, dz = h.z - p.z; if (dx * dx + dz * dz > 42 * 42) continue;
+      const sale = houseSale(s, h); if (!sale.mine && sale.price == null) continue;
+      near.push({ h, sale, d: dx * dx + dz * dz });
+    }
+    near.sort((a, b) => a.d - b.d); const pick = near.slice(0, 16), keep = new Set();
+    pick.forEach((o, i) => {
+      const g = get(i), sp = signPos(o.h), key = 'sign:' + o.h.id; keep.add(key);
+      g.visible = true; g.position.set(sp.x, standH(sp.x, sp.z), sp.z); g.rotation.y = sp.face;
+      g.userData.board.material = o.sale.mine ? (s.player.house === o.h.id ? M.home : o.h.forSale ? M.selling : M.mine) : M.sale;
+      if (!L[key]) L[key] = { x: sp.x, z: sp.z, r: 1.7, name: o.h.name + (o.sale.mine ? '' : ' (for sale)'), sign: o.h.id, town: o.h.town && o.h.town !== 'hearthmoor' ? o.h.town : undefined };
+      else L[key].name = o.h.name + (o.sale.mine ? '' : ' (for sale)');
+    });
+    for (let i = pick.length; i < pool.length; i++) pool[i].visible = false;
+    for (const k of shown) if (!keep.has(k) && k !== UI.loc) delete L[k];
+    shown = keep;
+  }
+  /* your houses show what you have done to them: flower boxes, a lantern, a banner; boards over the door when empty; rubble when worn */
+  const DG = { box: flat(new THREE.BoxGeometry(1.0, 0.18, 0.26)), bloom: flat(new THREE.IcosahedronGeometry(0.09, 0)), lamp: new THREE.BoxGeometry(0.16, 0.22, 0.16), bracket: flat(new THREE.BoxGeometry(0.05, 0.05, 0.35)),
+    banner: flat(new THREE.BoxGeometry(0.5, 0.85, 0.03)), plank: flat(new THREE.BoxGeometry(1.3, 0.14, 0.05)), rubble: flat(new THREE.DodecahedronGeometry(0.22, 0)) };
+  const glow = new THREE.MeshBasicMaterial({ color: 0xffd27a }), deco = new Map();
+  function dress(s, h) {
+    const vacant = !h.tenants.length && s.player.house !== h.id, lv = h.comfort || 0, worn = (h.wear || 0) > 10, sig = lv + '|' + vacant + '|' + worn;
+    let g = deco.get(h.id); if (g && g.userData.sig === sig) return g;
+    if (g) scene.remove(g);
+    g = new THREE.Group(); g.userData.sig = sig;
+    const f = Sim.houseShape(h).face, d = Sim.doorOf(h), sx = Math.cos(f), sz = -Math.sin(f), bx = -Math.sin(f) * 0.55, bz = -Math.cos(f) * 0.55;
+    const put = (geo, m, side, y, out, parent) => { const o = new THREE.Mesh(geo, typeof m === 'string' ? mat(m) : m); o.position.set(d.x + bx + sx * side - Math.sin(f) * -out, y, d.z + bz + sz * side - Math.cos(f) * -out); o.rotation.y = f; (parent || g).add(o); return o; };
+    const y0 = standH(d.x, d.z);
+    if (lv >= 1) { put(DG.box, '#6b4a2a', 1.5, y0 + 0.95, 0.15); [-0.35, 0, 0.35].forEach((k, i) => put(DG.bloom, ['#c2412d', '#e6c34a', '#b05aa0'][i], 1.5 + k, y0 + 1.1, 0.15)); }
+    if (lv >= 2) { put(DG.bracket, '#2a2420', -1.0, y0 + 1.95, 0.15); put(DG.lamp, glow, -1.0, y0 + 1.82, 0.3); }
+    if (lv >= 3) put(DG.banner, '#2f3a5a', 1.5, y0 + 2.05, 0.05);
+    if (vacant) { put(DG.plank, '#8a6a44', 0, y0 + 0.9, 0.12).rotation.z = 0.5; put(DG.plank, '#7a5a38', 0, y0 + 0.9, 0.14).rotation.z = -0.5; }
+    if (worn) { [-0.3, 0.1, 0.4].forEach((k, i) => put(DG.rubble, '#7d776c', -2.0 + k, y0 + 0.1, 0.6 + i * 0.2)); }
+    g.traverse(o => { if (o.isMesh) { const r = o.rotation.z; o.rotation.set(0, f, r); } });
+    scene.add(g); deco.set(h.id, g); return g;
+  }
+  function stepDeco(s) {
+    const p = s.player, seen = new Set();
+    for (const h of s.houses) if (h.owner === 'player') { const dx = h.x - p.x, dz = h.z - p.z; if (dx * dx + dz * dz < 90 * 90 && !UI.inside) { dress(s, h).visible = true; seen.add(h.id); } }
+    for (const [id, g] of deco) if (!seen.has(id)) { if (s.houses.some(h => h.id === id && h.owner === 'player')) g.visible = false; else { scene.remove(g); deco.delete(id); } }
+  }
+  const greeted = {};
+  function greet(s) {
+    const p = s.player, mine = new Set(s.houses.filter(h => h.owner === 'player').map(h => h.id)); if (!mine.size) return;
+    for (const a of s.agents || []) {
+      const q = a.pid && s.people[a.pid]; if (!q || !mine.has(q.home) || greeted[q.id] === s.day) continue;
+      if (Math.hypot(a.x - p.x, a.z - p.z) > 3.2) continue;
+      greeted[q.id] = s.day;
+      const o = q.opinion || 0, first = q.name.split(' ')[0], h = s.houses.find(x => x.id === q.home);
+      const line = q.owed > 0 ? 'I’ll have the rent for you soon, I swear it.' : o >= 40 ? 'Good day to you! ' + h.name + ' suits us well.' : o >= 0 ? 'Morning. Rent’s paid.' : 'Come for your rent again, have you?';
+      toast(first + ' (your tenant): “' + line + '”', o >= 0 ? 'info' : 'bad', true); return;
+    }
+  }
+  function hideAll() { pool.forEach(g => g.visible = false); for (const k of shown) delete L[k]; shown = new Set(); }
+  const step0 = step;
+  return { step: (s, t) => { const before = lastT; step0(s, t); if (lastT !== before) { stepDeco(s); greet(s); } }, hideAll };
+})();
 function oakBizCard(s, Lh, walking) {
   const L = Sim.LAYOUT[Lh.town], b = s.biz[Lh.biz], site = L.biz.find(x => x.id === Lh.biz);
   if (!b) return `<h2>${esc(Lh.name)}</h2>${walking}`;
@@ -8232,7 +8412,7 @@ function pinPos(k) {
 }
 const pinV = new THREE.Vector3();
 function buildPins() {
-  const keys = Object.keys(L).filter(k => Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']);
+  const keys = Object.keys(L).filter(k => !L[k].sign && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']);
   $('pins').innerHTML = keys.map(k => `<button type="button" class="pin ${pinKind(k)} ${UI.mapSel === k ? 'sel' : ''}" data-k="${esc(k)}" ${k === 'you' ? 'tabindex="-1"' : `data-c='${esc(JSON.stringify(['ui', 'mapSel', k]))}'`}><span>${esc(pinLabel(k))}</span></button>`).join('');
 }
 function updatePins() {
@@ -9206,7 +9386,7 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
-  if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { walkPlayer(G, dt); SignKit.step(G, t); } const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
@@ -9469,8 +9649,18 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0116';
+const BUILD = '2026.11.05.0227';
 const NOTES = [
+  { v: '0.35', date: '5 November', title: 'Signs and seals', items: [
+    'Every house you can buy has a FOR SALE sign by its door. Walk up to it to see who owns it, who lives there, the rent and its condition, and buy it on the spot.',
+    'Once it is yours the sign says YOURS (or HOME). Use it to move in, set the rent, evict a tenant, improve or repair the house, or put it up for sale.',
+    'Your houses show what you have done to them: flower boxes, a lantern by the door and a banner as you improve them, boards across the door when nobody lives there, and rubble when they need repair. Your tenants greet you when you pass.',
+    'Your title sits at the start of the row at the top, and your clothes change as you rise: a purse for a merchant, a chain for a councillor, robe and staff for the Elder, cloak and plumed cap for a lord, crown and ermine for the ruler.',
+    'Managers are now about keeping a place running while you are away: a little more custom, a quicker worker, supplies a tenth cheaper overnight, a happy worker and a replacement if one quits. In tests a shop with a manager earned about 6c a day more than one without, after the wage.',
+    'The ledger now adds up to the coin: managers\u2019 wages and orders, and town fees for businesses elsewhere, have their own lines, and anything else shows as Other.',
+    'Buying or selling a load of goods is priced one unit at a time, so a big sale lowers the price as you go.',
+    'Over many years, townsfolk spend their savings and full town chests get spent, so coin no longer piles up for ever.'
+  ] },
   { v: '0.34', date: '5 November', title: 'Making it matter', items: [
     'One fair economy. Every business, yours or not, now sells into the same demand: a town\u2019s grown people and its travellers, shared between every seller of that trade by how many hands each has. Ingredients cost what the town\u2019s market charges that day, and bigger towns cost more to trade in but have more custom to win. Your Hearthmoor shops now share the village\u2019s custom with Gerd, Hollin, Ysolde and Ash.',
     'Grain, timber and iron ore have their own stock and price in every town. Greenhaven grows grain cheaply, Ironcrest digs iron, and the cities pay more for both. You can buy and sell at every town\u2019s market, and the Trading Post shows what each town pays, so carrying goods between towns can pay.',
@@ -9482,7 +9672,6 @@ const NOTES = [
     'A lord holds one region at a time. You can move into its seat, which takes your family\u2019s name: Varrow Manor becomes your manor, Stane Keep your keep. The ruler lives in Crownmere castle.',
     'Choose a first and a family name for your character. And choose how you begin: from nothing, as a merchant with a Bread Stand, as the Elder of Hearthmoor, as lord of Greenhaven, or as ruler of Alderwyn.',
     'Manage at one of your shops or businesses now opens just that place: its prices, stock, upgrades, staff and manager. Show all businesses goes back to the full list.',
-    'Managers earn their wage. In a shop they bring in regulars and travellers (about a third more customers), work alongside your worker (up to half again as fast), order supplies overnight at a tenth off and keep your worker happy; in a town business they count as an extra hand and get supplies a tenth cheaper. Only careless managers make mistakes now.',
     'Your shop counters at the top are now one Businesses button. Tap it for a short list with Go and Manage on each. The Shops page is sorted into a tab for each town, with the ones you could buy folded away underneath.',
     'A Tasks button at the top shows everything you have been asked to do: the elder\u2019s errands, orders, contracts, promises, your shifts and your managers\u2019 decisions, each with a button to head there. The number on it counts what is waiting.',
     'Find people: on anyone\u2019s page in the Ledger, tap "Find them" for a gold light over them and a mark on the minimap. If they are in another town, the minimap points the way.',

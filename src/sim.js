@@ -375,9 +375,9 @@
       const T = TRADES[shop.trade], Ti = tierOf(shop);
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
-      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15) * (shop.manager ? 1.3 : 1);
+      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15) * (shop.manager ? 1.2 : 1);
       villagers(s).filter(p => p.purse >= shop.price && !p.kid && !(p.job && ['guard', 'lord', 'steward', 'taxman'].includes(p.job.office))).forEach(p => { if (rand(s) < vr) sched.push({ at: when(), pid: p.id, shop: shop.id }); });
-      const n = Math.max(0, Math.round((Ti.travelers + (shop.manager ? 1 : 0) + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
+      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
       for (let i = 0; i < Math.round(n * Math.min(1, share * 1.15 + 0.2)); i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
@@ -454,14 +454,18 @@
       e.notes = explainShop(s, shop, e);
       entry.shops.push(e);
     }
+    const c0 = s.coins;
+    if (s.people) managersDay(s, entry);
+    entry.managers = c0 - s.coins;
     entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest;
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers;
     if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of 2% a day is added every evening' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
     }
     entry.coinsEnd = s.coins;
+    { const prev = s.ledger[s.ledger.length - 1]; if (prev && prev.day === entry.day - 1) { const gap = (entry.coinsEnd - prev.coinsEnd) - entry.profit; if (gap) { entry.other = gap; if (gap > 0) entry.income += gap; else entry.costs -= gap; entry.profit = entry.income - entry.costs; } } }
     s.ledger.push(entry);
     if (s.ledger.length > 14) s.ledger.shift();
     s.rec.days++;
@@ -469,7 +473,6 @@
     if (!s.rec.worstDay || entry.profit < s.rec.worstDay.profit) s.rec.worstDay = { profit: entry.profit, day: entry.day };
     event(s, 'Books closed for Day ' + entry.day + ': ' + (entry.profit >= 0 ? 'up ' : 'down ') + Math.abs(entry.profit) + 'c. Open the ledger to see why.', entry.profit >= 0 ? 'good' : 'bad');
 
-    if (s.people) managersDay(s, entry);
     for (const shop of s.shops) {
       const w = shop.worker;
       if (!w) continue;
@@ -536,7 +539,7 @@
         if (pick) { const r = cmd(s, 'hire', shop.id, pick.i, pick.a.ask); if (r.ok) did.push('hired ' + pick.a.name + ' at ' + pick.a.ask + 'c'); }
       }
       if (shop.worker && shop.worker.wage < shop.worker.ask && shop.worker.ask - shop.worker.wage <= budget) { budget -= shop.worker.ask - shop.worker.wage; shop.worker.wage = shop.worker.ask; did.push('raised ' + shop.worker.name + '\u2019s pay to ' + shop.worker.ask + 'c'); }
-      if (ss.tooExpensive > Math.max(2, ss.sold * 0.25) && shop.price > floor) { shop.price--; did.push('lowered the price to ' + shop.price + 'c (' + ss.tooExpensive + ' turned away)'); }
+      if (ss.tooExpensive > Math.max(3, ss.sold * 0.5) && shop.goods >= tierOf(shop).out && shop.price > floor) { shop.price--; did.push('lowered the price to ' + shop.price + 'c (' + ss.tooExpensive + ' turned away)'); }
       else if (ss.soldOut > 0 && ss.tooExpensive <= 1 && shop.price < Math.round(T.wtp * 1.4)) { shop.price++; did.push('raised the price to ' + shop.price + 'c (sold out)'); }
       if (m.skill < 0.85 && rand(s) < (1.15 - m.skill) * 0.2) { const loss = 1 + Math.floor(rand(s) * 4); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
       const e = entry.shops.find(x => x.id === shop.id);
@@ -817,7 +820,7 @@
     return !!w && (w.task === 'serve' || w.task === 'tend') && dist(w, plotPt(shop, 'serve')) < 0.8;
   }
   /* a manager on the floor lends a hand at the bench and the counter: up to half again as fast */
-  const mgrBoost = shop => shop && shop.manager ? 1 + 0.45 * Math.min(1.3, shop.manager.skill || 1) : 1;
+  const mgrBoost = shop => shop && shop.manager ? 1 + 0.25 * Math.min(1.3, shop.manager.skill || 1) : 1;
   function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop); }
 
   function updateCounter(s, shop, dt) {
@@ -1447,9 +1450,11 @@
     for (const t in TOWN_GOODS) { s.goods[t] = {}; for (const g of GOODS) { const T = TOWN_GOODS[t]; s.goods[t][g] = Math.round(goodsTarget(t, g) + 2 * (T.make[g] - T.use[g])); } }
     for (const t in TOWN_GOODS) for (const g of GOODS) s.goods[t][g] = Math.max(8, s.goods[t][g]);
   }
-  function goodsPrice(s, t, g) { setupGoods(s); const st = Math.max(1, s.goods[t || 'hearthmoor'][g]); return GOODS_BASE[g] * clamp(Math.pow(goodsTarget(t || 'hearthmoor', g) / st, 0.6), 0.4, 3.2); }
-  const buyPrice = (s, t, g, n) => Math.max(n || 1, Math.round(goodsPrice(s, t, g) * 1.1 * (n || 1)));
-  const sellPrice = (s, t, g, n) => Math.max(0, Math.floor(goodsPrice(s, t, g) * 0.75 * (n || 1)));
+  function goodsPrice(s, t, g, shift) { setupGoods(s); const st = Math.max(1, s.goods[t || 'hearthmoor'][g] + (shift || 0)); return GOODS_BASE[g] * clamp(Math.pow(goodsTarget(t || 'hearthmoor', g) / st, 0.6), 0.4, 3.2); }
+  /* a load is priced unit by unit: each one bought makes the next dearer, each one sold makes the next cheaper */
+  function loadPrice(s, t, g, n, dir) { let sum = 0; for (let k = 0; k < n; k++) sum += goodsPrice(s, t, g, dir * k); return sum; }
+  const buyPrice = (s, t, g, n) => { n = n || 1; return Math.max(n, Math.round(loadPrice(s, t, g, n, -1) * 1.1)); };
+  const sellPrice = (s, t, g, n) => { n = n || 1; return Math.max(0, Math.floor(loadPrice(s, t, g, n, 1) * 0.75)); };
   function goodsDay(s) {
     setupGoods(s);
     for (const t in TOWN_GOODS) for (const g of GOODS) {
@@ -1467,7 +1472,7 @@
     return out;
   }
   function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : 1; return (b.staff.length + own) * E.perWorker * (b.disrepair ? 0.7 : 1); }
-  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 1 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
+  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 0.5 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
   function townDemand(s, t, trade) {
     const E = ECON[trade]; if (!E) return 0;
     const folk = living(s).filter(p => townOf(p) === t && !p.kid && p.age >= 14);
@@ -1590,6 +1595,8 @@
       p.mood = Math.round(clamp(p.mood + (target - p.mood) * 0.3, 0, 100));
       // debts grow: the Ashford moneylender takes 2% a day
       if (p.purse < 0) p.purse -= Math.max(1, Math.ceil(-p.purse * INTEREST));
+      // savings get spent: clothes, tools, ale, tithes and feast days keep coin from piling up for ever
+      else if (!p.kid && p.purse > 80) p.purse -= Math.round((p.purse - 80) * 0.03);
       p.purse = Math.round(p.purse);
       if (j && j.type === 'biz' && j.role === 'hand') p.tenure = (p.tenure || 0) + 1;
     }
@@ -3209,7 +3216,7 @@
   function townMorning1(s, id, T) {
     T.id = id;
     const fee = FEES[T.fee].coin;
-    for (const b of Object.values(s.biz)) if (b.town === id && !b.closed) { const o = b.owner === 'player' ? null : s.people[b.owner]; if (o) { o.purse -= fee; T.chest += fee; } else if (b.owner === 'player') { spend(s, fee); T.chest += fee; } }
+    for (const b of Object.values(s.biz)) if (b.town === id && !b.closed) { const o = b.owner === 'player' ? null : s.people[b.owner]; if (o) { o.purse -= fee; T.chest += fee; } else if (b.owner === 'player') { spend(s, fee); T.chest += fee; s.stats.tax = (s.stats.tax || 0) + fee; } }
     const up = UPKEEP[id] || 40; T.chest -= up;
     // a full chest is spent on the town: paving, the watch, the walls, a feast day
     const capC = id === 'crownmere' ? 1500 : id === 'oakbridge' ? 400 : 150;
@@ -3235,6 +3242,8 @@
   function townEvening(s) { for (const id in (s.towns || {})) townEvening1(s, id, s.towns[id]); }
   function townEvening1(s, id, T) {
     T.id = id;
+    // a full chest gets spent on walls, wells, the watch and the poor
+    if (T.chest > 600 && !(T.mayor === 'player')) T.chest -= Math.round((T.chest - 600) * 0.06);
     // a hungry household sends someone out to find day work: on the quay, in the fields, wherever there is some
     const jobsHere = Object.keys(id === 'greenhaven' ? GH_JOBS : id === 'crownmere' ? CM_JOBS : OAK_JOBS);
     const famHungry = new Set(townFolk(s, id).filter(p => p.kid && p.hungry).flatMap(p => p.parents || []));
@@ -4616,7 +4625,7 @@
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
