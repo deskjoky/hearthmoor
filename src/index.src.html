@@ -3074,7 +3074,7 @@ function myBusinesses(s) {
 function hud(s) {
   { const n = taskList(s).filter(x => !x.soft).length, el = $('taskN'); if (el && el.textContent !== String(n || '')) el.textContent = n || ''; }
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
-  { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year; }
+  { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year + '. ' + c.next.charAt(0).toUpperCase() + c.next.slice(1) + ' in ' + c.daysLeft + (c.daysLeft === 1 ? ' day.' : ' days.'); }
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
   const inv = s.player.inv, chips = [];
   rankWatch(s);
@@ -3182,7 +3182,7 @@ function pageLedger(s) {
     }
     html += `</div>`;
   }
-  return html.replace('</p>', '</p>' + managerNews(s));
+  return html.replace('</p>', '</p>' + seasonBox(s) + managerNews(s));
 }
 function managerNews(s) {
   const dec = s.decisions || [], rep = (s.reports || []).slice(0, 8);
@@ -3195,6 +3195,19 @@ function managerNews(s) {
 function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
 function willing(shop, price, trav) { const T = TR[shop.trade]; return Math.round(100 * (1 - 0.5 * (1 + erf((price - Sim.wtpMean(shop, trav)) / (T.sd * Math.SQRT2))))); }
 function willText(shop) { return `About ${willing(shop, shop.price, false)}% of villagers and ${willing(shop, shop.price, true)}% of travelers will pay this.`; }
+// the season ahead: what it will do, and where prices are heading, so a shop can prepare
+const SEASON_SAY = {
+  spring: 'Grain is short until the new crop comes; travellers return.',
+  summer: 'The busiest season on the roads: about a quarter more travellers, and good spirits. Wood is cheap.',
+  autumn: 'The harvest: grain is plentiful and cheap. The time to lay in stock for winter.',
+  winter: 'The fields are bare: grain dear, wood burned in every hearth, the mines slow, travellers down by 40%, thieves bolder, spirits low.'
+};
+function seasonBox(s) {
+  const c = Sim.calendar(s), L = (s.priceLog || {}).hearthmoor || {};
+  const trend = g => { const a = L[g] || []; if (a.length < 2) return ''; const now = a[a.length - 1], then = a[0], d = now - then; return `<dt>${g.charAt(0).toUpperCase() + g.slice(1)}</dt><dd class="num">${now.toFixed(2)}c ${Math.abs(d) < 0.05 ? '· steady' : d > 0 ? '· up ' + d.toFixed(2) + 'c' : '· down ' + (-d).toFixed(2) + 'c'} <small>over ${a.length} days</small></dd>`; };
+  const ups = s.shops.map(x => { const T = TR[x.trade], Ti = Sim.tierOf(x); const per = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * Sim.buyPrice(s, 'hearthmoor', g), 0); const held = Object.keys(T.recipe).map(g => x.stock[g] + ' ' + g).join(', '); return `<li>${esc(Ti.name)}: supplies cost ${per.toFixed(1)}c a batch at today’s prices; in storage ${held}.</li>`; }).join('');
+  return `<div class="box"><h5>${c.season.charAt(0).toUpperCase() + c.season.slice(1)}, ${c.dom} ${c.monthName} · ${c.next} in ${c.daysLeft} ${c.daysLeft === 1 ? 'day' : 'days'}</h5><p>Now: ${SEASON_SAY[c.season]}</p><p><b>Coming:</b> ${SEASON_SAY[c.next]}</p>${L.grain ? `<p>Prices at the Trading Post in Hearthmoor:</p><dl class="kv">${['grain', 'wood', 'ore'].map(trend).join('')}</dl>` : ''}${ups ? `<ul class="notes">${ups}</ul>` : ''}</div>`;
+}
 function businessTowns(s) {
   const mine = myBusinesses(s), towns = Object.keys(TOWN_NAMES), count = t => mine.filter(x => x.town === t).length;
   let t0 = UI.btown;
@@ -3213,7 +3226,7 @@ function businessTowns(s) {
 }
 function pageShops(s, only) {
   let html = only ? '' : `<h3>Your Shops and Businesses</h3><p class="lead">Pick a town, then tap Manage on the place you want to run.</p>`;
-  if (!only) return html + businessTowns(s);
+  if (!only) return html + seasonBox(s) + businessTowns(s);
   if (!s.shops.length) {
     html += `<p>You own no shops yet. Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the four shops on the square, then open your own on an empty lot.</p><table class="trades"><thead><tr><th>Trade</th><th>Learn at</th><th>To open</th><th>Makes</th></tr></thead><tbody>
       ${Sim.TRADE_KEYS.map(k => { const T = TR[k], e = Sim.EMPLOYERS.find(x => x.trade === k); return `<tr><td>${T.name} ${Sim.learned(s, k) ? '<span class="pill yes">learned</span>' : ''}</td><td>${esc(e.name)}</td><td>${Sim.costText(T.tiers[0].cost)}</td><td>${T.many} from ${Sim.recipeText(k)}</td></tr>`; }).join('')}</tbody></table>`;
@@ -3230,6 +3243,7 @@ function pageShops(s, only) {
       <input type="range" id="price-${shop.id}" data-shop="${shop.id}" min="1" max="${Math.round(T.wtp * 2.2)}" step="1" value="${shop.price}" aria-label="Price for ${T.many}">
       <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div></div>`;
     if (shop.worker) html += `<p><label><input type="checkbox" id="pol-${shop.id}" data-shop="${shop.id}" ${shop.policy.supplyRuns ? 'checked' : ''}> ${esc(shop.worker.name)} buys ${Object.keys(T.recipe).join(' and ')} at the Trading Post when storage runs out</label></p>`;
+    if (shop.manager) html += `<p><label><input type="checkbox" id="res-${shop.id}" data-shop="${shop.id}" ${shop.policy.reserve !== false ? 'checked' : ''}> In autumn and winter, the manager lays in a reserve of ${Object.keys(T.recipe).join(' and ')} (up to ${Ti.cap} each, and no more than about ${60 + shop.manager.budget * 4}c a day)</label></p>`;
     if (next) {
       const can = Sim.canPay(s, next.cost, shop);
       html += `<div class="box"><h5>Upgrade to ${esc(next.name)}</h5><dl class="kv"><dt>Cost</dt><dd>${Sim.costText(next.cost)}</dd><dt>You have</dt><dd>${s.coins}c${Sim.GOODS.filter(g => next.cost[g]).map(g => ', ' + (s.player.inv[g] + shop.stock[g]) + ' ' + g).join('')}</dd>
@@ -3254,12 +3268,13 @@ function managerBox(s, kind, ref, title) {
       <div class="stepper"><button type="button" data-c='${JSON.stringify(['managerBudget', kind, ref, m.budget - 5])}' aria-label="Lower budget">&minus;</button><output class="num">${m.budget}c</output><button type="button" data-c='${JSON.stringify(['managerBudget', kind, ref, m.budget + 5])}' aria-label="Raise budget">+</button></div>
       ${kind === 'biz' ? `<p><b>Staff to keep</b> besides the manager:</p><div class="stepper"><button type="button" data-c='${JSON.stringify(['staffTarget', ref, (m.staffTarget || 0) - 1])}' aria-label="Fewer staff">&minus;</button><output class="num">${m.staffTarget || 0}</output><button type="button" data-c='${JSON.stringify(['staffTarget', ref, (m.staffTarget || 0) + 1])}' aria-label="More staff">+</button></div>` : '<p>They keep a worker on, pay fair wages, order supplies and set the price to what sells.</p>'}
       ${o.disrepair ? `<p class="why">Needs mending: takings are down by a third. ${B_('Mend it · ' + (o.repairCost || 30) + 'c', ['repairBiz', ref], '', s.coins < (o.repairCost || 30))}</p>` : ''}
+      <div class="acts">${B_('Audit the books · 15c', ['audit', kind, ref], 'alt', s.coins < 15 || (m.audited != null && s.day - m.audited < 5))}</div><p class="why">${m.audited != null ? 'Last audited on day ' + m.audited + '. ' : ''}An auditor checks the takings against the tallies. Honest managers don\u2019t love being checked.</p>
       <div class="acts">${UI.confirm === 'mgr' + kind + ref ? B_('Yes, let ' + esc(m.name) + ' go', ['fireManager', kind, ref], 'warn') + B_('Keep them', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'mgr' + kind + ref], 'alt')}</div></div>`;
   }
   if (kind === 'shop' && !(o.tier > 0)) return `<div class="box"><h5>${esc(title)}: no manager</h5><p>A ${esc(Sim.tierOf(o).name)} is too small for a manager. Upgrade it and you can put someone in charge.</p></div>`;
   const cands = Sim.managerCandidates(s, kind, ref);
   return `<div class="box"><h5>${esc(title)}: no manager</h5><p>${kind === 'shop' ? 'A manager draws in regulars and travellers, about a third more customers, and works beside your worker, so goods are made and customers served up to half again as fast. They order supplies overnight at a tenth off so storage never runs dry, keep your worker content, hire a new one if they quit, and set prices by what sold.' : 'A manager counts as one more pair of hands, haggles a tenth off supplies, hires and keeps staff, pays fair wages and small repairs, and reports to you each evening.'}</p>
-    ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}</span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
+    ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}<br><small>${esc(c.ref)}</small></span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
 }
 function pageManage(s) {
   const F = UI.focus || [], all = B_('Show all businesses', ['ui', 'manage', null], 'alt');
@@ -3391,10 +3406,10 @@ function hearActs(s, c, C, presets) {
   a.push(P_('Guilty: a warning' + (c.value && K !== 'smuggling' && K !== 'poaching' ? ', repay' : ''), {}));
   a.push(P_('Guilty: 2 days’ work for the ' + (C.id === 'hearthmoor' ? 'village' : 'town'), { work: 2 }));
   for (const [lab, pen, cls] of presets) a.push(P_(lab + dl(pen.days), pen, cls));
-  const why = A && (A.hungry || A.purse < 20) ? 'they were hungry and poor' : 'it was a first offence';
-  a.push(P_('Guilty, but pardon them: ' + why, { reason: why }, 'alt', 'mercy'));
+  const rec = A ? (A.record || 0) : 0;
+  for (const m of Sim.mercyReasons(s, c)) a.push(P_('Guilty, but pardon: ' + m.name.toLowerCase(), { why: m.key }, m.key === 'favour' ? 'warn' : 'alt', 'mercy'));
   return `<p><b>Hear it now:</b></p><div class="acts">${a.join('')}</div>
-    <p class="why">Fines go to <button type="button" class="linklike" data-c='${JSON.stringify(['ui', 'fineTo', ft === 'chest' ? 'you' : 'chest'])}'>${ft === 'chest' ? (C.id === 'hearthmoor' ? 'the village chest' : 'the town chest') : 'your own purse'}</button>. A day in ${esc(C.place)} is ${lifeOf(s, 1) || 'a day'}${s.ageRate ? '' : ' (no one ages)'}: keep long sentences for serious harm. Mercy is lawful when it is open and has a reason; the town judges whether the reason is fair.${c.value && K !== 'smuggling' && K !== 'poaching' ? ' Repaying ' + c.value + 'c goes to ' + (c.victim === 'chest' ? 'the chest' : c.victim === 'player' ? 'you' : c.victim === 'crown' ? 'the treasury' : 'the victim') + '.' : ''}</p>`;
+    <p class="why">Fines go to <button type="button" class="linklike" data-c='${JSON.stringify(['ui', 'fineTo', ft === 'chest' ? 'you' : 'chest'])}'>${ft === 'chest' ? (C.id === 'hearthmoor' ? 'the village chest' : 'the town chest') : 'your own purse'}</button>. A day in ${esc(C.place)} is ${lifeOf(s, 1) || 'a day'}${s.ageRate ? '' : ' (no one ages)'}: keep long sentences for serious harm. ${A ? esc(A.name.split(' ')[0]) + (rec ? ' has been found guilty ' + rec + (rec === 1 ? ' time' : ' times') + ' before. ' : ' has no record. ') : ''}Mercy is lawful when the reason is true; only reasons that fit this case are offered, and pardoning a friend is open favour. The town weighs the reason against the harm and their record.${c.value && K !== 'smuggling' && K !== 'poaching' ? ' Repaying ' + c.value + 'c goes to ' + (c.victim === 'chest' ? 'the chest' : c.victim === 'player' ? 'you' : c.victim === 'crown' ? 'the treasury' : 'the victim') + '.' : ''}</p>`;
 }
 function caseCardX(s, c, C) {
   const judge = Sim.canJudge(s, C) || Sim.tradeJudge(s, c), A = s.people[c.accused], w = Sim.caseWeight(c), shownW = c.witnesses.filter(x => x.shown || x.leaned);
@@ -3436,7 +3451,7 @@ function crownPowers(s) {
   let h = '';
   if (seat('treasury')) h += `<div class="box"><h5>Lord Treasurer: the town chests</h5><p>Send clerks to audit every town chest for money gone missing. Once a week.</p><div class="acts">${B_('Audit the chests', ['xAudit'], 'alt', R.lastAudit != null && s.day - R.lastAudit < 7)}</div></div>`;
   if (seat('trade')) h += `<div class="box"><h5>Master of Trade: the markets</h5><p>Look into hoarding and market abuses in every town.${R.monopoly ? ' ' + esc(s.people[R.monopoly.pid].name) + ' holds the bakeries in a grip; the charter can break it.' : ''}</p><div class="acts">${B_('Inquire into the markets', ['xMarket'], 'alt', R.lastMarket != null && s.day - R.lastMarket < 5)}</div></div>`;
-  if (seat('war')) { const M = (R.military || []).reduce((x, m) => x + m.n, 0); h += `<div class="box"><h5>Marshal: the soldiers</h5><p>Soldiers sweep the roads of bandits (50c from the treasury). They are not the watch, and leave the towns to it.</p><div class="acts">${Object.keys(R.regions).filter(id => s.bandits && s.bandits[id] != null).map(id => B_('Sweep ' + esc(Sim.REGIONS[id].replace(/^the /, '')) + ' · bandits ' + Math.round(s.bandits[id]), ['xSoldiers', id], 'alt', R.treasury < 50)).join('')}</div>${M ? `<p>${M} captured bandits are held at the castle.</p><div class="acts">${B_('Hang them', ['xMartial', null, 'hang'], 'warn')}${B_('Press them into the garrisons', ['xMartial', null, 'press'], 'alt')}${B_('Dungeon, 20 days', ['xMartial', null, 'prison'], 'alt')}${B_('Road gangs', ['xMartial', null, 'work'], 'alt')}${B_('Pardon on oath', ['xMartial', null, 'pardon'], 'alt')}</div><p class="why">Hanging quiets the roads and frightens the towns. Pressed men may desert; the dungeon costs the treasury 1c a day each; road gangs mend the roads; some pardoned men go back to robbing.</p>` : ''}</div>`; }
+  if (seat('war')) { const M = (R.military || []).reduce((x, m) => x + m.n, 0); h += `<div class="box"><h5>Marshal: the soldiers</h5><p>Soldiers sweep the roads of bandits (50c from the treasury). They are not the watch, and leave the towns to it.</p><div class="acts">${Object.keys(R.regions).filter(id => s.bandits && s.bandits[id] != null).map(id => B_('Sweep ' + esc(Sim.REGIONS[id].replace(/^the /, '')) + ' · bandits ' + Math.round(s.bandits[id]), ['xSoldiers', id], 'alt', R.treasury < 50)).join('')}</div>${M ? `<p>${M} captured bandits are held at the castle.</p><div class="acts">${B_('Hang them', ['xMartial', null, 'hang'], 'warn')}${B_('Press them into the garrisons', ['xMartial', null, 'press'], 'alt')}${B_('Dungeon, 20 days', ['xMartial', null, 'prison'], 'alt')}${B_('Road gangs', ['xMartial', null, 'work'], 'alt')}${B_('Pardon on oath', ['xMartial', null, 'pardon'], 'alt')}</div><p class="why">Hanging quiets the roads where they were taken and frightens the town nearby; the court approves only where the roads were truly dangerous. Pressed men may desert; the dungeon costs the treasury 1c a day each; road gangs mend the roads; some pardoned men go back to robbing. Unsentenced after three days, the royal judges send them to the dungeon (or the road gangs if the treasury is short).</p>` : ''}</div>`; }
   if (seat('law')) h += `<div class="box"><h5>Lord Justice: detentions and officials</h5><p>Free anyone held without lawful cause in any court, and look into the king’s officers for misconduct. You can also overturn convictions and pardon on any court’s page.</p><div class="acts">${B_('Review every detention', ['xReview'], 'alt')}${B_('Investigate the officials', ['xMisconduct'], 'alt', R.lastMisconduct != null && s.day - R.lastMisconduct < 5)}</div></div>`;
   if (ruler) h += `<div class="box"><h5>The crown: appointments</h5><p>Dismiss a councillor and name another, or take a lordship away. Lords do not forget it.</p><div class="acts">${Object.keys(Sim.COUNCIL).filter(k => R.council[k] && R.council[k] !== 'player').map(k => B_('Dismiss the ' + Sim.COUNCIL[k], ['xDismiss', k], 'warn')).join('')}${Object.keys(R.regions).filter(id => id !== 'crownmere' && Sim.regionLord(s, id) && Sim.regionLord(s, id) !== 'player').map(id => B_('Take ' + esc(Sim.REGIONS[id]) + ' from its lord', ['xDismissLord', id], 'warn')).join('')}</div></div>`;
   return h ? `<h4>Powers of your office</h4><div class="grid2">${h}</div>` : '';
@@ -3495,7 +3510,7 @@ function pageJusticeHM(s) {
   if (dem.length || J.inquiry || J.lastInquiry) {
     h += `<h4>What people are saying</h4>`;
     if (J.inquiry) h += `<div class="why">The council’s inquiry into the Elder sits on day ${J.inquiry.day}.</div>`;
-    dem.forEach(k => { const q = s.people[k.demanded.pid]; h += `<div class="why">${esc(q ? q.name : 'Someone')} knows ${esc(k.text)}, and wants ${k.demanded.amount}c to keep quiet.<div class="acts">${B_('Pay ' + k.demanded.amount + 'c', ['jHush', k.id, true], 'warn', s.coins < k.demanded.amount)}${B_('Refuse', ['jHush', k.id, false], 'alt')}</div></div>`; });
+    dem.forEach(k => { const q = s.people[k.demanded.pid]; h += `<div class="why">${esc(q ? q.name : 'Someone')} knows ${esc(k.text)}, and wants ${k.demanded.amount}c to keep quiet${k.demanded.again ? ' (again: they were paid before)' : ''}. Silence bought lasts about ${Sim.HUSH_DAYS} days; then they may come back for more.<div class="acts">${B_('Pay ' + k.demanded.amount + 'c', ['jHush', k.id, true], 'warn', s.coins < k.demanded.amount)}${B_('Refuse', ['jHush', k.id, false], 'alt')}</div></div>`; });
     if (J.lastInquiry) h += `<p>Last inquiry (day ${J.lastInquiry.day}): ${esc(J.lastInquiry.out)}</p>`;
   }
   const mine = J.secrets.filter(k => !k.exposed);
@@ -3956,7 +3971,7 @@ function pageFamily(s) {
       <h4>${cands.length ? 'Or begin again' : 'Nobody to carry on'}</h4><p>${cands.length ? 'Leave the family behind and start over as a newcomer.' : 'With no family to inherit, your property goes back to the lord and the towns.'} The world, and everyone in it, remembers what came before.</p>
       <div class="acts">${B_('Begin again as a newcomer (man)', ['beginAgain', 'Hugh Rowan', 'm'], 'alt')}${B_('Begin again as a newcomer (woman)', ['beginAgain', 'Ada Thorne', 'f'], 'alt')}</div>`;
   }
-  const ageing = s.ageRate ? (s.ageRate >= 60 ? 'People age with the calendar: a year every 60 days.' : 'People age a year every ' + s.ageRate + ' days.') : 'Ageing is off in Settings.';
+  const ageing = s.ageRate ? (s.ageRate >= 60 ? 'People age slowly, with the calendar: a year every 60 days.' : s.ageRate === 15 ? 'People age a year every season (15 days).' : 'People age a year every ' + s.ageRate + ' days.') : 'Ageing is off in Settings.';
   let h = `<h3>Your Family</h3><div class="acts">${B_('Your family tree', ['ui', 'tree', Y.pid])}</div><p class="lead">${esc(s.name)}, aged ${Y.age}. ${Y.generation > 1 ? 'Generation ' + Y.generation + ' of the family. ' : ''}${ageing}</p>`;
   h += `<div class="box"><h5>${sp ? 'Married to ' + nm(sp) : 'Unmarried'}</h5>`;
   if (sp) h += `<p>${nm(sp)}, ${sp.age}: ${esc(Sim.occupation(s, sp))}.</p><div class="setting"><span>Children</span>${seg2('hoping', Y.hoping ? 1 : 0, [[1, 'Hoping for more'], [0, 'Not for now']])}</div>`;
@@ -4257,7 +4272,7 @@ function pauseMainHTML(s) {
   const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
   const here = s.people ? Sim.living(s).length : 0;
   const tiles = [
-    (() => { const c = Sim.calendar(s); return ['sun', c.dom + ' ' + c.monthName, c.season.charAt(0).toUpperCase() + c.season.slice(1) + ', year ' + c.year + ' \u00b7 ' + sm.clock]; })(),
+    (() => { const c = Sim.calendar(s); return ['sun', c.dom + ' ' + c.monthName, c.season.charAt(0).toUpperCase() + c.season.slice(1) + ', year ' + c.year + ' \u00b7 ' + c.next + ' in ' + c.daysLeft + 'd \u00b7 ' + sm.clock]; })(),
     ['coin', sm.coins + 'c', 'worth ' + sm.netWorth + 'c'],
     ['house', s.shops.length + (s.biz ? Object.values(s.biz).filter(b => b.owner === 'player').length : 0) + ' businesses', (s.houses ? s.houses.filter(h => h.owner === 'player').length : 0) + ' houses'],
     ['crown', 'Standing ' + v.standing, v.council ? 'on the council' : v.step > 0 ? 'known to the elder' : 'unknown'],
@@ -4319,7 +4334,7 @@ function seg(id, value, opts) { return `<div class="seg" role="group">${opts.map
 function settingsHTML() {
   const st = meta.settings, ar = G ? ({ 0: 'off', 60: 'calendar', 15: 'steady', 4: 'quick' }[G.ageRate] || (G.ageRate > 20 ? 'calendar' : G.ageRate > 6 ? 'steady' : 'quick')) : 'calendar';
   return `<h3>Settings</h3>
-  ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['calendar', 'With the calendar'], ['steady', 'Steady'], ['quick', 'Quick'], ['off', 'Off']])}<p>How fast everyone grows older. With the calendar, a year of life is a year of twelve five-day months (60 days). Steady is a year every 15 days, Quick a year every 4 days, so children grow up and generations pass while you play. Off stops ageing.</p></div>` : ''}
+  ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['steady', 'Steady'], ['calendar', 'Slow'], ['quick', 'Quick'], ['off', 'Off']])}<p>How fast everyone grows older. Steady (the usual) is a year of life every season, 15 days: a child grows up in about 240 days, so you can play your heirs. Slow follows the calendar, a year of life every 60 days, for one long life. Quick is a year every 4 days. Off stops ageing. When an heir is grown, you can hand everything over and retire from the Family page.</p></div>` : ''}
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 12 minutes, normal about 18, relaxed about 24. Wages, hunger, rent and work all follow the same clock.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
   <div class="setting"><span>Place cards</span>${seg('cards', st.cards || 'tab', [['tab', 'Name only until tapped'], ['open', 'Open as you arrive']])}<p>Walking past a place shows just its name at the bottom; tap it for the full card.</p></div>
@@ -4511,7 +4526,7 @@ document.addEventListener('input', e => {
   }
   if (id === 'newFirst' || id === 'newLast') { if (id === 'newFirst') UI.newFirst = e.target.value.trim(); else UI.newLast = e.target.value.trim(); const c = $('ccName'); if (c) c.textContent = fullNewName(); }
 });
-document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.duty) { act(['jDuty', e.target.dataset.duty, e.target.value]); return; } const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.duty) { act(['jDuty', e.target.dataset.duty, e.target.value]); return; } const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); if (id.startsWith('res-')) act(['policy', +e.target.dataset.shop, 'reserve', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
 $('taskBtn').onclick = () => openBook('tasks');
 $('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, MAP_C.r === 300 ? 460 : 190); };
@@ -5266,6 +5281,15 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.41', date: '5 November', title: 'Fair warning', items: [
+    'People now age a year every season (15 days) by default, so a child grows up in about 240 days and you can play your heirs. The slow calendar ageing (a year every 60 days) is still in Settings. When an heir is grown, you can hand everything over and retire from the Family page.',
+    'Winter is seen coming. The clock and the pause screen say how many days until the next season; the Ledger and the Shops page have a season box: what this season and the next will do, the last fifteen days of prices at the Trading Post, and what your shops have in storage. A manager can lay in a reserve in autumn and winter, but only while supplies are at or below their usual price, and within a daily limit.',
+    'Fear no longer silences everyone. It quiets people in public (by up to 70%), but frightened people may whisper what they know to your rivals at court instead. Hush money buys about twenty days of silence, not forever; then they may come back, for half as much again.',
+    'Mercy needs a true reason. Choose hardship, first offence, repayment, cooperation or making peace, and only reasons that fit the case are offered. Or pardon openly as a favour. The town weighs the reason against the harm and the person’s record, and every hearing shows how many times they have been found guilty before.',
+    'Captured bandits get a hearing: if the Marshal has not sentenced them in three days, the royal judges send them to the dungeon (or the road gangs if the treasury is short). Hanging now quiets the roads of the region they were taken in, not the whole realm, and the court only approves where those roads were truly dangerous.',
+    'Managers have a character. Candidates come with a word from those who know them (right more often than not), and anyone convicted of fraud is named as such. You can audit a manager’s books for 15c every five days; an audit finds most skimming and opens a case.',
+    'A house’s price follows the rent it has actually brought in over about two weeks, so a rent raised this morning adds nothing.',
+  ] },
   { v: '0.40', date: '5 November', title: 'Seasons, and justice in proportion', items: [
     'A calendar: five-day months, twelve months to a year, from Thawmonth to Snowmelt. The clock shows the date; the pause screen shows the season. People now age a year every sixty days by default (Settings can still make it quicker or stop it).',
     'Four seasons. The harvest comes in autumn and grain is cheap; in winter the fields are bare, wood dear as every hearth burns it, the mines slow, fewer travellers come, and thieves are bolder. Summer brings traders and good spirits. Prices rise and fall with the year. Winter turns the land grey and brings snow; autumn turns it gold.',

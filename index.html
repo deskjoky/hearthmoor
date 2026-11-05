@@ -764,7 +764,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const MONTH_DAYS = 5, YEAR_DAYS = 60;
   const MONTHS = ['Thawmonth', 'Seedmonth', 'Blossom', 'Highsun', 'Haymonth', 'Goldmonth', 'Reaping', 'Applefall', 'Leaffall', 'Frostmonth', 'Deepwinter', 'Snowmelt'];
   const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
-  function calendar(s) { const d = (s.day || 1) - 1, m = Math.floor(d / MONTH_DAYS) % 12; return { year: Math.floor(d / YEAR_DAYS) + 1, month: m, monthName: MONTHS[m], dom: d % MONTH_DAYS + 1, season: SEASONS[Math.floor(m / 3)] }; }
+  function calendar(s) { const d = (s.day || 1) - 1, m = Math.floor(d / MONTH_DAYS) % 12; const si = Math.floor(m / 3); return { year: Math.floor(d / YEAR_DAYS) + 1, month: m, monthName: MONTHS[m], dom: d % MONTH_DAYS + 1, season: SEASONS[si], next: SEASONS[(si + 1) % 4], daysLeft: 15 - (d % 15) }; }
   const seasonOf = s => calendar(s).season;
   // what each season does to the land and the roads
   const SEASON_FX = {
@@ -866,7 +866,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   /* ---------- new game ---------- */
   function newGame(seed, name) {
     const s = {
-      v: VERSION, ageRate: YEAR_DAYS, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
+      v: VERSION, ageRate: 15, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
       player: { x: P.home.x, z: P.home.z, face: 0, dest: null, action: null, inv: { grain: 0, wood: 0, ore: 0 } },
       shops: [], nextShop: 1, job: null, trades: { bakery: 0, smithy: 0, tavern: 0, joinery: 0 },
       agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null, village: freshVillage()
@@ -960,7 +960,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare' };
+  const FLOW_LABEL = { audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare' };
   function closeDay(s) {
     const st = s.stats;
     if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
@@ -971,7 +971,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.realm && s.towns && s.people) courtsDay(s);
     if (s.towns) townEvening(s);
     if (s.people) propertyDay(s);
-    goodsDay(s);
+    goodsDay(s); logPrices(s);
     if (s.realm) realmDay(s);
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
@@ -1055,24 +1055,37 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const town = townOfBiz(s, kind, ref);
     return living(s).filter(p => townOf(p) === town && !p.kid && !p.retired && p.age >= 22 && p.age <= 62 && (!p.job || p.job.type === 'commons' || (p.job.type === 'biz' && p.job.role === 'hand' && s.biz[p.job.biz] && s.biz[p.job.biz].owner === 'player')) && !isHousehold(p))
       .sort((a, b) => ((b.skill || 0.8) * 40 + (b.rep || 0) * 0.5 + (b.opinion || 0) * 0.2) - ((a.skill || 0.8) * 40 + (a.rep || 0) * 0.5 + (a.opinion || 0) * 0.2)).slice(0, 4)
-      .map(p => ({ pid: p.id, name: p.name, skill: p.skill || 0.8, ask: managerAsk(p), now: occupation(s, p) }));
+      .map(p => ({ pid: p.id, name: p.name, skill: p.skill || 0.8, ask: managerAsk(p), now: occupation(s, p), ref: referenceOf(s, p) }));
   }
   function report(s, text) { s.reports = s.reports || []; s.reports.unshift({ day: s.day, text }); if (s.reports.length > 40) s.reports.length = 40; }
   function releaseManager(s, m, why) { const p = m && s.people[m.pid]; if (p && p.job && p.job.type === 'manage') { p.job = null; plog(s, p, why || 'No longer a manager.'); } }
   // a dishonest manager may skim the takings; the books show it sooner or later, and sometimes an honest one is wrongly suspected
+  // everyone has a character: most are honest, some are not. It is fixed for life, and others only half know it
+  function charOf(p) { if (p.honest == null) { const n = parseInt(String(p.id).replace(/\D/g, ''), 10) || 7; p.honest = ((n * 2654435761) >>> 0) % 1000 / 1000; } return p.honest; }
+  // what a former employer or neighbour says of them: right more often than not, never certain
+  function referenceOf(s, p) {
+    const n = parseInt(String(p.id).replace(/\D/g, ''), 10) || 7, noise = (((n * 40503 + 97) >>> 0) % 1000 / 1000 - 0.5) * 0.5, seen = charOf(p) + noise;
+    const fraud = (p.record || 0) && allCourts(s).some(C => C.closed.some(c => c.kind === 'fraud' && c.accused === p.id && c.verdict === 'guilty'));
+    return fraud ? 'Convicted of fraud before' : seen > 0.62 ? 'Trusted by those who know them' : seen > 0.38 ? 'A mixed word from past work' : 'Doubtful: people count their change';
+  }
+  function openFraud(s, m, town, name, guilty, how) {
+    const mp = s.people[m.pid], C = town === 'hearthmoor' ? s.justice : s.courts && s.courts[town]; if (!mp || !C) return null;
+    if ((C.cases || []).some(k => k.status === 'open' && k.kind === 'fraud' && k.accused === mp.id)) return null;
+    const value = guilty ? m.skim : 8 + Math.floor(rand(s) * 15);
+    const c = newCase(s, 'fraud', { accused: mp.id, accuser: null, victim: 'player', value, where: name, truth: guilty ? 'guilty' : 'mistaken', excuse: guilty ? null : ['A cart of supplies was held at the toll gate; the receipts came a week late.', 'The missing coin was paid to a carpenter for repairs; the bill was filed under the wrong day.', 'The till was short because a customer paid in a foreign coin the clerk could not change.'][Math.floor(rand(s) * 3)], what: value + 'c missing from the takings of ' + name, claim: (how === 'audit' ? 'Your auditor finds the books of ' : 'The books of ') + name + ' ' + value + 'c short, and ' + mp.name + ' keeps them.' }, C);
+    c.hidden = evidencePool(s, c); if (how === 'audit' && guilty) c.evidence.push({ text: 'The auditor traces the missing coin to ' + mp.name + '’s purse.', w: 2 });
+    if (guilty) m.skim = 0;
+    event(s, 'The books of ' + name + ' are ' + value + 'c short. A case against ' + mp.name + ', your manager, is open in ' + C.name + '.', 'bad');
+    return c;
+  }
+  // a dishonest manager may skim the takings; the books show it sooner or later, and sometimes an honest one is wrongly suspected
   function managerFraud(s, m, town, name, did) {
     const mp = s.people[m.pid]; if (!mp) return;
-    if (m.honest == null) m.honest = Math.round(rand(s) * 100) / 100;
+    if (m.honest == null) m.honest = charOf(mp);
     if (m.honest < 0.3 && rand(s) < 0.04 + (m.skim ? 0.15 : 0)) { const x = Math.min(Math.max(0, s.coins), 3 + Math.floor(rand(s) * 8)); if (x > 0) { spend(s, x); mp.purse += x; m.skim = (m.skim || 0) + x; } }
-    const C = town === 'hearthmoor' ? s.justice : s.courts && s.courts[town];
-    if (!C || (C.cases || []).some(k => k.status === 'open' && k.kind === 'fraud' && k.accused === mp.id)) return;
     const guilty = m.skim > 0 && rand(s) < 0.06 + m.skim / 200, mistaken = !m.skim && rand(s) < 0.004;
     if (!guilty && !mistaken) return;
-    const value = guilty ? m.skim : 8 + Math.floor(rand(s) * 15);
-    const c = newCase(s, 'fraud', { accused: mp.id, accuser: null, victim: 'player', value, where: name, truth: guilty ? 'guilty' : 'mistaken', excuse: guilty ? null : ['A cart of supplies was held at the toll gate; the receipts came a week late.', 'The missing coin was paid to a carpenter for repairs; the bill was filed under the wrong day.', 'The till was short because a customer paid in a foreign coin the clerk could not change.'][Math.floor(rand(s) * 3)], what: value + 'c missing from the takings of ' + name, claim: 'The books of ' + name + ' are ' + value + 'c short, and ' + mp.name + ' keeps them.' }, C);
-    c.hidden = evidencePool(s, c); if (guilty) m.skim = 0;
-    did.push('the books are ' + value + 'c short, and a fraud case is open against ' + m.name);
-    event(s, 'The books of ' + name + ' are ' + value + 'c short. A case against ' + mp.name + ', your manager, is open in ' + C.name + '.', 'bad');
+    const c = openFraud(s, m, town, name, guilty); if (c) did.push('the books are ' + c.value + 'c short, and a fraud case is open against ' + m.name);
   }
   function managersDay(s, entry) {
     // anyone whose business has gone (sold, seized) goes back to looking for work
@@ -1086,9 +1099,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (!shop.policy.supplyRuns) { shop.policy.supplyRuns = true; did.push('set the worker to buy supplies'); }
       { /* the manager orders supplies in bulk overnight, a little cheaper, so the worker never has to leave the counter */
         const r = T.recipe, Ti = tierOf(shop), want = {};
-        for (const g of Object.keys(r)) want[g] = Math.max(0, Math.min(Ti.cap, r[g] * 4) - shop.stock[g]);
+        // before and through winter, a manager lays in a reserve of what the shop uses, if you allow it and can spare the coin
+        const reserve = shop.policy.reserve !== false && (seasonOf(s) === 'autumn' || seasonOf(s) === 'winter') && s.coins > 120;
+        for (const g of Object.keys(r)) want[g] = Math.max(0, Math.min(Ti.cap, r[g] * (reserve && goodsPrice(s, 'hearthmoor', g) <= GOODS_BASE[g] ? 10 : 4)) - shop.stock[g]);   // only while it is cheap: a sensible manager does not corner the market
         const price = g => Math.ceil(buyPrice(s, 'hearthmoor', g, want[g]) * 0.9), cost = () => Object.keys(want).reduce((a, g) => a + (want[g] ? price(g) : 0), 0);
-        while (cost() > Math.max(0, s.coins - 20) && Object.values(want).some(v => v > 0)) { const g = Object.keys(want).sort((a, b) => want[b] / r[b] - want[a] / r[a])[0]; want[g]--; }
+        while ((cost() > Math.max(0, s.coins - 20) || (reserve && cost() > 60 + budget * 4)) && Object.values(want).some(v => v > 0)) { const g = Object.keys(want).sort((a, b) => want[b] / r[b] - want[a] / r[a])[0]; want[g]--; }
         const c = cost(), got = Object.keys(want).filter(g => want[g]);
         if (got.length && c > 0) {
           spend(s, c); ss.supplies = (ss.supplies || 0) + c;
@@ -2073,6 +2088,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function loadPrice(s, t, g, n, dir) { let sum = 0; for (let k = 0; k < n; k++) sum += goodsPrice(s, t, g, dir * k); return sum; }
   const buyPrice = (s, t, g, n) => { n = n || 1; return Math.max(n, Math.round(loadPrice(s, t, g, n, -1) * 1.1)); };
   const sellPrice = (s, t, g, n) => { n = n || 1; return Math.max(0, Math.floor(loadPrice(s, t, g, n, 1) * 0.75)); };
+  // the last fifteen days of prices in every market, so a trend can be seen before the season turns
+  function logPrices(s) {
+    if (!s.goods) return; s.priceLog = s.priceLog || {};
+    for (const t in s.goods) { const L = s.priceLog[t] = s.priceLog[t] || {}; for (const g of GOODS) { const a = L[g] = L[g] || []; a.push(Math.round(goodsPrice(s, t, g) * 100) / 100); if (a.length > 15) a.shift(); } }
+  }
   function goodsDay(s) {
     setupGoods(s);
     for (const t in TOWN_GOODS) for (const g of GOODS) {
@@ -2225,7 +2245,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         p.owed = (p.owed || 0) + h.rent;
         const pay = Math.min(Math.max(0, p.purse), p.owed);
         if (pay > 0) {
-          p.purse -= pay; p.owed -= pay;
+          p.purse -= pay; p.owed -= pay; h.taken = (h.taken || 0) + pay;
           if (h.owner === 'player') { earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay; }
           else if (h.owner === 'office:lord') { if (lordHolder === 'player') { earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay; } else if (lordHolder && s.people[lordHolder]) s.people[lordHolder].purse += pay; }
           else if (h.owner && h.owner.startsWith('town:') && s.towns && s.towns[h.owner.slice(5)]) s.towns[h.owner.slice(5)].chest += pay;
@@ -4347,9 +4367,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return { k, name: f > 0.7 ? 'in the heart of town' : f > 0.4 ? 'near the market' : f > 0.15 ? 'a quiet street' : 'on the edge of town' };
   }
   const placeFactor = (town, x, z) => (LAND[town || 'hearthmoor'] || 1) * areaOf(town, x, z).k;
-  function houseValue(s, h) { if (h.rent0 == null) h.rent0 = h.rent; const fair = Math.min(h.rent, Math.max(1, h.rent0) * 1.25), lived = h.tenants.length || (s.player && s.player.house === h.id) ? 1 : 0.9; return Math.round((40 + fair * 45) * lived * placeFactor(h.town, h.x, h.z) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
+  function houseValue(s, h) { if (h.rent0 == null) h.rent0 = h.rent; /* a buyer pays for the rent the house has really been bringing in, over about two weeks, not the rent asked */ const earned = h.tenants.length ? Math.min(h.rent, h.rentAvg == null ? h.rent0 : h.rentAvg) : h.rent0, fair = Math.min(earned, Math.max(1, h.rent0) * 1.25), lived = h.tenants.length || (s.player && s.player.house === h.id) ? 1 : 0.9; return Math.round((40 + fair * 45) * lived * placeFactor(h.town, h.x, h.z) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
   function propertyDay(s) {
-    for (const h of s.houses) if (h.rent0 == null) h.rent0 = h.rent;
+    for (const h of s.houses) { if (h.rent0 == null) h.rent0 = h.rent; if (h.tenants.length) h.rentAvg = Math.round(((h.rentAvg == null ? h.rent0 : h.rentAvg) * 13 + (h.taken || 0)) / 14 * 100) / 100; h.taken = 0; }
     propertyMarket(s);
     for (const h of s.houses) if (h.owner === 'player') h.wear = Math.min(100, (h.wear || 0) + 0.4);
     // let businesses: the tenant pays you each day, or falls behind
@@ -4676,15 +4696,21 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       J.closed.unshift(c); jlog(s, 'Hoarding: ' + c.outcome, 'info', J); return;
     }
     if (verdict === 'mercy') {
-      // found guilty, and pardoned openly for a stated reason: lawful mercy, judged by the town on its merits
-      const deserving = A && (A.hungry || A.purse < 20 || (c.kind === 'poaching' && !c.organiser)) && c.value <= 30;
-      c.outcome = 'Found guilty by ' + by + ', and pardoned' + (pen.reason ? ' because ' + pen.reason : '') + '.'; c.mercy = true;
+      // found guilty, and pardoned openly for a stated reason: lawful mercy, judged by the town on the reason and the record
+      const why = MERCY[pen.why] ? pen.why : 'favour', ok = mercyFits(s, c, why), rec = A ? (A.record || 0) : 0;
+      if (why === 'repaid' && ok && A) { const pay = Math.min(c.value, Math.max(0, A.purse)); A.purse -= pay; if (vic) vic.purse += pay; else if (c.victim === 'chest') chestOf(s, J).chest += pay; else if (c.victim === 'crown' && s.realm) s.realm.treasury += pay; else if (c.victim === 'player') { earn(s, pay); s.stats.restitution = (s.stats.restitution || 0) + pay; } }
+      c.outcome = 'Found guilty by ' + by + ', and pardoned: ' + MERCY[why].said + '.'; c.mercy = why;
+      if (A) A.record = rec + 1;
       if (c.held) release(s, c.accused, 'Pardoned at the hearing.'); c.held = false;
-      if (A) A.opinion = clamp((A.opinion || 0) + 15, -100, 100);
-      if (vic) vic.opinion = clamp((vic.opinion || 0) - 6, -100, 100);
-      if (by === 'you') { if (J.id === 'hearthmoor') approve(s, 'elder', deserving ? 2 : -3); else { const T = s.towns && s.towns[J.id]; if (T) T.approval = clamp((T.approval || 50) + (deserving ? 2 : -3), 0, 100); } }
+      if (A) A.opinion = clamp((A.opinion || 0) + (why === 'favour' ? 25 : 15), -100, 100);
+      if (vic) vic.opinion = clamp((vic.opinion || 0) - (why === 'reconciled' && ok ? 0 : why === 'favour' ? 12 : 6), -100, 100);
+      // how the town takes it: a true reason for a small wrong is respected; a reason that does not fit, a repeat offender or
+      // open favour for a friend costs you
+      const harm = c.kind === 'assault' || c.value > 40, fair = ok && !(harm && rec >= 1) && why !== 'favour';
+      const d = why === 'favour' ? -4 : !ok ? -5 : fair ? 2 : -2;
+      if (by === 'you') { if (J.id === 'hearthmoor') approve(s, 'elder', d); else { const T = s.towns && s.towns[J.id]; if (T) T.approval = clamp((T.approval || 50) + d, 0, 100); } }
       J.closed.unshift(c); if (J.closed.length > 30) J.closed.length = 30;
-      jlog(s, CRIME[c.kind] + ' case against ' + (A ? A.name : 'someone') + ': ' + c.outcome + (deserving ? ' People think it fair.' : ' Some say it is favour, not mercy.'), 'info', J); return;
+      jlog(s, CRIME[c.kind] + ' case against ' + (A ? A.name : 'someone') + ': ' + c.outcome + (why === 'favour' ? ' Everyone knows it was a favour.' : !ok ? ' People know the reason is not true.' : fair ? ' People think it fair.' : ' It is ' + (rec >= 1 ? 'not their first time' : 'a serious wrong') + ', and some think mercy too soft.'), 'info', J); return;
     }
     if (verdict === 'dismiss') {
       c.outcome = 'Dismissed by ' + by + '.';
@@ -4698,7 +4724,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (pen.days && A) { const d = clamp(Math.round(pen.days), 1, maxDays(J)); if (!isHeld(A) && cellsFree(s, J) <= 0) parts.push('no cell free, so no time inside'); else { if (!isHeld(A)) hold(s, A.id, c, 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(), s.day + d, J); const pr = J.prisoners.find(x => x.pid === A.id); if (pr) { pr.until = s.day + d; pr.sentence = true; pr.reason = 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(); } parts.push(d + (d === 1 ? ' day' : ' days') + ' in the cells'); } }
       else if (c.held) release(s, c.accused, 'Released after the hearing.');
       c.outcome = 'Found guilty by ' + by + (parts.length ? ': ' + parts.join(', ') : ': a warning') + '.';
-      if (A) { A.opinion = clamp((A.opinion || 0) - (by === 'you' ? 15 : 5), -100, 100); A.mood = clamp(A.mood - 10, 0, 100); A.rep = Math.max(0, (A.rep || 0) - 10); }
+      if (A) { A.opinion = clamp((A.opinion || 0) - (by === 'you' ? 15 : 5), -100, 100); A.mood = clamp(A.mood - 10, 0, 100); A.rep = Math.max(0, (A.rep || 0) - 10); A.record = (A.record || 0) + 1; }
       fam.forEach(q => q.opinion = clamp((q.opinion || 0) - (by === 'you' ? 6 : 2), -100, 100));
       if (vic) vic.opinion = clamp((vic.opinion || 0) + (by === 'you' ? 6 : 2), -100, 100);
       if (c.truth !== 'guilty' && c.witnesses.some(x => x.leaned > 0)) s.justice.secrets.filter(x => x.kind === 'threat' && x.caseId === c.id).forEach(x => { x.weight += 2; x.text += ', and an innocent person was convicted on it'; });
@@ -4731,6 +4757,27 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     }
   }
 
+  // the reasons a judge can give for mercy, and whether each one is true of this case
+  const MERCY = {
+    hardship: { name: 'Hardship', said: 'they acted out of hunger and need' },
+    first: { name: 'First offence', said: 'it is their first offence' },
+    repaid: { name: 'They repay it', said: 'they have repaid what was taken' },
+    cooperated: { name: 'They cooperated', said: 'they named those behind it' },
+    reconciled: { name: 'Made peace', said: 'they have made peace with the one they wronged' },
+    favour: { name: 'As a favour', said: 'as a favour from the bench' }
+  };
+  function mercyFits(s, c, why) {
+    const A = s.people[c.accused]; if (!A) return false;
+    const vic = c.victim && s.people[c.victim];
+    if (why === 'hardship') return !!(A.hungry || A.purse < 20) && (c.kind === 'theft' || c.kind === 'poaching');
+    if (why === 'first') return !(A.record > 0);
+    if (why === 'repaid') return c.value > 0 && A.purse >= c.value && c.victim !== 'crown';
+    if (why === 'cooperated') return !!(c.organiser || c.guard);
+    if (why === 'reconciled') return !!vic && (c.kind === 'assault' || c.kind === 'theft') && (vic.opinion || 0) > -20 && (A.opinion || 0) > -20;
+    return true;
+  }
+  const mercyReasons = (s, c) => Object.keys(MERCY).filter(k => k === 'favour' || mercyFits(s, c, k)).map(k => ({ key: k, name: MERCY[k].name }));
+
   /* ---------- what you did, and who knows it ---------- */
   // how bad an abuse is: what it did, how much it took, and whether you have done it before
   function secret(s, kind, text, knownBy, weight, where, caseId) {
@@ -4753,12 +4800,16 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       // spreads it further, but hearsay is not evidence.
       if (!k.sources) { k.sources = k.knownBy.map(id => ({ pid: id, role: 'witness' })); k.heard = []; }
       for (const src of k.sources) {
-        const p = s.people[src.pid]; if (!p || p.status !== 'here' || (k.paid || {})[src.pid]) continue;
+        const p = s.people[src.pid]; if (!p || p.status !== 'here' || hushed(s, k, src.pid)) continue;
+        // frightened people who will not speak in public may still whisper to someone who can use it
+        if (J.fear >= 40 && src.role !== 'beneficiary' && !k.leaked && rand(s) < 0.006 * J.fear / 40) leak(s, k, p);
         if (rand(s) < talkChance(s, p, src.role)) { const t = villagers(s).filter(q => !q.kid && !k.knownBy.includes(q.id)); const q = t[Math.floor(rand(s) * t.length)]; if (q) { k.heard.push(q.id); k.knownBy.push(q.id); } }
       }
       for (const id of k.heard.slice()) { const p = s.people[id]; if (p && rand(s) < 0.03) { const t = villagers(s).filter(q => !q.kid && !k.knownBy.includes(q.id)); const q = t[Math.floor(rand(s) * t.length)]; if (q) { k.heard.push(q.id); k.knownBy.push(q.id); } } }
       // someone who knows may ask a price for keeping quiet
       if (!k.demanded && rand(s) < 0.04) { const who = (k.sources || []).filter(x => x.role !== 'victim').map(x => s.people[x.pid]).find(p => p && p.status === 'here' && p.opinion < 20 && !council.has(p.id)); if (who) { k.demanded = { pid: who.id, amount: 15 + Math.floor(rand(s) * 25), day: s.day }; jlog(s, who.name + ' knows what happened (' + k.text + ') and wants ' + k.demanded.amount + 'c to keep quiet.', 'bad'); } }
+      // bought silence wears off: when it does, they may come back for more
+      if (k.demanded && k.demanded.paid && k.demanded.until && s.day >= k.demanded.until && rand(s) < 0.15) { const q = s.people[k.demanded.pid]; if (q && q.status === 'here') { const amt = Math.round(k.demanded.amount * 1.5); k.demanded = { pid: q.id, amount: amt, day: s.day, again: (k.demanded.again || 0) + 1 }; jlog(s, q.name + ' comes back about ' + k.text + '. The price of silence is now ' + amt + 'c.', 'bad'); } }
       if (k.demanded && k.demanded.day && s.day - k.demanded.day > 3 && !k.demanded.paid) { k.knownBy.push(...villagers(s).filter(q => !q.kid).slice(0, 3).map(q => q.id)); k.demanded.day = null; }
       // rumour reaching the council starts an inquiry only if someone who saw it is willing to say so
       const willing = witnessesFor(s, k), onCouncil = k.knownBy.filter(id => council.has(id)).length;
@@ -4767,14 +4818,24 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     }
     if (J.inquiry && s.day >= J.inquiry.day) closeInquiry(s);
   }
+  // hush money buys about twenty days of silence, not forever
+  const HUSH_DAYS = 20;
+  function hushed(s, k, pid) { const v = (k.paid || {})[pid]; return v === true ? s.day < (k.demanded && k.demanded.until || 0) : typeof v === 'number' && s.day < v; }
+  function leak(s, k, p) {
+    k.leaked = true; const R = s.realm;
+    if (R) { R.favour = clamp(R.favour - Math.min(6, 2 * k.weight), 0, 100); realmLog(s, 'Word reaches the court, by way of ' + p.name + ', that ' + k.text + '. Your rivals make use of it.', 'bad'); }
+    k.knownBy.push(...villagers(s).filter(q => !q.kid && !k.knownBy.includes(q.id)).slice(0, 2).map(q => q.id));
+    jlog(s, p.name + ' would not speak up, but has whispered what they know (' + k.text + ') to people who can use it.', 'bad');
+  }
   function talkChance(s, p, role) {
     const fear = s.justice.fear, likes = (p.opinion || 0) > 40;
     const base = { victim: 0.1, family: 0.07, witness: 0.035 + (p.honest > 0.7 ? 0.03 : 0), official: 0.05, beneficiary: (p.opinion || 0) < -30 ? 0.03 : 0 }[role] || 0.03;
-    return Math.max(0, base + (p.grudge ? 0.04 : 0) - fear / 500 - (likes ? 0.04 : 0));
+    // fear quiets people in public but never fully: it can cut what they say by at most 70%
+    return Math.max(0, base * Math.max(0.3, 1 - fear / 120) + (p.grudge ? 0.04 : 0) - (likes ? 0.04 : 0));
   }
   // who would stand up and say it: those who saw it themselves, are not too afraid, and are not bought or loyal
   function witnessesFor(s, k) {
-    return (k.sources || []).filter(src => { const p = s.people[src.pid]; if (!p || p.status !== 'here' || (k.paid || {})[src.pid] || src.role === 'beneficiary') return false; return ((p.opinion || 0) < 25 || src.role === 'victim') && s.justice.fear < 70 + (src.role === 'victim' ? 20 : 0); });
+    return (k.sources || []).filter(src => { const p = s.people[src.pid]; if (!p || p.status !== 'here' || hushed(s, k, src.pid) || src.role === 'beneficiary') return false; return ((p.opinion || 0) < 25 || src.role === 'victim') && s.justice.fear < 70 + (src.role === 'victim' ? 20 : 0); });
   }
   function openInquiry(s, k) {
     const J = s.justice; if (J.inquiry) { J.inquiry.charges.push(k.id); return; }
@@ -4884,7 +4945,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       case 'jHush': {
         const k = J.secrets.find(x => x.id === a); if (!k || !k.demanded || k.demanded.paid) return fail('No one is asking.');
         const q = s.people[k.demanded.pid];
-        if (b) { if (s.coins < k.demanded.amount) return fail('You need ' + k.demanded.amount + 'c.'); spend(s, k.demanded.amount); s.stats.hush = (s.stats.hush || 0) + k.demanded.amount; if (q) q.purse += k.demanded.amount; k.demanded.paid = true; k.paid = Object.assign(k.paid || {}, { [k.demanded.pid]: true }); jlog(s, 'You pay ' + (q ? q.name : 'them') + ' to keep quiet.'); }
+        if (b) { if (s.coins < k.demanded.amount) return fail('You need ' + k.demanded.amount + 'c.'); spend(s, k.demanded.amount); s.stats.hush = (s.stats.hush || 0) + k.demanded.amount; if (q) q.purse += k.demanded.amount; k.demanded.paid = true; k.demanded.until = s.day + HUSH_DAYS; k.paid = Object.assign(k.paid || {}, { [k.demanded.pid]: s.day + HUSH_DAYS }); jlog(s, 'You pay ' + (q ? q.name : 'them') + ' to keep quiet.'); }
         else { k.demanded.day = s.day - 3; jlog(s, 'You refuse to pay. ' + (q ? q.name : 'They') + ' will talk.', 'bad'); }
         return ok();
       }
@@ -5023,6 +5084,23 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     else decide(s, c, 'dismiss', {}, by);
     if (w >= 3 && c.kind === 'corruption' && A && T && T.mayor === A.id) { const nx = (T.council || []).map(x => s.people[x]).find(p => p && p.status === 'here' && p !== A); if (nx) { T.mayor = nx.id; jlog(s, A.name + ' is removed as ' + T.title + ' of ' + C.name + '. ' + nx.name + ' takes their place.', 'info', C); } }
   }
+  // what becomes of captured bandits. Hanging quiets the roads they were taken on, and frightens the towns nearby;
+  // the rest of the realm hears of it, but its own roads are another matter
+  function sentenceBandits(s, m, fate, by) {
+    const R = s.realm, n = m.n, from = m.region, rn = REGIONS[from] || 'the roads', who = by === 'you' ? '' : ' (' + by + ')';
+    if (fate === 'press') { R.pressed = (R.pressed || []).concat({ n, day: s.day, region: from }); realmLog(s, n + ' captured bandits are pressed into the garrisons' + who + '. Whether they stay is another matter.', 'info'); }
+    else if (fate === 'prison') { R.banditPrison = (R.banditPrison || []).concat({ n, until: s.day + 20, region: from }); realmLog(s, n + ' bandits taken in ' + rn + ' go to the castle dungeon for twenty days' + who + ', at 1c a day each from the treasury.', 'info'); }
+    else if (fate === 'work') { const g = R.regions[from]; if (g) g.roads = Math.min(3, (g.roads || 0) + 1); R.workGang = (R.workGang || []).concat({ n, until: s.day + 15, region: from }); realmLog(s, n + ' bandits are set to mend the roads of ' + rn + ' under guard' + who + '.', 'info'); }
+    else if (fate === 'pardon') { R.parolees = (R.parolees || []).concat({ n, day: s.day, region: from }); const T = s.towns && s.towns[from]; if (T) T.approval = clamp((T.approval || 50) + 2, 0, 100); realmLog(s, n + ' bandits are pardoned on their oath to keep the peace' + who + '.', 'info'); }
+    else {
+      const bad = s.bandits && (s.bandits[from] || 0);
+      if (s.bandits && typeof s.bandits[from] === 'number') s.bandits[from] = Math.max(0, s.bandits[from] - Math.min(8, n * 2));
+      // where the roads were truly dangerous the court approves; where they were not, it looks like cruelty
+      R.favour = clamp(R.favour + (bad > 40 ? 1 : -1), 0, 100);
+      const T = s.towns && s.towns[from]; if (T) T.approval = clamp((T.approval || 50) - 2, 0, 100);
+      realmLog(s, n + ' bandits are hanged at the crossroads of ' + rn + who + '. Those roads go quiet for a while; the town nearby shivers.', 'info');
+    }
+  }
   function townSmuggling(s, C, folk) {
     const R = s.realm, owners = folk.filter(p => p.job && (p.job.role === 'owner' || (p.job.what || '').includes('dock'))), A = owners[Math.floor(rand(s) * owners.length)]; if (!A) return;
     const guilty = rand(s) < 0.7, good = ['cloth', 'wine', 'salt', 'spice'][Math.floor(rand(s) * 4)], value = Math.round((20 + rand(s) * 50) * (R ? R.tariff : 1));
@@ -5066,7 +5144,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (T.hoard && s.day - T.hoard.day > 25 && !(s.courts[C.id] && s.courts[C.id].cases.some(x => x.kind === 'hoarding' && x.accused === T.hoard.pid))) { s.goods[C.id][T.hoard.good] += T.hoard.qty; T.hoard = null; }
     }
     // soldiers back from the roads bring prisoners of their own
-    const R = s.realm; if (R && R.military) R.military = R.military.filter(m => s.day - m.day < 30);
+    // captured bandits have a hearing too: if the Marshal has not sentenced them in three days, the royal judges do
+    const R = s.realm; if (R && R.military) { for (const m of R.military.filter(m => m.day == null || s.day - m.day >= 3)) sentenceBandits(s, m, R.treasury >= m.n * 20 ? 'prison' : 'work', 'the royal judges'); R.military = R.military.filter(m => m.day != null && s.day - m.day < 3); }
     if (R && s.bandits) {
       // what became of the bandits you sentenced
       (R.pressed || []).forEach(x => { if (!x.done && s.day - x.day >= 8) { x.done = true; const gone = Math.round(x.n * (0.2 + rand(s) * 0.3)), stay = x.n - gone; if (gone) s.bandits[x.region] = (s.bandits[x.region] || 0) + gone * 4; if (stay >= 3) { const g = R.regions[x.region]; if (g) g.garrison = Math.min(3, g.garrison + 1); } realmLog(s, gone ? gone + ' of the pressed bandits have deserted' + (stay >= 3 ? '; the rest strengthen the garrison.' : '.') : 'The pressed bandits have settled into the garrison.', gone ? 'bad' : 'good'); } });
@@ -5134,13 +5213,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       case 'xMartial': {
         if (!seat('war')) return fail('Only the Marshal tries military prisoners.');
         const M = R.military || []; if (!M.length) return fail('There are no military prisoners.');
-        const n = M.reduce((x, m) => x + m.n, 0), from = M[0].region; R.military = [];
-        // pressed men may desert; pardoned men may go back to the roads; prisoners cost the treasury; work mends the roads
-        if (b === 'press') { R.pressed = (R.pressed || []).concat({ n, day: s.day, region: from }); realmLog(s, n + ' captured bandits are pressed into the garrisons. Whether they stay is another matter.', 'info'); }
-        else if (b === 'prison') { R.banditPrison = (R.banditPrison || []).concat({ n, until: s.day + 20, region: from }); realmLog(s, n + ' bandits go to the castle dungeon for twenty days, at 1c a day each from the treasury.', 'info'); }
-        else if (b === 'work') { const g = R.regions[from]; if (g) g.roads = Math.min(3, (g.roads || 0) + 1); R.workGang = (R.workGang || []).concat({ n, until: s.day + 15, region: from }); realmLog(s, n + ' bandits are set to mend the roads of ' + REGIONS[from] + ' under guard.', 'info'); }
-        else if (b === 'pardon') { R.parolees = (R.parolees || []).concat({ n, day: s.day, region: from }); for (const id in s.towns) s.towns[id].approval = clamp((s.towns[id].approval || 50) + 1, 0, 100); realmLog(s, n + ' bandits are pardoned on their oath to keep the peace.', 'info'); }
-        else { for (const id in s.bandits) if (typeof s.bandits[id] === 'number') s.bandits[id] = Math.max(0, s.bandits[id] - 5); R.favour = clamp(R.favour + 2, 0, 100); for (const id in s.towns) s.towns[id].approval = clamp((s.towns[id].approval || 50) - 1, 0, 100); realmLog(s, n + ' bandits are hanged at the crossroads. The roads go quiet for a while; the towns shiver.', 'info'); }
+        if (!['hang', 'press', 'prison', 'work', 'pardon'].includes(b)) return fail('Unknown sentence.');
+        R.military = []; for (const m of M) sentenceBandits(s, m, b, 'you');
         return ok();
       }
       case 'xReview': {
@@ -5909,6 +5983,17 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         return ok();
       }
       case 'ride': if (!p.horse) return fail('You have no horse.'); p.riding = !p.riding; return ok();
+      case 'audit': {
+        // a: 'shop' or 'biz', b: its id. An auditor goes through the books: 15c, once every five days
+        const o = a === 'shop' ? shopById(s, b) : s.biz[b]; if (!o || !o.manager) return fail('There is no manager to audit.');
+        const m = o.manager; if (m.audited != null && s.day - m.audited < 5) return fail('The books were audited on day ' + m.audited + '.');
+        if (s.coins < 15) return fail('An audit costs 15c.');
+        spend(s, 15); m.audited = s.day;
+        const town = a === 'shop' ? 'hearthmoor' : (o.town || 'hearthmoor'), name = managedName(s, a, b);
+        if (m.skim > 0 && rand(s) < 0.75) { openFraud(s, m, town, name, true, 'audit'); return ok('found'); }
+        const mp = s.people[m.pid]; if (mp) mp.opinion = clamp((mp.opinion || 0) - (m.honest >= 0.3 ? 4 : 0), -100, 100);
+        report(s, 'The audit of ' + name + ' finds the books in order.'); return ok('clean');
+      }
       case 'hireManager': {
         // a: 'shop' or 'biz', b: its id, c: the person
         const o = a === 'shop' ? shopById(s, b) : s.biz[b];
@@ -5920,7 +6005,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const q = s.people[c];
         if (q.job && q.job.type === 'biz') { const ob = s.biz[q.job.biz]; if (ob) ob.staff = ob.staff.filter(x => x.pid !== q.id); }
         q.job = { type: 'manage', kind: a, ref: b }; q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
-        o.manager = { pid: q.id, name: q.name, skill: cand.skill, wage: cand.ask, budget: 10, staffTarget: a === 'biz' ? Math.max(1, o.staff.length) : 0, since: s.day };
+        o.manager = { pid: q.id, name: q.name, skill: cand.skill, wage: cand.ask, budget: 10, staffTarget: a === 'biz' ? Math.max(1, o.staff.length) : 0, since: s.day, honest: charOf(q) };
         plog(s, q, 'Became manager of ' + managedName(s, a, b) + ' for ' + s.name + ' at ' + cand.ask + 'c a day.');
         event(s, q.name + ' will manage ' + managedName(s, a, b) + ' for ' + cand.ask + 'c a day, with a budget of 10c a day for wages, supplies and repairs.', 'good');
         return ok();
@@ -6168,7 +6253,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
@@ -8754,7 +8839,7 @@ function myBusinesses(s) {
 function hud(s) {
   { const n = taskList(s).filter(x => !x.soft).length, el = $('taskN'); if (el && el.textContent !== String(n || '')) el.textContent = n || ''; }
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
-  { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year; }
+  { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year + '. ' + c.next.charAt(0).toUpperCase() + c.next.slice(1) + ' in ' + c.daysLeft + (c.daysLeft === 1 ? ' day.' : ' days.'); }
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
   const inv = s.player.inv, chips = [];
   rankWatch(s);
@@ -8862,7 +8947,7 @@ function pageLedger(s) {
     }
     html += `</div>`;
   }
-  return html.replace('</p>', '</p>' + managerNews(s));
+  return html.replace('</p>', '</p>' + seasonBox(s) + managerNews(s));
 }
 function managerNews(s) {
   const dec = s.decisions || [], rep = (s.reports || []).slice(0, 8);
@@ -8875,6 +8960,19 @@ function managerNews(s) {
 function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
 function willing(shop, price, trav) { const T = TR[shop.trade]; return Math.round(100 * (1 - 0.5 * (1 + erf((price - Sim.wtpMean(shop, trav)) / (T.sd * Math.SQRT2))))); }
 function willText(shop) { return `About ${willing(shop, shop.price, false)}% of villagers and ${willing(shop, shop.price, true)}% of travelers will pay this.`; }
+// the season ahead: what it will do, and where prices are heading, so a shop can prepare
+const SEASON_SAY = {
+  spring: 'Grain is short until the new crop comes; travellers return.',
+  summer: 'The busiest season on the roads: about a quarter more travellers, and good spirits. Wood is cheap.',
+  autumn: 'The harvest: grain is plentiful and cheap. The time to lay in stock for winter.',
+  winter: 'The fields are bare: grain dear, wood burned in every hearth, the mines slow, travellers down by 40%, thieves bolder, spirits low.'
+};
+function seasonBox(s) {
+  const c = Sim.calendar(s), L = (s.priceLog || {}).hearthmoor || {};
+  const trend = g => { const a = L[g] || []; if (a.length < 2) return ''; const now = a[a.length - 1], then = a[0], d = now - then; return `<dt>${g.charAt(0).toUpperCase() + g.slice(1)}</dt><dd class="num">${now.toFixed(2)}c ${Math.abs(d) < 0.05 ? '· steady' : d > 0 ? '· up ' + d.toFixed(2) + 'c' : '· down ' + (-d).toFixed(2) + 'c'} <small>over ${a.length} days</small></dd>`; };
+  const ups = s.shops.map(x => { const T = TR[x.trade], Ti = Sim.tierOf(x); const per = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * Sim.buyPrice(s, 'hearthmoor', g), 0); const held = Object.keys(T.recipe).map(g => x.stock[g] + ' ' + g).join(', '); return `<li>${esc(Ti.name)}: supplies cost ${per.toFixed(1)}c a batch at today’s prices; in storage ${held}.</li>`; }).join('');
+  return `<div class="box"><h5>${c.season.charAt(0).toUpperCase() + c.season.slice(1)}, ${c.dom} ${c.monthName} · ${c.next} in ${c.daysLeft} ${c.daysLeft === 1 ? 'day' : 'days'}</h5><p>Now: ${SEASON_SAY[c.season]}</p><p><b>Coming:</b> ${SEASON_SAY[c.next]}</p>${L.grain ? `<p>Prices at the Trading Post in Hearthmoor:</p><dl class="kv">${['grain', 'wood', 'ore'].map(trend).join('')}</dl>` : ''}${ups ? `<ul class="notes">${ups}</ul>` : ''}</div>`;
+}
 function businessTowns(s) {
   const mine = myBusinesses(s), towns = Object.keys(TOWN_NAMES), count = t => mine.filter(x => x.town === t).length;
   let t0 = UI.btown;
@@ -8893,7 +8991,7 @@ function businessTowns(s) {
 }
 function pageShops(s, only) {
   let html = only ? '' : `<h3>Your Shops and Businesses</h3><p class="lead">Pick a town, then tap Manage on the place you want to run.</p>`;
-  if (!only) return html + businessTowns(s);
+  if (!only) return html + seasonBox(s) + businessTowns(s);
   if (!s.shops.length) {
     html += `<p>You own no shops yet. Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the four shops on the square, then open your own on an empty lot.</p><table class="trades"><thead><tr><th>Trade</th><th>Learn at</th><th>To open</th><th>Makes</th></tr></thead><tbody>
       ${Sim.TRADE_KEYS.map(k => { const T = TR[k], e = Sim.EMPLOYERS.find(x => x.trade === k); return `<tr><td>${T.name} ${Sim.learned(s, k) ? '<span class="pill yes">learned</span>' : ''}</td><td>${esc(e.name)}</td><td>${Sim.costText(T.tiers[0].cost)}</td><td>${T.many} from ${Sim.recipeText(k)}</td></tr>`; }).join('')}</tbody></table>`;
@@ -8910,6 +9008,7 @@ function pageShops(s, only) {
       <input type="range" id="price-${shop.id}" data-shop="${shop.id}" min="1" max="${Math.round(T.wtp * 2.2)}" step="1" value="${shop.price}" aria-label="Price for ${T.many}">
       <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div></div>`;
     if (shop.worker) html += `<p><label><input type="checkbox" id="pol-${shop.id}" data-shop="${shop.id}" ${shop.policy.supplyRuns ? 'checked' : ''}> ${esc(shop.worker.name)} buys ${Object.keys(T.recipe).join(' and ')} at the Trading Post when storage runs out</label></p>`;
+    if (shop.manager) html += `<p><label><input type="checkbox" id="res-${shop.id}" data-shop="${shop.id}" ${shop.policy.reserve !== false ? 'checked' : ''}> In autumn and winter, the manager lays in a reserve of ${Object.keys(T.recipe).join(' and ')} (up to ${Ti.cap} each, and no more than about ${60 + shop.manager.budget * 4}c a day)</label></p>`;
     if (next) {
       const can = Sim.canPay(s, next.cost, shop);
       html += `<div class="box"><h5>Upgrade to ${esc(next.name)}</h5><dl class="kv"><dt>Cost</dt><dd>${Sim.costText(next.cost)}</dd><dt>You have</dt><dd>${s.coins}c${Sim.GOODS.filter(g => next.cost[g]).map(g => ', ' + (s.player.inv[g] + shop.stock[g]) + ' ' + g).join('')}</dd>
@@ -8934,12 +9033,13 @@ function managerBox(s, kind, ref, title) {
       <div class="stepper"><button type="button" data-c='${JSON.stringify(['managerBudget', kind, ref, m.budget - 5])}' aria-label="Lower budget">&minus;</button><output class="num">${m.budget}c</output><button type="button" data-c='${JSON.stringify(['managerBudget', kind, ref, m.budget + 5])}' aria-label="Raise budget">+</button></div>
       ${kind === 'biz' ? `<p><b>Staff to keep</b> besides the manager:</p><div class="stepper"><button type="button" data-c='${JSON.stringify(['staffTarget', ref, (m.staffTarget || 0) - 1])}' aria-label="Fewer staff">&minus;</button><output class="num">${m.staffTarget || 0}</output><button type="button" data-c='${JSON.stringify(['staffTarget', ref, (m.staffTarget || 0) + 1])}' aria-label="More staff">+</button></div>` : '<p>They keep a worker on, pay fair wages, order supplies and set the price to what sells.</p>'}
       ${o.disrepair ? `<p class="why">Needs mending: takings are down by a third. ${B_('Mend it · ' + (o.repairCost || 30) + 'c', ['repairBiz', ref], '', s.coins < (o.repairCost || 30))}</p>` : ''}
+      <div class="acts">${B_('Audit the books · 15c', ['audit', kind, ref], 'alt', s.coins < 15 || (m.audited != null && s.day - m.audited < 5))}</div><p class="why">${m.audited != null ? 'Last audited on day ' + m.audited + '. ' : ''}An auditor checks the takings against the tallies. Honest managers don\u2019t love being checked.</p>
       <div class="acts">${UI.confirm === 'mgr' + kind + ref ? B_('Yes, let ' + esc(m.name) + ' go', ['fireManager', kind, ref], 'warn') + B_('Keep them', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'mgr' + kind + ref], 'alt')}</div></div>`;
   }
   if (kind === 'shop' && !(o.tier > 0)) return `<div class="box"><h5>${esc(title)}: no manager</h5><p>A ${esc(Sim.tierOf(o).name)} is too small for a manager. Upgrade it and you can put someone in charge.</p></div>`;
   const cands = Sim.managerCandidates(s, kind, ref);
   return `<div class="box"><h5>${esc(title)}: no manager</h5><p>${kind === 'shop' ? 'A manager draws in regulars and travellers, about a third more customers, and works beside your worker, so goods are made and customers served up to half again as fast. They order supplies overnight at a tenth off so storage never runs dry, keep your worker content, hire a new one if they quit, and set prices by what sold.' : 'A manager counts as one more pair of hands, haggles a tenth off supplies, hires and keeps staff, pays fair wages and small repairs, and reports to you each evening.'}</p>
-    ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}</span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
+    ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}<br><small>${esc(c.ref)}</small></span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
 }
 function pageManage(s) {
   const F = UI.focus || [], all = B_('Show all businesses', ['ui', 'manage', null], 'alt');
@@ -9071,10 +9171,10 @@ function hearActs(s, c, C, presets) {
   a.push(P_('Guilty: a warning' + (c.value && K !== 'smuggling' && K !== 'poaching' ? ', repay' : ''), {}));
   a.push(P_('Guilty: 2 days’ work for the ' + (C.id === 'hearthmoor' ? 'village' : 'town'), { work: 2 }));
   for (const [lab, pen, cls] of presets) a.push(P_(lab + dl(pen.days), pen, cls));
-  const why = A && (A.hungry || A.purse < 20) ? 'they were hungry and poor' : 'it was a first offence';
-  a.push(P_('Guilty, but pardon them: ' + why, { reason: why }, 'alt', 'mercy'));
+  const rec = A ? (A.record || 0) : 0;
+  for (const m of Sim.mercyReasons(s, c)) a.push(P_('Guilty, but pardon: ' + m.name.toLowerCase(), { why: m.key }, m.key === 'favour' ? 'warn' : 'alt', 'mercy'));
   return `<p><b>Hear it now:</b></p><div class="acts">${a.join('')}</div>
-    <p class="why">Fines go to <button type="button" class="linklike" data-c='${JSON.stringify(['ui', 'fineTo', ft === 'chest' ? 'you' : 'chest'])}'>${ft === 'chest' ? (C.id === 'hearthmoor' ? 'the village chest' : 'the town chest') : 'your own purse'}</button>. A day in ${esc(C.place)} is ${lifeOf(s, 1) || 'a day'}${s.ageRate ? '' : ' (no one ages)'}: keep long sentences for serious harm. Mercy is lawful when it is open and has a reason; the town judges whether the reason is fair.${c.value && K !== 'smuggling' && K !== 'poaching' ? ' Repaying ' + c.value + 'c goes to ' + (c.victim === 'chest' ? 'the chest' : c.victim === 'player' ? 'you' : c.victim === 'crown' ? 'the treasury' : 'the victim') + '.' : ''}</p>`;
+    <p class="why">Fines go to <button type="button" class="linklike" data-c='${JSON.stringify(['ui', 'fineTo', ft === 'chest' ? 'you' : 'chest'])}'>${ft === 'chest' ? (C.id === 'hearthmoor' ? 'the village chest' : 'the town chest') : 'your own purse'}</button>. A day in ${esc(C.place)} is ${lifeOf(s, 1) || 'a day'}${s.ageRate ? '' : ' (no one ages)'}: keep long sentences for serious harm. ${A ? esc(A.name.split(' ')[0]) + (rec ? ' has been found guilty ' + rec + (rec === 1 ? ' time' : ' times') + ' before. ' : ' has no record. ') : ''}Mercy is lawful when the reason is true; only reasons that fit this case are offered, and pardoning a friend is open favour. The town weighs the reason against the harm and their record.${c.value && K !== 'smuggling' && K !== 'poaching' ? ' Repaying ' + c.value + 'c goes to ' + (c.victim === 'chest' ? 'the chest' : c.victim === 'player' ? 'you' : c.victim === 'crown' ? 'the treasury' : 'the victim') + '.' : ''}</p>`;
 }
 function caseCardX(s, c, C) {
   const judge = Sim.canJudge(s, C) || Sim.tradeJudge(s, c), A = s.people[c.accused], w = Sim.caseWeight(c), shownW = c.witnesses.filter(x => x.shown || x.leaned);
@@ -9116,7 +9216,7 @@ function crownPowers(s) {
   let h = '';
   if (seat('treasury')) h += `<div class="box"><h5>Lord Treasurer: the town chests</h5><p>Send clerks to audit every town chest for money gone missing. Once a week.</p><div class="acts">${B_('Audit the chests', ['xAudit'], 'alt', R.lastAudit != null && s.day - R.lastAudit < 7)}</div></div>`;
   if (seat('trade')) h += `<div class="box"><h5>Master of Trade: the markets</h5><p>Look into hoarding and market abuses in every town.${R.monopoly ? ' ' + esc(s.people[R.monopoly.pid].name) + ' holds the bakeries in a grip; the charter can break it.' : ''}</p><div class="acts">${B_('Inquire into the markets', ['xMarket'], 'alt', R.lastMarket != null && s.day - R.lastMarket < 5)}</div></div>`;
-  if (seat('war')) { const M = (R.military || []).reduce((x, m) => x + m.n, 0); h += `<div class="box"><h5>Marshal: the soldiers</h5><p>Soldiers sweep the roads of bandits (50c from the treasury). They are not the watch, and leave the towns to it.</p><div class="acts">${Object.keys(R.regions).filter(id => s.bandits && s.bandits[id] != null).map(id => B_('Sweep ' + esc(Sim.REGIONS[id].replace(/^the /, '')) + ' · bandits ' + Math.round(s.bandits[id]), ['xSoldiers', id], 'alt', R.treasury < 50)).join('')}</div>${M ? `<p>${M} captured bandits are held at the castle.</p><div class="acts">${B_('Hang them', ['xMartial', null, 'hang'], 'warn')}${B_('Press them into the garrisons', ['xMartial', null, 'press'], 'alt')}${B_('Dungeon, 20 days', ['xMartial', null, 'prison'], 'alt')}${B_('Road gangs', ['xMartial', null, 'work'], 'alt')}${B_('Pardon on oath', ['xMartial', null, 'pardon'], 'alt')}</div><p class="why">Hanging quiets the roads and frightens the towns. Pressed men may desert; the dungeon costs the treasury 1c a day each; road gangs mend the roads; some pardoned men go back to robbing.</p>` : ''}</div>`; }
+  if (seat('war')) { const M = (R.military || []).reduce((x, m) => x + m.n, 0); h += `<div class="box"><h5>Marshal: the soldiers</h5><p>Soldiers sweep the roads of bandits (50c from the treasury). They are not the watch, and leave the towns to it.</p><div class="acts">${Object.keys(R.regions).filter(id => s.bandits && s.bandits[id] != null).map(id => B_('Sweep ' + esc(Sim.REGIONS[id].replace(/^the /, '')) + ' · bandits ' + Math.round(s.bandits[id]), ['xSoldiers', id], 'alt', R.treasury < 50)).join('')}</div>${M ? `<p>${M} captured bandits are held at the castle.</p><div class="acts">${B_('Hang them', ['xMartial', null, 'hang'], 'warn')}${B_('Press them into the garrisons', ['xMartial', null, 'press'], 'alt')}${B_('Dungeon, 20 days', ['xMartial', null, 'prison'], 'alt')}${B_('Road gangs', ['xMartial', null, 'work'], 'alt')}${B_('Pardon on oath', ['xMartial', null, 'pardon'], 'alt')}</div><p class="why">Hanging quiets the roads where they were taken and frightens the town nearby; the court approves only where the roads were truly dangerous. Pressed men may desert; the dungeon costs the treasury 1c a day each; road gangs mend the roads; some pardoned men go back to robbing. Unsentenced after three days, the royal judges send them to the dungeon (or the road gangs if the treasury is short).</p>` : ''}</div>`; }
   if (seat('law')) h += `<div class="box"><h5>Lord Justice: detentions and officials</h5><p>Free anyone held without lawful cause in any court, and look into the king’s officers for misconduct. You can also overturn convictions and pardon on any court’s page.</p><div class="acts">${B_('Review every detention', ['xReview'], 'alt')}${B_('Investigate the officials', ['xMisconduct'], 'alt', R.lastMisconduct != null && s.day - R.lastMisconduct < 5)}</div></div>`;
   if (ruler) h += `<div class="box"><h5>The crown: appointments</h5><p>Dismiss a councillor and name another, or take a lordship away. Lords do not forget it.</p><div class="acts">${Object.keys(Sim.COUNCIL).filter(k => R.council[k] && R.council[k] !== 'player').map(k => B_('Dismiss the ' + Sim.COUNCIL[k], ['xDismiss', k], 'warn')).join('')}${Object.keys(R.regions).filter(id => id !== 'crownmere' && Sim.regionLord(s, id) && Sim.regionLord(s, id) !== 'player').map(id => B_('Take ' + esc(Sim.REGIONS[id]) + ' from its lord', ['xDismissLord', id], 'warn')).join('')}</div></div>`;
   return h ? `<h4>Powers of your office</h4><div class="grid2">${h}</div>` : '';
@@ -9175,7 +9275,7 @@ function pageJusticeHM(s) {
   if (dem.length || J.inquiry || J.lastInquiry) {
     h += `<h4>What people are saying</h4>`;
     if (J.inquiry) h += `<div class="why">The council’s inquiry into the Elder sits on day ${J.inquiry.day}.</div>`;
-    dem.forEach(k => { const q = s.people[k.demanded.pid]; h += `<div class="why">${esc(q ? q.name : 'Someone')} knows ${esc(k.text)}, and wants ${k.demanded.amount}c to keep quiet.<div class="acts">${B_('Pay ' + k.demanded.amount + 'c', ['jHush', k.id, true], 'warn', s.coins < k.demanded.amount)}${B_('Refuse', ['jHush', k.id, false], 'alt')}</div></div>`; });
+    dem.forEach(k => { const q = s.people[k.demanded.pid]; h += `<div class="why">${esc(q ? q.name : 'Someone')} knows ${esc(k.text)}, and wants ${k.demanded.amount}c to keep quiet${k.demanded.again ? ' (again: they were paid before)' : ''}. Silence bought lasts about ${Sim.HUSH_DAYS} days; then they may come back for more.<div class="acts">${B_('Pay ' + k.demanded.amount + 'c', ['jHush', k.id, true], 'warn', s.coins < k.demanded.amount)}${B_('Refuse', ['jHush', k.id, false], 'alt')}</div></div>`; });
     if (J.lastInquiry) h += `<p>Last inquiry (day ${J.lastInquiry.day}): ${esc(J.lastInquiry.out)}</p>`;
   }
   const mine = J.secrets.filter(k => !k.exposed);
@@ -9636,7 +9736,7 @@ function pageFamily(s) {
       <h4>${cands.length ? 'Or begin again' : 'Nobody to carry on'}</h4><p>${cands.length ? 'Leave the family behind and start over as a newcomer.' : 'With no family to inherit, your property goes back to the lord and the towns.'} The world, and everyone in it, remembers what came before.</p>
       <div class="acts">${B_('Begin again as a newcomer (man)', ['beginAgain', 'Hugh Rowan', 'm'], 'alt')}${B_('Begin again as a newcomer (woman)', ['beginAgain', 'Ada Thorne', 'f'], 'alt')}</div>`;
   }
-  const ageing = s.ageRate ? (s.ageRate >= 60 ? 'People age with the calendar: a year every 60 days.' : 'People age a year every ' + s.ageRate + ' days.') : 'Ageing is off in Settings.';
+  const ageing = s.ageRate ? (s.ageRate >= 60 ? 'People age slowly, with the calendar: a year every 60 days.' : s.ageRate === 15 ? 'People age a year every season (15 days).' : 'People age a year every ' + s.ageRate + ' days.') : 'Ageing is off in Settings.';
   let h = `<h3>Your Family</h3><div class="acts">${B_('Your family tree', ['ui', 'tree', Y.pid])}</div><p class="lead">${esc(s.name)}, aged ${Y.age}. ${Y.generation > 1 ? 'Generation ' + Y.generation + ' of the family. ' : ''}${ageing}</p>`;
   h += `<div class="box"><h5>${sp ? 'Married to ' + nm(sp) : 'Unmarried'}</h5>`;
   if (sp) h += `<p>${nm(sp)}, ${sp.age}: ${esc(Sim.occupation(s, sp))}.</p><div class="setting"><span>Children</span>${seg2('hoping', Y.hoping ? 1 : 0, [[1, 'Hoping for more'], [0, 'Not for now']])}</div>`;
@@ -9937,7 +10037,7 @@ function pauseMainHTML(s) {
   const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
   const here = s.people ? Sim.living(s).length : 0;
   const tiles = [
-    (() => { const c = Sim.calendar(s); return ['sun', c.dom + ' ' + c.monthName, c.season.charAt(0).toUpperCase() + c.season.slice(1) + ', year ' + c.year + ' \u00b7 ' + sm.clock]; })(),
+    (() => { const c = Sim.calendar(s); return ['sun', c.dom + ' ' + c.monthName, c.season.charAt(0).toUpperCase() + c.season.slice(1) + ', year ' + c.year + ' \u00b7 ' + c.next + ' in ' + c.daysLeft + 'd \u00b7 ' + sm.clock]; })(),
     ['coin', sm.coins + 'c', 'worth ' + sm.netWorth + 'c'],
     ['house', s.shops.length + (s.biz ? Object.values(s.biz).filter(b => b.owner === 'player').length : 0) + ' businesses', (s.houses ? s.houses.filter(h => h.owner === 'player').length : 0) + ' houses'],
     ['crown', 'Standing ' + v.standing, v.council ? 'on the council' : v.step > 0 ? 'known to the elder' : 'unknown'],
@@ -9999,7 +10099,7 @@ function seg(id, value, opts) { return `<div class="seg" role="group">${opts.map
 function settingsHTML() {
   const st = meta.settings, ar = G ? ({ 0: 'off', 60: 'calendar', 15: 'steady', 4: 'quick' }[G.ageRate] || (G.ageRate > 20 ? 'calendar' : G.ageRate > 6 ? 'steady' : 'quick')) : 'calendar';
   return `<h3>Settings</h3>
-  ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['calendar', 'With the calendar'], ['steady', 'Steady'], ['quick', 'Quick'], ['off', 'Off']])}<p>How fast everyone grows older. With the calendar, a year of life is a year of twelve five-day months (60 days). Steady is a year every 15 days, Quick a year every 4 days, so children grow up and generations pass while you play. Off stops ageing.</p></div>` : ''}
+  ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['steady', 'Steady'], ['calendar', 'Slow'], ['quick', 'Quick'], ['off', 'Off']])}<p>How fast everyone grows older. Steady (the usual) is a year of life every season, 15 days: a child grows up in about 240 days, so you can play your heirs. Slow follows the calendar, a year of life every 60 days, for one long life. Quick is a year every 4 days. Off stops ageing. When an heir is grown, you can hand everything over and retire from the Family page.</p></div>` : ''}
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 12 minutes, normal about 18, relaxed about 24. Wages, hunger, rent and work all follow the same clock.</p></div>
   <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
   <div class="setting"><span>Place cards</span>${seg('cards', st.cards || 'tab', [['tab', 'Name only until tapped'], ['open', 'Open as you arrive']])}<p>Walking past a place shows just its name at the bottom; tap it for the full card.</p></div>
@@ -10191,7 +10291,7 @@ document.addEventListener('input', e => {
   }
   if (id === 'newFirst' || id === 'newLast') { if (id === 'newFirst') UI.newFirst = e.target.value.trim(); else UI.newLast = e.target.value.trim(); const c = $('ccName'); if (c) c.textContent = fullNewName(); }
 });
-document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.duty) { act(['jDuty', e.target.dataset.duty, e.target.value]); return; } const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.duty) { act(['jDuty', e.target.dataset.duty, e.target.value]); return; } const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); if (id.startsWith('res-')) act(['policy', +e.target.dataset.shop, 'reserve', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
 $('taskBtn').onclick = () => openBook('tasks');
 $('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, MAP_C.r === 300 ? 460 : 190); };
@@ -10944,8 +11044,17 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.1317';
+const BUILD = '2026.11.05.1414';
 const NOTES = [
+  { v: '0.41', date: '5 November', title: 'Fair warning', items: [
+    'People now age a year every season (15 days) by default, so a child grows up in about 240 days and you can play your heirs. The slow calendar ageing (a year every 60 days) is still in Settings. When an heir is grown, you can hand everything over and retire from the Family page.',
+    'Winter is seen coming. The clock and the pause screen say how many days until the next season; the Ledger and the Shops page have a season box: what this season and the next will do, the last fifteen days of prices at the Trading Post, and what your shops have in storage. A manager can lay in a reserve in autumn and winter, but only while supplies are at or below their usual price, and within a daily limit.',
+    'Fear no longer silences everyone. It quiets people in public (by up to 70%), but frightened people may whisper what they know to your rivals at court instead. Hush money buys about twenty days of silence, not forever; then they may come back, for half as much again.',
+    'Mercy needs a true reason. Choose hardship, first offence, repayment, cooperation or making peace, and only reasons that fit the case are offered. Or pardon openly as a favour. The town weighs the reason against the harm and the person’s record, and every hearing shows how many times they have been found guilty before.',
+    'Captured bandits get a hearing: if the Marshal has not sentenced them in three days, the royal judges send them to the dungeon (or the road gangs if the treasury is short). Hanging now quiets the roads of the region they were taken in, not the whole realm, and the court only approves where those roads were truly dangerous.',
+    'Managers have a character. Candidates come with a word from those who know them (right more often than not), and anyone convicted of fraud is named as such. You can audit a manager’s books for 15c every five days; an audit finds most skimming and opens a case.',
+    'A house’s price follows the rent it has actually brought in over about two weeks, so a rent raised this morning adds nothing.',
+  ] },
   { v: '0.40', date: '5 November', title: 'Seasons, and justice in proportion', items: [
     'A calendar: five-day months, twelve months to a year, from Thawmonth to Snowmelt. The clock shows the date; the pause screen shows the season. People now age a year every sixty days by default (Settings can still make it quicker or stop it).',
     'Four seasons. The harvest comes in autumn and grain is cheap; in winter the fields are bare, wood dear as every hearth burns it, the mines slow, fewer travellers come, and thieves are bolder. Summer brings traders and good spirits. Prices rise and fall with the year. Winter turns the land grey and brings snow; autumn turns it gold.',

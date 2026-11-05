@@ -589,7 +589,7 @@ console.log('19. The Elder\u2019s powers: the village works, officers, and the o
 console.log('20. A whole life: ageing, marriage, children, death and inheritance');
 {
   const s = newGameAging(110);
-  check(newGameRaw(109).ageRate === Sim.YEAR_DAYS && Sim.YEAR_DAYS === 60, 'by default a year is the calendar year: twelve months of five days');
+  check(newGameRaw(109).ageRate === 15 && Sim.YEAR_DAYS === 60, 'by default a year of life passes every season (15 days); the calendar year is sixty');
   check(s.ageRate === 4, 'this test ages the world quickly: a year every four days');
   const age0 = Sim.living(s).map(p => [p.id, p.age]);
   Sim.advance(s, 1440 * 4);
@@ -652,7 +652,7 @@ console.log('21. Your own life: courtship, marriage, children, and carrying on')
   const coins0 = s.coins; s.pendingDeath = { day: s.day, age: 71 };
   check(Sim.cmd(s, 'carryOn', k0.id).ok && s.name === k0.name && Sim.you(s).pid === k0.id && Sim.you(s).generation === 2, 'you die, and carry on as ' + s.name + ', generation 2');
   check(s.coins >= coins0 && s.offices.elder !== 'player' && s.people[Y.pid] === undefined || true, 'your coin passes to your heir; the Elder\u2019s chair falls vacant');
-  const oldRec = s.people[k0.parents[0]];
+  const oldRec = k0.parents.map(id => s.people[id]).find(p => p && p.status === 'dead');
   check(oldRec && oldRec.status === 'dead' && k0.parents.includes(oldRec.id), 'the one who came before is remembered, and still ' + k0.name.split(' ')[0] + '\u2019s parent');
   const back = Sim.deserialize(Sim.serialize(s)); Sim.advance(s, 300); Sim.advance(back, 300);
   check(Sim.serialize(s) === Sim.serialize(back) && back.name === k0.name, 'saving and loading straight after a succession loses nothing');
@@ -952,7 +952,7 @@ console.log('33. The calendar, the seasons, and justice in proportion');
   check(a1.held && a1.deadline === s.day + 1, 'someone arrested must be heard by the next day');
   // mercy is lawful
   folk[1].hungry = true; folk[1].purse = 2; const op = folk[1].opinion || 0; const m1 = mk(folk[1]);
-  check(X('jHear', m1.id, { reason: 'they were hungry' }, 'mercy').ok && m1.verdict === 'mercy' && /pardoned because they were hungry/.test(m1.outcome) && (folk[1].opinion || 0) > op, 'a guilty verdict with an open pardon is lawful mercy, and remembered kindly');
+  check(Sim.mercyReasons(s, m1).some(r => r.key === 'hardship') && X('jHear', m1.id, { why: 'hardship' }, 'mercy').ok && m1.verdict === 'mercy' && /hunger and need/.test(m1.outcome) && (folk[1].opinion || 0) > op, 'a guilty verdict with an open pardon is lawful mercy, and remembered kindly');
   // community work: the town gains, the convicted keeps their liberty
   const ch0 = s.towns.greenhaven.chest, w1 = mk(folk[2]); X('jHear', w1.id, { work: 2 }, 'guilty');
   check(w1.workLeft === 2 && !folk[2].held, 'two days of work for the town, not the cells');
@@ -1003,6 +1003,46 @@ console.log('33. The calendar, the seasons, and justice in proportion');
   for (const Cx of Object.values(t2.courts)) for (const c of Cx.closed.concat(Cx.cases)) { all++; if (c.decidedBy === 'you' || (!c.delegated && c.status === 'open')) mine++; }
   check(all > 5 && mine <= all * 0.5, 'a ruler of every court sees ' + mine + ' of ' + all + ' cases; the rest are heard by the captains');
   check(s.ledger.slice(1).every(e => !e.unexplained), 'skimmed takings, seized cargo and restitution all have lines in your books');
+}
+
+console.log('34. Silence that wears off, mercy with true reasons, and preparing for winter');
+{
+  const s = newGameRaw(35); s.ageRate = 0; Sim.applyStart(s, 'lord'); s.coins = 3000; Sim.advance(s, 1440);
+  const J = s.justice, R = s.realm, X = (...a) => Sim.cmd(s, ...a), v = Sim.living(s).find(p => p.town === 'greenhaven' && !p.kid && p.status === 'here');
+  J.fear = 100; v.opinion = 0;
+  check(Sim.talkChance(s, v, 'victim') > 0.02, 'even under great fear a victim may still speak (' + Sim.talkChance(s, v, 'victim').toFixed(3) + ' a day)');
+  const k = { id: 999, kind: 'bribe', paid: { [v.id]: s.day + Sim.HUSH_DAYS }, demanded: { pid: v.id, amount: 20, paid: true, until: s.day + Sim.HUSH_DAYS } };
+  check(Sim.hushed(s, k, v.id), 'paid to keep quiet, they stay quiet for now');
+  s.day += Sim.HUSH_DAYS; check(!Sim.hushed(s, k, v.id), 'after ' + Sim.HUSH_DAYS + ' days the silence has worn off'); s.day -= Sim.HUSH_DAYS;
+  // mercy: only true reasons are offered
+  const C = s.courts.greenhaven, mk = (p, o) => { const c = Object.assign({ id: J.nextCase++, kind: 'theft', day: s.day, status: 'open', evidence: [{ text: 'x', w: 4 }], hidden: [], witnesses: [], investigating: 0, held: false, accused: p.id, accuser: null, victim: 'chest', value: 10, where: 'x', truth: 'guilty', what: 'test', claim: 'test', authority: C.authority, court: 'greenhaven' }, o || {}); C.cases.push(c); return c; };
+  const rep = Sim.living(s).filter(p => p.town === 'greenhaven' && !p.kid && p.status === 'here' && !p.held)[3]; rep.record = 2; rep.hungry = false; rep.purse = 50;
+  const rc = mk(rep, { kind: 'assault', victim: v.id, value: 20 });
+  const reasons = Sim.mercyReasons(s, rc).map(r => r.key);
+  check(!reasons.includes('first') && !reasons.includes('hardship') && reasons.includes('favour'), 'a well-off repeat offender is not offered "first offence" or "hardship", only what is true (' + reasons.join(', ') + ')');
+  const ap0 = s.towns.greenhaven.approval; X('jHear', rc.id, { why: 'favour' }, 'mercy');
+  check(s.towns.greenhaven.approval < ap0 && rc.mercy === 'favour' && rep.record === 3, 'pardoning them as a favour is lawful, open, and costs you with the town');
+  // bandits: a hearing within three days, and hanging is felt where they were taken
+  R.military = [{ n: 4, region: 'ironcrest', day: s.day }]; for (let d = 0; d < 4; d++) Sim.advance(s, 1440);
+  check(!(R.military || []).length && ((R.banditPrison || []).length || (R.workGang || []).length), 'unsentenced bandits go before the royal judges within three days, not into thin air');
+  R.council.war = 'player'; for (const id in s.bandits) s.bandits[id] = 50; R.military = [{ n: 4, region: 'ironcrest', day: s.day }];
+  X('xMartial', null, 'hang');
+  check(s.bandits.ironcrest < 50 && s.bandits.eastwatch === 50, 'hanging quiets the roads where they were taken, not the whole realm');
+  // the house price ignores a rent raised this morning
+  const h = s.houses.find(x => x.tenants.length && x.rent > 0); h.owner = 'player'; const v0 = Sim.houseValue(s, h), r0 = h.rent; h.rent = r0 * 3;
+  check(Sim.houseValue(s, h) === v0, 'a rent raised today adds nothing to the price (' + v0 + 'c)'); h.rent = r0;
+  // winter, seen coming
+  const cal = Sim.calendar({ day: 40 });
+  check(cal.season === 'autumn' && cal.next === 'winter' && cal.daysLeft === 6, 'on day 40 the calendar says winter is six days away');
+  check(s.priceLog && s.priceLog.hearthmoor && s.priceLog.hearthmoor.grain.length >= 4, 'the Trading Post keeps the last fifteen days of prices');
+  // managers: a reference, and an audit that finds a skim
+  const cands = Sim.managerCandidates(s, 'biz', Object.keys(s.biz)[0]);
+  check(!cands.length || cands.every(c => typeof c.ref === 'string' && c.ref.length), 'every manager candidate comes with a word from those who know them');
+  const b = Object.values(s.biz).find(x => x.town === 'greenhaven' && x.trade !== 'estate' && !x.closed), mp = Sim.living(s).filter(p => p.town === 'greenhaven' && !p.kid && p.status === 'here' && !p.held)[6];
+  b.owner = 'player'; b.manager = { pid: mp.id, name: mp.name, wage: 5, budget: 5, skill: 1, honest: 0, skim: 12 }; mp.job = { type: 'manage', kind: 'biz', ref: b.id };
+  let found = false; for (let i = 0; i < 6 && !found; i++) { b.manager.audited = null; b.manager.skim = 12; found = X('audit', 'biz', b.id).msg === 'found'; }
+  check(found && C.cases.some(c => c.kind === 'fraud' && c.accused === mp.id), 'an audit finds the skim and opens a case');
+  check(s.ledger.slice(1).every(e => !e.unexplained), 'audits have their own line in your books');
 }
 
 }
