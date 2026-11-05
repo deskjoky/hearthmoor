@@ -846,6 +846,57 @@ console.log('30. The books add up: every coin has a named line');
   check(later.every(e => { const p = s.ledger[s.ledger.indexOf(e) - 1]; return !p || e.coinsEnd - p.coinsEnd === e.profit; }), 'each day’s profit is exactly the change in your coins');
 }
 
+console.log('31. Law and order: the watch, cases, cells, and the people who know');
+{
+  const s = Sim.newGame(31); Sim.applyStart(s, 'elder'); s.village.chest = 400; Sim.advance(s, 1440);
+  const J = s.justice, C = (...a) => Sim.cmd(s, ...a);
+  check(J && J.watch.length >= 1 && J.cells === 2, 'Hearthmoor starts with a named watch and two cells');
+  let kinds = new Set(); for (let d = 0; d < 40; d++) { Sim.advance(s, 1440); J.cases.concat(J.closed).forEach(c => kinds.add(c.truth)); if (kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie'))) break; }
+  check(kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie')), 'some accusations are true and some are not (' + Array.from(kinds).join(', ') + ')');
+  // cells fill up
+  const vil = Sim.villagers(s).filter(p => !p.kid && !p.held && p.status === 'here' && !(p.job && p.job.type === 'office'));
+  const mk = p => { const c = { id: J.nextCase++, kind: 'theft', day: s.day, status: 'open', evidence: [{ text: 'x', w: 3 }], hidden: [], witnesses: [], investigating: 0, held: false, accused: p.id, accuser: vil[0].id, victim: vil[0].id, value: 8, where: 'a house', truth: 'guilty', what: 'test', claim: 'test', authority: 'Elder of Hearthmoor' }; J.cases.push(c); return c; };
+  J.prisoners.slice().forEach(pr => C('jRelease', pr.pid));
+  const c1 = mk(vil[1]), c2 = mk(vil[2]), c3 = mk(vil[3]);
+  check(C('jArrest', c1.id).ok && C('jArrest', c2.id).ok && !C('jArrest', c3.id).ok, 'two cells hold two prisoners; a third arrest is refused');
+  check(!C('jHear', c1.id, { days: 5 }, 'guilty').ok, 'the Elder cannot order more than three days');
+  // a held worker leaves your shop short, and comes back
+  s.coins = 500; s.trades.bakery = 9; C('open', 0, 'bakery'); const sh = s.shops[0]; s.applicants.unshift({ name: vil[4].name, pid: vil[4].id, skill: 1, ask: 7 }); C('hire', sh.id, 0, 7);
+  C('jRelease', vil[2].id); const c4 = mk(vil[4]); C('jArrest', c4.id);
+  check(vil[4].held && Sim.income(s, vil[4]) === 0, vil[4].name + ', your worker, is held: no work and no wage');
+  for (let d = 0; d < 6; d++) Sim.advance(s, 1440);
+  check(!vil[4].held && !c4.held, 'not heard within four days, they are released');
+  // an unpayable fine is paid off or worked off, never more prison
+  const poor = vil[5]; poor.purse = 3; const c5 = mk(poor); C('jHear', c5.id, { fine: 30 }, 'guilty');
+  const owed0 = c5.fineOwed; for (let d = 0; d < 5; d++) Sim.advance(s, 1440);
+  check(owed0 > 0 && c5.fineOwed < owed0 && !poor.held, 'a fine they cannot pay is paid off or worked off a little at a time (' + owed0 + 'c to ' + c5.fineOwed + 'c), with no prison for debt');
+  // an honest guard refuses an unlawful order
+  J.watch.forEach(g => { g.honest = 1; s.people[g.pid].opinion = -60; }); J.fear = 0;
+  let refused = false; for (let k = 0; k < 6 && !refused; k++) { const r = C('jArrestOnWord', vil[6].id); refused = r.ok && r.msg === 'refused'; if (vil[6].held) C('jRelease', vil[6].id); }
+  check(refused && J.secrets.some(k => k.kind === 'order'), 'an honest guard refuses to arrest someone with no charge, and that is remembered');
+  // a bribe works, once, and leaves a secret
+  const c6 = mk(vil[7]); c6.bribe = { pid: vil[7].id, amount: 20, wants: 'dismiss' }; vil[7].purse = 50; const coins0 = s.coins;
+  check(C('jBribe', c6.id, true).ok && s.coins === coins0 + 20 && J.secrets.some(k => k.kind === 'bribe') && !J.cases.includes(c6), 'a bribe pays and the case goes away, but someone knows');
+  check(!C('jBribe', c6.id, true).ok, 'the same bribe cannot be taken twice');
+  // appeals
+  const c7 = mk(vil[8]); C('jArrest', c7.id); C('jHear', c7.id, { fine: 5, days: 3 }, 'guilty');
+  s.realm.council.law = 'player'; const p8 = vil[8].purse;
+  check(C('jOverturn', c7.id).ok && !vil[8].held && vil[8].purse > p8, 'the Lord Justice overturns a conviction: freed, and paid for the wrong');
+  s.realm.council.law = null;
+  // save and load in the middle of a case
+  const c8 = mk(vil[9]); C('jArrest', c8.id);
+  const s2 = JSON.parse(JSON.stringify(s)); Sim.advance(s2, 1440);
+  check(s2.justice.cases.some(c => c.id === c8.id) && s2.people[vil[9].id].held, 'a case and its prisoner survive a save and load');
+  // losing office mid-case: the council takes it on
+  s.offices.elder = vil[10].id; for (let d = 0; d < 6; d++) Sim.advance(s, 1440);
+  check(!J.cases.some(c => c.id === c8.id), 'when you are no longer Elder, your open cases are heard by the council');
+  // a prisoner named to an office is released
+  const c9 = mk(vil[11]); s.offices.elder = 'player'; C('jArrest', c9.id); s.offices.elder = vil[10].id;
+  Sim.appoint(s, 'watch', vil[11].id);
+  check(!vil[11].held, 'someone held who is named to an office is released to take it up');
+  check(s.ledger.slice(1).every(e => !e.unexplained), 'fines, bribes and repayments all have their own lines in your books');
+}
+
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
