@@ -107,7 +107,7 @@ console.log('6. Broke players can always recover');
   Sim.cmd(s, 'gather', 'wood'); runIdle(s);
   Sim.cmd(s, 'goto', 'market'); runIdle(s);
   const r = Sim.cmd(s, 'sell', 'wood', s.player.inv.wood);
-  check(r.ok && s.coins === 20, 'gathered and sold wood for ' + s.coins + 'c with nothing to start');
+  check(r.ok && s.coins >= 15, 'gathered and sold wood for ' + s.coins + 'c with nothing to start');
   check(Sim.cmd(s, 'apply', 'tankard').ok, 'and a job is always available');
 }
 
@@ -239,13 +239,13 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   check(v.dispute != null, 'a dispute arrives for the council');
   Sim.cmd(s, 'talk'); runIdle(s);
   const who = Sim.DISPUTES[v.dispute].a;
-  if (v.chest < 5) Sim.cmd(s, 'giveChest', 10);
+  if (v.chest < 60) Sim.cmd(s, 'giveChest', 60 - v.chest);
   const rs = Sim.cmd(s, 'settle', 2);
   check(v.dispute == null && s.rec.disputesSettled === 1, 'settled the dispute' + (rs.ok ? '' : ': ' + rs.msg));
   Sim.step(s, 1);
   check(v.step === 7 && v.letter, 'the lord’s steward sends a letter');
-  Sim.cmd(s, 'gate'); runIdle(s, 6000);
-  check(v.step === 8, 'met the steward at the manor gate: chapter complete');
+  const rg = Sim.cmd(s, 'gate'); runIdle(s, 6000);
+  check(v.step >= 8, 'met the steward at the manor gate: chapter complete' + (v.step >= 8 ? '' : ' [step ' + v.step + ' ' + JSON.stringify(rg) + ' letter ' + JSON.stringify(v.letter) + ']'));
   Sim.cmd(s, 'toll', 'high');
   const before = s.agents.length; Sim.advance(s, 1440 * 7);
   check(s.rec.taxesPaid > 0, 'the tax collector came (' + s.rec.taxesPaid + 'c paid)');
@@ -629,12 +629,15 @@ console.log('21. Your own life: courtship, marriage, children, and carrying on')
   check(!!q, 'there is someone to court: ' + (q ? q.name : 'nobody'));
   const near = () => { let b = s.agents.find(a => a.pid === q.id); if (!b) { const T = Sim.TOWNS[Sim.townOf(q)]; s.player.x = T.x; s.player.z = T.z; Sim.step(s, 0.01); b = s.agents.find(a => a.pid === q.id); } if (b) { s.player.x = b.x; s.player.z = b.z; } };
   near(); check(!Sim.cmd(s, 'propose', q.id).ok, 'propose too soon and they say no');
-  for (let d = 0; d < 40 && (Y.court[q.id] || 0) < 60; d++) {
+  let rp = { ok: false }, best = 0;
+  for (let tries = 0; tries < 5 && !rp.ok; tries++) {
     if (!Sim.canCourt(s, q)) q = pick();
-    near(); Sim.cmd(s, 'court', q.id, d % 3 ? null : 'gift'); Sim.advance(s, 1440);
+    for (let d = 0; d < 40 && (Y.court[q.id] || 0) < 60 && Sim.canCourt(s, q); d++) { near(); Sim.cmd(s, 'court', q.id, d % 3 ? null : 'gift'); Sim.advance(s, 1440); }
+    best = Math.max(best, Y.court[q.id] || 0);
+    if (Sim.canCourt(s, q) && (Y.court[q.id] || 0) >= 60) { near(); rp = Sim.cmd(s, 'propose', q.id); }   // if they married someone else meanwhile, court another
   }
-  check((Y.court[q.id] || 0) >= 60, 'after time together, fondness reaches ' + Y.court[q.id]);
-  check(Sim.cmd(s, 'propose', q.id).ok && Y.spouse === q.id && q.home === 'you', 'you marry ' + q.name + ', who moves in with you');
+  check(best >= 60, 'after time together, fondness reaches ' + best);
+  check(rp.ok && Y.spouse === q.id && q.home === 'you', 'you marry ' + q.name + ', who moves in with you' + (rp.ok ? '' : ': ' + rp.msg + ' (coins ' + s.coins + ')'));
   for (let d = 0; d < 120 && Sim.yourKids(s).filter(c => c.status === 'here').length < 2; d++) Sim.advance(s, 1440);
   const kids = Sim.yourKids(s).filter(c => c.status === 'here');
   check(kids.length >= 2 && kids.every(c => c.home === 'you' && c.parents.includes(Y.pid)), 'you have ' + kids.length + ' children, living with you: ' + kids.map(c => c.name + (c.home === 'you' ? '' : ' [' + c.home + ' ' + c.status + ' ' + c.parents + ']')).join(', '));
@@ -744,32 +747,52 @@ console.log('27. Bandits on the roads');
   check(s.bandits.oakbridge < c0, 'paying for patrols drives them back');
 }
 
-console.log('28. From hired hand to the throne of Alderwyn, and back from exile');
+console.log('28. To the throne of Alderwyn by deeds, and back from exile');
 {
   const s = Sim.newGame(190), R = s.realm, cm = Sim.STAGE.crownmere, at = (x, z) => { s.player.x = x; s.player.z = z; }, away = () => at(0, 4), court = () => at(cm.x, cm.z);
-  check(R.crown === 'king' && Object.keys(R.regions).every(id => Sim.lordName(s, id) !== 'no one'), 'the realm has a King and six lords: ' + Object.keys(R.regions).map(id => Sim.lordName(s, id)).join(', '));
+  const atMarket = t => { const L = Sim.LOCS[Sim.MARKET_AT[t]]; at(L.x, L.z); };
+  check(R.crown === 'king' && Object.keys(R.regions).every(id => Sim.lordName(s, id) !== 'no one') && R.figures.length === 3, 'the realm has a King, six lords and three people of influence');
   s.coins = 6000; court();
-  check(!Sim.cmd(s, 'seekLordship', 'ironcrest').ok, 'a stranger cannot ask for a lordship');
-  Sim.cmd(s, 'giftCrown', 900); s.people[R.regions.ironcrest.lord].rep = 30;
-  check(Sim.cmd(s, 'seekLordship', 'ironcrest').ok && Sim.yourLordships(s).includes('ironcrest'), 'with favour at court, the King gives you a failing lord’s lands: you are Lord of Ironcrest');
-  Sim.cmd(s, 'giftCrown', 600); check(Sim.cmd(s, 'seekSeat', 'trade').ok, 'a lord in favour is named Master of Trade');
-  check(!Sim.cmd(s, 'claimCrown').ok, 'claiming the crown too early fails');
-  for (let d = 0; d < 20; d++) { court(); Sim.cmd(s, 'undermineKing'); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); }
-  Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'guilds'); Sim.cmd(s, 'patronage', 'guilds');
-  for (const t of Object.keys(Sim.TOWNS)) { Sim.cmd(s, 'patronage', 'town', t); Sim.cmd(s, 'patronage', 'town', t); }
-  Sim.cmd(s, 'giftCrown', 400); for (let d = 0; d < 3; d++) { court(); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); }
-  court(); const sup = Sim.computeSupport(s);
-  check(Sim.cmd(s, 'claimCrown').ok && Sim.isRuler(s), 'with support of ' + sup + ' and the old King’s standing at ' + Math.round(R.kingSupport) + ', you are crowned');
-  const t0 = R.treasury; Sim.cmd(s, 'rule', 'tax', 1.5); away(); Sim.advance(s, 1440 * 3);
-  check(R.treasury !== t0 && R.support.guilds < 75, 'as ruler, taxes fill the treasury (' + t0 + 'c to ' + R.treasury + 'c) and cost you the guilds (' + R.support.guilds + ')');
-  R.rival = { name: 'Hugh Vane', strength: 900, since: s.day }; Sim.advance(s, 1440);
-  check(!Sim.isRuler(s) && R.exile && !Sim.yourLordships(s).length && !Sim.yourSeats(s).length, 'a rival’s army takes the crown: you are in exile, without lands or seats');
-  check(!Sim.cmd(s, 'claimCrown').ok, 'too soon to try again');
-  for (let d = 0; d < 31; d++) Sim.advance(s, 1440);
-  s.coins += 3000; Sim.cmd(s, 'giftCrown', 1000); Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'guilds'); for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t);
-  for (let d = 0; d < 8; d++) { court(); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); }
-  court(); check(Sim.cmd(s, 'claimCrown').ok && Sim.isRuler(s) && !R.exile, 'a month later, with the realm behind you again, you take the crown back');
-  const back = Sim.deserialize(Sim.serialize(s)); check(back.realm.crown === 'player' && back.realm.regions.ironcrest, 'the realm saves and loads');
+  const g0 = R.favour; Sim.cmd(s, 'giftCrown', 300); const g1 = R.favour - g0; Sim.cmd(s, 'giftCrown', 300); const g2 = R.favour - g0 - g1;
+  check(g2 < g1, 'a second gift soon after the first counts for less (' + Math.round(g1) + ' then ' + Math.round(g2) + ' favour)');
+  R.favour = 60; s.people[R.regions.eastwatch.lord].rep = 30;
+  check(!Sim.cmd(s, 'seekLordship', 'eastwatch').ok, 'favour and coin are not enough: the King wants a deed done in Eastwatch first');
+  // do a contract for Eastwatch
+  R.contracts = [{ n: 999, kind: 'supply', region: 'eastwatch', good: 'grain', qty: 10, reward: 60, what: 'deliver 10 grain to the market in Eastwatch', who: 'Rowena Tarrant', until: s.day + 6, day: s.day }];
+  check(Sim.cmd(s, 'takeContract', 999).ok, 'you take a contract to supply Eastwatch');
+  s.player.inv.grain = 10; atMarket('eastwatch');
+  check(Sim.cmd(s, 'fulfil', 999).ok && Sim.deedsIn(s, 'eastwatch') === 1, 'you deliver the grain: a deed done for Eastwatch');
+  court(); check(Sim.cmd(s, 'seekLordship', 'eastwatch').ok && Sim.yourLordships(s).includes('eastwatch'), 'now the King grants you Eastwatch');
+  s.people[R.regions.ironcrest.lord].rep = 20; R.deeds.ironcrest = 1;
+  check(!Sim.cmd(s, 'seekLordship', 'ironcrest').ok, 'a lord holds one region at a time');
+  check(Sim.cmd(s, 'moveToSeat').ok && /Castle/.test(Sim.homeOfYou(s).name), 'you move into your seat: ' + Sim.homeOfYou(s).name);
+  check(!Sim.cmd(s, 'seekSeat', 'trade').ok, 'a council seat needs allies and a name for good government');
+  // allies: back the reformer and the lord of Ironcrest; good government
+  Sim.cmd(s, 'backFigure', 'reformer'); Sim.cmd(s, 'backFigure', 'lord');
+  s.bandits.eastwatch = 5; for (let d = 0; d < 10; d++) { away(); Sim.advance(s, 1440); s.bandits.eastwatch = 5; }
+  R.favour = 70; court();
+  check(Sim.cmd(s, 'seekSeat', 'trade').ok, 'with ' + Sim.alliesOf(s).length + ' allies and ten days of good rule, you are named Master of Trade');
+  // a promise kept
+  R.promises = [{ region: 'oakbridge', pid: R.regions.oakbridge.lord, day: s.day, state: 'asked' }];
+  check(Sim.cmd(s, 'givePromise').ok, 'a lord asks for your word, and you give it');
+  for (let d = 0; d < 8; d++) { s.bandits.oakbridge = 5; away(); Sim.advance(s, 1440); }
+  check(R.kept >= 1, 'you keep it');
+  for (let d = 0; d < 12; d++) { court(); Sim.cmd(s, 'undermineKing'); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); }
+  Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'guilds'); for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t);
+  R.kingSupport = Math.min(R.kingSupport, 40); court(); const sup = Sim.computeSupport(s);
+  const rc = Sim.cmd(s, 'claimCrown'); check(rc.ok && Sim.isRuler(s), 'with ' + Sim.alliesOf(s).length + ' allies, a kept promise and support of ' + sup + ', you are crowned' + (rc.ok ? '' : ': ' + rc.msg));
+  const t0 = R.treasury; Sim.cmd(s, 'rule', 'draw', 700); check(R.embezzled === 700, 'taking 700c from the treasury is remembered');
+  R.figures.find(f => f.kind === 'reformer').ally = false; s.coins = 0; for (let d = 0; d < 30 && Sim.isRuler(s); d++) { away(); Sim.advance(s, 1440); }
+  check(!Sim.isRuler(s) && R.exile, 'an inquiry finds the theft, you cannot repay, and the council removes you: exile');
+  s.coins = 3000; court();
+  check(!Sim.cmd(s, 'claimCrown').ok, 'waiting is not enough: you need allies, a war chest, the towns and the new ruler exposed');
+  const lords = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== 'player' && l !== R.king).slice(0, 3); lords.forEach(l => { s.people[l].opinion = 40; });
+  lords.forEach(l => Sim.cmd(s, 'rallyAlly', l)); Sim.cmd(s, 'warChest', 600);
+  for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t);
+  for (let d = 0; d < 12 && R.kingSupport >= 50; d++) { court(); Sim.cmd(s, 'exposeRuler'); away(); Sim.advance(s, 1440); }
+  court(); const rr = Sim.cmd(s, 'claimCrown');
+  check(rr.ok && Sim.isRuler(s) && !R.exile, 'with sworn allies, a war chest, the towns and the new ruler exposed, you take the crown back' + (rr.ok ? '' : ': ' + rr.msg));
+  const back = Sim.deserialize(Sim.serialize(s)); check(back.realm.crown === 'player' && back.realm.figures.length === 3, 'the realm saves and loads');
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

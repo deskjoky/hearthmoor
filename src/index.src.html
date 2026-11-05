@@ -2640,6 +2640,18 @@ function placesRow(s) {
 function progressBar(frac) { return `<div class="bar"><i style="width:${Math.round(clamp(frac, 0, 1) * 100)}%"></i></div>`; }
 function shiftText(e) { return String(e.shift[0]).padStart(2, '0') + ':00–' + String(e.shift[1]).padStart(2, '0') + ':00'; }
 
+// buying and selling grain, timber and iron at a town's market, with what the other towns pay
+const GOOD_NAME = { grain: 'grain', wood: 'timber', ore: 'iron ore' };
+function marketActs(s, t) {
+  const inv = s.player.inv, out = [];
+  Sim.GOODS.forEach(g => { const c1 = Sim.buyPrice(s, t, g, 1), c5 = Sim.buyPrice(s, t, g, 5); out.push(B_(`Buy ${GOOD_NAME[g]} · ${c1}c`, ['buy', g, 1], '', s.coins < c1)); out.push(B_(`Buy 5 · ${c5}c`, ['buy', g, 5], 'alt', s.coins < c5)); });
+  Sim.GOODS.forEach(g => { if (inv[g]) out.push(B_(`Sell ${inv[g]} ${GOOD_NAME[g]} · ${Sim.sellPrice(s, t, g, inv[g])}c`, ['sell', g, inv[g]], 'alt')); });
+  return out.join('');
+}
+function marketTable(s) {
+  const towns = Object.keys(Sim.TOWN_GOODS);
+  return `<div class="why"><b>What the markets pay for 10</b> (selling)<br>${Sim.GOODS.map(g => GOOD_NAME[g] + ': ' + towns.map(t => TOWN_NAMES[t] + ' ' + Sim.sellPrice(s, t, g, 10)).join(' \u00b7 ')).join('<br>')}</div>`;
+}
 function cardHTML(s) {
   const p = s.player;
   if (UI.sel != null) {
@@ -2724,9 +2736,7 @@ function cardHTML(s) {
     return `<h2>${L[here].name}</h2><div class="sub">${blurb} ${esc(carryText(s))}</div>${busy}${walking}<div class="acts">${acts.join('')}</div>`;
   }
   if (here === 'market') {
-    const inv = p.inv, acts = [];
-    Sim.GOODS.forEach(g => acts.push(B_(`Buy ${g} · ${Sim.BUY[g]}c`, ['buy', g, 1], '', s.coins < Sim.BUY[g])));
-    Sim.GOODS.forEach(g => { if (inv[g]) acts.push(B_(`Sell ${inv[g]} ${g} · ${inv[g] * Sim.SELL[g]}c`, ['sell', g, inv[g]], 'alt')); });
+    const inv = p.inv, acts = [marketActs(s, 'hearthmoor')];
     const c = s.village.contract;
     let order = '';
     if (c) {
@@ -2734,7 +2744,7 @@ function cardHTML(s) {
       order = `<div class="why"><b>Order:</b> ${esc(c.who)} wants ${esc(Sim.goodsName(c.trade, c.qty))} by day ${c.until} for <b>${c.reward}c</b>. Your shops hold ${have}.</div>`;
       acts.unshift(B_(`Deliver the order · ${c.reward}c`, ['deliver'], '', have < c.qty));
     }
-    return `<h2>Trading Post</h2><div class="sub">Grain and wood cost 2c, ore 3c. Everything sells back for 1c, so gathering always earns something. ${esc(carryText(s))}</div>${order}${walking}<div class="acts">${acts.join('')}</div>`;
+    return `<h2>Trading Post</h2><div class="sub">Prices follow how much the village has in store. Other towns pay differently, so carrying goods between them can pay. ${esc(carryText(s))}</div>${order}${marketTable(s)}${walking}<div class="acts">${acts.join('')}</div>`;
   }
   if (here === 'hall') return hallCard(s, walking);
   if (here === 'granary') {
@@ -2858,6 +2868,8 @@ function renderCard(force) {
   let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
   // a place you merely walk past shows only its name; tap the tab to open it
   const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
+  // a town's market square: buy and sell here too
+  { const mt = here && Object.keys(Sim.MARKET_AT).find(t => t !== 'hearthmoor' && Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; }
   // a door you can go through
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
@@ -3391,7 +3403,7 @@ function pageFamily(s) {
   if (s.pendingDeath) {
     const cands = [H.named, ...H.kids, H.spouse, ...H.sibs].filter((q, i, arr) => q && arr.indexOf(q) === i && q.status === 'here');
     return `<h3>${esc(s.name)} has died</h3><p class="lead">Aged ${Y.age}, in the ${Y.generation === 1 ? 'first' : 'next'} generation of the family. The world goes on.</p>
-      ${cands.length ? `<h4>Carry on as</h4><div class="grid2">${cands.map(q => { const pv = Sim.inheritPreview(s, q); return `<div class="box"><h5>${nm(q)}, ${Math.max(16, q.age)}</h5><p>${q === H.spouse ? 'Your ' + (Sim.sexOf(q) === 'f' ? 'wife' : 'husband') : H.sibs.includes(q) ? (Sim.sexOf(q) === 'f' ? 'Your sister' : 'Your brother') : (Sim.sexOf(q) === 'f' ? 'Your daughter' : 'Your son')}${q === H.named ? ', your named heir' : ''}${q.kid ? '. Still young: they grow up fast.' : '.'}</p><p><b>Inherits:</b> ${pv.gets.join(', ')}.</p>${pv.notes.map(t => `<p>${esc(t)}</p>`).join('')}<div class="acts">${B_('Carry on as ' + esc(q.name.split(' ')[0]), ['carryOn', q.id])}</div></div>`; }).join('')}</div>` : ''}
+      ${cands.length ? `<h4>Carry on as</h4><div class="grid2">${cands.map(q => { const pv = Sim.inheritPreview(s, q); return `<div class="box"><h5>${nm(q)}, ${Math.max(16, q.age)}</h5><p>${q === H.spouse ? 'Your ' + (Sim.sexOf(q) === 'f' ? 'wife' : 'husband') : H.sibs.includes(q) ? (Sim.sexOf(q) === 'f' ? 'Your sister' : 'Your brother') : (Sim.sexOf(q) === 'f' ? 'Your daughter' : 'Your son')}${q === H.named ? ', your named heir' : ''}${q.kid ? '. Still a child: a regent runs the family\u2019s affairs until they come of age at 16.' : '.'}</p><p><b>Inherits:</b> ${pv.gets.join(', ')}.</p>${pv.notes.map(t => `<p>${esc(t)}</p>`).join('')}<div class="acts">${B_('Carry on as ' + esc(q.name.split(' ')[0]), ['carryOn', q.id])}</div></div>`; }).join('')}</div>` : ''}
       <h4>${cands.length ? 'Or begin again' : 'Nobody to carry on'}</h4><p>${cands.length ? 'Leave the family behind and start over as a newcomer.' : 'With no family to inherit, your property goes back to the lord and the towns.'} The world, and everyone in it, remembers what came before.</p>
       <div class="acts">${B_('Begin again as a newcomer (man)', ['beginAgain', 'Hugh Rowan', 'm'], 'alt')}${B_('Begin again as a newcomer (woman)', ['beginAgain', 'Ada Thorne', 'f'], 'alt')}</div>`;
   }

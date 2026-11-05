@@ -860,10 +860,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const T = TRADES[shop.trade], Ti = tierOf(shop);
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
-      const vr = T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0);
+      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15);
       villagers(s).filter(p => p.purse >= shop.price && !p.kid && !(p.job && ['guard', 'lord', 'steward', 'taxman'].includes(p.job.office))).forEach(p => { if (rand(s) < vr) sched.push({ at: when(), pid: p.id, shop: shop.id }); });
       const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
-      for (let i = 0; i < n; i++) sched.push({ at: when(), id: null, shop: shop.id });
+      for (let i = 0; i < Math.round(n * Math.min(1, share * 1.15 + 0.2)); i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
     sched.sort((a, b) => a.at - b.at);
@@ -916,6 +916,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.gov) govEvening(s);
     if (s.towns) townEvening(s);
     if (s.people) propertyDay(s);
+    goodsDay(s);
     if (s.realm) realmDay(s);
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
@@ -1000,7 +1001,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const mp = s.people[m.pid]; if (!mp || mp.status !== 'here') { shop.manager = null; report(s, 'Your ' + TRADES[shop.trade].name.toLowerCase() + ' has lost its manager.'); continue; }
       spend(s, m.wage); mp.purse += m.wage; s.rec.wagesPaid += m.wage;
       let budget = m.budget, did = [];
-      const ss = shopStats(s, shop), T = TRADES[shop.trade], floor = Math.ceil(Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Math.max(1, tierOf(shop).out) * 1.1);
+      const ss = shopStats(s, shop), T = TRADES[shop.trade], floor = Math.ceil(Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * buyPrice(s, 'hearthmoor', g), 0) / Math.max(1, tierOf(shop).out) * 1.1);
       if (!shop.policy.supplyRuns) { shop.policy.supplyRuns = true; did.push('set the worker to buy supplies'); }
       if (!shop.worker && s.applicants && s.applicants.length) {
         const pick = s.applicants.map((a, i) => ({ a, i })).filter(x => x.a.ask <= budget + 9).sort((x, y) => y.a.skill / y.a.ask - x.a.skill / x.a.ask)[0];
@@ -1067,7 +1068,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       notes.push(n);
     }
     if (e.fullAt && e.sold > 0) notes.push({ text: 'Shelves were full at ' + e.fullAt + ', so no more could be made. A bigger building holds more.' });
-    const unit = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Ti.out;
+    const unit = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * buyPrice(s, 'hearthmoor', g), 0) / Ti.out;
     if (e.price <= unit) notes.push({ text: 'At ' + e.price + 'c you barely cover bought supplies (about ' + unit.toFixed(1) + 'c each).' });
     if (e.profit < 0) notes.push({ text: 'This shop lost ' + (-e.profit) + 'c: costs of ' + e.costs + 'c (supplies ' + e.supplies + 'c, wages ' + e.wages + 'c, upkeep ' + e.upkeep + 'c) against ' + e.revenue + 'c of sales.' });
     if (e.upkeepUnpaid > 0) notes.push({ text: 'You could not cover ' + e.upkeepUnpaid + 'c of upkeep. Nothing was taken from you, but earn some coin before tomorrow.' });
@@ -1458,7 +1459,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const sp = workerSpeed(w);
     const low = !shop.work.loaded && !canProduce(shop);
     const target = Math.min(Ti.cap - Ti.out, Ti.out * 2);
-    const missingCost = Object.keys(T.recipe).reduce((a, g) => a + Math.max(0, T.recipe[g] - shop.stock[g]) * BUY[g], 0);
+    const missingCost = Object.keys(T.recipe).reduce((a, g) => a + Math.max(0, T.recipe[g] - shop.stock[g]) * buyPrice(s, 'hearthmoor', g), 0);
     if (shop.policy.supplyRuns && low && s.coins >= missingCost && h < H.end - 1 && !(w.supWait > s.t)) {
       w.task = 'supply'; w.sup = { phase: 'go' };
       supplyRun(s, shop, w, dt); return;
@@ -1492,7 +1493,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (moveTo(w, P.market.x - 0.8, P.market.z, 1.1 * dt)) {
         const want = {};
         for (const g of Object.keys(r)) want[g] = shop.stock[g] >= r[g] * 3 ? 0 : Math.min(r[g] * 3 - shop.stock[g], Ti.cap - shop.stock[g]);
-        const cost = () => Object.keys(want).reduce((a, g) => a + want[g] * BUY[g], 0);
+        const cost = () => Object.keys(want).reduce((a, g) => a + (want[g] ? buyPrice(s, 'hearthmoor', g, want[g]) : 0), 0);
         while (cost() > s.coins && Object.values(want).some(v => v > 0)) {
           const g = Object.keys(want).sort((a, b) => want[b] / r[b] - want[a] / r[a])[0]; want[g]--;
         }
@@ -1868,8 +1869,82 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
 
   /* the village's businesses keep their own books */
+  /* ================= one economy (Stage V) =================
+     Grain, timber and iron have their own stock and price in every town. Every business, yours or not,
+     sells into the same demand: the town's grown people and its travellers, shared between every seller of
+     that trade by how much each can make. Ingredients cost what they cost in that town's market today. */
+  const GOODS_BASE = { grain: 2, wood: 2, ore: 3 };
+  const TOWN_GOODS = {
+    hearthmoor: { make: { grain: 30, wood: 25, ore: 9 }, use: { grain: 20, wood: 15, ore: 6 }, travellers: 8 },
+    greenhaven: { make: { grain: 60, wood: 10, ore: 0 }, use: { grain: 25, wood: 15, ore: 4 }, travellers: 10 },
+    oakbridge: { make: { grain: 15, wood: 22, ore: 0 }, use: { grain: 50, wood: 35, ore: 12 }, travellers: 40 },
+    crownmere: { make: { grain: 25, wood: 15, ore: 0 }, use: { grain: 150, wood: 90, ore: 40 }, travellers: 120 },
+    ironcrest: { make: { grain: 2, wood: 35, ore: 90 }, use: { grain: 40, wood: 30, ore: 20 }, travellers: 15 },
+    eastwatch: { make: { grain: 10, wood: 5, ore: 0 }, use: { grain: 70, wood: 60, ore: 15 }, travellers: 60 }
+  };
+  // per trade: how often a grown person buys (visits a day), how much each time, the usual price,
+  // the goods used per unit sold, and how many units one pair of hands can make in a day
+  const ECON = {
+    bakery: { rate: 0.6, qty: 1.3, price: 5, inputs: { grain: 0.5, wood: 0.25 }, perWorker: 6 },
+    tavern: { rate: 0.55, qty: 1.6, price: 3, inputs: { grain: 0.5, wood: 0.15 }, perWorker: 10 },
+    smithy: { rate: 0.06, qty: 1, price: 18, inputs: { ore: 1.5, wood: 1 }, perWorker: 1.5 },
+    joinery: { rate: 0.05, qty: 1, price: 12, inputs: { wood: 2.5 }, perWorker: 2.5 },
+    mill: { rate: 0.5, qty: 1, price: 2, inputs: { grain: 0.5 }, perWorker: 15 },
+    butcher: { rate: 0.35, qty: 1.2, price: 4, inputs: { grain: 0.6 }, perWorker: 7 },
+    chandler: { rate: 0.2, qty: 1.3, price: 3, inputs: { wood: 0.3 }, perWorker: 10 },
+    tailor: { rate: 0.05, qty: 1, price: 12, inputs: {}, perWorker: 2.5 },
+    weaver: { rate: 0.07, qty: 1, price: 8, inputs: {}, perWorker: 4 },
+    potter: { rate: 0.1, qty: 1.2, price: 4, inputs: { wood: 0.4 }, perWorker: 7 },
+    cooper: { rate: 0.05, qty: 1, price: 8, inputs: { wood: 1.5 }, perWorker: 3.5 },
+    wheelwright: { rate: 0.03, qty: 1, price: 14, inputs: { wood: 2, ore: 0.3 }, perWorker: 2 },
+    carter: { rate: 0.12, qty: 1, price: 3, inputs: {}, perWorker: 10 },
+    boatwright: { rate: 0.012, qty: 1, price: 40, inputs: { wood: 6 }, perWorker: 0.75 },
+    goldsmith: { rate: 0.012, qty: 1, price: 30, inputs: { ore: 1 }, perWorker: 1 },
+    apothecary: { rate: 0.12, qty: 1, price: 5, inputs: {}, perWorker: 6 },
+    mason: { rate: 0.025, qty: 1, price: 20, inputs: {}, perWorker: 1.5 },
+    tanner: { rate: 0.06, qty: 1, price: 6, inputs: {}, perWorker: 5 },
+    dairy: { rate: 0.45, qty: 1, price: 2, inputs: { grain: 0.3 }, perWorker: 15 },
+    estate: { rate: 0, qty: 0, price: 0, inputs: {}, perWorker: 0, flat: 70 }
+  };
+  const goodsTarget = (t, g) => Math.max(20, TOWN_GOODS[t].use[g] * 5);
+  function setupGoods(s) {
+    if (s.goods) return;
+    s.goods = {};
+    for (const t in TOWN_GOODS) { s.goods[t] = {}; for (const g of GOODS) { const T = TOWN_GOODS[t]; s.goods[t][g] = Math.round(goodsTarget(t, g) + 2 * (T.make[g] - T.use[g])); } }
+    for (const t in TOWN_GOODS) for (const g of GOODS) s.goods[t][g] = Math.max(8, s.goods[t][g]);
+  }
+  function goodsPrice(s, t, g) { setupGoods(s); const st = Math.max(1, s.goods[t || 'hearthmoor'][g]); return GOODS_BASE[g] * clamp(Math.pow(goodsTarget(t || 'hearthmoor', g) / st, 0.6), 0.4, 3.2); }
+  const buyPrice = (s, t, g, n) => Math.max(n || 1, Math.round(goodsPrice(s, t, g) * 1.1 * (n || 1)));
+  const sellPrice = (s, t, g, n) => Math.max(0, Math.floor(goodsPrice(s, t, g) * 0.75 * (n || 1)));
+  function goodsDay(s) {
+    setupGoods(s);
+    for (const t in TOWN_GOODS) for (const g of GOODS) {
+      const T = TOWN_GOODS[t], st = s.goods[t][g], carts = 0.5 * (goodsTarget(t, g) - st);   // merchants' carts fill gaps and carry off gluts
+      s.goods[t][g] = Math.max(4, Math.round(st + T.make[g] * (0.85 + rand(s) * 0.3) - T.use[g] * (0.85 + rand(s) * 0.3) + carts));
+    }
+  }
+  const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour' };
+  function marketHere(s) { setupGoods(s); for (const t in MARKET_AT) { const L = LOCS[MARKET_AT[t]]; if (L && dist(s.player, L) < L.r + (t === 'hearthmoor' ? 0 : 4)) return t; } return null; }
+  // the day's demand for a trade in a town, and how much each seller can make
+  function sellersOf(s, t, trade) {
+    const out = [];
+    for (const id in s.biz) { const b = s.biz[id]; if (b.closed || b.trade !== trade || (b.town || 'hearthmoor') !== t) continue; out.push({ b, cap: bizCap(s, b) }); }
+    if (t === 'hearthmoor') for (const sh of s.shops) if (sh.trade === trade) out.push({ shop: sh, cap: shopCap(sh) });
+    return out;
+  }
+  function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : 1; return (b.staff.length + own) * E.perWorker * (b.disrepair ? 0.7 : 1); }
+  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
+  function townDemand(s, t, trade) {
+    const E = ECON[trade]; if (!E) return 0;
+    const folk = living(s).filter(p => townOf(p) === t && !p.kid && p.age >= 14);
+    const work = folk.length ? folk.filter(p => p.job || p.retired).length / folk.length : 0.8;
+    return (folk.length * E.rate * (0.55 + 0.55 * work) + TOWN_GOODS[t].travellers * E.rate) * E.qty;
+  }
+  function inputCost(s, t, trade, units) { const E = ECON[trade] || {}; return Object.keys(E.inputs || {}).reduce((a, g) => a + E.inputs[g] * goodsPrice(s, t, g), 0) * units; }
+  // the share of the village's custom that comes to one of your lot shops
+  function shopShare(s, sh) { const all = sellersOf(s, 'hearthmoor', sh.trade), tot = all.reduce((a, x) => a + x.cap, 0); return tot ? shopCap(sh) / tot : 1; }
   function bizDay(s) {
-    const pop = adults(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length);
+    const pop = adults(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length), dem = {};
     for (const id in s.biz) {
       const b = s.biz[id];
       if (b.closed) { b.lastProfit = 0; continue; }
@@ -1878,7 +1953,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const workers = b.staff.length + (own ? 1 : 0);
       const rivals = Object.values(s.biz).filter(x => x !== b && !x.closed && x.trade === b.trade && (x.town || 'hearthmoor') === (b.town || 'hearthmoor')).length;
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
-      const revenue = Math.round((b.disrepair ? 0.7 : 1) * BIZ_BASE[b.trade] * (0.55 + 0.55 * employed) * Math.min(1.5, 0.5 + 0.5 * workers) * competition * (s.village.shortage && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1));
+      const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
+      if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
+      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap : 0);
+      const revenue = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1));
+      b.lastSold = Math.round(sold);
       let wages = 0;
       for (const st of b.staff) {
         const w = person(s, st.pid);
@@ -1887,16 +1966,18 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         w.purse += paid; wages += paid;
         if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
       }
-      const supplies = Math.round(revenue * 0.35), profit = revenue - supplies - wages - 3;
+      const premises = { hearthmoor: 3, greenhaven: 4, ironcrest: 6, oakbridge: 8, eastwatch: 9, crownmere: 11 }[t0] || 3;
+      const supplies = Math.round(E.flat ? revenue * 0.35 : inputCost(s, t0, b.trade, sold) + sold * E.price * 0.08), profit = revenue - supplies - wages - premises;
       b.lastRevenue = revenue; b.lastProfit = profit; b.lastWages = wages;
       b.profits.push(profit); if (b.profits.length > 5) b.profits.shift();
       if (mine) {
-        const net = revenue - supplies - 3;
+        const net = revenue - supplies - premises;
         if (net >= 0) earn(s, net); else spend(s, -net);
         s.stats.owned = (s.stats.owned || 0) + profit;
         continue;
       }
-      own.purse += revenue - supplies - 3;
+      own.purse += revenue - supplies - premises;
+      if (own.purse > 300) own.purse -= Math.round((own.purse - 300) * 0.12);   // a prosperous household lives well
       if (lessee) continue;
       // owners hire when doing well and let people go when not
       const recent = avg(b.profits.slice(-3));
@@ -2106,6 +2187,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function yourBirthday(s, today) {
     const Y = you(s); if (s.pendingDeath || Y.bday % s.ageRate !== today) return;
     Y.age++; s.people[Y.pid].age = Y.age;
+    if (Y.regent && Y.age >= 16) { event(s, 'You come of age at 16. ' + Y.regent.name + '\u2019s regency ends: the family\u2019s affairs are yours to run.', 'story'); Y.regent = null; const me = s.people[Y.pid]; if (me) me.kid = false; }
     const die = Y.age >= 95 ? 1 : Y.age >= 80 ? 0.22 : Y.age >= 70 ? 0.08 : Y.age >= 60 ? 0.02 : 0;
     if (rand(s) < die) { s.pendingDeath = { day: s.day, age: Y.age }; event(s, 'You have died, aged ' + Y.age + '. Your story passes on.', 'story'); return; }
     if (Y.age === 60 || Y.age === 70) event(s, 'You turn ' + Y.age + '. It may be time to think about who carries on after you: see the Family page.', 'story');
@@ -2153,7 +2235,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const notes = [];
     if (s.offices.elder === 'player') notes.push('The Elder\u2019s chair is elected: it falls vacant and the moot chooses.');
     if (s.offices.lord === 'player') notes.push(h && (h.parents || []).includes(you(s).pid) && !h.kid ? 'The lordship passes to ' + h.name + ', with the crown\u2019s recognition.' : 'The lordship needs a grown child of your blood; without one it passes out of the family.');
-    if (s.village.council) notes.push('A council seat is earned: ' + (h ? h.name : 'your heir') + ' starts with part of your standing and must earn the rest.');
+    if (s.village.council) notes.push('Your seat on the village council falls vacant; ' + (h ? h.name : 'your heir') + ' starts with part of your standing and can win it back at a moot (standing 40).');
     return { gets: out, notes };
   }
   function succeed(s, h, why) {
@@ -2180,7 +2262,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (h.home && h.home !== 'you') moveOut(s, h, 'Moved into the family home.');
     s.coins += Math.max(0, h.purse); h.purse = 0;
     const prev = s.name; s.name = h.name; s.job = null; s.player.dest = null; s.player.action = null;
-    Y.age = Math.max(16, h.age); Y.sex = sexOf(h); Y.spouse = h.spouse && s.people[h.spouse] && s.people[h.spouse].status === 'here' ? h.spouse : null; Y.heir = null; Y.court = {}; Y.generation++; Y.family = surname(h.name);
+    Y.regent = null;
+    if (h.age < 16 && s.ageRate) {
+      const rg = [Y.spouse && s.people[Y.spouse], ...living(s).filter(q => !q.kid && q.age >= 18 && (q.parents || []).some(x => (h.parents || []).includes(x)) && q.id !== h.id)].find(q => q && q.status === 'here');
+      Y.regent = { pid: rg ? rg.id : null, name: rg ? rg.name : 'the village council' };
+      event(s, h.name + ' is only ' + h.age + '. ' + (rg ? rg.name : 'The village council') + ' will act as regent, running the family\u2019s affairs, until ' + h.name.split(' ')[0] + ' comes of age at 16.', 'story');
+    }
+    if (v.council) { v.council = false; govLog(s, 'Your seat on the village council falls vacant. The moot will choose again: ' + h.name + ' can win it back.', 'story'); }
+    Y.age = h.age < 16 && s.ageRate ? h.age : Math.max(16, h.age); Y.sex = sexOf(h); Y.spouse = h.spouse && s.people[h.spouse] && s.people[h.spouse].status === 'here' ? h.spouse : null; Y.heir = null; Y.court = {}; Y.generation++; Y.family = surname(h.name);
     if (Y.spouse) { const sp = s.people[Y.spouse]; sp.spouse = h.id; if (sp.home !== 'you') { moveOut(s, sp, 'Moved in with ' + h.name + '.'); sp.home = 'you'; } }
     // the heir's own record becomes yours; your children stay listed as theirs
     h.status = 'you'; h.kid = false; h.town = undefined; Y.pid = h.id; h.log.unshift({ day: s.day, text: why === 'retire' ? 'Took over from ' + prev + '.' : 'Inherited everything from ' + prev + '.' });
@@ -2623,6 +2712,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return { yes, no, keep: yes >= no };
   }
   function holdMoot(s) {
+    { const v = s.village; if (v.step >= 6 && !v.council && v.standing >= 40 && !(you(s).regent)) { v.council = true; addStanding(s, 4, 'the moot returns you to the village council.'); } }
     const g = s.gov, v = s.village, notes = [], after = [];
     g.warned = false;
     // seats are kept by those who still have the village's respect
@@ -3909,8 +3999,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.coins < (cost.coin || 0)) return false;
     return GOODS.every(g => !cost[g] || s.player.inv[g] + (shop ? shop.stock[g] : 0) >= cost[g]);
   }
+  const REGENCY_BLOCK = new Set(['court', 'propose', 'apply', 'seekLordship', 'seekSeat', 'claimCrown', 'undermineKing', 'acceptLordship', 'buyBiz', 'buyHouse', 'listForSale', 'acceptOffer', 'leaseBiz', 'moveIn', 'hireManager', 'nameHeir', 'handOver']);
   function cmd(s, name, a, b, c) {
     const p = s.player;
+    if (s.you && s.you.regent && REGENCY_BLOCK.has(name)) return fail('You are still a child. ' + s.you.regent.name.charAt(0).toUpperCase() + s.you.regent.name.slice(1) + ' acts for you until you are 16.');
     const shop = typeof a === 'number' ? shopById(s, a) : null;
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
@@ -3996,18 +4088,19 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       }
       case 'serve': if (!shop) return fail('No such shop.'); walkTo(s, plotPt(shop, 'serve')); return ok();
       case 'buy': case 'sell': {
-        if (dist(p, LOCS.market) > LOCS.market.r) return fail('Go to the Trading Post first.');
+        const mt = marketHere(s); if (!mt) return fail('Go to a market first: the Trading Post, or a town\u2019s market square.');
         if (!GOODS.includes(a)) return fail('They do not trade that.');
         const n = b || 1;
         if (name === 'buy') {
-          const cost = BUY[a] * n;
+          const cost = buyPrice(s, mt, a, n);
+          if (s.goods[mt][a] < n) return fail('The market has only ' + s.goods[mt][a] + ' ' + a + '.');
           if (s.coins < cost) return fail('You need ' + cost + 'c for that.');
           if (carried(s) + n > CARRY) return fail('You can carry ' + CARRY + ' items at most.');
-          spend(s, cost); s.stats.marketBuys += cost; p.inv[a] += n;
+          spend(s, cost); s.stats.marketBuys += cost; p.inv[a] += n; s.goods[mt][a] -= n;
           return ok('Bought ' + n + ' ' + a + ' for ' + cost + 'c.');
         }
         if (p.inv[a] < n || n <= 0) return fail('You have only ' + p.inv[a] + ' ' + a + '.');
-        p.inv[a] -= n; const got = SELL[a] * n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
+        p.inv[a] -= n; const got = sellPrice(s, mt, a, n); s.goods[mt][a] += n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
         return ok('Sold ' + n + ' ' + a + ' for ' + got + 'c.');
       }
       case 'setPrice': if (shop) shop.price = clamp(Math.round(b), 1, TRADES[shop.trade].wtp * 3); return ok();
@@ -4129,7 +4222,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       case 'hoping': you(s).hoping = !!a; return ok();
       case 'nameHeir': { const q = s.people[a]; if (!q || q.status !== 'here' || q.kid) return fail('Your heir must be grown.'); if (!(q.parents || []).includes(you(s).pid) && q.id !== you(s).spouse && (q.opinion || 0) < 30) return fail(q.name + ' does not know you well enough.'); you(s).heir = q.id; return ok(q.name + ' is now your named heir.'); }
       case 'handOver': { const h = yourHeirs(s).best; if (!h || h.kid) return fail('There is no grown heir to hand over to.'); succeed(s, h, 'retire'); return ok(); }
-      case 'carryOn': { if (!s.pendingDeath) return fail('Not now.'); const h = (a && s.people[a] && s.people[a].status === 'here') ? s.people[a] : yourHeirs(s).best; if (!h) return fail('There is nobody to carry on.'); if (h.kid) { h.kid = false; h.age = Math.max(h.age, 16); } succeed(s, h, 'death'); return ok(); }
+      case 'carryOn': { if (!s.pendingDeath) return fail('Not now.'); const h = (a && s.people[a] && s.people[a].status === 'here') ? s.people[a] : yourHeirs(s).best; if (!h) return fail('There is nobody to carry on.'); if (h.kid && !s.ageRate) { h.kid = false; h.age = Math.max(h.age, 16); } succeed(s, h, 'death'); return ok(); }
       case 'beginAgain': { if (!s.pendingDeath) return fail('Not now.'); beginAgain(s, a, b); return ok(); }
       case 'ageRate': if (AGE_RATES[a] == null) return fail('Unknown pace.'); s.ageRate = AGE_RATES[a]; return ok();
       case 'works': {
@@ -4771,7 +4864,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -6952,6 +7045,18 @@ function placesRow(s) {
 function progressBar(frac) { return `<div class="bar"><i style="width:${Math.round(clamp(frac, 0, 1) * 100)}%"></i></div>`; }
 function shiftText(e) { return String(e.shift[0]).padStart(2, '0') + ':00–' + String(e.shift[1]).padStart(2, '0') + ':00'; }
 
+// buying and selling grain, timber and iron at a town's market, with what the other towns pay
+const GOOD_NAME = { grain: 'grain', wood: 'timber', ore: 'iron ore' };
+function marketActs(s, t) {
+  const inv = s.player.inv, out = [];
+  Sim.GOODS.forEach(g => { const c1 = Sim.buyPrice(s, t, g, 1), c5 = Sim.buyPrice(s, t, g, 5); out.push(B_(`Buy ${GOOD_NAME[g]} · ${c1}c`, ['buy', g, 1], '', s.coins < c1)); out.push(B_(`Buy 5 · ${c5}c`, ['buy', g, 5], 'alt', s.coins < c5)); });
+  Sim.GOODS.forEach(g => { if (inv[g]) out.push(B_(`Sell ${inv[g]} ${GOOD_NAME[g]} · ${Sim.sellPrice(s, t, g, inv[g])}c`, ['sell', g, inv[g]], 'alt')); });
+  return out.join('');
+}
+function marketTable(s) {
+  const towns = Object.keys(Sim.TOWN_GOODS);
+  return `<div class="why"><b>What the markets pay for 10</b> (selling)<br>${Sim.GOODS.map(g => GOOD_NAME[g] + ': ' + towns.map(t => TOWN_NAMES[t] + ' ' + Sim.sellPrice(s, t, g, 10)).join(' \u00b7 ')).join('<br>')}</div>`;
+}
 function cardHTML(s) {
   const p = s.player;
   if (UI.sel != null) {
@@ -7036,9 +7141,7 @@ function cardHTML(s) {
     return `<h2>${L[here].name}</h2><div class="sub">${blurb} ${esc(carryText(s))}</div>${busy}${walking}<div class="acts">${acts.join('')}</div>`;
   }
   if (here === 'market') {
-    const inv = p.inv, acts = [];
-    Sim.GOODS.forEach(g => acts.push(B_(`Buy ${g} · ${Sim.BUY[g]}c`, ['buy', g, 1], '', s.coins < Sim.BUY[g])));
-    Sim.GOODS.forEach(g => { if (inv[g]) acts.push(B_(`Sell ${inv[g]} ${g} · ${inv[g] * Sim.SELL[g]}c`, ['sell', g, inv[g]], 'alt')); });
+    const inv = p.inv, acts = [marketActs(s, 'hearthmoor')];
     const c = s.village.contract;
     let order = '';
     if (c) {
@@ -7046,7 +7149,7 @@ function cardHTML(s) {
       order = `<div class="why"><b>Order:</b> ${esc(c.who)} wants ${esc(Sim.goodsName(c.trade, c.qty))} by day ${c.until} for <b>${c.reward}c</b>. Your shops hold ${have}.</div>`;
       acts.unshift(B_(`Deliver the order · ${c.reward}c`, ['deliver'], '', have < c.qty));
     }
-    return `<h2>Trading Post</h2><div class="sub">Grain and wood cost 2c, ore 3c. Everything sells back for 1c, so gathering always earns something. ${esc(carryText(s))}</div>${order}${walking}<div class="acts">${acts.join('')}</div>`;
+    return `<h2>Trading Post</h2><div class="sub">Prices follow how much the village has in store. Other towns pay differently, so carrying goods between them can pay. ${esc(carryText(s))}</div>${order}${marketTable(s)}${walking}<div class="acts">${acts.join('')}</div>`;
   }
   if (here === 'hall') return hallCard(s, walking);
   if (here === 'granary') {
@@ -7170,6 +7273,8 @@ function renderCard(force) {
   let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
   // a place you merely walk past shows only its name; tap the tab to open it
   const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
+  // a town's market square: buy and sell here too
+  { const mt = here && Object.keys(Sim.MARKET_AT).find(t => t !== 'hearthmoor' && Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; }
   // a door you can go through
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
@@ -7703,7 +7808,7 @@ function pageFamily(s) {
   if (s.pendingDeath) {
     const cands = [H.named, ...H.kids, H.spouse, ...H.sibs].filter((q, i, arr) => q && arr.indexOf(q) === i && q.status === 'here');
     return `<h3>${esc(s.name)} has died</h3><p class="lead">Aged ${Y.age}, in the ${Y.generation === 1 ? 'first' : 'next'} generation of the family. The world goes on.</p>
-      ${cands.length ? `<h4>Carry on as</h4><div class="grid2">${cands.map(q => { const pv = Sim.inheritPreview(s, q); return `<div class="box"><h5>${nm(q)}, ${Math.max(16, q.age)}</h5><p>${q === H.spouse ? 'Your ' + (Sim.sexOf(q) === 'f' ? 'wife' : 'husband') : H.sibs.includes(q) ? (Sim.sexOf(q) === 'f' ? 'Your sister' : 'Your brother') : (Sim.sexOf(q) === 'f' ? 'Your daughter' : 'Your son')}${q === H.named ? ', your named heir' : ''}${q.kid ? '. Still young: they grow up fast.' : '.'}</p><p><b>Inherits:</b> ${pv.gets.join(', ')}.</p>${pv.notes.map(t => `<p>${esc(t)}</p>`).join('')}<div class="acts">${B_('Carry on as ' + esc(q.name.split(' ')[0]), ['carryOn', q.id])}</div></div>`; }).join('')}</div>` : ''}
+      ${cands.length ? `<h4>Carry on as</h4><div class="grid2">${cands.map(q => { const pv = Sim.inheritPreview(s, q); return `<div class="box"><h5>${nm(q)}, ${Math.max(16, q.age)}</h5><p>${q === H.spouse ? 'Your ' + (Sim.sexOf(q) === 'f' ? 'wife' : 'husband') : H.sibs.includes(q) ? (Sim.sexOf(q) === 'f' ? 'Your sister' : 'Your brother') : (Sim.sexOf(q) === 'f' ? 'Your daughter' : 'Your son')}${q === H.named ? ', your named heir' : ''}${q.kid ? '. Still a child: a regent runs the family\u2019s affairs until they come of age at 16.' : '.'}</p><p><b>Inherits:</b> ${pv.gets.join(', ')}.</p>${pv.notes.map(t => `<p>${esc(t)}</p>`).join('')}<div class="acts">${B_('Carry on as ' + esc(q.name.split(' ')[0]), ['carryOn', q.id])}</div></div>`; }).join('')}</div>` : ''}
       <h4>${cands.length ? 'Or begin again' : 'Nobody to carry on'}</h4><p>${cands.length ? 'Leave the family behind and start over as a newcomer.' : 'With no family to inherit, your property goes back to the lord and the towns.'} The world, and everyone in it, remembers what came before.</p>
       <div class="acts">${B_('Begin again as a newcomer (man)', ['beginAgain', 'Hugh Rowan', 'm'], 'alt')}${B_('Begin again as a newcomer (woman)', ['beginAgain', 'Ada Thorne', 'f'], 'alt')}</div>`;
   }
@@ -8957,7 +9062,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.2230';
+const BUILD = '2026.11.04.2327';
 const NOTES = [
   { v: '0.33', date: '4 November', title: 'All of Alderwyn, and its crown', items: [
     'Two new towns. Ironcrest, about 200 people on a mountain shelf above Crownmere: mines driven into the crags, smelters, charcoal burners and Stane Keep. Eastwatch, about 480 people in a walled port on the sea: quays, warehouses, ships at the piers, a shipyard, a lighthouse and the Warden\u2019s castle. Roads run up to Ironcrest from Crownmere and east to Eastwatch from Oakbridge, over new bridges on the Alder.',

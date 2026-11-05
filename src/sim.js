@@ -375,10 +375,10 @@
       const T = TRADES[shop.trade], Ti = tierOf(shop);
       const [o, c] = T.hours;
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
-      const vr = T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0);
+      const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15);
       villagers(s).filter(p => p.purse >= shop.price && !p.kid && !(p.job && ['guard', 'lord', 'steward', 'taxman'].includes(p.job.office))).forEach(p => { if (rand(s) < vr) sched.push({ at: when(), pid: p.id, shop: shop.id }); });
       const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
-      for (let i = 0; i < n; i++) sched.push({ at: when(), id: null, shop: shop.id });
+      for (let i = 0; i < Math.round(n * Math.min(1, share * 1.15 + 0.2)); i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
     sched.sort((a, b) => a.at - b.at);
@@ -431,6 +431,7 @@
     if (s.gov) govEvening(s);
     if (s.towns) townEvening(s);
     if (s.people) propertyDay(s);
+    goodsDay(s);
     if (s.realm) realmDay(s);
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
@@ -515,7 +516,7 @@
       const mp = s.people[m.pid]; if (!mp || mp.status !== 'here') { shop.manager = null; report(s, 'Your ' + TRADES[shop.trade].name.toLowerCase() + ' has lost its manager.'); continue; }
       spend(s, m.wage); mp.purse += m.wage; s.rec.wagesPaid += m.wage;
       let budget = m.budget, did = [];
-      const ss = shopStats(s, shop), T = TRADES[shop.trade], floor = Math.ceil(Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Math.max(1, tierOf(shop).out) * 1.1);
+      const ss = shopStats(s, shop), T = TRADES[shop.trade], floor = Math.ceil(Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * buyPrice(s, 'hearthmoor', g), 0) / Math.max(1, tierOf(shop).out) * 1.1);
       if (!shop.policy.supplyRuns) { shop.policy.supplyRuns = true; did.push('set the worker to buy supplies'); }
       if (!shop.worker && s.applicants && s.applicants.length) {
         const pick = s.applicants.map((a, i) => ({ a, i })).filter(x => x.a.ask <= budget + 9).sort((x, y) => y.a.skill / y.a.ask - x.a.skill / x.a.ask)[0];
@@ -582,7 +583,7 @@
       notes.push(n);
     }
     if (e.fullAt && e.sold > 0) notes.push({ text: 'Shelves were full at ' + e.fullAt + ', so no more could be made. A bigger building holds more.' });
-    const unit = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Ti.out;
+    const unit = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * buyPrice(s, 'hearthmoor', g), 0) / Ti.out;
     if (e.price <= unit) notes.push({ text: 'At ' + e.price + 'c you barely cover bought supplies (about ' + unit.toFixed(1) + 'c each).' });
     if (e.profit < 0) notes.push({ text: 'This shop lost ' + (-e.profit) + 'c: costs of ' + e.costs + 'c (supplies ' + e.supplies + 'c, wages ' + e.wages + 'c, upkeep ' + e.upkeep + 'c) against ' + e.revenue + 'c of sales.' });
     if (e.upkeepUnpaid > 0) notes.push({ text: 'You could not cover ' + e.upkeepUnpaid + 'c of upkeep. Nothing was taken from you, but earn some coin before tomorrow.' });
@@ -973,7 +974,7 @@
     const sp = workerSpeed(w);
     const low = !shop.work.loaded && !canProduce(shop);
     const target = Math.min(Ti.cap - Ti.out, Ti.out * 2);
-    const missingCost = Object.keys(T.recipe).reduce((a, g) => a + Math.max(0, T.recipe[g] - shop.stock[g]) * BUY[g], 0);
+    const missingCost = Object.keys(T.recipe).reduce((a, g) => a + Math.max(0, T.recipe[g] - shop.stock[g]) * buyPrice(s, 'hearthmoor', g), 0);
     if (shop.policy.supplyRuns && low && s.coins >= missingCost && h < H.end - 1 && !(w.supWait > s.t)) {
       w.task = 'supply'; w.sup = { phase: 'go' };
       supplyRun(s, shop, w, dt); return;
@@ -1007,7 +1008,7 @@
       if (moveTo(w, P.market.x - 0.8, P.market.z, 1.1 * dt)) {
         const want = {};
         for (const g of Object.keys(r)) want[g] = shop.stock[g] >= r[g] * 3 ? 0 : Math.min(r[g] * 3 - shop.stock[g], Ti.cap - shop.stock[g]);
-        const cost = () => Object.keys(want).reduce((a, g) => a + want[g] * BUY[g], 0);
+        const cost = () => Object.keys(want).reduce((a, g) => a + (want[g] ? buyPrice(s, 'hearthmoor', g, want[g]) : 0), 0);
         while (cost() > s.coins && Object.values(want).some(v => v > 0)) {
           const g = Object.keys(want).sort((a, b) => want[b] / r[b] - want[a] / r[a])[0]; want[g]--;
         }
@@ -1160,8 +1161,12 @@
   }
   function bodyOf(s, p) { const a = indexOf(s.agents, 'pid').get(p.id); return a && a.pid === p.id ? a : null; }
   // where you live: your hut, or a house you have bought and moved into
-  function yourHouse(s) { const id = s.player && s.player.house; const h = id ? houseById(s, id) : null; return h && h.owner === 'player' ? h : null; }
-  function yourTown(s) { const h = yourHouse(s); return h && h.town && h.town !== 'hearthmoor' ? h.town : undefined; }
+  // the seat of a region you hold: Varrow Manor becomes your family's manor, Stane Keep your keep
+  const SEAT_STYLE = { hearthmoor: f => f + ' Manor', greenhaven: f => f + ' Hall', oakbridge: f => f + ' Keep', ironcrest: f => f + ' Keep', eastwatch: f => 'Castle ' + f, crownmere: () => 'Crownmere Castle' };
+  function seatName(s, id) { return SEAT_STYLE[id] ? SEAT_STYLE[id](familyName(s)) : 'the seat of ' + REGIONS[id]; }
+  function yourSeat(s) { const id = s.player && s.player.seat; return id && s.realm && regionLord(s, id) === 'player' ? id : null; }
+  function yourHouse(s) { if (s.player && s.player.seat && yourSeat(s)) return null; const id = s.player && s.player.house; const h = id ? houseById(s, id) : null; return h && h.owner === 'player' ? h : null; }
+  function yourTown(s) { const st = yourSeat(s); if (st) return st === 'hearthmoor' ? undefined : st; const h = yourHouse(s); return h && h.town && h.town !== 'hearthmoor' ? h.town : undefined; }
   // the shape of a house on the ground: which way its door faces, and whether it is a tall townhouse
   function houseShape(h) {
     const i = +String(h.id).replace(/^[a-z]+/, ''), L = h.town === 'oakbridge' ? OAK.houses : h.town === 'crownmere' ? CM.houses : h.town === 'greenhaven' ? GH.houses : null;
@@ -1170,7 +1175,7 @@
     return { face: Math.atan2(P.center.x - h.x, P.center.z - h.z), tall: (h.cap || 0) >= 4, kind: 'hearthmoor' };
   }
   function doorOf(h) { const f = houseShape(h).face; return { x: h.x + Math.sin(f) * 4.2, z: h.z + Math.cos(f) * 4.2 }; }
-  function homeOfYou(s) { const h = yourHouse(s); return h ? { x: h.x, z: h.z, name: h.name, town: h.town || 'hearthmoor', house: h } : { x: P.home.x, z: P.home.z, name: 'your hut', town: 'hearthmoor', house: null }; }
+  function homeOfYou(s) { const st = yourSeat(s); if (st) { const pt = SEATS()[st]; return { x: pt.x, z: pt.z, name: seatName(s, st), town: st, house: null, seat: st }; } const h = yourHouse(s); return h ? { x: h.x, z: h.z, name: h.name, town: h.town || 'hearthmoor', house: h } : { x: P.home.x, z: P.home.z, name: 'your hut', town: 'hearthmoor', house: null }; }
   // everyone who lives with you follows you to a new home
   function bringFamily(s, why) {
     const T = yourTown(s), tn = T || 'hearthmoor';
@@ -1189,7 +1194,7 @@
     if (!p.home) return null;
     if (p.home === 'manor') return MANOR_HOME;
     if (p.home.startsWith('seat:')) { const st = SEATS()[p.home.slice(5)]; return st ? { x: st.x, z: st.z } : null; }
-    if (p.home === 'you') { const H = yourHouse(s); return H ? { x: H.x + 1.5, z: H.z + 1.5 } : { x: P.home.x + 1.5, z: P.home.z + 1.5 }; }
+    if (p.home === 'you') { const H = homeOfYou(s); return { x: H.x + 1.5, z: H.z + 1.5 }; }
     if (p.home.startsWith('biz:')) { const e = empById(p.home.slice(4)); return { x: e.x, z: e.z }; }
     const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
   }
@@ -1383,8 +1388,82 @@
   }
 
   /* the village's businesses keep their own books */
+  /* ================= one economy (Stage V) =================
+     Grain, timber and iron have their own stock and price in every town. Every business, yours or not,
+     sells into the same demand: the town's grown people and its travellers, shared between every seller of
+     that trade by how much each can make. Ingredients cost what they cost in that town's market today. */
+  const GOODS_BASE = { grain: 2, wood: 2, ore: 3 };
+  const TOWN_GOODS = {
+    hearthmoor: { make: { grain: 30, wood: 25, ore: 9 }, use: { grain: 20, wood: 15, ore: 6 }, travellers: 8 },
+    greenhaven: { make: { grain: 60, wood: 10, ore: 0 }, use: { grain: 25, wood: 15, ore: 4 }, travellers: 10 },
+    oakbridge: { make: { grain: 15, wood: 22, ore: 0 }, use: { grain: 50, wood: 35, ore: 12 }, travellers: 40 },
+    crownmere: { make: { grain: 25, wood: 15, ore: 0 }, use: { grain: 150, wood: 90, ore: 40 }, travellers: 120 },
+    ironcrest: { make: { grain: 2, wood: 35, ore: 90 }, use: { grain: 40, wood: 30, ore: 20 }, travellers: 15 },
+    eastwatch: { make: { grain: 10, wood: 5, ore: 0 }, use: { grain: 70, wood: 60, ore: 15 }, travellers: 60 }
+  };
+  // per trade: how often a grown person buys (visits a day), how much each time, the usual price,
+  // the goods used per unit sold, and how many units one pair of hands can make in a day
+  const ECON = {
+    bakery: { rate: 0.6, qty: 1.3, price: 5, inputs: { grain: 0.5, wood: 0.25 }, perWorker: 6 },
+    tavern: { rate: 0.55, qty: 1.6, price: 3, inputs: { grain: 0.5, wood: 0.15 }, perWorker: 10 },
+    smithy: { rate: 0.06, qty: 1, price: 18, inputs: { ore: 1.5, wood: 1 }, perWorker: 1.5 },
+    joinery: { rate: 0.05, qty: 1, price: 12, inputs: { wood: 2.5 }, perWorker: 2.5 },
+    mill: { rate: 0.5, qty: 1, price: 2, inputs: { grain: 0.5 }, perWorker: 15 },
+    butcher: { rate: 0.35, qty: 1.2, price: 4, inputs: { grain: 0.6 }, perWorker: 7 },
+    chandler: { rate: 0.2, qty: 1.3, price: 3, inputs: { wood: 0.3 }, perWorker: 10 },
+    tailor: { rate: 0.05, qty: 1, price: 12, inputs: {}, perWorker: 2.5 },
+    weaver: { rate: 0.07, qty: 1, price: 8, inputs: {}, perWorker: 4 },
+    potter: { rate: 0.1, qty: 1.2, price: 4, inputs: { wood: 0.4 }, perWorker: 7 },
+    cooper: { rate: 0.05, qty: 1, price: 8, inputs: { wood: 1.5 }, perWorker: 3.5 },
+    wheelwright: { rate: 0.03, qty: 1, price: 14, inputs: { wood: 2, ore: 0.3 }, perWorker: 2 },
+    carter: { rate: 0.12, qty: 1, price: 3, inputs: {}, perWorker: 10 },
+    boatwright: { rate: 0.012, qty: 1, price: 40, inputs: { wood: 6 }, perWorker: 0.75 },
+    goldsmith: { rate: 0.012, qty: 1, price: 30, inputs: { ore: 1 }, perWorker: 1 },
+    apothecary: { rate: 0.12, qty: 1, price: 5, inputs: {}, perWorker: 6 },
+    mason: { rate: 0.025, qty: 1, price: 20, inputs: {}, perWorker: 1.5 },
+    tanner: { rate: 0.06, qty: 1, price: 6, inputs: {}, perWorker: 5 },
+    dairy: { rate: 0.45, qty: 1, price: 2, inputs: { grain: 0.3 }, perWorker: 15 },
+    estate: { rate: 0, qty: 0, price: 0, inputs: {}, perWorker: 0, flat: 70 }
+  };
+  const goodsTarget = (t, g) => Math.max(20, TOWN_GOODS[t].use[g] * 5);
+  function setupGoods(s) {
+    if (s.goods) return;
+    s.goods = {};
+    for (const t in TOWN_GOODS) { s.goods[t] = {}; for (const g of GOODS) { const T = TOWN_GOODS[t]; s.goods[t][g] = Math.round(goodsTarget(t, g) + 2 * (T.make[g] - T.use[g])); } }
+    for (const t in TOWN_GOODS) for (const g of GOODS) s.goods[t][g] = Math.max(8, s.goods[t][g]);
+  }
+  function goodsPrice(s, t, g) { setupGoods(s); const st = Math.max(1, s.goods[t || 'hearthmoor'][g]); return GOODS_BASE[g] * clamp(Math.pow(goodsTarget(t || 'hearthmoor', g) / st, 0.6), 0.4, 3.2); }
+  const buyPrice = (s, t, g, n) => Math.max(n || 1, Math.round(goodsPrice(s, t, g) * 1.1 * (n || 1)));
+  const sellPrice = (s, t, g, n) => Math.max(0, Math.floor(goodsPrice(s, t, g) * 0.75 * (n || 1)));
+  function goodsDay(s) {
+    setupGoods(s);
+    for (const t in TOWN_GOODS) for (const g of GOODS) {
+      const T = TOWN_GOODS[t], st = s.goods[t][g], carts = 0.5 * (goodsTarget(t, g) - st);   // merchants' carts fill gaps and carry off gluts
+      s.goods[t][g] = Math.max(4, Math.round(st + T.make[g] * (0.85 + rand(s) * 0.3) - T.use[g] * (0.85 + rand(s) * 0.3) + carts));
+    }
+  }
+  const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour' };
+  function marketHere(s) { setupGoods(s); for (const t in MARKET_AT) { const L = LOCS[MARKET_AT[t]]; if (L && dist(s.player, L) < L.r + (t === 'hearthmoor' ? 0 : 4)) return t; } return null; }
+  // the day's demand for a trade in a town, and how much each seller can make
+  function sellersOf(s, t, trade) {
+    const out = [];
+    for (const id in s.biz) { const b = s.biz[id]; if (b.closed || b.trade !== trade || (b.town || 'hearthmoor') !== t) continue; out.push({ b, cap: bizCap(s, b) }); }
+    if (t === 'hearthmoor') for (const sh of s.shops) if (sh.trade === trade) out.push({ shop: sh, cap: shopCap(sh) });
+    return out;
+  }
+  function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : 1; return (b.staff.length + own) * E.perWorker * (b.disrepair ? 0.7 : 1); }
+  function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0)) * [1, 1.5, 2][sh.tier || 0]; }
+  function townDemand(s, t, trade) {
+    const E = ECON[trade]; if (!E) return 0;
+    const folk = living(s).filter(p => townOf(p) === t && !p.kid && p.age >= 14);
+    const work = folk.length ? folk.filter(p => p.job || p.retired).length / folk.length : 0.8;
+    return (folk.length * E.rate * (0.55 + 0.55 * work) + TOWN_GOODS[t].travellers * E.rate) * E.qty;
+  }
+  function inputCost(s, t, trade, units) { const E = ECON[trade] || {}; return Object.keys(E.inputs || {}).reduce((a, g) => a + E.inputs[g] * goodsPrice(s, t, g), 0) * units; }
+  // the share of the village's custom that comes to one of your lot shops
+  function shopShare(s, sh) { const all = sellersOf(s, 'hearthmoor', sh.trade), tot = all.reduce((a, x) => a + x.cap, 0); return tot ? shopCap(sh) / tot : 1; }
   function bizDay(s) {
-    const pop = adults(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length);
+    const pop = adults(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length), dem = {};
     for (const id in s.biz) {
       const b = s.biz[id];
       if (b.closed) { b.lastProfit = 0; continue; }
@@ -1393,7 +1472,11 @@
       const workers = b.staff.length + (own ? 1 : 0);
       const rivals = Object.values(s.biz).filter(x => x !== b && !x.closed && x.trade === b.trade && (x.town || 'hearthmoor') === (b.town || 'hearthmoor')).length;
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
-      const revenue = Math.round((b.disrepair ? 0.7 : 1) * BIZ_BASE[b.trade] * (0.55 + 0.55 * employed) * Math.min(1.5, 0.5 + 0.5 * workers) * competition * (s.village.shortage && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1));
+      const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
+      if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
+      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap : 0);
+      const revenue = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
+      b.lastSold = Math.round(sold);
       let wages = 0;
       for (const st of b.staff) {
         const w = person(s, st.pid);
@@ -1402,16 +1485,18 @@
         w.purse += paid; wages += paid;
         if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
       }
-      const supplies = Math.round(revenue * 0.35), profit = revenue - supplies - wages - 3;
+      const premises = { hearthmoor: 3, greenhaven: 4, ironcrest: 6, oakbridge: 8, eastwatch: 9, crownmere: 11 }[t0] || 3;
+      const supplies = Math.round(E.flat ? revenue * 0.35 : inputCost(s, t0, b.trade, sold) + sold * E.price * 0.08), profit = revenue - supplies - wages - premises;
       b.lastRevenue = revenue; b.lastProfit = profit; b.lastWages = wages;
       b.profits.push(profit); if (b.profits.length > 5) b.profits.shift();
       if (mine) {
-        const net = revenue - supplies - 3;
+        const net = revenue - supplies - premises;
         if (net >= 0) earn(s, net); else spend(s, -net);
         s.stats.owned = (s.stats.owned || 0) + profit;
         continue;
       }
-      own.purse += revenue - supplies - 3;
+      own.purse += revenue - supplies - premises;
+      if (own.purse > 300) own.purse -= Math.round((own.purse - 300) * 0.12);   // a prosperous household lives well
       if (lessee) continue;
       // owners hire when doing well and let people go when not
       const recent = avg(b.profits.slice(-3));
@@ -1621,6 +1706,7 @@
   function yourBirthday(s, today) {
     const Y = you(s); if (s.pendingDeath || Y.bday % s.ageRate !== today) return;
     Y.age++; s.people[Y.pid].age = Y.age;
+    if (Y.regent && Y.age >= 16) { event(s, 'You come of age at 16. ' + Y.regent.name + '\u2019s regency ends: the family\u2019s affairs are yours to run.', 'story'); Y.regent = null; const me = s.people[Y.pid]; if (me) me.kid = false; }
     const die = Y.age >= 95 ? 1 : Y.age >= 80 ? 0.22 : Y.age >= 70 ? 0.08 : Y.age >= 60 ? 0.02 : 0;
     if (rand(s) < die) { s.pendingDeath = { day: s.day, age: Y.age }; event(s, 'You have died, aged ' + Y.age + '. Your story passes on.', 'story'); return; }
     if (Y.age === 60 || Y.age === 70) event(s, 'You turn ' + Y.age + '. It may be time to think about who carries on after you: see the Family page.', 'story');
@@ -1668,7 +1754,7 @@
     const notes = [];
     if (s.offices.elder === 'player') notes.push('The Elder\u2019s chair is elected: it falls vacant and the moot chooses.');
     if (s.offices.lord === 'player') notes.push(h && (h.parents || []).includes(you(s).pid) && !h.kid ? 'The lordship passes to ' + h.name + ', with the crown\u2019s recognition.' : 'The lordship needs a grown child of your blood; without one it passes out of the family.');
-    if (s.village.council) notes.push('A council seat is earned: ' + (h ? h.name : 'your heir') + ' starts with part of your standing and must earn the rest.');
+    if (s.village.council) notes.push('Your seat on the village council falls vacant; ' + (h ? h.name : 'your heir') + ' starts with part of your standing and can win it back at a moot (standing 40).');
     return { gets: out, notes };
   }
   function succeed(s, h, why) {
@@ -1687,6 +1773,7 @@
       for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' after ' + s.name + ' died.' }).id;
       for (const id in R.regions) if (R.regions[id].lord === 'player') { if (blood && (R.favour >= 20 || isRuler(s))) realmLog(s, h.name + ' inherits ' + REGIONS[id] + ', and the crown recognises the claim.', 'story'); else { R.regions[id].lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' returns to the crown: ' + (blood ? 'the court does not recognise the heir' : 'no child of the blood can take it') + '.', 'story'); } }
       if (isRuler(s) && !blood) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without a child of the blood'); }
+      if (s.player.seat && regionLord(s, s.player.seat) !== 'player') s.player.seat = null;
       else if (isRuler(s)) realmLog(s, h.name + ' is crowned ruler of Alderwyn in the Great Hall of the Realm.', 'story');
     }
     // the heir steps into your shoes: your coin and property, their own purse, part of your standing, and the town's memory of your family
@@ -1695,7 +1782,14 @@
     if (h.home && h.home !== 'you') moveOut(s, h, 'Moved into the family home.');
     s.coins += Math.max(0, h.purse); h.purse = 0;
     const prev = s.name; s.name = h.name; s.job = null; s.player.dest = null; s.player.action = null;
-    Y.age = Math.max(16, h.age); Y.sex = sexOf(h); Y.spouse = h.spouse && s.people[h.spouse] && s.people[h.spouse].status === 'here' ? h.spouse : null; Y.heir = null; Y.court = {}; Y.generation++; Y.family = surname(h.name);
+    Y.regent = null;
+    if (h.age < 16 && s.ageRate) {
+      const rg = [Y.spouse && s.people[Y.spouse], ...living(s).filter(q => !q.kid && q.age >= 18 && (q.parents || []).some(x => (h.parents || []).includes(x)) && q.id !== h.id)].find(q => q && q.status === 'here');
+      Y.regent = { pid: rg ? rg.id : null, name: rg ? rg.name : 'the village council' };
+      event(s, h.name + ' is only ' + h.age + '. ' + (rg ? rg.name : 'The village council') + ' will act as regent, running the family\u2019s affairs, until ' + h.name.split(' ')[0] + ' comes of age at 16.', 'story');
+    }
+    if (v.council) { v.council = false; govLog(s, 'Your seat on the village council falls vacant. The moot will choose again: ' + h.name + ' can win it back.', 'story'); }
+    Y.age = h.age < 16 && s.ageRate ? h.age : Math.max(16, h.age); Y.sex = sexOf(h); Y.spouse = h.spouse && s.people[h.spouse] && s.people[h.spouse].status === 'here' ? h.spouse : null; Y.heir = null; Y.court = {}; Y.generation++; Y.family = surname(h.name);
     if (Y.spouse) { const sp = s.people[Y.spouse]; sp.spouse = h.id; if (sp.home !== 'you') { moveOut(s, sp, 'Moved in with ' + h.name + '.'); sp.home = 'you'; } }
     // the heir's own record becomes yours; your children stay listed as theirs
     h.status = 'you'; h.kid = false; h.town = undefined; Y.pid = h.id; h.log.unshift({ day: s.day, text: why === 'retire' ? 'Took over from ' + prev + '.' : 'Inherited everything from ' + prev + '.' });
@@ -1713,13 +1807,13 @@
     old.name = s.name; old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
     if (s.offices.elder === 'player') s.offices.elder = null;
     if (s.offices.lord === 'player') { s.offices.lord = null; replaceLord(s, 'the old lord died without an heir'); }
-    if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; }
+    if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; s.player.seat = null; }
     s.houses.filter(h => h.owner === 'player').forEach(h => { h.owner = 'office:lord'; });
     Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => { b.closed = true; b.manager = null; });
     s.shops.slice().forEach(sh => { if (sh.worker && sh.worker.pid && s.people[sh.worker.pid]) s.people[sh.worker.pid].job = null; });
     s.shops = []; s.coins = 5; s.job = null; s.village.council = false; s.village.standing = 0; s.player.horse = null; s.player.riding = false;
     s.name = name || 'Wren'; s.player.x = P.home.x; s.player.z = P.home.z;
-    const gen = Y.generation; s.you = null; const Z = you(s); Z.generation = gen + 1; Z.sex = sex || 'm'; Z.age = 20;
+    const gen = Y.generation; s.you = null; const Z = you(s); Z.generation = gen + 1; Z.sex = sex || 'm'; Z.age = 20; if (s.name.includes(' ')) Z.family = s.name.split(' ').slice(1).join(' ');
     s.pendingDeath = null;
     event(s, 'A newcomer arrives in Hearthmoor with 5 coins: ' + s.name + '. The world remembers those who came before.', 'story');
   }
@@ -2138,6 +2232,7 @@
     return { yes, no, keep: yes >= no };
   }
   function holdMoot(s) {
+    { const v = s.village; if (v.step >= 6 && !v.council && v.standing >= 40 && !(you(s).regent)) { v.council = true; addStanding(s, 4, 'the moot returns you to the village council.'); } }
     const g = s.gov, v = s.village, notes = [], after = [];
     g.warned = false;
     // seats are kept by those who still have the village's respect
@@ -3179,7 +3274,8 @@
     marketPeace: { name: 'The Market Peace', say: 'Watchmen in every market. Towns feel safe; it costs the treasury 6c a day.' },
     forestLaw: { name: 'Forest Law', say: 'The royal forests are closed to commoners. +10c a day to the treasury; the towns resent it.' },
     guildCharters: { name: 'Guild Charters', say: 'The guilds set their own prices. The guilds love it; the lords do not.' },
-    harshJustice: { name: 'Harsh Justice', say: 'Hangings at the crossroads. Bandits stay away; the towns are uneasy.' }
+    harshJustice: { name: 'Harsh Justice', say: 'Hangings at the crossroads. Bandits stay away; the towns are uneasy.' },
+    fairCourts: { name: 'The Fair Courts', say: 'Ambrose Fell\u2019s reform: favour can no longer be bought so easily, and theft from the treasury is hunted down. The towns approve; the lords grumble.' }
   };
   const SEATS = () => ({ crownmere: { x: CM.castle.x, z: CM.castle.z + 10 }, oakbridge: { x: OAK.keep.x, z: OAK.keep.z + 9 }, greenhaven: { x: GH.estate.x + 9, z: GH.estate.z }, ironcrest: { x: IC.keep.x + 8, z: IC.keep.z + 6 }, eastwatch: { x: EW.keep.x, z: EW.keep.z - 12 }, hearthmoor: MANOR_HOME });
   function noble(s, o) { const p = newPerson(s, Object.assign({ purse: 600, palette: 4, retired: true, rep: 70, mood: 70 }, o)); p.log = [{ day: s.day, text: o.why || 'Of noble blood.' }]; return p; }
@@ -3202,6 +3298,7 @@
     const council = { treasury: courtier('Hugo Wendle', 61, 'Lord Treasurer of Alderwyn.').id, trade: courtier('Margery Cole', 50, 'Master of Trade.').id, war: courtier('Ralph Durrant', 55, 'Marshal of Alderwyn.').id, law: courtier('Ambrose Fell', 63, 'Lord Justice.').id };
     s.realm = { king: king.id, prince: prince.id, crown: 'king', regions, council, favour: 0, kingSupport: 60, treasury: 1500, taxRate: 1, tariff: 1, laws: { marketPeace: true, forestLaw: false, guildCharters: false, harshJustice: false }, levies: 120, support: { lords: 40, guilds: 40, court: 0, towns: 40 }, rival: null, exile: null, lowDays: 0, debtDays: 0, log: [], offer: null, crowned: null };
     s.bandits = { oakbridge: 20, greenhaven: 15, hearthmoor: 10, crownmere: 10, ironcrest: 30, eastwatch: 25, lastRaid: null };
+    setupFigures(s);
   }
   function realmLog(s, text, kind) { const R = s.realm; R.log.unshift({ day: s.day, text }); if (R.log.length > 30) R.log.length = 30; event(s, text, kind || 'info'); }
   const isRuler = s => !!(s.realm && s.realm.crown === 'player');
@@ -3215,11 +3312,12 @@
     const lords = Object.keys(R.regions).map(id => { const l = regionLord(s, id); return l === 'player' ? 100 : l && s.people[l] ? op01(s.people[l]) : 50; });
     const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').map(b => s.people[b.owner]).filter(Boolean);
     const mine = Object.values(s.biz).filter(b => b.owner === 'player').length;
-    let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
+    const mono = R.monopoly && !((R.figures || []).find(f => f.kind === 'merchant') || {}).ally ? 10 : 0;
+    let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - mono - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
     const tw = Object.keys(TOWNS).map(t => { const f = living(s).filter(p => townOf(p) === t && !p.kid); return f.length ? avg(f.slice(0, 120).map(op01)) : 50; });
-    let towns = avg(tw) * 0.75 + (s.village ? s.village.standing : 0) * 0.15 + 10 - (isRuler(s) ? (R.taxRate - 1) * 35 + (R.laws.forestLaw ? 8 : 0) + (R.laws.harshJustice ? 6 : 0) - (R.laws.marketPeace ? 6 : 0) : 0);
+    let towns = avg(tw) * 0.75 + (s.village ? s.village.standing : 0) * 0.15 + 10 + (R.laws.fairCourts ? 8 : 0) - (isRuler(s) ? (R.taxRate - 1) * 35 + (R.laws.forestLaw ? 8 : 0) + (R.laws.harshJustice ? 6 : 0) - (R.laws.marketPeace ? 6 : 0) : 0);
     let court = R.favour + yourSeats(s).length * 6 + yourLordships(s).length * 4;
-    let lordAvg = avg(lords) - (isRuler(s) && R.laws.guildCharters ? 10 : 0) - (isRuler(s) && R.debtDays > 5 ? 15 : 0);
+    let lordAvg = avg(lords) - (R.laws.fairCourts ? 6 : 0) - (isRuler(s) && R.laws.guildCharters ? 10 : 0) - (isRuler(s) && R.debtDays > 5 ? 15 : 0);
     S.lords = Math.round(clamp(lordAvg, 0, 100)); S.guilds = Math.round(clamp(guilds, 0, 100)); S.court = Math.round(clamp(court, 0, 100)); S.towns = Math.round(clamp(towns, 0, 100));
     return Math.round((S.lords + S.guilds + S.court + S.towns) / 4);
   }
@@ -3264,7 +3362,10 @@
   // a day at court
   function realmDay(s) {
     const R = s.realm; if (!R) return;
-    banditDay(s);
+    setupFigures(s);
+    banditDay(s); contractDay(s); promiseDay(s); goodRuleDay(s); treasuryWatch(s);
+    if (s.day % 7 === 3) figuresWeek(s);
+    { const m = (R.figures || []).find(f => f.kind === 'merchant'); if (m && m.ally) { const n = Object.values(s.biz).filter(b => b.owner === m.pid).length; if (n) earn(s, n * 2); } }
     // the old king's standing drifts; hard times and raids wear it down
     R.kingSupport = clamp(R.kingSupport + (58 - R.kingSupport) * 0.03 + (rand(s) - 0.55) * 3 - (s.bandits && s.bandits.lastRaid && s.bandits.lastRaid.day === s.day ? 1.5 : 0), 5, 95);
     R.favour = clamp(R.favour - 0.15, 0, 100);
@@ -3303,12 +3404,11 @@
       if (R.rival && R.rival.strength > R.levies + sup * 2) fallFromThrone(s, R.rival.name + '’s army takes Crownmere');
       else if (R.lowDays >= 6) fallFromThrone(s, 'the lords and the court abandon you');
     }
-    if (R.exile && !R.exile.done && s.day - R.exile.since >= 30) { R.exile.done = true; realmLog(s, 'Time has passed since your fall. Old friends write to you: if you can win the realm back to your side, the crown may yet be yours again.', 'story'); }
   }
   function nameForNoble(s) { const F = ['Hugh', 'Walter', 'Cecily', 'Geoffrey', 'Matilda', 'Roger', 'Eleanor', 'Baldwin', 'Joan', 'Simon'], L = ['Vane', 'Ashworth', 'Grayle', 'Monfort', 'Thorne', 'Beaumont', 'Corbet', 'Lacy']; return F[Math.floor(rand(s) * F.length)] + ' ' + L[Math.floor(rand(s) * L.length)]; }
   function vacantSeat(s, id) {
     const R = s.realm, g = R.regions[id]; if (g.lord) return;
-    if (R.favour >= 50 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: 150 }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
+    if (R.favour >= 50 && totalDeeds(s) >= 1 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: 150 }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
     if (R.offer && R.offer.region === id && s.day - R.offer.day < 5) return;
     const n = noble(s, { name: nameForNoble(s), age: 40 + Math.floor(rand(s) * 15), town: id === 'hearthmoor' ? undefined : id, home: 'seat:' + id, why: 'Granted ' + REGIONS[id] + ' by the crown.' });
     n.noble = id; g.lord = n.id; if (R.offer && R.offer.region === id) R.offer = null;
@@ -3338,8 +3438,128 @@
     for (const id of yourLordships(s)) { if (R.regions[id].lord === 'office') { s.offices.lord = null; replaceLord(s, 'the old ruler fell'); } else if (R.regions[id].lord === 'player') { R.regions[id].lord = null; } }
     for (const k of yourSeats(s)) R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' by the new king.' }).id;
     const seized = Math.round(Math.max(0, s.coins) * 0.5); spend(s, seized);
-    R.favour = 0; R.exile = { since: s.day, why, seized };
-    realmLog(s, 'You have lost the crown: ' + why + '. You flee into exile, stripped of your lordships and council seats, and ' + seized + 'c is seized. You are free, and you can rebuild. In time the realm may take you back.', 'bad');
+    R.favour = 0; R.exile = { since: s.day, why, seized, allies: [], fund: 0 }; R.embezzled = 0;
+    if (s.player.seat) { s.player.seat = null; bringFamily(s, 'Fled the seat with ' + s.name + '.'); }
+    realmLog(s, 'You have lost the crown: ' + why + '. You flee into exile, stripped of your lordships and council seats, and ' + seized + 'c is seized. To come back you will need sworn allies, a war chest, the towns behind you, and the new ruler\u2019s failings laid bare.', 'bad');
+  }
+  /* ================= power earned by deeds (Stage V) =================
+     Contracts from the lords and towns, promises to keep, regions governed well, and three people of
+     influence with aims of their own. Gifts and feasts still help, but less each time. */
+  const REGION_GOODS = { hearthmoor: 'grain', greenhaven: 'grain', oakbridge: 'wood', crownmere: 'grain', ironcrest: 'wood', eastwatch: 'wood' };
+  function deedsIn(s, id) { const R = s.realm; return (R.deeds && R.deeds[id]) || 0; }
+  const totalDeeds = s => s.realm && s.realm.deeds ? Object.values(s.realm.deeds).reduce((a, b) => a + b, 0) : 0;
+  function addDeed(s, id, text) { const R = s.realm; R.deeds = R.deeds || {}; R.deeds[id] = (R.deeds[id] || 0) + 1; realmLog(s, text, 'good'); }
+  // repeated gifts and feasts count for less: each one in the last fortnight halves the next
+  function diminish(s, key) { const R = s.realm; R.patron = R.patron || {}; const recent = (R.patron[key] || []).filter(d => s.day - d < 14); R.patron[key] = recent.concat([s.day]); return Math.pow(0.5, recent.length); }
+  function alliesOf(s) {
+    const R = s.realm, out = [];
+    for (const id in R.regions) { const l = regionLord(s, id); if (l && l !== 'player' && s.people[l] && l !== R.king && (s.people[l].opinion || 0) >= 40) out.push(s.people[l].name); }
+    for (const f of R.figures || []) if (f.ally && s.people[f.pid] && s.people[f.pid].status !== 'dead' && !out.includes(s.people[f.pid].name)) out.push(s.people[f.pid].name);
+    return out;
+  }
+  // contracts: the realm's lords and towns ask for things to be done
+  function contractDay(s) {
+    const R = s.realm; R.contracts = (R.contracts || []).filter(c => !c.done);
+    for (const c of R.contracts) {
+      if (c.taken && c.kind === 'clear' && s.bandits && (s.bandits || {})[c.region] < 20) completeContract(s, c);
+      else if (s.day > c.until) {
+        if (c.taken) { const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) - 10, -100, 100); realmLog(s, 'You failed to ' + c.what + ' in time. ' + (q ? q.name + ' remembers.' : ''), 'bad'); s.rec.contractsMissed = (s.rec.contractsMissed || 0) + 1; }
+        c.done = true;
+      }
+    }
+    R.contracts = R.contracts.filter(c => !c.done);
+    if (R.contracts.filter(c => !c.taken).length < 3 && rand(s) < 0.6) {
+      const ids = Object.keys(R.regions), id = ids[Math.floor(rand(s) * ids.length)], who = regionLord(s, id) === 'player' ? (TOWNS[id] ? TOWNS[id].name + ' council' : 'the village') : lordName(s, id);
+      const k = rand(s), n0 = R.contractN = (R.contractN || 0) + 1;
+      let c;
+      if (k < 0.45) { const g = rand(s) < 0.5 ? REGION_GOODS[id] : GOODS[Math.floor(rand(s) * 3)], n = 10 + Math.floor(rand(s) * 3) * 5; c = { n: n0, kind: 'supply', region: id, good: g, qty: n, reward: Math.round(n * goodsPrice(s, id, g) * 1.7 + 10), what: 'deliver ' + n + ' ' + (g === 'wood' ? 'timber' : g === 'ore' ? 'iron ore' : g) + ' to the market in ' + REGIONS[id] }; }
+      else if (k < 0.75) { const w = 10 + Math.floor(rand(s) * 3) * 5, coin = 40 + Math.floor(rand(s) * 4) * 20; c = { n: n0, kind: 'repair', region: id, good: 'wood', qty: w, cost: coin, reward: Math.round(coin * 0.5 + w * 3), what: 'repair the ' + ['bridge', 'town walls', 'mill race', 'road', 'granary'][Math.floor(rand(s) * 5)] + ' in ' + REGIONS[id] + ' (' + coin + 'c and ' + w + ' timber)' }; }
+      else { c = { n: n0, kind: 'clear', region: id, reward: 90, what: 'clear the bandits from the roads of ' + REGIONS[id] + ' (danger under 20)' }; if (((s.bandits || {})[id] || 0) < 25) c = null; }
+      if (c) { c.who = who; c.until = s.day + 6; c.day = s.day; R.contracts.push(c); }
+    }
+  }
+  function completeContract(s, c) {
+    const R = s.realm; c.done = true; earn(s, c.reward);
+    const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
+    for (const p of living(s)) if (townOf(p) === c.region && !p.kid && rand(s) < 0.35) p.opinion = clamp((p.opinion || 0) + 4, -100, 100);
+    if (s.towns && s.towns[c.region]) s.towns[c.region].approval = clamp(s.towns[c.region].approval + 2, 0, 100);
+    s.rec.contractsDone = (s.rec.contractsDone || 0) + 1;
+    addDeed(s, c.region, 'You ' + c.what.replace(/^deliver/, 'delivered').replace(/^repair/, 'repaired').replace(/^clear/, 'cleared') + ', as ' + c.who + ' asked. ' + c.reward + 'c, and ' + (q ? q.name + '’s' : 'the town’s') + ' gratitude.');
+  }
+  // promises: now and then a lord asks for your word
+  function promiseDay(s) {
+    const R = s.realm; R.promises = R.promises || [];
+    for (const pr of R.promises) {
+      if (pr.state !== 'given') continue;
+      const ok = ((s.bandits || {})[pr.region] || 0) < 30, q = s.people[pr.pid];
+      if (!ok) { pr.state = 'broken'; R.broken = (R.broken || 0) + 1; if (q) q.opinion = clamp((q.opinion || 0) - 30, -100, 100); realmLog(s, 'You gave ' + (q ? q.name : 'a lord') + ' your word the roads of ' + REGIONS[pr.region] + ' would stay safe, and they did not. Your word counts for less now.', 'bad'); }
+      else if (s.day >= pr.until) { pr.state = 'kept'; R.kept = (R.kept || 0) + 1; if (q) q.opinion = clamp((q.opinion || 0) + 25, -100, 100); addDeed(s, pr.region, 'You kept your word to ' + (q ? q.name : 'the lord') + ': the roads of ' + REGIONS[pr.region] + ' stayed safe for a week.'); }
+    }
+    R.promises = R.promises.filter(p => p.state === 'asked' ? s.day - p.day < 4 : s.day - p.day < 30);
+    if (!R.promises.some(p => p.state === 'asked' || p.state === 'given') && rand(s) < 0.15) {
+      const ids = Object.keys(R.regions).filter(id => { const l = regionLord(s, id); return l && l !== 'player' && l !== R.king && s.people[l]; });
+      if (ids.length) { const id = ids[Math.floor(rand(s) * ids.length)], q = s.people[regionLord(s, id)]; R.promises.push({ region: id, pid: q.id, day: s.day, state: 'asked' }); realmLog(s, q.name + ' asks for your word that the roads of ' + REGIONS[id] + ' will stay safe for a week. Answer on the Realm page.', 'story'); }
+    }
+  }
+  // good government: a lord whose roads are safe and whose markets thrive earns a name for it
+  function goodRuleDay(s) {
+    const R = s.realm; R.goodDays = R.goodDays || {};
+    for (const id of yourLordships(s)) { const good = ((s.bandits || {})[id] || 0) < 30 && marketOf(s, id) >= 0.98; R.goodDays[id] = good ? (R.goodDays[id] || 0) + 1 : 0; if (R.goodDays[id] === 10) addDeed(s, id, 'Ten days of safe roads and busy markets: ' + REGIONS[id] + ' is known to be well governed.'); }
+  }
+  // the treasury: what a ruler takes for themself may be found out
+  function treasuryWatch(s) {
+    const R = s.realm; if (!(R.embezzled > 0)) return;
+    const reform = (R.figures || []).find(f => f.kind === 'reformer'), keen = reform && !reform.ally ? 2 : 1;
+    if (rand(s) < Math.min(0.5, R.embezzled / 2500 * keen)) {
+      const owed = Math.round(R.embezzled * 1.25);
+      for (const id in R.regions) { const l = regionLord(s, id); if (l && l !== 'player' && s.people[l]) s.people[l].opinion = clamp((s.people[l].opinion || 0) - 10, -100, 100); }
+      R.favour = clamp(R.favour - 15, 0, 100);
+      if (s.coins >= owed) { spend(s, owed); R.treasury += owed; realmLog(s, 'An inquiry finds you took ' + R.embezzled + 'c from the treasury. You must repay ' + owed + 'c, and the lords think less of you.', 'bad'); R.embezzled = 0; }
+      else if (isRuler(s) && R.embezzled >= 600) { R.embezzled = 0; fallFromThrone(s, 'an inquiry proves you robbed the treasury, and the council removes you'); }
+      else { realmLog(s, 'An inquiry finds you took ' + R.embezzled + 'c from the treasury and cannot repay it. The lords and the court turn against you.', 'bad'); R.favour = 0; R.embezzled = Math.round(R.embezzled * 0.5); }
+    }
+  }
+  // three people of influence, each with an aim
+  function setupFigures(s) {
+    const R = s.realm; if (R.figures) return;
+    const merchant = Object.values(s.people).find(p => p.name === 'Julian Marchant') || noble(s, { name: 'Julian Marchant', age: 46, town: 'eastwatch', why: 'Merchant of Eastwatch.' });
+    const lord = s.people[R.regions.ironcrest.lord] || noble(s, { name: 'Gareth Stane', age: 58, town: 'ironcrest', home: 'seat:ironcrest' });
+    let heir = Object.values(s.people).find(p => (p.parents || []).includes(lord.id) && p.status === 'here');
+    if (!heir) { heir = newPerson(s, { name: 'Aldo Stane', age: 22, town: 'ironcrest', home: 'seat:ironcrest', purse: 80, retired: true }); heir.parents = [lord.id]; heir.log = [{ day: s.day, text: 'Heir to Ironcrest.' }]; }
+    const reformer = s.people[R.council.law] || noble(s, { name: 'Ambrose Fell', age: 63, town: 'crownmere', home: 'seat:crownmere' });
+    R.figures = [
+      { kind: 'merchant', pid: merchant.id, aim: 'a monopoly on bread: five bakeries under his name', trade: 'bakery', progress: 0, ally: false, foe: false },
+      { kind: 'lord', pid: lord.id, heirPid: heir.id, aim: 'the crown’s promise that ' + heir.name + ' will hold Ironcrest after him', progress: 0, ally: false, foe: false },
+      { kind: 'reformer', pid: reformer.id, aim: 'the Fair Courts: an end to bought favour and theft from the treasury', progress: 0, ally: false, foe: false }
+    ];
+    R.figures.forEach(f => { s.people[f.pid].figure = f.kind; });
+  }
+  function figuresWeek(s) {
+    const R = s.realm; setupFigures(s);
+    for (const f of R.figures) {
+      const q = s.people[f.pid]; if (!q || q.status === 'dead') continue;
+      if (f.kind === 'merchant') {
+        const mine = Object.values(s.biz).filter(b => b.owner === q.id && b.trade === f.trade).length; f.progress = mine;
+        if (mine < 5) {
+          const target = Object.values(s.biz).filter(b => b.trade === f.trade && !b.closed && b.owner !== 'player' && b.owner !== q.id && !b.lease).sort((a, b) => bizPrice(s, a.id) - bizPrice(s, b.id))[0];
+          if (target) { const price = bizPrice(s, target.id); q.purse = Math.max(q.purse, price + 50); const old = s.people[target.owner]; q.purse -= price; if (old) { old.purse += price; if (old.job && old.job.biz === target.id) { old.job = null; plog(old ? s : s, old, 'Sold ' + empById(target.id).name + ' to ' + q.name + '.'); } } target.owner = q.id; f.progress = mine + 1; realmLog(s, q.name + ' buys ' + empById(target.id).name + ' (' + TOWNS[target.town || 'hearthmoor'].name + '). He now owns ' + f.progress + ' of the five bakeries he wants.', 'info'); }
+        }
+        if (f.progress >= 5 && !R.monopoly) { R.monopoly = { trade: f.trade, pid: q.id }; realmLog(s, q.name + ' controls enough bakeries to set the price of bread across Alderwyn. Bread costs more everywhere, and the guilds are uneasy.' + (f.ally ? ' As his partner, you share in it.' : ''), f.ally ? 'info' : 'bad'); }
+      } else if (f.kind === 'lord') {
+        if (!f.done) f.progress = Math.min(5, f.progress + 1);
+        if (yourLordships(s).includes('ironcrest') || (R.lastSought === 'ironcrest' && s.day - (R.lastSoughtDay || 0) < 14)) f.foe = true;
+        if (f.foe && !f.ally) { R.favour = clamp(R.favour - 3, 0, 100); if (yourLordships(s).includes('ironcrest') && s.bandits) s.bandits.ironcrest = Math.min(100, (s.bandits.ironcrest || 0) + 8); realmLog(s, q.name + ' speaks against you at court' + (yourLordships(s).includes('ironcrest') ? ', and his old men-at-arms look the other way while bandits work the Ironcrest road' : '') + '.', 'bad'); }
+      } else if (f.kind === 'reformer') {
+        if (!f.done) f.progress = Math.min(5, f.progress + (R.laws.fairCourts ? 0 : 1));
+        if (f.foe && R.embezzled > 0) R.embezzled = Math.round(R.embezzled * 1.2);
+      }
+    }
+  }
+  // exile: the way back is won by deeds, not by waiting
+  function exileReady(s) {
+    const R = s.realm, E = R.exile; if (!E) return null;
+    const need = { allies: (E.allies || []).length >= 3, fund: (E.fund || 0) >= 600, towns: R.support.towns >= 55, exposed: R.kingSupport < 50 };
+    return need;
   }
   /* buying, renting and firing */
   /* ----- property: what it is worth, keeping it up, letting it, and selling it ----- */
@@ -3424,8 +3644,10 @@
     if (s.coins < (cost.coin || 0)) return false;
     return GOODS.every(g => !cost[g] || s.player.inv[g] + (shop ? shop.stock[g] : 0) >= cost[g]);
   }
+  const REGENCY_BLOCK = new Set(['court', 'propose', 'apply', 'seekLordship', 'seekSeat', 'claimCrown', 'undermineKing', 'acceptLordship', 'buyBiz', 'buyHouse', 'listForSale', 'acceptOffer', 'leaseBiz', 'moveIn', 'hireManager', 'nameHeir', 'handOver']);
   function cmd(s, name, a, b, c) {
     const p = s.player;
+    if (s.you && s.you.regent && REGENCY_BLOCK.has(name)) return fail('You are still a child. ' + s.you.regent.name.charAt(0).toUpperCase() + s.you.regent.name.slice(1) + ' acts for you until you are 16.');
     const shop = typeof a === 'number' ? shopById(s, a) : null;
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
@@ -3511,18 +3733,19 @@
       }
       case 'serve': if (!shop) return fail('No such shop.'); walkTo(s, plotPt(shop, 'serve')); return ok();
       case 'buy': case 'sell': {
-        if (dist(p, LOCS.market) > LOCS.market.r) return fail('Go to the Trading Post first.');
+        const mt = marketHere(s); if (!mt) return fail('Go to a market first: the Trading Post, or a town\u2019s market square.');
         if (!GOODS.includes(a)) return fail('They do not trade that.');
         const n = b || 1;
         if (name === 'buy') {
-          const cost = BUY[a] * n;
+          const cost = buyPrice(s, mt, a, n);
+          if (s.goods[mt][a] < n) return fail('The market has only ' + s.goods[mt][a] + ' ' + a + '.');
           if (s.coins < cost) return fail('You need ' + cost + 'c for that.');
           if (carried(s) + n > CARRY) return fail('You can carry ' + CARRY + ' items at most.');
-          spend(s, cost); s.stats.marketBuys += cost; p.inv[a] += n;
+          spend(s, cost); s.stats.marketBuys += cost; p.inv[a] += n; s.goods[mt][a] -= n;
           return ok('Bought ' + n + ' ' + a + ' for ' + cost + 'c.');
         }
         if (p.inv[a] < n || n <= 0) return fail('You have only ' + p.inv[a] + ' ' + a + '.');
-        p.inv[a] -= n; const got = SELL[a] * n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
+        p.inv[a] -= n; const got = sellPrice(s, mt, a, n); s.goods[mt][a] += n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
         return ok('Sold ' + n + ' ' + a + ' for ' + got + 'c.');
       }
       case 'setPrice': if (shop) shop.price = clamp(Math.round(b), 1, TRADES[shop.trade].wtp * 3); return ok();
@@ -3644,7 +3867,7 @@
       case 'hoping': you(s).hoping = !!a; return ok();
       case 'nameHeir': { const q = s.people[a]; if (!q || q.status !== 'here' || q.kid) return fail('Your heir must be grown.'); if (!(q.parents || []).includes(you(s).pid) && q.id !== you(s).spouse && (q.opinion || 0) < 30) return fail(q.name + ' does not know you well enough.'); you(s).heir = q.id; return ok(q.name + ' is now your named heir.'); }
       case 'handOver': { const h = yourHeirs(s).best; if (!h || h.kid) return fail('There is no grown heir to hand over to.'); succeed(s, h, 'retire'); return ok(); }
-      case 'carryOn': { if (!s.pendingDeath) return fail('Not now.'); const h = (a && s.people[a] && s.people[a].status === 'here') ? s.people[a] : yourHeirs(s).best; if (!h) return fail('There is nobody to carry on.'); if (h.kid) { h.kid = false; h.age = Math.max(h.age, 16); } succeed(s, h, 'death'); return ok(); }
+      case 'carryOn': { if (!s.pendingDeath) return fail('Not now.'); const h = (a && s.people[a] && s.people[a].status === 'here') ? s.people[a] : yourHeirs(s).best; if (!h) return fail('There is nobody to carry on.'); if (h.kid && !s.ageRate) { h.kid = false; h.age = Math.max(h.age, 16); } succeed(s, h, 'death'); return ok(); }
       case 'beginAgain': { if (!s.pendingDeath) return fail('Not now.'); beginAgain(s, a, b); return ok(); }
       case 'ageRate': if (AGE_RATES[a] == null) return fail('Unknown pace.'); s.ageRate = AGE_RATES[a]; return ok();
       case 'works': {
@@ -3849,8 +4072,8 @@
       case 'giftCrown': {
         const R = s.realm; if (!R || isRuler(s)) return fail('There is no one to give it to.');
         const n = Math.round(a); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
-        spend(s, n); R.favour = clamp(R.favour + n / 15, 0, 100); s.rec.given = (s.rec.given || 0) + n;
-        event(s, 'You give ' + n + 'c to the King\u2019s treasury. Your favour at court rises to ' + Math.round(R.favour) + '.', 'good'); return ok();
+        const dm = diminish(s, 'crown') * (R.laws.fairCourts ? 0.5 : 1), gain = Math.min(20, n / 15) * dm; spend(s, n); R.favour = clamp(R.favour + gain, 0, 100); s.rec.given = (s.rec.given || 0) + n;
+        event(s, 'You give ' + n + 'c to the King\u2019s treasury. Your favour at court rises by ' + Math.round(gain) + ' to ' + Math.round(R.favour) + (dm < 1 ? ' (gifts count for less when they come often)' : '') + '.', 'good'); return ok();
       }
       case 'attendCourt': {
         const R = s.realm; if (!R || isRuler(s)) return fail('You are the court.');
@@ -3863,6 +4086,7 @@
         const R = s.realm; const o = R && R.offer; if (!o) return fail('No lordship is on offer.');
         const g = R.regions[o.region]; R.offer = null;
         if (name === 'refuseLordship') { vacantSeat(s, o.region); return ok(); }
+        if (yourLordships(s).some(x => x !== 'crownmere')) { vacantSeat(s, o.region); return fail('You already hold a region; the King gives ' + REGIONS[o.region] + ' to another.'); }
         if (s.coins < o.fee) { vacantSeat(s, o.region); return fail('You could not pay the fee; the King gives it to another.'); }
         spend(s, o.fee); g.lord = 'player'; R.favour = clamp(R.favour + 5, 0, 100);
         realmLog(s, 'You swear your oath to the King and are made ' + (you(s).sex === 'f' ? 'Lady' : 'Lord') + ' of ' + REGIONS[o.region] + '. Its taxes are yours, and so are its roads, patrols and garrison.', 'story'); return ok();
@@ -3872,6 +4096,9 @@
         const R = s.realm; if (!R || R.exile) return fail(R && R.exile ? 'No lord will give up lands to an exile.' : 'Not yet.');
         const g = R.regions[a]; if (!g || g.lord === 'crown') return fail('Those are the Crown Lands.');
         if (regionLord(s, a) === 'player') return fail('It is already yours.');
+        { const held = yourLordships(s).filter(x => x !== 'crownmere'); if (held.length) return fail('You already hold ' + REGIONS[held[0]] + '. A lord holds one region at a time: give it up first, on the Realm page.'); }
+        R.lastSought = a; R.lastSoughtDay = s.day;
+        if (deedsIn(s, a) < 1) return fail('The King grants lands to those who have served them. Do something for ' + REGIONS[a] + ' first: take one of its contracts, or keep a promise to its lord.');
         if (R.favour < 55) return fail('You need more favour at court (55; you have ' + Math.round(R.favour) + ').');
         const fee = 400; if (s.coins < fee) return fail('The fee for a lordship is ' + fee + 'c.');
         const cur = regionLord(s, a), L0 = cur && s.people[cur], weak = !L0 || L0.status !== 'here' || (L0.rep || 0) < 45 || L0.purse < 50 || (a === 'hearthmoor' && s.gov && s.gov.approval.lord < 45);
@@ -3897,6 +4124,8 @@
         const R = s.realm; if (!R || R.exile) return fail('Not now.');
         if (!COUNCIL[a]) return fail('No such office.'); if (R.council[a] === 'player') return fail('You already hold it.');
         if (!yourLordships(s).length) return fail('Only a lord sits on the royal council.');
+        if (alliesOf(s).length < 2) return fail('You need at least two allies among the lords or the people of influence (you have ' + alliesOf(s).length + ').');
+        if (!yourLordships(s).some(id => deedsIn(s, id) >= 2 || ((R.goodDays || {})[id] || 0) >= 10)) return fail('Show that you govern well first: ten days of safe roads and busy markets in your lands, or two deeds done there.');
         if (R.favour < 65) return fail('You need more favour at court (65; you have ' + Math.round(R.favour) + ').');
         const old = s.people[R.council[a]]; if (old) { old.opinion = clamp((old.opinion || 0) - 30, -100, 100); plog(s, old, 'Replaced as ' + COUNCIL[a] + ' by ' + s.name + '.'); }
         R.council[a] = 'player'; R.favour = clamp(R.favour - 5, 0, 100);
@@ -3915,31 +4144,98 @@
         if (a === 'lords') {
           const ls = Object.keys(R.regions).map(id => regionLord(s, id)).filter(l => l && l !== 'player' && s.people[l] && l !== R.king);
           const c = ls.length * 120; if (s.coins < c) return fail('Gifts fit for ' + ls.length + ' lords cost ' + c + 'c.');
-          spend(s, c); ls.forEach(l => { const q = s.people[l]; q.opinion = clamp((q.opinion || 0) + 14, -100, 100); plog(s, q, 'Received a fine gift from ' + s.name + '.'); });
+          const dm = diminish(s, 'lords'); spend(s, c); ls.forEach(l => { const q = s.people[l]; q.opinion = clamp((q.opinion || 0) + Math.round(14 * dm), -100, 100); plog(s, q, 'Received a fine gift from ' + s.name + '.'); });
           event(s, 'You send gifts to ' + ls.length + ' lords of the realm: horses, plate and wine. They think better of you.', 'good');
         } else if (a === 'guilds') {
           const c = 300; if (s.coins < c) return fail('A guild feast costs ' + c + 'c.');
-          spend(s, c); Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').forEach(b => { const q = s.people[b.owner]; if (q) q.opinion = clamp((q.opinion || 0) + 7, -100, 100); });
+          const dm = diminish(s, 'guilds'); spend(s, c); Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').forEach(b => { const q = s.people[b.owner]; if (q) q.opinion = clamp((q.opinion || 0) + Math.round(7 * dm), -100, 100); });
           event(s, 'You hold a feast for the guild masters of every town in the Guildhall of Crownmere. The guilds speak well of you.', 'good');
         } else if (a === 'town') {
           const folk = living(s).filter(q => townOf(q) === b && !q.kid); const c = Math.max(40, Math.round(folk.length * 0.6));
           if (!folk.length) return fail('No such town.'); if (s.coins < c) return fail('A feast for ' + TOWNS[b].name + ' costs ' + c + 'c.');
-          spend(s, c); folk.forEach(q => { q.opinion = clamp((q.opinion || 0) + 12, -100, 100); q.mood = clamp(q.mood + 6, 0, 100); });
+          const dm = diminish(s, 'town:' + b); spend(s, c); folk.forEach(q => { q.opinion = clamp((q.opinion || 0) + Math.round(12 * dm), -100, 100); q.mood = clamp(q.mood + 6, 0, 100); });
           if (s.towns && s.towns[b]) s.towns[b].approval = clamp(s.towns[b].approval + 2, 0, 100);
           event(s, 'You lay on a feast for the people of ' + TOWNS[b].name + ': roast meat, bread and ale in the square. They will remember it.', 'good');
         } else return fail('No such thing.');
         computeSupport(s); return ok();
+      }
+      case 'takeContract': {
+        const R = s.realm, c = R && (R.contracts || []).find(x => x.n === a); if (!c || c.done) return fail('That contract has gone.');
+        if (c.taken) return fail('You already took it.'); if (R.contracts.filter(x => x.taken).length >= 2) return fail('You can hold two contracts at a time.');
+        c.taken = true; c.delivered = 0; event(s, 'You agree to ' + c.what + ' by day ' + c.until + ' for ' + c.who + '.', 'info'); return ok();
+      }
+      case 'fulfil': {
+        const R = s.realm, c = R && (R.contracts || []).find(x => x.n === a && x.taken && !x.done); if (!c) return fail('No such contract.');
+        if (c.kind === 'clear') return fail('This one is done when the roads of ' + REGIONS[c.region] + ' are safe (danger under 20). Pay for patrols there.');
+        if (marketHere(s) !== c.region) return fail('Bring it to the market in ' + REGIONS[c.region] + '.');
+        if (c.kind === 'repair' && s.coins < c.cost) return fail('The repair needs ' + c.cost + 'c as well as the timber.');
+        const n = Math.min(p.inv[c.good] || 0, c.qty - (c.delivered || 0)); if (n <= 0) return fail('You have no ' + (c.good === 'wood' ? 'timber' : c.good) + ' with you.');
+        p.inv[c.good] -= n; c.delivered = (c.delivered || 0) + n;
+        if (c.delivered < c.qty) return ok('Delivered ' + n + '. ' + (c.qty - c.delivered) + ' more to go.');
+        if (c.kind === 'repair') spend(s, c.cost);
+        completeContract(s, c); return ok();
+      }
+      case 'givePromise': case 'refusePromise': {
+        const R = s.realm, pr = R && (R.promises || []).find(x => x.state === 'asked'); if (!pr) return fail('No one is asking.');
+        if (name === 'refusePromise') { pr.state = 'refused'; const q = s.people[pr.pid]; if (q) q.opinion = clamp((q.opinion || 0) - 3, -100, 100); return ok(); }
+        pr.state = 'given'; pr.until = s.day + 7; event(s, 'You give your word: the roads of ' + REGIONS[pr.region] + ' will stay safe (danger under 30) until day ' + pr.until + '.', 'info'); return ok();
+      }
+      case 'backFigure': case 'opposeFigure': {
+        const R = s.realm; setupFigures(s); const f = R.figures.find(x => x.kind === a), q = f && s.people[f.pid]; if (!q || q.status === 'dead') return fail('They are gone.');
+        const back = name === 'backFigure';
+        if (f.kind === 'merchant') {
+          if (back) { if (s.coins < 200) return fail('He wants 200c invested in his venture.'); spend(s, 200); f.ally = true; f.foe = false; q.opinion = clamp((q.opinion || 0) + 40, -100, 100); realmLog(s, 'You invest 200c with ' + q.name + '. He counts you a partner: 2c a day from each business he owns, and his voice among the guilds.', 'good'); }
+          else { if (!(isRuler(s) || R.council.trade === 'player')) return fail('Only the Master of Trade or the ruler can refuse him a royal charter.'); R.monopoly = null; R.charterRefused = true; f.foe = true; f.ally = false; q.opinion = clamp((q.opinion || 0) - 60, -100, 100); realmLog(s, 'You refuse ' + q.name + ' a charter over bread. His monopoly will not stand, and he will not forget it.', 'story'); }
+        } else if (f.kind === 'lord') {
+          const heir = s.people[f.heirPid];
+          if (back) { if (R.favour < 10) return fail('You need some favour at court to speak for his heir.'); R.favour = clamp(R.favour - 10, 0, 100); f.ally = true; f.foe = false; f.done = true; q.opinion = clamp((q.opinion || 0) + 50, -100, 100); realmLog(s, 'You speak at court for ' + (heir ? heir.name : 'his heir') + '\u2019s right to Ironcrest. ' + q.name + ' is your ally.', 'good'); }
+          else { f.foe = true; f.ally = false; q.opinion = clamp((q.opinion || 0) - 40, -100, 100); realmLog(s, 'You oppose ' + q.name + '\u2019s plans for his heir. He becomes your enemy at court.', 'story'); }
+        } else {
+          if (back) { if ((R.embezzled || 0) > 0) return fail('He will not stand beside someone who has taken from the treasury. Repay it first.'); f.ally = true; f.foe = false; q.opinion = clamp((q.opinion || 0) + 40, -100, 100); f.progress = Math.min(5, f.progress + 2);
+            if (isRuler(s) || f.progress >= 5) { R.laws.fairCourts = true; f.done = true; realmLog(s, 'The Fair Courts are proclaimed, with your backing. ' + q.name + ' is your ally.', 'good'); } else realmLog(s, 'You back ' + q.name + '\u2019s reform at court. He is your ally.', 'good'); }
+          else { f.foe = true; f.ally = false; q.opinion = clamp((q.opinion || 0) - 40, -100, 100); realmLog(s, 'You oppose the Fair Courts. ' + q.name + ' will be watching the treasury closely.', 'story'); }
+        }
+        computeSupport(s); return ok();
+      }
+      case 'rallyAlly': {
+        const R = s.realm, E = R && R.exile; if (!E) return fail('Only an exile needs to rally allies.');
+        const q = s.people[a]; if (!q || q.status === 'dead') return fail('They are gone.'); if (E.allies.includes(a)) return fail('They are already sworn to you.');
+        if ((q.opinion || 0) < 25) return fail(q.name + ' does not think well enough of you (needs 25; ' + Math.round(q.opinion || 0) + ').'); if (s.coins < 80) return fail('Winning a sworn ally costs 80c in gifts.');
+        spend(s, 80); E.allies.push(a); realmLog(s, q.name + ' swears to support your return.', 'good'); return ok();
+      }
+      case 'warChest': { const R = s.realm, E = R && R.exile; if (!E) return fail('Not in exile.'); const n = Math.round(a); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.'); spend(s, n); E.fund = (E.fund || 0) + n; event(s, 'Your war chest holds ' + E.fund + 'c.', 'info'); return ok(); }
+      case 'exposeRuler': {
+        const R = s.realm, E = R && R.exile; if (!E) return fail('Not in exile.'); if (townAt(p.x, p.z) !== 'crownmere') return fail('The proof of the new ruler\u2019s failings is in Crownmere.');
+        if (E.lastExpose && s.day - E.lastExpose < 3) return fail('Lie low for a few days before you try again.'); E.lastExpose = s.day;
+        if (rand(s) < 0.7) { R.kingSupport = clamp(R.kingSupport - 9, 5, 95); realmLog(s, 'Your people spread proof of the new ruler\u2019s failures through the capital. Their standing falls to ' + Math.round(R.kingSupport) + '.', 'good'); }
+        else { const t = Math.round(Math.max(0, s.coins) * 0.1); spend(s, t); realmLog(s, 'Your agents are caught in Crownmere. You pay ' + t + 'c to free them.', 'bad'); }
+        return ok();
+      }
+      case 'moveToSeat': {
+        const R = s.realm, id = (a && regionLord(s, a) === 'player') ? a : yourLordships(s).find(x => x !== 'crownmere') || (isRuler(s) ? 'crownmere' : null);
+        if (!id) return fail('You hold no seat to move into.');
+        if (s.player.seat === id) return fail('You already live there.');
+        for (const q of living(s)) if (q.home === 'seat:' + id && q.id !== R.king) { q.home = null; const h = vacancy(s, 99, townOf(q)); if (h) moveIn(s, q, h); plog(s, q, 'Moved out of the seat of ' + REGIONS[id] + ' for ' + s.name + '.'); }
+        s.player.seat = id; bringFamily(s, 'Moved into ' + seatName(s, id) + ' with ' + s.name + '.');
+        realmLog(s, 'You move into ' + seatName(s, id) + ', the seat of ' + REGIONS[id] + '. It carries your family\u2019s name now.', 'story'); return ok();
+      }
+      case 'renounceLordship': {
+        const R = s.realm; if (!R || regionLord(s, a) !== 'player' || a === 'crownmere') return fail('That is not yours to give up.');
+        if (R.regions[a].lord === 'office') { s.offices.lord = null; replaceLord(s, s.name + ' gave the lordship back to the crown'); } else { R.regions[a].lord = null; vacantSeat(s, a); }
+        if (s.player.seat === a) { s.player.seat = null; bringFamily(s, 'Left the seat of ' + REGIONS[a] + '.'); }
+        realmLog(s, 'You give ' + REGIONS[a] + ' back to the crown.', 'info'); return ok();
       }
       case 'claimCrown': {
         const R = s.realm; if (!R) return fail('Not yet.'); if (isRuler(s)) return fail('The crown is already yours.');
         const sup = computeSupport(s);
         if (!R.exile && !yourLordships(s).length) return fail('You must hold a lordship first.');
         if (!R.exile && !yourSeats(s).length) return fail('You must sit on the royal council first.');
-        if (R.exile && !R.exile.done) return fail('It is too soon after your fall. Rebuild your support first.');
+        if (R.exile) { const ex = exileReady(s); if (!(ex.allies && ex.fund && ex.towns && ex.exposed)) return fail('To come back you need three sworn allies (' + (R.exile.allies || []).length + '), a war chest of 600c (' + (R.exile.fund || 0) + 'c), the towns behind you (' + R.support.towns + ' of 55), and the new ruler\u2019s failings exposed (their standing ' + Math.round(R.kingSupport) + ', under 50).'); }
+        else { if (alliesOf(s).length < 3) return fail('You need three allies to claim the crown (you have ' + alliesOf(s).length + ').'); if (!(R.kept > 0)) return fail('No one follows a claimant whose word is untested. Keep a promise to a lord first.'); }
         const need = 65;
         if (sup < need) return fail('Your support is ' + sup + '. You need ' + need + ' to claim the crown.');
         const K = s.people[R.king];
-        if (K && K.status === 'here' && R.kingSupport >= (R.exile ? 60 : 45)) { R.favour = clamp(R.favour - 30, 0, 100); realmLog(s, 'You claim the crown, but the court stands by King ' + K.name.split(' ')[0] + '. The claim fails, and your favour falls.', 'bad'); return ok(); }
+        if (K && K.status === 'here' && R.kingSupport >= (R.exile ? 50 : 45)) { R.favour = clamp(R.favour - 30, 0, 100); realmLog(s, 'You claim the crown, but the court stands by King ' + K.name.split(' ')[0] + '. The claim fails, and your favour falls.', 'bad'); return ok(); }
         crownYou(s, R.exile ? 'You return from exile with the realm behind you' : 'The lords, the guilds and the court turn to you, and the old King gives way'); return ok();
       }
       case 'rule': {
@@ -3949,8 +4245,8 @@
         else if (a === 'tariff') R.tariff = clamp(Math.round(b * 4) / 4, 0, 3);
         else if (a === 'levies') R.levies = clamp(Math.round(b / 10) * 10, 0, 600);
         else if (a === 'law' && LAWS[b]) R.laws[b] = !R.laws[b];
-        else if (a === 'draw') { const n = Math.min(Math.round(b), Math.max(0, R.treasury)); R.treasury -= n; earn(s, n); R.favour = clamp(R.favour - n / 40, 0, 100); event(s, 'You take ' + n + 'c from the treasury for your own use. The court notices.', 'info'); }
-        else if (a === 'give') { const n = Math.min(Math.round(b), Math.max(0, s.coins)); spend(s, n); R.treasury += n; event(s, 'You put ' + n + 'c of your own into the treasury.', 'good'); }
+        else if (a === 'draw') { const n = Math.min(Math.round(b), Math.max(0, R.treasury)); R.treasury -= n; earn(s, n); R.embezzled = (R.embezzled || 0) + n; R.favour = clamp(R.favour - n / 40, 0, 100); event(s, 'You take ' + n + 'c from the treasury for your own use. The court notices.', 'info'); }
+        else if (a === 'give') { const n = Math.min(Math.round(b), Math.max(0, s.coins)); spend(s, n); R.treasury += n; R.embezzled = Math.max(0, (R.embezzled || 0) - n); event(s, 'You put ' + n + 'c of your own into the treasury.', 'good'); }
         else if (a === 'payRival' && R.rival) { const n = Math.round(R.rival.strength * 6); if (R.treasury < n) return fail('Buying off ' + R.rival.name + ' would cost ' + n + 'c from the treasury.'); R.treasury -= n; realmLog(s, 'You pay ' + R.rival.name + ' ' + n + 'c to give up the claim and leave the realm.', 'info'); R.rival = null; }
         else return fail('Nothing to set.');
         computeSupport(s); return ok();
@@ -4286,7 +4582,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
