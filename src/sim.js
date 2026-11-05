@@ -1136,7 +1136,7 @@
     const v = s.village;
     if (v.step === 8 && v.standing >= 80 && s.offices.elder !== 'player') {
       const old = s.offices.elder && s.people[s.offices.elder];
-      appoint(s, 'elder', 'player'); v.step = 9; if (s.gov) { s.gov.approval.elder = Math.max(60, s.gov.approval.you); s.rec.timesElected++; }
+      appoint(s, 'elder', 'player'); s.rec.everElder = true; v.step = 9; if (s.gov) { s.gov.approval.elder = Math.max(60, s.gov.approval.you); s.rec.timesElected++; }
       if (old) { old.retired = true; plog(s, old, 'Stepped down as Elder in favour of ' + s.name + '.'); }
       event(s, (old ? old.name : 'The old elder') + ' stands before the moot: "I am old, and the village needs younger hands." The moot names you Elder of Hearthmoor. You draw the elder\u2019s 5c a day, and ' + (old ? old.name + ' is just a villager now.' : 'the hall is yours.'), 'story');
     }
@@ -3401,6 +3401,24 @@
      towns is your support; with enough of it, and a lordship and a council seat, the crown itself can be yours. */
   const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch' };
   const COUNCIL = { treasury: 'Lord Treasurer', trade: 'Master of Trade', war: 'Marshal', law: 'Lord Justice' };
+  /* the council is three careers, and you follow one. The road of coin runs from Master of Trade up to Lord
+     Treasurer; the road of arms leads to Marshal; the road of law to Lord Justice. Once you have taken a seat on
+     one road the others are shut to you, as a soldier who goes for one rank cannot hold its sister rank. */
+  const COUNCIL_PATH = { trade: 'coin', treasury: 'coin', war: 'arms', law: 'law' };
+  const PATH_NAME = { coin: 'the road of coin', arms: 'the road of arms', law: 'the road of law' };
+  // each seat asks for proof that you have walked its road
+  function seatNeeds(s, k) {
+    const R = s.realm, rec = s.rec, owned = s.shops.length + Object.values(s.biz || {}).filter(b => b.owner === 'player').length, cb = R.contractsByKind || {};
+    const supply = (cb.supply || 0) + (cb.repair || 0), clear = cb.clear || 0, patrol = rec.patrolCoin || 0, kept = R.kept || 0;
+    const L = {
+      trade: [[owned >= 3, 'own 3 shops or businesses (you have ' + owned + ')'], [supply >= 3, 'deliver 3 supply contracts (' + supply + ')']],
+      treasury: [[R.council.trade === 'player' || (s.player.seatsHeld || []).includes('trade'), 'serve first as Master of Trade'], [netWorth(s) >= 2500, 'be worth 2,500c (' + netWorth(s) + 'c)'], [!R.embezzled, 'never have taken from the treasury']],
+      war: [[patrol >= 300, 'pay 300c for patrols on the roads (' + patrol + 'c)'], [clear >= 1, 'clear one road of bandits by contract (' + clear + ')']],
+      law: [[!!rec.everElder, 'have served as Elder of a town'], [kept >= 2, 'keep 2 promises (' + kept + ')']]
+    }[k] || [];
+    return L.filter(x => !x[0]).map(x => x[1]);
+  }
+  const LORDSHIP_FEE = { hearthmoor: 300, greenhaven: 350, ironcrest: 500, oakbridge: 600, eastwatch: 800 };
   const LAWS = {
     marketPeace: { name: 'The Market Peace', say: 'Watchmen in every market. Towns feel safe; it costs the treasury 6c a day.' },
     forestLaw: { name: 'Forest Law', say: 'The royal forests are closed to commoners. +10c a day to the treasury; the towns resent it.' },
@@ -3539,7 +3557,7 @@
   function nameForNoble(s) { const F = ['Hugh', 'Walter', 'Cecily', 'Geoffrey', 'Matilda', 'Roger', 'Eleanor', 'Baldwin', 'Joan', 'Simon'], L = ['Vane', 'Ashworth', 'Grayle', 'Monfort', 'Thorne', 'Beaumont', 'Corbet', 'Lacy']; return F[Math.floor(rand(s) * F.length)] + ' ' + L[Math.floor(rand(s) * L.length)]; }
   function vacantSeat(s, id) {
     const R = s.realm, g = R.regions[id]; if (g.lord) return;
-    if (R.favour >= 50 && totalDeeds(s) >= 1 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: 150 }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
+    if (R.favour >= 50 && totalDeeds(s) >= 1 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: Math.round((LORDSHIP_FEE[id] || 400) * 0.4) }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
     if (R.offer && R.offer.region === id && s.day - R.offer.day < 5) return;
     const n = noble(s, { name: nameForNoble(s), age: 40 + Math.floor(rand(s) * 15), town: id === 'hearthmoor' ? undefined : id, home: 'seat:' + id, why: 'Granted ' + REGIONS[id] + ' by the crown.' });
     n.noble = id; g.lord = n.id; if (R.offer && R.offer.region === id) R.offer = null;
@@ -3611,7 +3629,7 @@
     }
   }
   function completeContract(s, c) {
-    const R = s.realm; c.done = true; earn(s, c.reward);
+    const R = s.realm; c.done = true; earn(s, c.reward); s.stats.contract += c.reward; R.contractsByKind = R.contractsByKind || {}; R.contractsByKind[c.kind] = (R.contractsByKind[c.kind] || 0) + 1;
     const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
     for (const p of living(s)) if (townOf(p) === c.region && !p.kid && rand(s) < 0.35) p.opinion = clamp((p.opinion || 0) + 4, -100, 100);
     if (s.towns && s.towns[c.region]) s.towns[c.region].approval = clamp(s.towns[c.region].approval + 2, 0, 100);
@@ -3710,7 +3728,7 @@
     s.start = mode;
     if (mode === 'elder' || mode === 'lord' || mode === 'ruler') {
       v.step = 9; v.council = true; v.landGranted = true; v.standing = 80; v.chest = Math.max(v.chest, 150);
-      if (mode === 'elder') { const old = s.offices.elder && s.people[s.offices.elder]; appoint(s, 'elder', 'player'); if (old) old.retired = true; if (s.gov) s.gov.approval.elder = 65; }
+      if (mode === 'elder') { const old = s.offices.elder && s.people[s.offices.elder]; appoint(s, 'elder', 'player'); s.rec.everElder = true; if (old) old.retired = true; if (s.gov) s.gov.approval.elder = 65; }
     }
     if (mode === 'lord' || mode === 'ruler') { Y.age = Math.max(Y.age, mode === 'ruler' ? 32 : 28); s.people[Y.pid].age = Y.age; R.favour = 55; R.deeds = { greenhaven: 1 }; }
     if (mode === 'lord') { const old = s.people[R.regions.greenhaven.lord]; if (old) { old.retired = true; old.noble = null; } R.regions.greenhaven.lord = 'player'; cmd(s, 'moveToSeat', 'greenhaven'); const st = STAGE.greenhaven; s.player.x = st.x; s.player.z = st.z; }
@@ -4311,7 +4329,7 @@
         R.lastSought = a; R.lastSoughtDay = s.day;
         if (deedsIn(s, a) < 1) return fail('The King grants lands to those who have served them. Do something for ' + REGIONS[a] + ' first: take one of its contracts, or keep a promise to its lord.');
         if (R.favour < 55) return fail('You need more favour at court (55; you have ' + Math.round(R.favour) + ').');
-        const fee = 400; if (s.coins < fee) return fail('The fee for a lordship is ' + fee + 'c.');
+        const fee = LORDSHIP_FEE[a] || 400; if (s.coins < fee) return fail('The fee for the lordship of ' + REGIONS[a] + ' is ' + fee + 'c.');
         const cur = regionLord(s, a), L0 = cur && s.people[cur], weak = !L0 || L0.status !== 'here' || (L0.rep || 0) < 45 || L0.purse < 50 || (a === 'hearthmoor' && s.gov && s.gov.approval.lord < 45);
         if (!weak) return fail(L0.name + ' holds ' + REGIONS[a] + ' firmly. A lord who is failing, or in debt, can be replaced.');
         spend(s, fee); R.favour = clamp(R.favour - 10, 0, 100);
@@ -4327,20 +4345,25 @@
       case 'fundPatrol': {
         const B = s.bandits; if (!B || B[a] == null) return fail('Nowhere to patrol.');
         const n = Math.round(b); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
-        spend(s, n); B[a] = Math.max(0, B[a] - n / 3);
+        spend(s, n); B[a] = Math.max(0, B[a] - n / 3); s.rec.patrolCoin = (s.rec.patrolCoin || 0) + n;
         for (const q of living(s)) if (townOf(q) === a && rand(s) < 0.2) q.opinion = clamp((q.opinion || 0) + 2, -100, 100);
         event(s, 'You pay for armed men to ride the roads around ' + REGIONS[a] + '. The bandits pull back.', 'good'); return ok();
       }
       case 'seekSeat': {
         const R = s.realm; if (!R || R.exile) return fail('Not now.');
         if (!COUNCIL[a]) return fail('No such office.'); if (R.council[a] === 'player') return fail('You already hold it.');
+        const held0 = Object.keys(COUNCIL).find(k => R.council[k] === 'player'), path = s.player.councilPath || (held0 && COUNCIL_PATH[held0]); if (path && path !== COUNCIL_PATH[a]) return fail('You walk ' + PATH_NAME[path] + '. ' + COUNCIL[a] + ' is on ' + PATH_NAME[COUNCIL_PATH[a]] + ', and that road is shut to you.');
+        { const need = seatNeeds(s, a); if (need.length) return fail('To be ' + COUNCIL[a] + ' you must first ' + need.join('; ') + '.'); }
         if (!yourLordships(s).length) return fail('Only a lord sits on the royal council.');
         if (alliesOf(s).length < 2) return fail('You need at least two allies among the lords or the people of influence (you have ' + alliesOf(s).length + ').');
         if (!yourLordships(s).some(id => deedsIn(s, id) >= 2 || ((R.goodDays || {})[id] || 0) >= 10)) return fail('Show that you govern well first: ten days of safe roads and busy markets in your lands, or two deeds done there.');
         if (R.favour < 65) return fail('You need more favour at court (65; you have ' + Math.round(R.favour) + ').');
         const old = s.people[R.council[a]]; if (old) { old.opinion = clamp((old.opinion || 0) - 30, -100, 100); plog(s, old, 'Replaced as ' + COUNCIL[a] + ' by ' + s.name + '.'); }
+        // rising on your road: the lower seat passes to another
+        for (const k in R.council) if (R.council[k] === 'player' && k !== a) { R.council[k] = null; realmLog(s, 'You give up the post of ' + COUNCIL[k] + ' to take a higher one.', 'info'); }
         R.council[a] = 'player'; R.favour = clamp(R.favour - 5, 0, 100);
-        realmLog(s, 'The King names you ' + COUNCIL[a] + ' of Alderwyn. You sit on the royal council.', 'story'); return ok();
+        s.player.councilPath = COUNCIL_PATH[a]; s.player.seatsHeld = Array.from(new Set((s.player.seatsHeld || []).concat(a)));
+        realmLog(s, 'The King names you ' + COUNCIL[a] + ' of Alderwyn. You sit on the royal council, on ' + PATH_NAME[COUNCIL_PATH[a]] + '.', 'story'); return ok();
       }
       case 'undermineKing': {
         const R = s.realm; if (!R || isRuler(s)) return fail('Not now.'); if (!yourSeats(s).length) return fail('Only a councillor can sway the court against the King.');
@@ -4791,7 +4814,7 @@
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,

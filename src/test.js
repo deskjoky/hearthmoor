@@ -774,7 +774,11 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   Sim.cmd(s, 'backFigure', 'reformer'); Sim.cmd(s, 'backFigure', 'lord');
   s.bandits.eastwatch = 5; for (let d = 0; d < 10; d++) { away(); Sim.advance(s, 1440); s.bandits.eastwatch = 5; }
   R.favour = 70; court();
-  check(Sim.cmd(s, 'seekSeat', 'trade').ok, 'with ' + Sim.alliesOf(s).length + ' allies and ten days of good rule, you are named Master of Trade');
+  check(!Sim.cmd(s, 'seekSeat', 'trade').ok && Sim.seatNeeds(s, 'trade').length > 0, 'Master of Trade wants proof of the road of coin: ' + Sim.seatNeeds(s, 'trade').join('; '));
+  R.contractsByKind = Object.assign(R.contractsByKind || {}, { supply: 3 }); s.coins += 3000;
+  Object.values(s.biz).filter(b => b.town === 'eastwatch' && b.owner !== 'player' && s.people[b.owner]).slice(0, 3).forEach(b => Sim.cmd(s, 'buyBiz', b.id));
+  check(Sim.cmd(s, 'seekSeat', 'trade').ok, 'with ' + Sim.alliesOf(s).length + ' allies, ten days of good rule, three businesses and three contracts, you are named Master of Trade');
+  check(!Sim.cmd(s, 'seekSeat', 'war').ok && s.player.councilPath === 'coin', 'on the road of coin, the Marshal\u2019s seat is shut to you');
   // a promise kept
   R.promises = [{ region: 'oakbridge', pid: R.regions.oakbridge.lord, day: s.day, state: 'asked' }];
   check(Sim.cmd(s, 'givePromise').ok, 'a lord asks for your word, and you give it');

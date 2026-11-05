@@ -59,6 +59,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .chip.rank.r-councillor { box-shadow: inset 0 0 0 1px #c9c6bc; }
 .chip.rank.r-elder { background: rgba(52, 78, 48, .9); box-shadow: inset 0 0 0 1px #c9c6bc; }
 .chip.rank.r-lord { background: rgba(90, 34, 48, .92); box-shadow: inset 0 0 0 1px #d9aa3a; }
+.chip.rank.r-c_trade { background: rgba(34, 64, 106, .92); box-shadow: inset 0 0 0 1px #d9aa3a; }
+.chip.rank.r-c_treasury { background: rgba(31, 74, 58, .92); box-shadow: inset 0 0 0 1px #f5cf73; }
+.chip.rank.r-c_war { background: rgba(122, 31, 34, .92); box-shadow: inset 0 0 0 1px #c9cdd2; }
+.chip.rank.r-c_law { background: rgba(28, 26, 30, .94); box-shadow: inset 0 0 0 1px #f3efe4; }
 .chip.rank.r-ruler { background: rgba(142, 31, 34, .94); color: #fff3d6; box-shadow: inset 0 0 0 1px #f5cf73; }
 .treewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; padding-bottom: 6px; background: radial-gradient(ellipse at center, rgba(255,248,226,.6), rgba(0,0,0,0)); border-radius: 8px; }
 .tree { display: block; margin: 0 auto; font-family: var(--f-body); }
@@ -2105,6 +2109,7 @@ const RG = {
   pouch: flat(new THREE.BoxGeometry(0.14, 0.14, 0.08)), chain: new THREE.TorusGeometry(0.2, 0.025, 4, 14), medal: flat(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 8)),
   robe: flat(new THREE.CylinderGeometry(0.3, 0.42, 0.5, 8)), staff: flat(new THREE.CylinderGeometry(0.03, 0.03, 1.35, 5)), knob: flat(new THREE.SphereGeometry(0.06, 5, 3)),
   cloak: flat(new THREE.BoxGeometry(0.62, 0.78, 0.05)), collar: flat(new THREE.TorusGeometry(0.24, 0.07, 4, 12)), velvet: flat(new THREE.CylinderGeometry(0.25, 0.22, 0.12, 9)), plume: flat(new THREE.ConeGeometry(0.045, 0.3, 4)),
+  breast: flat(new THREE.CylinderGeometry(0.27, 0.3, 0.42, 8)), sword: flat(new THREE.BoxGeometry(0.05, 0.6, 0.05)), helm: flat(new THREE.SphereGeometry(0.25, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2)), bands: flat(new THREE.BoxGeometry(0.1, 0.16, 0.02)),
   circlet: new THREE.CylinderGeometry(0.235, 0.235, 0.09, 10, 1, true), point: flat(new THREE.ConeGeometry(0.05, 0.12, 4)), jewel: flat(new THREE.OctahedronGeometry(0.035))
 };
 function dressRank(g, rank, opt) {
@@ -2124,6 +2129,24 @@ function dressRank(g, rank, opt) {
     at(RG.cloak, '#5a2230', 0, 0.42, -0.31); at(RG.collar, '#5a2230', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
     at(RG.velvet, '#2a2238', 0, 1.1, 0); const pl = at(RG.plume, '#efe6d2', 0.12, 1.26, -0.06); pl.rotation.z = -0.5;
     return;
+  }
+  if (rank === 'c_trade') {   // Master of Trade: deep blue cloak, fat purse, chain of office with a coin, a merchant's hat
+    at(RG.cloak, '#22406a', 0, 0.42, -0.31); at(RG.collar, '#22406a', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
+    at(RG.pouch, '#8a5a2a', 0.22, 0.32, 0.24).scale.set(1.5, 1.5, 1.4); at(RG.pouch, '#8a5a2a', -0.22, 0.32, 0.24).scale.set(1.2, 1.2, 1.2);
+    at(RG.velvet, '#22406a', 0, 1.1, 0).scale.set(1.15, 1, 1.15); return;
+  }
+  if (rank === 'c_treasury') {   // Lord Treasurer: dark green and gold, the great chain, and the treasury key
+    at(RG.cloak, '#1f4a3a', 0, 0.4, -0.31).scale.set(1.1, 1.05, 1); at(RG.collar, '#c9a24a', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold); chain(gold);
+    at(RG.velvet, '#1f4a3a', 0, 1.1, 0); const hr = g.userData.hr; if (hr) { const k = mesh(RG.staff, gold, 0, 0.08, 0.06, hr); k.scale.set(1, 0.25, 1); mesh(RG.knob, gold, 0, 0.26, 0.06, hr); }
+    return;
+  }
+  if (rank === 'c_war') {   // Marshal: a steel breastplate, crimson cloak, a sword at the hip, a plumed steel helm
+    at(RG.cloak, '#7a1f22', 0, 0.42, -0.31); at(RG.breast, '#9aa0a6', 0, 0.48, 0.05); at(RG.sword, '#c9cdd2', -0.33, 0.28, 0.05).rotation.z = 0.15;
+    at(RG.helm, '#9aa0a6', 0, 1.06, 0); const pl = at(RG.plume, '#b0203a', 0, 1.3, -0.02); pl.scale.set(1.3, 1.2, 1.3); return;
+  }
+  if (rank === 'c_law') {   // Lord Justice: black robe to the floor, white bands at the throat, a black cap and the white rod of justice
+    at(RG.robe, '#1c1a1e', 0, 0.25, 0); at(RG.cloak, '#1c1a1e', 0, 0.42, -0.31); at(RG.collar, '#f3efe4', 0, 0.72, 0).rotation.x = Math.PI / 2; at(RG.bands, '#f3efe4', 0, 0.58, 0.29);
+    at(RG.velvet, '#1c1a1e', 0, 1.1, 0); const hr = g.userData.hr; if (hr) { mesh(RG.staff, '#efe6d2', 0, 0.35, 0.02, hr); } return;
   }
   if (rank === 'ruler') {
     at(RG.cloak, '#8e1f22', 0, 0.4, -0.31).scale.set(1.15, 1.05, 1); at(RG.collar, '#f3efe4', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
@@ -2972,6 +2995,8 @@ function rankOf(s) {
   const f = s.look && s.look.body === 'f', R = s.realm, v = s.village;
   if (Sim.isRuler(s)) return { key: 'ruler', title: f ? 'Queen of Alderwyn' : 'King of Alderwyn' };
   if (R && R.exile) return { key: 'exile', title: 'Exiled claimant' };
+  const seat = R && Object.keys(Sim.COUNCIL).find(k => R.council[k] === 'player');
+  if (seat) return { key: 'c_' + seat, title: Sim.COUNCIL[seat] };
   const ls = Sim.yourLordships(s).filter(id => id !== 'crownmere');
   if (ls.length) return { key: 'lord', title: (f ? 'Lady of ' : 'Lord of ') + (Sim.REGIONS[ls[0]] || ls[0]) };
   if (s.offices && s.offices.elder === 'player') return { key: 'elder', title: 'Elder of Hearthmoor' };
@@ -2980,7 +3005,7 @@ function rankOf(s) {
   if (s.job) return { key: 'hand', title: 'Hired hand' };
   return { key: 'newcomer', title: 'Newcomer' };
 }
-const RANK_ORDER = ['newcomer', 'hand', 'merchant', 'councillor', 'elder', 'lord', 'ruler'];
+const RANK_ORDER = ['newcomer', 'hand', 'merchant', 'councillor', 'elder', 'lord', 'c_trade', 'c_war', 'c_law', 'c_treasury', 'ruler'];
 function rankWatch(s) {
   const r = rankOf(s);
   if (r.key === UI.rankKey) return;
@@ -3571,9 +3596,10 @@ function pageRealm(s) {
     const step = (k, lab, max) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] - (k === 'tax' ? 0.25 : 1)])}' aria-label="Less">&minus;</button><output class="num">${k === 'tax' ? g[k] + '×' : g[k] + '/' + max}</output><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] + (k === 'tax' ? 0.25 : 1)])}' aria-label="More">+</button></div></div>`;
     return `<div class="box"><h5>${esc(Sim.REGIONS[id])}</h5><dl class="kv"><dt>Held by</dt><dd>${mine ? 'You' : esc(Sim.lordName(s, id))}</dd><dt>Roads</dt><dd>${danger} (${bl})</dd><dt>Property market</dt><dd class="num">${Math.round(Sim.marketOf(s, id) * 100)}%</dd></dl>
       ${mine && id !== 'hearthmoor' && id !== 'crownmere' ? step('patrol', 'Patrols, 4c a day each', 3) + step('garrison', 'Garrison, 6c a day each', 3) + step('roads', 'Road mending, 3c a day each', 3) + step('tax', 'Taxes', 2) : ''}
-      <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${!mine && !R.exile && id !== 'crownmere' ? B_('Seek this lordship · 400c', ['seekLordship', id], 'alt') : ''}</div></div>`;
+      <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${!mine && !R.exile && id !== 'crownmere' ? B_('Seek this lordship · ' + (Sim.LORDSHIP_FEE[id] || 400) + 'c', ['seekLordship', id], 'alt') : ''}</div></div>`;
   }).join('')}</div>`;
-  h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k]; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${c !== 'player' && !ruler && !R.exile ? `<div class="acts">${B_('Seek this seat', ['seekSeat', k], 'alt')}</div>` : ''}</div>`; }).join('')}</div>`;
+  h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k]; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${(() => { const pth = Sim.COUNCIL_PATH[k], mine = s.player.councilPath, shut = mine && mine !== pth, need = shut ? [] : Sim.seatNeeds(s, k);
+      return `<p class="why">${esc(Sim.PATH_NAME[pth].replace(/^the /, 'The '))}${k === 'treasury' ? ', after Master of Trade' : ''}.${shut ? ' Shut to you: you walk ' + esc(Sim.PATH_NAME[mine]) + '.' : c === 'player' ? '' : need.length ? ' You must first ' + esc(need.join('; ')) + '.' : ' You have walked this road.'}</p>${c !== 'player' && !ruler && !R.exile && !shut ? `<div class="acts">${B_('Seek this seat', ['seekSeat', k], 'alt', need.length > 0)}</div>` : ''}`; })()}</div>`; }).join('')}</div><p>The council is three roads, and you can walk only one: coin (Master of Trade, then Lord Treasurer), arms (Marshal) or law (Lord Justice). Each seat also needs you to hold a region, two allies, a record of good rule and favour of 65.</p>`;
   if (ruler) {
     const st = (k, v, d, lab, fmt) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['rule', k, v - d])}' aria-label="Less">&minus;</button><output class="num">${fmt(v)}</output><button type="button" data-c='${JSON.stringify(['rule', k, v + d])}' aria-label="More">+</button></div></div>`;
     h += `<h4>Ruling Alderwyn</h4><div class="box"><dl class="kv"><dt>Treasury</dt><dd class="num ${R.treasury < 0 ? 'debt' : ''}">${R.treasury}c</dd><dt>Last day</dt><dd class="num">+${R.lastIncome || 0}c, −${R.lastSpend || 0}c</dd>${R.rival ? `<dt>Rival claimant</dt><dd><b>${esc(R.rival.name)}</b>, ${Math.round(R.rival.strength)} men</dd>` : ''}</dl>
@@ -5040,6 +5066,9 @@ function judge() {
 const BUILD = '/*BUILD*/';
 const NOTES = [
   { v: '0.37', date: '5 November', title: 'Honest books', items: [
+    'A lordship costs more for a bigger place: Hearthmoor 300c, Greenhaven 350c, Ironcrest 500c, Oakbridge 600c, Eastwatch 800c.',
+    'The royal council is three roads, and you walk only one. Coin: Master of Trade (own 3 businesses, deliver 3 supply contracts), then Lord Treasurer (be worth 2,500c, never touch the treasury). Arms: Marshal (300c of patrols, clear a road of bandits). Law: Lord Justice (have been Elder, keep 2 promises). Once you take a seat, the other roads are shut.',
+    'Each council office has its own dress: the Master of Trade in blue with a fat purse, the Lord Treasurer in green and gold with the treasury key, the Marshal in a breastplate and plumed helm with a sword, the Lord Justice in a black robe with white bands and the white rod.',
     'Hands now sell only to villagers who have not bought that day, and each one weighs the street price as any customer would and pays from their own purse. When everyone has what they need, there is nothing to sell: more hands, or a higher price, no longer means guaranteed takings.',
     'The ledger names every coin: houses and businesses bought, building work, gifts to the crown, food for your household and stabling each get their own line. Anything it cannot name shows as Unrecorded (and fails the game\u2019s own tests).',
     'Goods you deliver for a contract go onto that town\u2019s market and ease its shortage, and towns hit by a shortage are the likeliest to post a contract for the good they lack.'
