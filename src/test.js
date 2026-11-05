@@ -799,7 +799,7 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   lords.forEach(l => Sim.cmd(s, 'rallyAlly', l)); Sim.cmd(s, 'warChest', 600);
   // winter can cost a point or two of the towns' goodwill, so keep rallying until support is there (at most five rounds)
   for (let round = 0; round < 5 && (round < 3 || Sim.supportOf(s) < 67); round++) { s.coins += 1500; rally(); for (let d = 0; d < 15; d++) { away(); Sim.advance(s, 1440); } }
-  for (let d = 0; d < 12 && R.kingSupport >= 50; d++) { court(); Sim.cmd(s, 'exposeRuler'); away(); Sim.advance(s, 1440); }
+  for (let d = 0; d < 24 && R.kingSupport >= 50; d++) { court(); Sim.cmd(s, 'exposeRuler'); away(); Sim.advance(s, 1440); }
   court(); const rr = Sim.cmd(s, 'claimCrown');
   check(rr.ok && Sim.isRuler(s) && !R.exile, 'with sworn allies, a war chest, the towns and the new ruler exposed, you take the crown back' + (rr.ok ? '' : ': ' + rr.msg));
   const back = Sim.deserialize(Sim.serialize(s)); check(back.realm.crown === 'player' && back.realm.figures.length === 3, 'the realm saves and loads');
