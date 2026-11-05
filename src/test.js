@@ -1091,6 +1091,34 @@ console.log('36. Across the Sundering Sea: the passage, Stormrest Isle and Dawnp
   check(up.towns.dawnport && up.valdoria && Sim.living(up).filter(p => p.town === 'dawnport').length >= 440, 'an old save gains Dawnport and its people when loaded');
 }
 
+console.log('37. Your own ship, sea trade, customs, and the Queen of Valdoria');
+{
+  const s = newGameRaw(39); s.ageRate = 0; const P = Sim.PORTS, X = (...a) => Sim.cmd(s, ...a), at = k => { s.player.x = P[k].x; s.player.z = P[k].z; };
+  s.coins = 2000; s.t = 10 * 60; s.day = 3; at('dawnport');
+  check(!X('buyShip').ok, 'ships are sold at Eastwatch, not Dawnport');
+  at('eastwatch'); check(X('buyShip').ok && s.ship && s.coins === 2000 - Sim.SHIP_PRICE, 'you buy a merchant cog at Eastwatch for ' + Sim.SHIP_PRICE + 'c');
+  check(Sim.seaPrice(s, 'eastwatch', 'iron') < Sim.seaPrice(s, 'dawnport', 'iron') && Sim.seaPrice(s, 'dawnport', 'wine') < Sim.seaPrice(s, 'eastwatch', 'wine'), 'iron is cheap at home and dear in Valdoria; wine the other way');
+  const p0 = Sim.seaPrice(s, 'eastwatch', 'iron'); X('cargoBuy', 'iron', 40);
+  check(s.ship.hold.iron === 40 && Sim.seaPrice(s, 'eastwatch', 'iron') > p0, 'buying 40 iron fills the hold and raises the price');
+  check(!X('cargoBuy', 'wool', 50).ok, 'the hold holds ' + Sim.SHIP_HOLD + ' loads, no more');
+  check(X('sailShip', 'dawnport').ok && s.ship.port === 'dawnport' && Sim.portHere(s) === 'dawnport', 'your ship takes you to Dawnport, whenever you like');
+  const r = X('cargoSell', 'iron', 40);
+  check(r.ok && r.msg.tax > 0 && r.msg.profit > 0, 'iron sold in Dawnport pays the Queen’s duty (' + r.msg.tax + 'c) and still makes ' + r.msg.profit + 'c');
+  check(s.valdoria.standing > 0, 'honest trade makes your name in Valdoria');
+  s.valdoria.standing = 45; s.player.x = 2050; s.player.z = -300; check(X('charter').ok && s.valdoria.charter && Sim.landingTax(s, 'dawnport', 'iron') < 0.15, 'with a good name, the Consul grants a charter that halves the duty');
+  at('dawnport'); X('cargoBuy', 'wine', 30); s.realm.tariff = 1.5; X('sailShip', 'eastwatch'); const t0 = s.realm.treasury, w = X('cargoSell', 'wine', 30);
+  check(w.ok && s.realm.treasury > t0, 'Valdorian wine sold at Eastwatch pays Alderwyn’s tariff to the crown');
+  // storms
+  s.day = [46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60].find(d => Sim.seaRough(s, d));
+  if (s.day) { check(!X('sailShip', 'dawnport').ok && X('sailShip', 'dawnport', true).ok, 'in a storm your ship waits, unless you tell it to sail anyway'); }
+  // the Queen answers tariffs
+  s.realm.tariff = 1.75; const d0 = s.valdoria.duty; for (let k = 0; k < 4; k++) { s.day = 5 + 7 * k; Sim.valdoriaDay(s); }
+  check(s.valdoria.duty > d0 && s.valdoria.relation < 50, 'high Alderwyn tariffs make the Queen raise her duty, and relations cool (' + Math.round(s.valdoria.relation) + ')');
+  s.valdoria.embargo = s.day + 5; at('eastwatch'); s.ship.port = 'eastwatch'; X('cargoBuy', 'wool', 10); s.ship.port = 'dawnport'; at('dawnport');
+  check(!X('cargoSell', 'wool', 10).ok, 'while Dawnport is closed to Alderwyn goods, you cannot sell them openly');
+  check(s.ledger.slice(1).every(e => !e.unexplained), 'ships, cargo, duty and crew all have lines in your books');
+}
+
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

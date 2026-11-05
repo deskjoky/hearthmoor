@@ -450,11 +450,12 @@
   function skillLabel(skill) { return skill < 0.85 ? 'Slow but cheap' : skill < 1.1 ? 'Steady' : 'Quick hands'; }
 
   // the part of today's coin that already has its own line in the books
-  function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare' };
+  function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
+  const FLOW_LABEL = { buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare' };
   function closeDay(s) {
     const st = s.stats;
     if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
+    if (s.ship) { spend(s, SHIP_UPKEEP); st.ship = (st.ship || 0) + SHIP_UPKEEP; }
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
     if (s.people) { bizDay(s); peopleEvening(s); }
     if (s.gov) govEvening(s);
@@ -462,9 +463,9 @@
     if (s.realm && s.towns && s.people) courtsDay(s);
     if (s.towns) townEvening(s);
     if (s.people) propertyDay(s);
-    goodsDay(s); logPrices(s);
+    goodsDay(s); logPrices(s); seaMarketDay(s); valdoriaDay(s);
     if (s.realm) realmDay(s);
-    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
+    const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
@@ -497,7 +498,7 @@
     if (s.people) managersDay(s, entry);
     entry.managers = c0 - s.coins;
     entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized + entry.fines + entry.restitution + entry.bribes + Math.max(0, entry.lands) + entry.partner;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling + entry.hush + Math.max(0, -entry.lands);
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling + (entry.ship || 0) + entry.hush + Math.max(0, -entry.lands);
     if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of 2% a day is added every evening' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
@@ -3406,11 +3407,55 @@
     s.towns[id] = { title: cfg.title, chest: cfg.chest, fee: 'normal', approval: 60, council: masters.slice(1, 5).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen ' + cfg.title + ' of ' + TOWNS[id].name + '.');
   }
+  /* ---------- trade across the sea: cargo that only ships carry ---------- */
+  // Each kingdom makes two things the other wants. Where a good is made it is plentiful and cheap; across the sea it is
+  // scarce and dear. Prices move as you buy and sell, and recover a little each day, so one ship cannot empty a market.
+  const SEA_GOODS = {
+    salt: { name: 'salt', base: 3, made: 'dawnport' }, wine: { name: 'wine', base: 6, made: 'dawnport' },
+    wool: { name: 'wool', base: 3, made: 'eastwatch' }, iron: { name: 'iron', base: 5, made: 'eastwatch' }
+  };
+  const SEA_PORTS = ['eastwatch', 'dawnport'];
+  const SHIP_PRICE = 800, SHIP_HOLD = 80, SHIP_UPKEEP = 3, SHIP_CREW = 6;
+  const seaTarget = (port, g) => SEA_GOODS[g].made === port ? 300 : 60;
+  function setupSeaMarket(s) { if (s.seaMarket) return s.seaMarket; s.seaMarket = {}; for (const p of SEA_PORTS) { s.seaMarket[p] = {}; for (const g in SEA_GOODS) s.seaMarket[p][g] = seaTarget(p, g); } return s.seaMarket; }
+  function seaPrice(s, port, g, shift) { const M = setupSeaMarket(s), G = SEA_GOODS[g], st = Math.max(4, M[port][g] + (shift || 0)), mult = G.made === port ? 0.8 : 1.35; return G.base * mult * clamp(Math.pow(seaTarget(port, g) / st, 0.6), 0.4, 3); }
+  const seaLoad = (s, port, g, n, dir) => { let sum = 0; for (let k = 0; k < n; k++) sum += seaPrice(s, port, g, dir * k); return Math.round(sum); };
+  function seaMarketDay(s) {
+    const M = setupSeaMarket(s);
+    for (const p of SEA_PORTS) for (const g in SEA_GOODS) { const T = seaTarget(p, g); M[p][g] = Math.round(M[p][g] + (T - M[p][g]) * 0.08 + (rand(s) - 0.5) * T * 0.04); }
+  }
+  // the tax each crown takes when goods from the other land are sold in its port: Valdoria's duty at Dawnport, Alderwyn's tariff at Eastwatch
+  function landingTax(s, port, g) {
+    const fromOther = SEA_GOODS[g] ? SEA_GOODS[g].made !== port : true;
+    if (!fromOther) return 0;
+    if (port === 'dawnport') { const V = s.valdoria; return Math.max(0, (V ? V.duty : 1.2) - 1) * (V && V.charter ? 0.5 : 1); }
+    return Math.max(0, (s.realm ? s.realm.tariff : 1) - 1);
+  }
   // Valdoria: its own crown and its own customs. For now it is a place to go and to trade; its queen, its laws and its
   // dealings with Alderwyn come in the next part of the stage
   function setupValdoria(s) {
     if (s.valdoria) return;
-    s.valdoria = { name: 'Valdoria', ruler: 'Queen Ximena II', capital: 'Valdor', duty: 1.2, log: [] };
+    s.valdoria = { name: 'Valdoria', ruler: 'Queen Ximena II', capital: 'Valdor', duty: 1.2, relation: 50, standing: 0, charter: false, embargo: 0, log: [] };
+  }
+  function valLog(s, text, kind) { const V = s.valdoria; if (!V) return; V.log.unshift({ day: s.day, text }); if (V.log.length > 20) V.log.length = 20; event(s, 'From Valdoria: ' + text, kind || 'info'); }
+  // the Queen of Valdoria rules for her own people: she answers Alderwyn's tariffs with her own duty, closes the port when
+  // relations sour, and now and then a decree or a bad season changes what Dawnport will pay
+  function valdoriaDay(s) {
+    const V = s.valdoria, R = s.realm; if (!V) return;
+    if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
+    if (s.day % 7 !== 5) return;
+    const tariff = R ? R.tariff : 1;
+    V.relation = clamp(V.relation + (1.1 - tariff) * 12 + (rand(s) - 0.5) * 4, 0, 100);
+    const want = clamp(1.1 + Math.max(0, tariff - 1) * 0.8 + (V.relation < 40 ? 0.15 : 0) - (V.relation > 70 ? 0.05 : 0), 1.05, 1.8);
+    if (Math.abs(want - V.duty) >= 0.05) { const old = V.duty; V.duty = Math.round((V.duty + Math.sign(want - V.duty) * 0.05) * 100) / 100; valLog(s, 'Queen Ximena ' + (V.duty > old ? 'raises' : 'lowers') + ' the duty on goods from Alderwyn to ' + Math.round((V.duty - 1) * 100) + '%' + (V.duty > old && tariff > 1 ? ', answering Alderwyn’s tariffs.' : '.'), V.duty > old ? 'bad' : 'good'); }
+    if (V.embargo && s.day >= V.embargo) { V.embargo = 0; valLog(s, 'Dawnport is open again to goods from Alderwyn.', 'good'); }
+    else if (!V.embargo && V.relation < 25 && rand(s) < 0.5) { V.embargo = s.day + 10; valLog(s, 'Relations with Alderwyn have soured. The Queen closes Dawnport to Alderwyn’s goods for ten days.', 'bad'); }
+    if (rand(s) < 0.3) {
+      const M = setupSeaMarket(s), ev = Math.floor(rand(s) * 3);
+      if (ev === 0) { M.dawnport.wine = Math.round(M.dawnport.wine * 0.35); valLog(s, 'Hail in the vineyards: wine is scarce in Dawnport this week.', 'info'); }
+      else if (ev === 1) { M.dawnport.iron = Math.round(M.dawnport.iron * 0.5); valLog(s, 'The Queen is building ships at Dawnport, and pays well for iron.', 'info'); }
+      else { M.dawnport.salt = Math.round(M.dawnport.salt * 1.6); valLog(s, 'A great salt harvest: salt is cheap in Dawnport.', 'info'); }
+    }
   }
   function setupCrownmere(s) {
     if (!s.towns || s.towns.crownmere) return;
@@ -5597,9 +5642,66 @@
         const mins = Math.round(seaDist(from, a) / SAIL_MPM) + (via ? 25 : 0), P1 = PORTS[a];
         s.player.x = P1.x + Math.sin(P1.face) * 3; s.player.z = P1.z + Math.cos(P1.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
         s.rec.sailed = (s.rec.sailed || 0) + 1;
+        if (a === 'dawnport' || (a === 'eastwatch' && from === 'dawnport')) { const n = carried(s); if (n) { const val = GOODS.reduce((x, g) => x + s.player.inv[g] * sellPrice(s, a, g), 0), rate = a === 'dawnport' ? Math.max(0, ((s.valdoria && s.valdoria.duty) || 1.2) - 1) * (s.valdoria && s.valdoria.charter ? 0.5 : 1) : Math.max(0, (s.realm ? s.realm.tariff : 1) - 1), d = Math.round(val * rate); if (d > 0) { if (s.coins >= d) { spend(s, d); if (a === 'eastwatch' && s.realm) s.realm.treasury += d; event(s, 'The customs men take ' + d + 'c duty on the goods you carry ashore.', 'info'); } else { GOODS.forEach(g => s.player.inv[g] = 0); event(s, 'You cannot pay the duty on what you carry, so the customs men keep it.', 'bad'); } } } }
         if (a === 'dawnport' && !s.rec.landedValdoria) { s.rec.landedValdoria = s.day; event(s, 'You step onto the quay at Dawnport. Sandstone, red tiles, the smell of salt pans and oranges: Valdoria.', 'story'); }
         event(s, 'You sail to ' + P1.name + (via ? ' by way of Stormrest Isle' : '') + ' for ' + f + 'c. The crossing takes ' + mins + ' minutes.', 'info');
         return { ok: true, mins };
+      }
+      case 'buyShip': {
+        if (portHere(s) !== 'eastwatch') return fail('Ships are built and sold at Eastwatch.');
+        if (s.ship) return fail('You already own a ship.');
+        if (s.coins < SHIP_PRICE) return fail('A merchant cog costs ' + SHIP_PRICE + 'c.');
+        spend(s, SHIP_PRICE); s.ship = { name: a && String(a).slice(0, 24) || 'the Hearthmoor Rose', port: 'eastwatch', hold: {}, cap: SHIP_HOLD, since: s.day };
+        event(s, 'You buy a merchant cog, ' + s.ship.name + '. It holds ' + SHIP_HOLD + ' loads of cargo, and its crew costs ' + SHIP_UPKEEP + 'c a day in port and ' + SHIP_CREW + 'c a voyage.', 'story'); return ok();
+      }
+      case 'sellShip': { if (!s.ship) return fail('You have no ship.'); if (portHere(s) !== s.ship.port) return fail('Go to where your ship is moored.'); if (Object.values(s.ship.hold).some(n => n > 0)) return fail('Sell the cargo first.'); earn(s, Math.round(SHIP_PRICE * 0.6)); s.ship = null; return ok(); }
+      case 'cargoBuy': {
+        const port = portHere(s), n = Math.round(b || 0); if (!s.ship || s.ship.port !== port || !SEA_PORTS.includes(port)) return fail('Your ship must be here, in a port with a market.');
+        if (!SEA_GOODS[a] || n <= 0) return fail('Nothing to buy.');
+        const used = Object.values(s.ship.hold).reduce((x, y) => x + y, 0); if (used + n > s.ship.cap) return fail('The hold has room for ' + (s.ship.cap - used) + ' more.');
+        const cost = seaLoad(s, port, a, n, -1); if (s.coins < cost) return fail(n + ' ' + a + ' cost ' + cost + 'c.');
+        spend(s, cost); s.seaMarket[port][a] -= n; s.ship.hold[a] = (s.ship.hold[a] || 0) + n; s.ship.paid = s.ship.paid || {}; s.ship.paid[a] = (s.ship.paid[a] || 0) + cost; return ok();
+      }
+      case 'cargoSell': {
+        // c: true to land it quietly, past the customs house
+        const port = portHere(s), n = Math.round(b || 0), V = s.valdoria; if (!s.ship || s.ship.port !== port || !SEA_PORTS.includes(port)) return fail('Your ship must be here, in a port with a market.');
+        const have = (s.ship.hold[a] || 0); if (!SEA_GOODS[a] || n <= 0 || n > have) return fail('You have ' + have + ' ' + a + ' aboard.');
+        const foreign = SEA_GOODS[a].made !== port;
+        if (port === 'dawnport' && foreign && V && V.embargo && !c) return fail('Dawnport is closed to Alderwyn’s goods until day ' + V.embargo + '.');
+        const gross = seaLoad(s, port, a, n, 1), rate = c ? 0 : landingTax(s, port, a), tax = Math.round(gross * rate);
+        const share = Math.round((s.ship.paid && s.ship.paid[a] || 0) * n / have); if (s.ship.paid) s.ship.paid[a] = Math.max(0, (s.ship.paid[a] || 0) - share);
+        s.ship.hold[a] = have - n;
+        if (c) {
+          // smuggling: a fair chance the customs men are waiting
+          const caught = rand(s) < (port === 'dawnport' ? 0.3 + (V && V.relation < 40 ? 0.15 : 0) : 0.25);
+          if (caught) { const fine = 30; spend(s, Math.min(fine, Math.max(0, s.coins))); if (port === 'dawnport' && V) { V.standing = clamp(V.standing - 12, 0, 100); V.relation = clamp(V.relation - 2, 0, 100); } valLog(s, 'The customs men seize ' + n + ' ' + a + ' landed without paying the duty, and fine you ' + fine + 'c.', 'bad'); return ok('caught'); }
+        }
+        earn(s, gross - tax); s.seaMarket[port][a] += n;
+        if (tax) { if (port === 'dawnport') { if (V) V.paid = (V.paid || 0) + tax; } else if (s.realm) s.realm.treasury += tax; }
+        if (port === 'dawnport' && V && !c) V.standing = clamp(V.standing + Math.min(3, Math.ceil(n / 30)), 0, 100);
+        s.rec.seaTrade = (s.rec.seaTrade || 0) + (gross - tax - share);
+        return ok(c ? 'landed' : { gross, tax, profit: gross - tax - share });
+      }
+      case 'sailShip': {
+        // your own ship goes when you say, by day or night; in a storm you may sail anyway, at a risk to the cargo
+        const from = portHere(s); if (!s.ship || s.ship.port !== from) return fail('Your ship is moored at ' + (s.ship ? PORTS[s.ship.port].name : 'nowhere') + '.');
+        if (!PORTS[a] || a === from) return fail('Choose where to sail.');
+        if (seaRough(s) && !b) return fail('A storm is up. Sail anyway, or wait for calmer water.');
+        if (s.coins < SHIP_CREW) return fail('The crew want ' + SHIP_CREW + 'c for the voyage.');
+        spend(s, SHIP_CREW);
+        let lost = '';
+        if (seaRough(s) && rand(s) < 0.35) { for (const g in s.ship.hold) { const l = Math.ceil(s.ship.hold[g] / 3); if (l) { s.ship.hold[g] -= l; if (s.ship.paid) s.ship.paid[g] = Math.round((s.ship.paid[g] || 0) * 2 / 3); } } lost = ' The storm washes a third of the cargo overboard.'; }
+        const mins = Math.round(seaDist(from, a) / (SAIL_MPM * 1.15)), P1 = PORTS[a];
+        s.ship.port = a; s.player.x = P1.x + Math.sin(P1.face) * 3; s.player.z = P1.z + Math.cos(P1.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
+        s.rec.sailed = (s.rec.sailed || 0) + 1; if (a === 'dawnport' && !s.rec.landedValdoria) s.rec.landedValdoria = s.day;
+        event(s, s.ship.name + ' brings you to ' + P1.name + ' in ' + mins + ' minutes.' + lost, lost ? 'bad' : 'info');
+        return { ok: true, mins };
+      }
+      case 'charter': {
+        // the Consul grants a merchant's charter to a foreigner who trades honestly: half duty on everything you land
+        const V = s.valdoria; if (!V) return fail('Not now.'); if (townAt(s.player.x, s.player.z) !== 'dawnport') return fail('Ask at the Consul’s palace in Dawnport.');
+        if (V.charter) return fail('You already hold a charter.'); if (V.standing < 40) return fail('The Consul does not know you well enough. Trade honestly in Dawnport first (your name here is ' + Math.round(V.standing) + ' of 40).');
+        if (s.coins < 200) return fail('The charter costs 200c.'); spend(s, 200); V.charter = true; valLog(s, 'The Consul grants you a merchant’s charter: you pay half the duty on what you land at Dawnport.', 'good'); return ok();
       }
       case 'journey': {
         // walk or ride the roads to another town
@@ -5894,6 +5996,7 @@
   }
 
   const api = {
+    SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,

@@ -2836,6 +2836,7 @@ function act(c) {
     G.look = Object.assign({}, G.look || {}, { body: Sim.you(G).sex === 'f' ? 'f' : 'm', hair: c[0] === 'beginAgain' ? (Sim.you(G).sex === 'f' ? 'long' : 'short') : hm, hairColor: Math.max(0, LOOKS.hairColor.indexOf(pl.hairColor)) });
     rebuildPlayer(G.look); UI.sel = null; UI.loc = null; focus.set(G.player.x, 0, G.player.z); UI.confirm = null; closeOverlay();
   }
+  if (c[0] === 'sailShip' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   if (c[0] === 'sail' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   if (c[0] === 'coach' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   drainEvents();
@@ -3021,7 +3022,7 @@ function cardHTML(s) {
   if (here === 'dpharbour') return oakHallCard(s, walking, 'dawnport');
   if (Lh && Lh.port) return portCard(s, Lh.port, walking);
   if (here === 'dpcustoms') return `<h2>The Customs House</h2><div class="sub">Where the Queen of Valdoria\u2019s clerks weigh and seal everything landed at Dawnport. Goods from Alderwyn pay a duty of ${Math.round(((s.valdoria && s.valdoria.duty) || 1.2) * 100 - 100)}% here.</div>${walking}`;
-  if (here === 'dppalace') return `<h2>The Consul\u2019s Palace</h2><div class="sub">The seat of the Consul of Dawnport, who governs the port for ${esc((s.valdoria && s.valdoria.ruler) || 'the Queen')}. ${s.towns && s.towns.dawnport && s.people[s.towns.dawnport.mayor] ? 'The Consul is ' + esc(s.people[s.towns.dawnport.mayor].name) + '.' : ''} You are a foreigner here: Alderwyn\u2019s titles mean little, though its coin spends the same.</div>${walking}`;
+  if (here === 'dppalace') return `<h2>The Consul\u2019s Palace</h2><div class="sub">The seat of the Consul of Dawnport, who governs the port for ${esc((s.valdoria && s.valdoria.ruler) || 'the Queen')}. ${s.towns && s.towns.dawnport && s.people[s.towns.dawnport.mayor] ? 'The Consul is ' + esc(s.people[s.towns.dawnport.mayor].name) + '.' : ''} You are a foreigner here: Alderwyn\u2019s titles mean little, though its coin spends the same.</div>${walking}${s.valdoria ? `<dl class="kv"><dt>Your name in Valdoria</dt><dd>${Math.round(s.valdoria.standing || 0)} of 100</dd><dt>Duty on Alderwyn goods</dt><dd>${Math.round((s.valdoria.duty - 1) * 100)}%${s.valdoria.charter ? ' (half for you)' : ''}</dd></dl>${s.valdoria.charter ? '<p>You hold a merchant\u2019s charter.</p>' : `<div class="acts">${B_('Ask for a merchant\u2019s charter · 200c', ['charter'], 'alt', (s.valdoria.standing || 0) < 40 || s.coins < 200)}</div><p class="why">A charter halves the duty on everything you land here. The Consul grants one to a foreigner who has traded honestly in Dawnport (40).</p>`}` : ''}`;
   if (here === 'dpplaza') return `<h2>The Plaza Mayor</h2><div class="sub">Dawnport\u2019s great square: a fountain under orange trees, arcades on every side, and the High Calle running from the quay to the palace steps.</div>${walking}`;
   if (here === 'cmmarket') { const T = s.towns && s.towns.crownmere; return `<h2>The Great Market</h2><div class="sub">The heart of the capital: two rings of stalls round the great fountain, a dozen shops and taverns facing the square, and traders from every town in Alderwyn. Stallholders pay the Lord Mayor ${T ? Sim.FEES[T.fee].coin + 'c' : 'a fee'} a day.</div>${walking}<div class="acts">${B_('The Guildhall', ['goto', 'cmhall'], 'alt')}${B_('Businesses', ['page', 'property'], 'alt')}</div>`; }
   if (here === 'cmcastle') { const R = s.realm, K = R && s.people[R.king]; return `<h2>Crownmere Castle</h2><div class="sub">${Sim.isRuler(s) ? 'Your castle, and the seat of your court.' : 'The royal castle on its hill above Crown Lake: the seat of ' + esc(K ? 'King ' + K.name : 'the King') + ' and his court.'}${R ? ' Your favour at court: ' + Math.round(R.favour) + '.' : ''}</div>${walking}<div class="acts">${!Sim.isRuler(s) ? B_('Attend court', ['attendCourt']) : ''}${B_('The Realm', ['page', 'realm'], 'alt')}</div>`; }
@@ -3265,6 +3266,7 @@ function pageLedger(s) {
     if (e.bribes) rows.push(['Private payments', e.bribes]);
     if (e.hush) rows.push(['Paid to keep people quiet', -e.hush]);
     if (e.stabling) rows.push(['Stabling your horse', -e.stabling]);
+    if (e.ship) rows.push(['Your ship\u2019s crew and mooring', -e.ship]);
     (e.otherItems || []).forEach(x => rows.push([esc(x.label), x.amount]));
     if (e.unexplained) rows.push(['Unrecorded', e.unexplained]);
     else if (e.other && !(e.otherItems || []).length) rows.push([e.other > 0 ? 'Other money in' : 'Other spending', e.other]);
@@ -3694,7 +3696,23 @@ function portCard(s, id, walking) {
     return B_(`Sail to ${esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, '').replace('Stormrest', 'Stormrest Isle'))} · ${f}c<small>about ${mins} min${via ? ', calling at Stormrest' : ''}</small>`, ['sail', k], '', !open || rough || s.coins < f); });
   const note = rough ? 'A storm is up on the Sundering Sea. No ship sails today.' : !open ? 'Ships sail between seven in the morning and five in the afternoon.' : (Sim.calendar(s).season === 'winter' ? 'In winter, about one day in five is too rough to sail.' : '');
   const fc = []; for (let d = 1; d <= 3; d++) if (Sim.seaRough(s, s.day + d)) fc.push(d === 1 ? 'tomorrow' : 'in ' + d + ' days');
-  return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}`;
+  return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<p><b>Passage on a merchant ship</b></p><div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}${shipPanel(s, id)}`;
+}
+// your own ship: the hold, the port's market for sea cargo, and where to sail
+function shipPanel(s, id) {
+  const S = s.ship, market = Sim.SEA_PORTS.includes(id), V = s.valdoria;
+  if (!S) return id === 'eastwatch' ? `<p><b>A ship of your own</b></p><p class="why">The Eastwatch shipwrights sell merchant cogs: ${Sim.SHIP_HOLD} loads of cargo, sail when you like, by day or night. Salt and wine are cheap in Dawnport and dear here; wool and iron the other way round. Crew and mooring cost ${Sim.SHIP_UPKEEP}c a day, and ${Sim.SHIP_CREW}c a voyage.</p><div class="acts">${B_('Buy a merchant cog · ' + Sim.SHIP_PRICE + 'c', ['buyShip'], 'alt', s.coins < Sim.SHIP_PRICE)}</div>` : '';
+  if (S.port !== id) return `<p class="why">Your ship, ${esc(S.name)}, is moored at ${esc(Sim.PORTS[S.port].name)}.</p>`;
+  const used = Object.values(S.hold).reduce((a, b) => a + b, 0), room = S.cap - used, rough = Sim.seaRough(s);
+  let h = `<p><b>${esc(S.name)}</b> · your ship · hold ${used} of ${S.cap}${used ? ': ' + Object.keys(S.hold).filter(g => S.hold[g]).map(g => S.hold[g] + ' ' + g).join(', ') : ', empty'}</p>`;
+  if (market) {
+    h += `<table class="trades"><thead><tr><th>Cargo</th><th>Buy 10</th><th>Sell 10</th><th></th></tr></thead><tbody>${Object.keys(Sim.SEA_GOODS).map(g => { const buy10 = Sim.seaLoad(s, id, g, 10, -1), sell10 = Sim.seaLoad(s, id, g, 10, 1), tax = Sim.landingTax(s, id, g), have = S.hold[g] || 0, made = Sim.SEA_GOODS[g].made === id;
+      return `<tr><td>${g.charAt(0).toUpperCase() + g.slice(1)}${made ? ' <small>made here</small>' : ''}</td><td class="num">${buy10}c</td><td class="num">${sell10}c${tax ? ' <small>less ' + Math.round(tax * 100) + '% duty</small>' : ''}</td><td><div class="acts">${B_('Buy 10', ['cargoBuy', g, 10], 'alt', room < 10 || s.coins < buy10)}${have ? B_('Sell ' + have, ['cargoSell', g, have], 'alt', id === 'dawnport' && !made && V && V.embargo) : ''}${have && tax ? B_('Land it quietly', ['cargoSell', g, have, true], 'warn') : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
+    if (id === 'dawnport' && V && V.embargo) h += `<p class="why">Dawnport is closed to Alderwyn\u2019s goods until day ${V.embargo}.</p>`;
+    h += `<p class="why">Prices move as you buy and sell, and recover over the following days. ${id === 'dawnport' ? 'Alderwyn goods sold here pay the Queen\u2019s duty' + (V && V.charter ? ', halved by your charter.' : '; a merchant\u2019s charter from the Consul halves it.') : 'Valdorian goods sold here pay Alderwyn\u2019s tariff to the crown.'} Landing cargo quietly skips the duty, if the customs men are not waiting.</p>`;
+  }
+  h += `<div class="acts">${Object.keys(Sim.PORTS).filter(k => k !== id).map(k => B_('Sail your ship to ' + esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, '')) + (rough ? ' · in the storm' : '') + '<small>' + Sim.SHIP_CREW + 'c for the crew</small>', ['sailShip', k, rough], rough ? 'warn' : 'alt', s.coins < Sim.SHIP_CREW)).join('')}</div>${rough ? '<p class="why">A storm is up: sail anyway and you may lose a third of the cargo.</p>' : ''}`;
+  return h;
 }
 function stageCard(s, id, walking) {
   const p = s.player, h = Sim.hourOf(s), running = h >= 6 && h < 19, acts = [];
@@ -3935,6 +3953,11 @@ function pageRealm(s) {
       <div class="acts">${B_('Take 200c for yourself', ['rule', 'draw', 200], 'alt')}${B_('Give 200c to the treasury', ['rule', 'give', 200], 'alt', s.coins < 200)}${R.rival ? B_('Buy off ' + esc(R.rival.name) + ' · ' + Math.round(R.rival.strength * 6) + 'c', ['rule', 'payRival'], 'warn') : ''}</div></div>`;
   }
   h += `<h4>News of the realm</h4><div class="box">${R.log.slice(0, 10).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') || '<p>All is quiet.</p>'}</div>`;
+  // the other crown, across the sea
+  const V = s.valdoria;
+  if (V) { const rel = V.relation >= 70 ? 'warm' : V.relation >= 45 ? 'cordial' : V.relation >= 25 ? 'cool' : 'hostile';
+    h += `<h4>Valdoria, across the sea</h4><div class="box"><dl class="kv"><dt>Its ruler</dt><dd>${esc(V.ruler)}, from ${esc(V.capital)}</dd><dt>Relations with Alderwyn</dt><dd>${rel} (${Math.round(V.relation)})</dd><dt>Duty at Dawnport</dt><dd>${Math.round((V.duty - 1) * 100)}% on Alderwyn goods${V.embargo ? ' · <b>port closed to them until day ' + V.embargo + '</b>' : ''}</dd><dt>Your name there</dt><dd>${Math.round(V.standing || 0)}${V.charter ? ' · merchant\u2019s charter' : ''}</dd></dl>
+      <p class="why">The Queen answers Alderwyn\u2019s tariffs with her own duty, and closes Dawnport when relations sour. ${Sim.isRuler(s) ? 'Your tariff on trade sets the tone: lower it and she warms to Alderwyn.' : ''}</p>${V.log.length ? V.log.slice(0, 5).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') : ''}</div>`; }
   return h;
 }
 function bizBox(s, b) {
@@ -5399,6 +5422,13 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.44', date: '5 November', title: 'A ship of your own, and the Queen of Valdoria', items: [
+    'Buy a merchant cog at Eastwatch’s Passage Office for 800c: 80 loads of cargo, and it sails when you say, by day or night. Crew and mooring cost 3c a day, and 6c a voyage. In a winter storm it waits unless you tell it to sail anyway, and then the sea may take a third of the cargo.',
+    'Sea trade. Each kingdom makes what the other wants: salt and wine are cheap in Dawnport and dear in Eastwatch; wool and iron the other way round. Prices move as you buy and sell and recover over the following days, so one ship cannot empty a market. The port card shows what ten loads cost to buy and fetch to sell.',
+    'Customs. Alderwyn goods sold at Dawnport pay the Queen’s duty (20% to start); Valdorian goods sold at Eastwatch pay Alderwyn’s tariff to the crown. Goods you carry ashore as a passenger pay too. You can land cargo quietly to skip the duty, but the customs men are often waiting: they seize it and fine you.',
+    'Your name in Valdoria grows with honest trade. At 40, the Consul in his palace will sell you a merchant’s charter (200c) that halves the duty on everything you land.',
+    'Queen Ximena II rules Valdoria for her own people. Each week she answers Alderwyn’s tariffs with her own duty; when relations sour she closes Dawnport to Alderwyn’s goods for ten days; and hail in the vineyards, a great salt harvest or her new warships change what Dawnport will pay. The Realm page shows her, the duty, relations with Alderwyn and your name there. As ruler, your tariff sets the tone.',
+  ] },
   { v: '0.43', date: '5 November', title: 'Across the Sundering Sea', items: [
     'Stage VII begins. Ships now sail from the Passage Office on Eastwatch’s quay across the Sundering Sea to Dawnport in Valdoria, calling at Stormrest Isle on the way: 40c to Dawnport, 18c to Stormrest, 24c from Stormrest on (10c more with a horse). Ships sail from seven in the morning to five in the afternoon; in winter about one day in five is too stormy, and the harbourmaster can tell you the next few days.',
     'Stormrest Isle: a bare rock halfway across, with a harbour wall, an inn and a lighthouse.',
