@@ -3633,7 +3633,7 @@
   function computeSupport(s) {
     const R = s.realm, S = R.support;
     const lords = Object.keys(R.regions).map(id => { const l = regionLord(s, id); return l === 'player' ? 100 : l && s.people[l] ? op01(s.people[l]) : 50; });
-    const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').map(b => s.people[b.owner]).filter(Boolean);
+    const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player' && !(TOWNS[b.town] && TOWNS[b.town].foreign)).map(b => s.people[b.owner]).filter(Boolean);
     const mine = Object.values(s.biz).filter(b => b.owner === 'player').length;
     const mono = R.monopoly && !((R.figures || []).find(f => f.kind === 'merchant') || {}).ally ? 10 : 0;
     let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - mono - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
@@ -3730,7 +3730,7 @@
       if (c === 0) { R.treasury += 80; if (L) { L.opinion = clamp((L.opinion || 0) - 25, -100, 100); L.purse -= 80; } others.forEach(o => o.opinion = clamp((o.opinion || 0) + 3, -100, 100)); R.favour = clamp(R.favour + 2, 0, 100); realmLog(s, (L ? L.name : 'The lord') + ' is summoned to the Great Hall and fined. The other lords take note.', 'info'); }
       else { if (L) L.opinion = clamp((L.opinion || 0) + 5, -100, 100); others.forEach(o => o.opinion = clamp((o.opinion || 0) - (quiet ? 6 : 4), -100, 100)); R.favour = clamp(R.favour - 2, 0, 100); realmLog(s, (L ? L.name : 'The lord') + '’s defiance goes unanswered. Other lords wonder what else they can get away with.', 'bad'); }
     } else if (q.kind === 'guilds') {
-      const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').map(b => s.people[b.owner]).filter(Boolean);
+      const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player' && !(TOWNS[b.town] && TOWNS[b.town].foreign)).map(b => s.people[b.owner]).filter(Boolean);
       if (c === 0) { R.tariff = Math.max(0.5, R.tariff - 0.25); owners.forEach(o => o.opinion = clamp((o.opinion || 0) + 4, -100, 100)); realmLog(s, 'The crown lowers the tariff to ' + R.tariff + '×. The guilds are pleased; the treasury will feel it.', 'good'); }
       else { owners.forEach(o => o.opinion = clamp((o.opinion || 0) - (quiet ? 3 : 2), -100, 100)); realmLog(s, quiet ? 'The guilds’ petition goes unanswered.' : 'The crown keeps the tariff. The guilds grumble.', 'info'); }
     }
