@@ -897,6 +897,41 @@ console.log('31. Law and order: the watch, cases, cells, and the people who know
   check(s.ledger.slice(1).every(e => !e.unexplained), 'fines, bribes and repayments all have their own lines in your books');
 }
 
+console.log('32. Courts of the towns, and the crown’s hand');
+{
+  const s = newGameRaw(32); s.ageRate = 0; Sim.applyStart(s, 'lord'); s.coins = 4000; Sim.advance(s, 1440);
+  const C = s.courts, R = s.realm, X = (...a) => Sim.cmd(s, ...a);
+  check(C && C.greenhaven.cells === 2 && C.crownmere.cells === 14 && C.oakbridge.captain, 'every town has a gaol to its size and a guard captain');
+  const folk = Sim.living(s).filter(p => p.town === 'greenhaven' && !p.kid && p.status === 'here'), O = Sim.living(s).filter(p => p.town === 'oakbridge' && !p.kid && p.status === 'here');
+  const mk = (Cx, p, o) => { const c = Object.assign({ id: s.justice.nextCase++, kind: 'theft', day: s.day, status: 'open', evidence: [{ text: 'x', w: 4 }], hidden: [], witnesses: [], investigating: 0, held: false, accused: p.id, accuser: null, victim: 'chest', value: 30, where: 'the chest', truth: 'guilty', what: 'test', claim: 'test', authority: Cx.authority, court: Cx.id }, o || {}); Cx.cases.push(c); return c; };
+  const c1 = mk(C.oakbridge, O[3]);
+  check(!X('jArrest', c1.id).ok, 'a lord of Greenhaven gives no orders in the court of Oakbridge');
+  const c2 = mk(C.greenhaven, folk[2]);
+  check(X('jArrest', c2.id).ok && folk[2].held && C.greenhaven.prisoners.length === 1, 'in your own region you arrest into the town’s gaol');
+  check(X('jHear', c2.id, { fine: 50, days: 8, restitution: true }, 'guilty').ok && C.greenhaven.prisoners.find(x => x.pid === folk[2].id).until === s.day + 8, 'a lord can sentence up to ten days and fine up to 100c');
+  // confiscation: lawful forfeiture against taking it yourself
+  const ownerB = Object.values(s.biz).find(b => b.town === 'greenhaven' && s.people[b.owner] && s.people[b.owner].status === 'here' && b.trade !== 'estate');
+  if (ownerB) { const own = s.people[ownerB.owner], ch0 = s.towns.greenhaven.chest; const c3 = mk(C.greenhaven, own, { kind: 'corruption' });
+    check(X('jHear', c3.id, { confiscate: 'lawful' }, 'guilty').ok && ownerB.owner !== 'player' && s.towns.greenhaven.chest > ch0, 'lawful forfeiture: ' + Sim.empById(ownerB.id).name + ' is sold for the town chest, not for you'); }
+  const ownerB2 = Object.values(s.biz).find(b => b.town === 'greenhaven' && b.owner !== 'player' && s.people[b.owner] && s.people[b.owner].status === 'here' && !b.closed && b.trade !== 'estate');
+  if (ownerB2) { const own = s.people[ownerB2.owner]; const c4 = mk(C.greenhaven, own, { kind: 'corruption' }); const n0 = s.justice.secrets.length;
+    check(X('jHear', c4.id, { confiscate: 'take' }, 'guilty').ok && ownerB2.owner === 'player' && s.justice.secrets.length > n0, 'taking it for yourself works, and is a theft someone remembers'); }
+  // the council's offices
+  R.council.treasury = 'player'; s.towns.oakbridge.skims = [{ pid: s.towns.oakbridge.mayor, amount: 30, day: s.day }];
+  let found = false; for (let k = 0; k < 6 && !found; k++) { R.lastAudit = null; X('xAudit'); found = !s.towns.oakbridge.skims.length; }
+  check(found, 'the Lord Treasurer’s audit finds a mayor’s hand in the chest');
+  R.council.treasury = null; R.council.war = 'player'; s.bandits.ironcrest = 60; R.treasury = 500;
+  check(X('xSoldiers', 'ironcrest').ok && s.bandits.ironcrest < 60 && (R.military || []).length, 'the Marshal’s soldiers sweep the roads and bring back prisoners');
+  check(X('xMartial', null, 'hang').ok && !(R.military || []).length, 'military prisoners are tried by the Marshal, apart from the watch');
+  R.council.war = null; R.council.law = 'player';
+  const h = O[5]; const ord = mk(C.oakbridge, h, { kind: 'order', truth: 'none' }); ord.held = true; ord.deadline = s.day + 4; s.courts.oakbridge.prisoners.push({ pid: h.id, caseId: ord.id, court: 'oakbridge', reason: 'held on order', since: s.day, until: s.day + 4 }); h.held = { caseId: ord.id };
+  check(X('xReview').ok && !h.held, 'the Lord Justice’s review frees someone held on an order with no charge');
+  R.council.law = null; R.crown = 'player';
+  const k0 = Object.keys(Sim.COUNCIL).find(k => R.council[k] && R.council[k] !== 'player'), old = R.council[k0];
+  check(X('xDismiss', k0).ok && R.council[k0] !== old, 'the crown dismisses a councillor and names another');
+  check(s.ledger.slice(1).every(e => !e.unexplained), 'lands, fines and seizures all have lines in your books');
+}
+
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

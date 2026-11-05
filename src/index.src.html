@@ -3134,6 +3134,12 @@ function pageLedger(s) {
     if (e.interest) rows.push(['Interest to the Ashford moneylender', -e.interest]);
     if (e.managers) rows.push(['Managers (wages and supplies they bought)', -e.managers]);
     if (e.family) rows.push(['Food for your household', -e.family]);
+    if (e.lands) rows.push(['Income from your lands', e.lands]);
+    if (e.partner) rows.push(['Your share as the merchant\u2019s partner', e.partner]);
+    if (e.fines) rows.push(['Fines kept and penalties paid', e.fines]);
+    if (e.restitution) rows.push(['Repaid to you by thieves', e.restitution]);
+    if (e.bribes) rows.push(['Private payments', e.bribes]);
+    if (e.hush) rows.push(['Paid to keep people quiet', -e.hush]);
     if (e.stabling) rows.push(['Stabling your horse', -e.stabling]);
     (e.otherItems || []).forEach(x => rows.push([esc(x.label), x.amount]));
     if (e.unexplained) rows.push(['Unrecorded', e.unexplained]);
@@ -3340,7 +3346,55 @@ function townPick(s) {
   return [t, `<div class="seg" role="group">${[['hearthmoor', 'Hearthmoor'], ['oakbridge', 'Oakbridge'], ['greenhaven', 'Greenhaven'], ['crownmere', 'Crownmere']].map(([v, n]) => `<button type="button" aria-pressed="${t === v}" data-c='${JSON.stringify(['ui', 'ptown', v])}'>${n}</button>`).join('')}</div>`];
 }
 const JW = w => w >= 5 ? 'strong against them' : w >= 3 ? 'enough to convict' : w >= 1 ? 'thin' : w > -2 ? 'nothing solid' : 'it points to their innocence';
+function caseCardX(s, c, C) {
+  const judge = Sim.canJudge(s, C), A = s.people[c.accused], w = Sim.caseWeight(c), shownW = c.witnesses.filter(x => x.shown || x.leaned);
+  let h = `<div class="box case"><h5>${esc(Sim.CRIME[c.kind])}: ${esc(A ? A.name : 'unknown')}${c.held ? ' <span class="pill bad">held</span>' : ''}</h5><p>${esc(c.what)} (day ${c.day}).</p>
+    <ul class="notes">${c.evidence.map(e => `<li>${esc(e.text)}</li>`).join('')}${shownW.map(x => `<li>Witness: ${esc(x.says)}</li>`).join('')}</ul>
+    <p><b>The evidence:</b> ${JW(w)}.${c.investigating ? ' The guard is asking questions.' : ''}${c.held ? ' Must be heard by day ' + c.deadline + '.' : ''}${c.delegated ? ' The captain and the steward will deal with it.' : ''}</p>`;
+  if (c.bribe && judge && !c.bribe.refused) { const br = s.people[c.bribe.pid]; h += `<div class="why">${esc(br ? br.name : 'Someone')} offers you ${c.bribe.amount}c to ${c.bribe.wants === 'convict' ? 'find them guilty' : 'let it go'}.<div class="acts">${B_('Take it', ['jBribe', c.id, true], 'warn')}${B_('Send them away', ['jBribe', c.id, false], 'alt')}</div></div>`; }
+  if (judge) {
+    h += `<div class="acts">${B_('Investigate', ['jInvestigate', c.id], 'alt', c.investigating > 0)}${c.held ? B_('Release until the hearing', ['jRelease', c.accused], 'alt') : B_('Arrest · ' + Sim.cellsFree(s, C) + ' cells free', ['jArrest', c.id], 'alt', Sim.cellsFree(s, C) <= 0)}</div>`;
+    if (!c.delegated) {
+      const ft = UI.fineTo || 'chest', big = C.id === 'crownmere', P_ = (lab, pen, cls) => B_(lab, ['jHear', c.id, Object.assign({ restitution: !!c.value, fineTo: ft }, pen), 'guilty'], cls || 'alt');
+      const owns = A && ((A.job && A.job.role === 'owner') || s.houses.some(x => x.owner === A.id && !x.tenants.includes(A.id)));
+      h += `<p><b>Hear it now:</b></p><div class="acts">${B_('Dismiss', ['jHear', c.id, {}, 'dismiss'], 'alt')}${P_('Guilty: a warning' + (c.value ? ', repay' : ''), {})}${P_('Guilty: fine ' + (big ? 40 : 20) + 'c', { fine: big ? 40 : 20 })}${P_('Guilty: fine ' + (big ? 80 : 40) + 'c, ' + (big ? 7 : 3) + ' days', { fine: big ? 80 : 40, days: big ? 7 : 3 })}${P_('Guilty: fine ' + (big ? 200 : 100) + 'c, ' + Sim.maxDays(C) + ' days', { fine: big ? 200 : 100, days: Sim.maxDays(C) })}${owns && (c.kind === 'corruption' || c.value >= 20) ? P_('Guilty: their property forfeit to the town', { confiscate: 'lawful' }) + P_('Guilty: take their property yourself', { confiscate: 'take' }, 'warn') : ''}</div>
+        <p class="why">Fines go to <button type="button" class="linklike" data-c='${JSON.stringify(['ui', 'fineTo', ft === 'chest' ? 'you' : 'chest'])}'>${ft === 'chest' ? 'the town chest' : 'your own purse'}</button>. A day in ${esc(C.place)} is about three months of their life.</p>`;
+    }
+  }
+  return h + `</div>`;
+}
+function pageCourt(s, C) {
+  const T = s.towns[C.id], judge = Sim.canJudge(s, C), cap = C.captain && s.people[C.captain], appeals = Sim.youHearAppeals(s);
+  let h = `<h3>Justice in ${esc(C.name)}</h3><p class="lead">${judge ? 'You hold this court: the captain answers to you, and the serious cases are yours to hear.' : 'Justice here is for ' + esc(C.authority) + '. You can only watch' + (appeals ? ', and hear appeals.' : '.')}</p>`;
+  h += `<div class="grid2"><div class="box"><h5>The guard</h5><dl class="kv"><dt>Watchmen</dt><dd>${T.watchN || 0} for ${Sim.living(s).filter(p => p.town === C.id).length} people</dd><dt>Captain</dt><dd>${cap ? esc(cap.name) : 'none'}</dd><dt>Town chest</dt><dd>${T.chest}c</dd></dl>
+    ${judge ? `<p>Size of the guard:</p><div class="seg" role="group">${[[0.75, 'Lean'], [1, 'Usual'], [1.25, 'Strong'], [1.5, 'Heavy']].map(([v, n]) => `<button type="button" aria-pressed="${(T.watchMul || 1) === v}" data-c='${JSON.stringify(['xGuard', C.id, v])}'>${n}</button>`).join('')}</div><p class="why">More men cost the town chest more, and the town feels safer.</p><div class="acts">${B_('Give 50c to the chest', ['xFund', C.id, 50], 'alt', s.coins < 50)}</div>` : ''}</div>
+    <div class="box"><h5>${esc(C.place.charAt(0).toUpperCase() + C.place.slice(1))}</h5><dl class="kv"><dt>Cells</dt><dd>${C.prisoners.length} of ${C.cells} in use</dd><dt>Condition</dt><dd>${Math.round(C.condition)}%</dd></dl>
+    ${judge ? `<div class="acts">${C.cells < C.baseCells + 4 ? B_('Add a cell · 150c', ['xCell', C.id], 'alt', T.chest < 150) : ''}${C.condition < 95 ? B_('Mend it · ' + Math.round((100 - C.condition) * 1.2) + 'c', ['xMend', C.id], 'alt') : ''}</div>` : ''}</div></div>`;
+  if (judge) { const ws = Sim.living(s).filter(p => p.town === C.id && p.job && p.job.what === Sim.TOWN_WATCH_JOB[C.id] && p.id !== C.captain).sort((a, b) => (b.skill || 1) - (a.skill || 1)).slice(0, 3); if (ws.length) h += `<p>Make captain:</p><div class="acts">${ws.map(p => B_(esc(p.name) + ' <small>' + Sim.skillLabel(p.skill || 1).toLowerCase() + '</small>', ['xCaptain', C.id, p.id], 'alt')).join('')}</div>`; }
+  h += `<h4>Open cases</h4>` + (C.cases.length ? C.cases.map(c => caseCardX(s, c, C)).join('') : '<p>No open cases.</p>');
+  h += `<h4>In ${esc(C.place)}</h4>` + (C.prisoners.length ? C.prisoners.map(pr => { const p = s.people[pr.pid]; return `<div class="staffrow"><span><b>${esc(p ? p.name : '?')}</b> · ${esc(pr.reason)} · ${pr.until != null ? (pr.sentence ? 'free on day ' : 'hearing by day ') + pr.until : ''}</span>${judge && !pr.sentence ? B_('Release', ['jRelease', pr.pid], 'alt') : ''}${appeals ? B_('Pardon', ['jPardon', pr.pid], 'alt') : ''}</div>`; }).join('') : '<p>No one is held.</p>');
+  if (C.closed.length) h += `<h4>Decided</h4>` + C.closed.slice(0, 8).map(c => { const A = s.people[c.accused]; return `<div class="staffrow"><span>Day ${c.day} · ${esc(Sim.CRIME[c.kind])}: ${esc(A ? A.name : '?')} · ${esc(c.outcome || '')}${c.overturned ? ' <b>Overturned.</b>' : ''}</span>${appeals && c.verdict === 'guilty' && !c.overturned ? B_('Overturn', ['jOverturn', c.id], 'alt') : ''}</div>`; }).join('');
+  if (C.log.length) h += `<h4>Court book</h4><ul class="notes">${C.log.slice(0, 6).map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('')}</ul>`;
+  return h;
+}
+function crownPowers(s) {
+  const R = s.realm; if (!R) return '';
+  const seat = k => R.council[k] === 'player' || R.crown === 'player', ruler = R.crown === 'player';
+  let h = '';
+  if (seat('treasury')) h += `<div class="box"><h5>Lord Treasurer: the town chests</h5><p>Send clerks to audit every town chest for money gone missing. Once a week.</p><div class="acts">${B_('Audit the chests', ['xAudit'], 'alt', R.lastAudit != null && s.day - R.lastAudit < 7)}</div></div>`;
+  if (seat('trade')) h += `<div class="box"><h5>Master of Trade: the markets</h5><p>Look into hoarding and market abuses in every town.${R.monopoly ? ' ' + esc(s.people[R.monopoly.pid].name) + ' holds the bakeries in a grip; the charter can break it.' : ''}</p><div class="acts">${B_('Inquire into the markets', ['xMarket'], 'alt', R.lastMarket != null && s.day - R.lastMarket < 5)}</div></div>`;
+  if (seat('war')) { const M = (R.military || []).reduce((x, m) => x + m.n, 0); h += `<div class="box"><h5>Marshal: the soldiers</h5><p>Soldiers sweep the roads of bandits (50c from the treasury). They are not the watch, and leave the towns to it.</p><div class="acts">${Object.keys(R.regions).filter(id => s.bandits && s.bandits[id] != null).map(id => B_('Sweep ' + esc(Sim.REGIONS[id].replace(/^the /, '')) + ' · bandits ' + Math.round(s.bandits[id]), ['xSoldiers', id], 'alt', R.treasury < 50)).join('')}</div>${M ? `<p>${M} captured bandits are held at the castle.</p><div class="acts">${B_('Hang them', ['xMartial', null, 'hang'], 'warn')}${B_('Press them into the garrisons', ['xMartial', null, 'press'], 'alt')}</div>` : ''}</div>`; }
+  if (seat('law')) h += `<div class="box"><h5>Lord Justice: detentions and officials</h5><p>Free anyone held without lawful cause in any court, and look into the king’s officers for misconduct. You can also overturn convictions and pardon on any court’s page.</p><div class="acts">${B_('Review every detention', ['xReview'], 'alt')}${B_('Investigate the officials', ['xMisconduct'], 'alt', R.lastMisconduct != null && s.day - R.lastMisconduct < 5)}</div></div>`;
+  if (ruler) h += `<div class="box"><h5>The crown: appointments</h5><p>Dismiss a councillor and name another, or take a lordship away. Lords do not forget it.</p><div class="acts">${Object.keys(Sim.COUNCIL).filter(k => R.council[k] && R.council[k] !== 'player').map(k => B_('Dismiss the ' + Sim.COUNCIL[k], ['xDismiss', k], 'warn')).join('')}${Object.keys(R.regions).filter(id => id !== 'crownmere' && Sim.regionLord(s, id) && Sim.regionLord(s, id) !== 'player').map(id => B_('Take ' + esc(Sim.REGIONS[id]) + ' from its lord', ['xDismissLord', id], 'warn')).join('')}</div></div>`;
+  return h ? `<h4>Powers of your office</h4><div class="grid2">${h}</div>` : '';
+}
 function pageJustice(s) {
+  const CS = Sim.setupCourts(s) || {}, ids = ['hearthmoor'].concat(Object.keys(CS));
+  const cur = ids.includes(UI.court) ? UI.court : 'hearthmoor';
+  let top = `<div class="seg towns" role="tablist">${ids.map(id => { const C = id === 'hearthmoor' ? s.justice : CS[id], mine = C && Sim.canJudge(s, C), n = C ? C.cases.filter(c => !c.delegated && mine).length : 0; return `<button type="button" aria-pressed="${cur === id}" data-c='${JSON.stringify(['ui', 'court', id])}'>${TOWN_NAMES[id]}${n ? ' <b class="num">' + n + '</b>' : ''}</button>`; }).join('')}</div>`;
+  return top + (cur === 'hearthmoor' ? pageJusticeHM(s) : pageCourt(s, CS[cur])) + crownPowers(s);
+}
+function pageJusticeHM(s) {
   const J = Sim.setupJustice(s);
   let h = `<h3>Justice in Hearthmoor</h3>`;
   if (!J) return h + '<p>Hearthmoor has no watch yet.</p>';
@@ -3628,6 +3682,7 @@ function taskList(s) {
   if (s.job) { const e = Sim.empById(s.job.emp); out.push({ who: e.boss, title: 'Your shift at ' + e.name, note: shiftText(e) + (Sim.inShift(s) ? ' · on now' : '') + ' · strikes ' + s.job.strikes + '/3', act: go('emp:' + e.id, 'Go to work') }); }
   const J = s.justice;
   if (J) {
+    for (const C of Object.values(s.courts || {}).filter(C => Sim.canJudge(s, C))) for (const c of C.cases.filter(c => !c.delegated)) { const A = s.people[c.accused]; out.push({ who: 'The guard of ' + C.name, title: 'Hear the ' + Sim.CRIME[c.kind].toLowerCase() + ' case against ' + (A ? A.name : 'someone'), note: c.what + '.', act: B_('Justice', ['ui', 'court', C.id]) }); }
     if (Sim.youJudge(s)) for (const c of J.cases.filter(c => !c.delegated)) { const A = s.people[c.accused]; out.push({ who: 'The watch', title: 'Hear the ' + Sim.CRIME[c.kind].toLowerCase() + ' case against ' + (A ? A.name : 'someone'), note: c.held ? 'Held: hear it by day ' + c.deadline + '.' : 'Reported on day ' + c.day + '.', act: B_('Justice', ['page', 'justice']) }); }
     for (const c of J.cases.filter(c => c.bribe && !c.bribe.refused && Sim.youJudge(s))) out.push({ who: (s.people[c.bribe.pid] || {}).name || 'Someone', title: 'A private offer of ' + c.bribe.amount + 'c', note: 'About the ' + Sim.CRIME[c.kind].toLowerCase() + ' case.', act: B_('Justice', ['page', 'justice']) });
     for (const k of J.secrets.filter(k => k.demanded && !k.demanded.paid && k.demanded.day)) out.push({ who: (s.people[k.demanded.pid] || {}).name || 'Someone', title: 'Wants ' + k.demanded.amount + 'c to keep quiet', note: 'They know ' + k.text + '.', act: B_('Justice', ['page', 'justice']) });
@@ -4325,6 +4380,7 @@ function uiCmd(k, v) {
     else { const was = UI.focus; UI.focus = null; UI.tab = 'shops'; if (was && was[0] === 'biz') { const b = G.biz[was[1]]; if (b) UI.btown = b.town || 'hearthmoor'; } else if (was) UI.btown = 'hearthmoor'; }
     if (UI.overlay !== 'book') openBook(); else renderBook(true); return;
   }
+  if (k === 'court') { UI.court = v; UI.tab = 'justice'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
   if (k === 'fineTo') { UI.fineTo = v; renderBook(); return; }
   if (k === 'leaseTerm') { UI.leaseTerm = v; renderBook(); return; }
   if (k === 'btown') { UI.btown = v; UI.focus = null; UI.tab = 'shops'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
@@ -5158,6 +5214,14 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.39', date: '5 November', title: 'Courts of the realm', items: [
+    'Every town has a court: a guard captain who answers to its lord, and a gaol in a building it already has. Greenhaven\u2019s cell under the Moot Hall (2), Stane Keep (4), Oakbridge Keep (5), Eastwatch Castle (6), and the King\u2019s Prison at Crownmere Castle (14). Each has its own cases, prisoners and record.',
+    'As a lord you hear the serious cases in your own region (big thefts, violence, corruption) and the captain deals with the rest. You can fine up to 100c and order up to ten days; the crown in Crownmere up to 200c and twenty days. You appoint the captain, set how big the guard is (paid from the town chest), give to the chest, and build or mend the gaol. An office in one place gives no orders in another.',
+    'Property can be taken as a penalty: forfeit to the town and sold into its chest, which is lawful; or taken for yourself, which works, frightens every owner in town, and is a theft that can reach the crown.',
+    'The council offices have work of their own. The Lord Treasurer audits the town chests for mayors with a hand in them. The Master of Trade looks into merchants hoarding grain, wood or ore. The Marshal sends soldiers (paid by the treasury, apart from the watch) to sweep bandits off the roads and tries the ones they bring back. The Lord Justice frees anyone held without lawful cause, investigates crooked officials, overturns convictions and pardons.',
+    'The crown can dismiss a councillor and name another, take a lordship from its lord, and pardon anyone in any court.',
+    'Your ledger now shows income from your lands and your share as a merchant\u2019s partner, so every coin has a line.'
+  ] },
   { v: '0.38', date: '5 November', title: 'Law and order', items: [
     'Every town keeps a watch sized to its people: about one for every forty, never fewer than two, and the capital a few more. Hearthmoor starts with 2, Greenhaven 2, Ironcrest 5, Oakbridge 6, Eastwatch 12 and Crownmere 33, and each grows or shrinks with its town.',
     'Hearthmoor has a village watch: named villagers paid from the village chest, who walk their rounds of the market, the houses, the east road or the watch house. As Elder you take people on (their kit is bought from the smith), set their duty and pay, and dismiss them. Unpaid guards lose heart and, after six days, leave.',
