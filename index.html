@@ -75,6 +75,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .tree .tnode { cursor: pointer; } .tree .tnode.dead rect { opacity: .85; } .tree .tnode.me rect { fill: #f7e3a6; }
 .tree .tnode:hover rect, .tree .tnode:focus rect { stroke-width: 3; } .tree .tnode.sel rect { stroke: #c9962b; } .tree .tplus { fill: #f4e7c8; font: 700 12px var(--f-body); }
 .warnbox { border-color: #8e2b22 !important; }
+.bizmenu { pointer-events: auto; max-width: 380px; margin: 6px auto 0; background: rgba(32, 26, 20, .92); color: #f1e3c2; border: 1px solid rgba(226, 181, 82, .6); border-radius: 10px; padding: 6px; max-height: 52vh; overflow-y: auto; display: grid; gap: 4px; }
+.bizrow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; background: rgba(255, 255, 255, .05); }
+.bizrow .bi { flex: 1; min-width: 0; font-size: 13px; line-height: 1.3; }
+.bizrow .bi b { color: #f5cf73; font-weight: 700; }
+.bizrow .bi .nm { display: block; font-size: 14px; color: #f1e3c2; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bizrow button { flex: none; border: 1px solid rgba(226, 181, 82, .7); background: transparent; color: #f1e3c2; border-radius: 6px; padding: 6px 10px; min-height: 36px; font-size: 13px; cursor: pointer; }
+.bizrow button.go { background: rgba(226, 181, 82, .18); }
 .chip.btn { pointer-events: auto; cursor: pointer; border: 1px solid rgba(226, 181, 82, .7); }
 .goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .goal em { font-family: var(--f-display); font-style: italic; color: #f5cf73; font-size: 14px; }
@@ -200,6 +207,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .seg { display: inline-flex; border: 1px solid var(--ink); border-radius: 6px; overflow: hidden; flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 8px 12px; min-height: 40px; font-size: 14px; }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--parch); }
+.seg.towns { display: flex; margin-bottom: 10px; }
+.seg.towns button { flex: 1 1 auto; }
+.forsale { margin-top: 12px; }
+.forsale summary { cursor: pointer; font-weight: 600; padding: 8px 0; min-height: 40px; }
 .setting { margin: 14px 0; }
 .setting > span { display: block; font-weight: 700; margin-bottom: 6px; }
 .setting p { margin: 4px 0 0; color: var(--ink-soft); font-size: 14px; }
@@ -450,6 +461,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     <button class="book-btn task-btn" id="taskBtn" type="button">Tasks<span id="taskN"></span></button><button class="book-btn" id="bookBtn" type="button">Ledger</button>
   </div>
   <div class="subhud" id="subhud"></div>
+  <div class="bizmenu" id="bizmenu" hidden></div>
   <div class="goal" id="goal"></div>
 </header>
 <div class="toasts" id="toasts" aria-live="polite"></div>
@@ -7360,7 +7372,7 @@ function cardHTML(s) {
     if (crafting) { acts.push(B_('Stop', ['stop'], 'alt')); if (q) acts.push(B_(`Serve ${q} waiting`, ['serve', shop.id])); }
     else { acts.push(B_(shop.work.loaded ? 'Finish the batch' : `${T.craft} ${Sim.goodsName(shop.trade, Ti.out)}`, ['craft', shop.id])); acts.push(B_('Mind the counter', ['serve', shop.id], 'alt')); }
     if (Object.keys(T.recipe).some(g => p.inv[g])) acts.push(B_('Store what I carry', ['store', shop.id], 'alt'));
-    acts.push(B_('Manage', ['page', 'shops'], 'alt'));
+    acts.push(B_('Manage', ['ui', 'manage', ['shop', shop.id]], 'alt'));
     const stock = Object.keys(T.recipe).map(g => shop.stock[g] + ' ' + g).join(', ');
     const status = `${Ti.name} · ${Sim.goodsName(shop.trade, shop.goods)} on the shelf · storage ${stock} (max ${Ti.cap}) · ${shop.price}c each${q ? ` · <b>${q} waiting</b>` : ''}${shop.worker ? ' · ' + esc(shop.worker.name) + ' works here' : ''}`;
     const busy = crafting || shop.work.loaded ? `<div class="sub">${T.crafting}: ${Math.round(shop.work.progress / Math.max(1, shop.work.need) * 100)}%</div>${progressBar(shop.work.progress / Math.max(1, shop.work.need))}` : '';
@@ -7534,6 +7546,16 @@ document.addEventListener('click', e => {
   act(c);
 });
 
+function myBusinesses(s) {
+  const here = townHere(), out = [];
+  s.shops.forEach(x => { const T = TR[x.trade]; out.push({ town: 'hearthmoor', ref: ['shop', x.id], name: Sim.tierOf(x).name + ' \u00b7 ' + T.name, go: here === 'hearthmoor' ? 'plot' + x.plot : null, line: `<b>${x.goods}</b> ${esc(T.product)} on the shelf${x.manager ? ' \u00b7 run by ' + esc(x.manager.name.split(' ')[0]) : x.worker ? ' \u00b7 ' + esc(x.worker.name.split(' ')[0]) : ''}` }); });
+  Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => {
+    const town = b.town || 'hearthmoor', key = Object.keys(Sim.LOCS).find(k => Sim.LOCS[k].biz === b.id);
+    const last = b.lastProfit != null ? b.lastProfit : null;
+    out.push({ town, ref: ['biz', b.id], name: Sim.empById(b.id).name, go: key && town === here ? key : null, line: `${esc(TOWN_NAMES[town] || town)}${b.lease ? ' \u00b7 let out' : ' \u00b7 ' + b.staff.length + ' staff'}${last != null ? ' \u00b7 <b>' + money(last) + '</b> last day' : ''}${b.closed ? ' \u00b7 closed' : ''}` });
+  });
+  return out;
+}
 function hud(s) {
   { const n = taskList(s).filter(x => !x.soft).length, el = $('taskN'); if (el && el.textContent !== String(n || '')) el.textContent = n || ''; }
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
@@ -7546,7 +7568,11 @@ function hud(s) {
   if (s.job) { const e = Sim.empById(s.job.emp), on = Sim.inShift(s); chips.push(`<span class="chip num ${on ? 'on' : ''}">${on ? 'On shift' : 'Job'}: ${esc(e.name)} ${shiftText(e)}</span>`); }
   { const w = waypointPos(); if (w) chips.push(`<span class="chip num btn" data-c='["ui","clearWaypoint"]' role="button" tabindex="0">Finding ${esc(w.name.split(' ')[0])}${w.near ? ' \u00b7 ' + Math.round(Math.hypot(s.player.x - w.x, s.player.z - w.z)) + ' m' : ' \u00b7 in ' + esc(TOWN_NAMES[w.town])} \u00d7</span>`); }
   if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
-  s.shops.forEach(x => chips.push(`${TR[x.trade].name}: <b>${x.goods}</b> ${TR[x.trade].product}${x.worker ? ' · ' + esc(x.worker.name) : ''}`));
+  const mine = myBusinesses(s);
+  if (mine.length) chips.push(`<span class="chip num btn" data-c='["ui","bizMenu"]' role="button" tabindex="0" aria-expanded="${!!UI.bizMenu}">${mine.length === 1 ? 'Your business' : 'Businesses <b>' + mine.length + '</b>'} ${UI.bizMenu ? '\u25b4' : '\u25be'}</span>`);
+  const bm = UI.bizMenu && mine.length && !UI.overlay ? mine.map(x => `<div class="bizrow"><div class="bi"><span class="nm">${esc(x.name)}</span>${x.line}</div>${x.go && x.go !== UI.loc ? `<button type="button" data-c='${esc(JSON.stringify(['goto', x.go]))}'>Go</button>` : ''}<button type="button" class="go" data-c='${esc(JSON.stringify(['ui', 'manage', x.ref]))}'>Manage</button></div>`).join('') : '';
+  if ($('bizmenu').innerHTML !== bm) $('bizmenu').innerHTML = bm;
+  $('bizmenu').hidden = !bm;
   const html = chips.map(c => c.startsWith('<span') ? c : `<span class="chip num">${c}</span>`).join('');
   if ($('subhud').innerHTML !== html) $('subhud').innerHTML = html;
   const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
@@ -7559,7 +7585,7 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['realm', 'Realm'], ['goals', 'Goals']];
+const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Businesses'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['realm', 'Realm'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
@@ -7573,7 +7599,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ manage: pageManage, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -7640,17 +7666,34 @@ function managerNews(s) {
 function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
 function willing(shop, price, trav) { const T = TR[shop.trade]; return Math.round(100 * (1 - 0.5 * (1 + erf((price - Sim.wtpMean(shop, trav)) / (T.sd * Math.SQRT2))))); }
 function willText(shop) { return `About ${willing(shop, shop.price, false)}% of villagers and ${willing(shop, shop.price, true)}% of travelers will pay this.`; }
-function pageShops(s) {
-  let html = `<h3>Your Shops</h3><p class="lead">Set prices, give orders, and build bigger.</p>`;
+function businessTowns(s) {
+  const mine = myBusinesses(s), towns = Object.keys(TOWN_NAMES), count = t => mine.filter(x => x.town === t).length;
+  let t0 = UI.btown;
+  if (!t0) { const h = townHere(); t0 = count(h) ? h : (towns.find(count) || h); }
+  let html = `<div class="seg towns" role="tablist">${towns.map(t => `<button type="button" role="tab" aria-pressed="${t === t0}" data-c='${JSON.stringify(['ui', 'btown', t])}'>${TOWN_NAMES[t]}${count(t) ? ` <b class="num">${count(t)}</b>` : ''}</button>`).join('')}</div>`;
+  const here = mine.filter(x => x.town === t0);
+  html += here.length ? `<div class="grid2">${here.map(x => `<div class="box"><h5>${esc(x.name)}</h5><p>${x.line}</p><div class="acts">${B_('Manage', ['ui', 'manage', x.ref])}${x.go && x.go !== UI.loc ? B_('Go there', ['goto', x.go], 'alt') : ''}</div></div>`).join('')}</div>` : `<p>You own nothing in ${TOWN_NAMES[t0]} yet.</p>`;
+  if (t0 === 'hearthmoor') {
+    const free = Sim.PLOTS.map((p, i) => i).filter(i => !Sim.shopOnPlot(s, i) && (!Sim.PLOTS[i].grant || s.village.landGranted));
+    if (!s.shops.length) html += `<p>Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the shops on the square, then open your own on an empty lot.</p>`;
+    else if (free.length) html += `<p>${free.length === 1 ? 'One lot is' : free.length + ' lots are'} still empty on the square. Visit one to open another trade you have learned.</p>`;
+  }
+  const sale = Object.values(s.biz || {}).filter(b => (b.town || 'hearthmoor') === t0 && b.owner !== 'player' && s.people[b.owner]);
+  if (sale.length) html += `<details class="forsale"><summary>Others you could buy in ${TOWN_NAMES[t0]} (${sale.length})</summary><div class="grid2">${sale.map(b => bizBox(s, b)).join('')}</div></details>`;
+  return html;
+}
+function pageShops(s, only) {
+  let html = only ? '' : `<h3>Your Businesses</h3><p class="lead">Pick a town, then tap Manage on the place you want to run.</p>`;
+  if (!only) return html + businessTowns(s);
   if (!s.shops.length) {
     html += `<p>You own no shops yet. Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the four shops on the square, then open your own on an empty lot.</p><table class="trades"><thead><tr><th>Trade</th><th>Learn at</th><th>To open</th><th>Makes</th></tr></thead><tbody>
       ${Sim.TRADE_KEYS.map(k => { const T = TR[k], e = Sim.EMPLOYERS.find(x => x.trade === k); return `<tr><td>${T.name} ${Sim.learned(s, k) ? '<span class="pill yes">learned</span>' : ''}</td><td>${esc(e.name)}</td><td>${Sim.costText(T.tiers[0].cost)}</td><td>${T.many} from ${Sim.recipeText(k)}</td></tr>`; }).join('')}</tbody></table>`;
     return html;
   }
-  for (const shop of s.shops) {
+  for (const shop of s.shops.filter(x => !only || x.id === only)) {
     const T = TR[shop.trade], Ti = Sim.tierOf(shop), next = T.tiers[shop.tier + 1];
     const unit = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * Sim.BUY[g], 0) / Ti.out;
-    html += `<h4>${esc(Ti.name)} · ${esc(Sim.PLOTS[shop.plot].name)}</h4><div class="grid2"><div class="box"><dl class="kv">
+    html += `${only ? '' : `<h4>${esc(Ti.name)} · ${esc(Sim.PLOTS[shop.plot].name)}</h4>`}<div class="grid2"><div class="box"><dl class="kv">
       <dt>Each batch</dt><dd>${Sim.goodsName(shop.trade, Ti.out)} from ${Sim.recipeText(shop.trade)}</dd><dt>Time</dt><dd>${Ti.min} min</dd>
       <dt>Storage and shelf</dt><dd>${Ti.cap} each</dd><dt>Open to customers</dt><dd>${String(T.hours[0]).padStart(2, '0')}:00–${T.hours[1]}:00</dd>
       <dt>Travelers a day</dt><dd>about ${Ti.travelers}</dd><dt>Upkeep</dt><dd>${Ti.upkeep}c a day</dd><dt>Supplies if bought</dt><dd>${unit.toFixed(2)}c each</dd></dl></div>
@@ -7668,7 +7711,7 @@ function pageShops(s) {
     html += `<div class="acts">${UI.confirm === 'sell' + shop.id ? `<div class="confirm">Sell this ${T.name.toLowerCase()} for ${refund}c? Its building, stock${shop.worker ? ' and ' + esc(shop.worker.name) + '\u2019s job' : ''} go with it, and the lot is free for another trade. ${B_('Yes, sell it', ['sellShop', shop.id], 'warn')} ${B_('Keep it', ['ui', 'confirm', null], 'alt')}</div>` : B_(`Sell this shop&hellip;<small>half its building cost back: ${refund}c</small>`, ['ui', 'confirm', 'sell' + shop.id], 'alt')}</div>`;
   }
   const free = Sim.PLOTS.map((p, i) => i).filter(i => !Sim.shopOnPlot(s, i) && (!Sim.PLOTS[i].grant || s.village.landGranted));
-  if (free.length) html += `<p>${free.length === 1 ? 'One lot is' : free.length + ' lots are'} still empty on the square. Visit one to open another trade you have learned.</p>`;
+  if (free.length && !only) html += `<p>${free.length === 1 ? 'One lot is' : free.length + ' lots are'} still empty on the square. Visit one to open another trade you have learned.</p>`;
   return html;
 }
 const mgrLabel = k => k < 0.85 ? 'Careless, cheap' : k < 1.1 ? 'Steady' : 'Sharp, costs more';
@@ -7688,17 +7731,32 @@ function managerBox(s, kind, ref, title) {
   return `<div class="box"><h5>${esc(title)}: no manager</h5><p>${kind === 'shop' ? 'A manager keeps a worker on, orders supplies, sets prices and reports to you each evening.' : 'A manager hires and keeps staff, pays fair wages and small repairs, and reports to you each evening.'}</p>
     ${cands.length ? cands.map(c => `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${mgrLabel(c.skill)} · now ${esc(c.now.toLowerCase())}</span>${B_('Hire · ' + c.ask + 'c a day', ['hireManager', kind, ref, c.pid], 'alt')}</div>`).join('') : '<p>Nobody suitable in town right now.</p>'}</div>`;
 }
-function pageStaff(s) {
-  let html = `<h3>Staff</h3><p class="lead">Hire help, set pay, and see what they are doing.</p>`;
+function pageManage(s) {
+  const F = UI.focus || [], all = B_('Show all businesses', ['ui', 'manage', null], 'alt');
+  if (F[0] === 'shop') {
+    const shop = Sim.shopById(s, F[1]);
+    if (!shop) return `<p>That shop is no longer yours.</p><div class="acts">${all}</div>`;
+    return `<h3>${esc(Sim.tierOf(shop).name)}</h3><p class="lead">${esc(Sim.PLOTS[shop.plot].name)} · just this shop.</p><div class="acts">${all}</div>` + pageShops(s, shop.id) + pageStaff(s, shop.id);
+  }
+  if (F[0] === 'biz') {
+    const b = s.biz[F[1]];
+    if (!b || b.owner !== 'player') return `<p>That business is no longer yours.</p><div class="acts">${all}</div>`;
+    return `<h3>${esc(Sim.empById(b.id).name)}</h3><p class="lead">${esc(TOWN_NAMES[b.town || 'hearthmoor'])} · just this business.</p><div class="acts">${all}</div><div class="grid2">${bizBox(s, b)}${managerBox(s, 'biz', b.id, 'Manager')}</div>`;
+  }
+  return pageShops(s);
+}
+function pageStaff(s, only) {
+  let html = only ? '' : `<h3>Staff</h3><p class="lead">Hire help, set pay, and see what they are doing.</p>`;
   const owned = Object.values(s.biz || {}).filter(b => b.owner === 'player');
-  if (s.shops.length || owned.length) {
+  if (only) { const x = Sim.shopById(s, only); if (x) html += managerBox(s, 'shop', x.id, 'Your ' + TR[x.trade].name.toLowerCase()); }
+  else if (s.shops.length || owned.length) {
     html += `<h4>Managers</h4><p>Put someone you trust in charge, set a daily budget, and they run the place while you are elsewhere. Their reports and anything they need you for appear in the ledger.</p><div class="grid2">`;
     s.shops.forEach(x => { html += managerBox(s, 'shop', x.id, 'Your ' + TR[x.trade].name.toLowerCase()); });
     owned.forEach(b => { html += managerBox(s, 'biz', b.id, Sim.empById(b.id).name); });
     html += `</div>`;
   }
   if (!s.shops.length) return html + (owned.length ? '' : `<p>Once you own a shop you can hire someone to run it while you do other things.</p>`);
-  for (const shop of s.shops.filter(x => x.worker)) {
+  for (const shop of s.shops.filter(x => x.worker && (!only || x.id === only))) {
     const w = shop.worker, st = s.stats.shops[shop.id] || { workerMin: 0, batchesBy: { worker: 0 }, servedBy: { worker: 0 } }, H = Sim.workerHours(shop);
     html += `<div class="box"><h5>${esc(w.name)} · your ${TR[shop.trade].name.toLowerCase()}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(w.skill)} (${Math.round(w.skill * 100)}% speed)</dd><dt>Asked for</dt><dd>${w.ask}c a day</dd><dt>Mood</dt><dd>${Math.round(w.mood)}/100</dd><dt>Hours today</dt><dd>${Sim.hm(st.workerMin)}</dd><dt>Batches today</dt><dd>${st.batchesBy.worker}</dd><dt>Served today</dt><dd>${st.servedBy.worker}</dd></dl>
       <div class="bar mood ${w.mood < 30 ? 'low' : ''}"><i style="width:${Math.round(w.mood)}%"></i></div>
@@ -7707,7 +7765,7 @@ function pageStaff(s) {
       <p>${w.wage < w.ask ? 'Below what they asked. Mood drops each day.' : w.wage > w.ask ? 'Above the asking wage. Mood rises faster.' : 'Matches the asking wage.'} Paid at 21:00. Below 30 mood they work slower, and a miserable worker quits after a warning.</p>
       <div class="acts">${UI.confirm === 'fire' + shop.id ? `<div class="confirm">Let ${esc(w.name)} go? ${B_('Yes, let them go', ['fire', shop.id], 'warn')} ${B_('Keep them', ['ui', 'confirm', null], 'alt')}</div>` : B_('Let go&hellip;', ['ui', 'confirm', 'fire' + shop.id], 'alt')}</div></div>`;
   }
-  const open = s.shops.filter(x => !x.worker);
+  const open = s.shops.filter(x => !x.worker && (!only || x.id === only));
   if (open.length) {
     html += `<h4>Looking for work today</h4><p>Pick someone and set a daily wage. Paying below what they ask saves coin but makes them unhappy. New faces come each morning.</p><div class="grid2">`;
     s.applicants.forEach((a, i) => {
@@ -7851,7 +7909,8 @@ function oakBizCard(s, Lh, walking) {
   let html = `<h2>${esc(Lh.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${dist}.${blurb} ${own ? 'It is yours.' : 'Run by ' + esc(owner ? owner.name : site.boss) + '.'} ${b.staff.length} ${b.staff.length === 1 ? 'hand' : 'hands'} · last day ${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit.${rivals.length ? ' Competes with ' + esc(rivals.join(' and ')) + '.' : ''}</div>${walking}`;
   const acts = [];
   if (!own && owner) { const price = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)); }
-  acts.push(B_('Businesses', ['page', 'property'], 'alt'));
+  if (own) acts.push(B_('Manage', ['ui', 'manage', ['biz', b.id]]));
+  acts.push(B_(own ? 'All businesses' : 'Businesses', ['ui', 'btown', Lh.town], 'alt'));
   return html + `<div class="acts">${acts.join('')}</div>`;
 }
 function oakHallCard(s, walking, id) {
@@ -8558,7 +8617,15 @@ const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 function fullNewName() { const f = cap1((UI.newFirst || '').replace(/\s+/g, '')) || 'Wren', l = cap1((UI.newLast || '').replace(/\s+/g, '')); return l ? f + ' ' + l : f; }
 function uiCmd(k, v) {
   if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
-  if (k === 'tab') { UI.tab = v; UI.confirm = null; renderBook(true); return; }
+  if (k === 'tab') { UI.tab = v; UI.confirm = null; UI.focus = null; renderBook(true); return; }
+  if (k === 'bizMenu') { UI.bizMenu = !UI.bizMenu; if (G) hud(G); return; }
+  if (k === 'manage') {
+    UI.confirm = null; UI.bizMenu = false;
+    if (v) { UI.focus = v; UI.tab = 'manage'; }
+    else { const was = UI.focus; UI.focus = null; UI.tab = 'shops'; if (was && was[0] === 'biz') { const b = G.biz[was[1]]; if (b) UI.btown = b.town || 'hearthmoor'; } else if (was) UI.btown = 'hearthmoor'; }
+    if (UI.overlay !== 'book') openBook(); else renderBook(true); return;
+  }
+  if (k === 'btown') { UI.btown = v; UI.focus = null; UI.tab = 'shops'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
   if (k === 'ptown') { UI.ptown = v; renderBook(true); return; }
   if (k === 'tree') { UI.tree = v; UI.treeB = null; UI.tab = 'tree'; if (UI.overlay !== 'book') openBook('tree'); else renderBook(true); return; }
   if (k === 'treeTap') { if (UI.treeOpen) UI.treeOpen.add(v); UI.treeSel = v; renderBook(true); return; }
@@ -9387,7 +9454,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0031';
+const BUILD = '2026.11.05.0058';
 const NOTES = [
   { v: '0.34', date: '5 November', title: 'Making it matter', items: [
     'One fair economy. Every business, yours or not, now sells into the same demand: a town\u2019s grown people and its travellers, shared between every seller of that trade by how many hands each has. Ingredients cost what the town\u2019s market charges that day, and bigger towns cost more to trade in but have more custom to win. Your Hearthmoor shops now share the village\u2019s custom with Gerd, Hollin, Ysolde and Ash.',
@@ -9399,6 +9466,8 @@ const NOTES = [
     'Exile is a chapter of its own: win back three sworn allies, raise a war chest, win over the towns and expose the new ruler\u2019s failings. Waiting alone no longer brings you back.',
     'A lord holds one region at a time. You can move into its seat, which takes your family\u2019s name: Varrow Manor becomes your manor, Stane Keep your keep. The ruler lives in Crownmere castle.',
     'Choose a first and a family name for your character. And choose how you begin: from nothing, as a merchant with a Bread Stand, as the Elder of Hearthmoor, as lord of Greenhaven, or as ruler of Alderwyn.',
+    'Manage at one of your shops or businesses now opens just that place: its prices, stock, upgrades, staff and manager. Show all businesses goes back to the full list.',
+    'Your shop counters at the top are now one Businesses button. Tap it for a short list with Go and Manage on each. The Shops page is now Businesses, sorted into a tab for each town, with the ones you could buy folded away underneath.',
     'A Tasks button at the top shows everything you have been asked to do: the elder\u2019s errands, orders, contracts, promises, your shifts and your managers\u2019 decisions, each with a button to head there. The number on it counts what is waiting.',
     'Find people: on anyone\u2019s page in the Ledger, tap "Find them" for a gold light over them and a mark on the minimap. If they are in another town, the minimap points the way.',
     'If you die and carry on as a young child, a regent runs the family\u2019s affairs until they come of age at 16. Your village council seat now falls vacant at a death, and can be won back at a moot.'
