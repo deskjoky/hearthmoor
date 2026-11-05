@@ -3689,6 +3689,10 @@
       const b = s.biz[id]; if (!b.lease) continue;
       const q = s.people[b.lease.pid];
       if (!q || q.status !== 'here' || b.owner !== 'player') { endLease(s, b, 'The lease on ' + empById(id).name + ' has ended.'); continue; }
+      if (b.lease.until && s.day >= b.lease.until) {
+        if (b.lease.renew && (b.lease.behind || 0) < 2) { b.lease.until = s.day + (b.lease.term || 30); event(s, 'The lease on ' + empById(id).name + ' runs on for another ' + (b.lease.term || 30) + ' days, until day ' + b.lease.until + '.', 'info'); }
+        else { endLease(s, b, 'The lease on ' + empById(id).name + ' is up. ' + q.name + ' hands back the keys.'); continue; }
+      }
       const pay = Math.max(0, Math.min(b.lease.rent, q.purse));
       q.purse -= pay; earn(s, pay); s.stats.rent += pay; s.rec.rentCollected += pay;
       if (pay < b.lease.rent) { b.lease.behind = (b.lease.behind || 0) + 1; if (b.lease.behind >= 4) endLease(s, b, q.name + ' could not keep up the rent on ' + empById(id).name + ' and has handed back the keys.'); } else b.lease.behind = 0;
@@ -3709,6 +3713,8 @@
       event(s, q.name + ' offers ' + amount + 'c for ' + L.name + ' (you asked ' + L.ask + 'c). See the Property page.', 'coin');
     }
   }
+  const leaseRent = (offer, term) => Math.max(4, offer + (term === 14 ? 1 : term === 60 ? -1 : 0));
+  const leaseBreakable = (s, b) => !b.lease || !b.lease.until || s.day >= b.lease.until || (b.lease.behind || 0) >= 2;
   function endLease(s, b, why) { const q = b.lease && s.people[b.lease.pid]; if (q && q.job && q.job.type === 'biz' && q.job.biz === b.id) { q.job = null; plog(s, q, why); } b.lease = null; event(s, why, 'info'); }
   function leaseCandidates(s, id) {
     const b = s.biz[id], town = b.town || 'hearthmoor';
@@ -4068,6 +4074,7 @@
       }
       case 'fireStaff': {
         const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
+        if (bz.lease) return fail('It is let to ' + ((s.people[bz.lease.pid] || {}).name || 'a tenant') + ' until day ' + bz.lease.until + ': they run it and choose its staff.');
         const w = s.people[b]; if (!w) return fail('No such person.');
         loseJob(s, w, 'Let go by ' + s.name + ' from ' + empById(a).name + '.');
         w.opinion = clamp(w.opinion - 30, -100, 100); s.rec.staffFired++; approveHolder(s, 'player', -3);
@@ -4076,6 +4083,7 @@
       }
       case 'hireStaff': {
         const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
+        if (bz.lease) return fail('It is let to ' + ((s.people[bz.lease.pid] || {}).name || 'a tenant') + ' until day ' + bz.lease.until + ': they run it and choose its staff.');
         const w = s.people[b]; if (!w || w.job) return fail('They are not looking for work.');
         if (bz.staff.length >= 3) return fail('Three staff is all the shop can use.');
         bz.staff.push({ pid: w.id, wage: clamp(c || 7, 1, 40) }); w.job = { type: 'biz', biz: a, role: 'hand' };
@@ -4086,6 +4094,7 @@
       }
       case 'setStaffWage': {
         const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
+        if (bz.lease) return fail('It is let to ' + ((s.people[bz.lease.pid] || {}).name || 'a tenant') + ' until day ' + bz.lease.until + ': they run it and choose its staff.');
         const st = bz.staff.find(x => x.pid === b); if (st) st.wage = clamp(Math.round(c), 1, 40);
         return ok();
       }
@@ -4142,6 +4151,7 @@
         const o = a === 'house' ? houseById(s, b) : s.biz[b];
         if (!o || o.owner !== 'player') return fail('That is not yours to sell.');
         if (a === 'house' && s.player.house === b) return fail('You live there. Move out first.');
+        if (a === 'biz' && c > 0 && o.lease && !leaseBreakable(s, o)) return fail('It is let until day ' + o.lease.until + '. Sell it once the lease is up.');
         o.forSale = c > 0 ? Math.round(c) : null; if (!o.forSale) s.offers = (s.offers || []).filter(x => !(x.kind === a && x.id === b));
         event(s, o.forSale ? (a === 'house' ? o.name : empById(b).name) + ' is up for sale at ' + o.forSale + 'c. Buyers will come to you.' : 'Taken off the market.', 'info');
         return ok();
@@ -4163,18 +4173,20 @@
         return ok();
       }
       case 'leaseBiz': {
-        const b = s.biz[a]; if (!b || b.owner !== 'player') return fail('That is not your business.');
+        const termArg = b; { const b = s.biz[a]; if (!b || b.owner !== 'player') return fail('That is not your business.');
         if (b.lease) return fail('It is already let.');
         const c0 = leaseCandidates(s, a).find(x => x.pid === c); if (!c0) return fail('They cannot take it on.');
         const q = s.people[c0.pid];
         if (b.manager) { releaseManager(s, b.manager, 'The business was let to ' + q.name + '.'); b.manager = null; }
         if (q.job) loseJob(s, q, 'Left to run ' + empById(a).name + ' on a lease.');
         q.job = { type: 'biz', biz: a, role: 'owner' }; b.staff = b.staff.filter(x => x.pid !== q.id);
-        b.lease = { pid: q.id, rent: c0.offer, since: s.day }; plog(s, q, 'Took a lease on ' + empById(a).name + ' from ' + s.name + ' at ' + c0.offer + 'c a day.');
-        event(s, q.name + ' takes ' + empById(a).name + ' on a lease and will pay you ' + c0.offer + 'c a day. They keep whatever it earns above that.', 'good');
-        return ok();
+        const term = [14, 30, 60].includes(termArg) ? termArg : 30, rent = leaseRent(c0.offer, term);
+        b.lease = { pid: q.id, rent, since: s.day, term, until: s.day + term, renew: true }; plog(s, q, 'Took a ' + term + '-day lease on ' + empById(a).name + ' from ' + s.name + ' at ' + rent + 'c a day.');
+        event(s, q.name + ' takes ' + empById(a).name + ' on a ' + term + '-day lease and will pay you ' + rent + 'c a day, until day ' + b.lease.until + '. They run it and keep whatever it earns above that.', 'good');
+        return ok(); }
       }
-      case 'endLease': { const b = s.biz[a]; if (!b || !b.lease) return fail('It is not let.'); endLease(s, b, 'You take ' + empById(a).name + ' back from ' + (s.people[b.lease.pid] || {}).name + '.'); return ok(); }
+      case 'leaseRenew': { const b = s.biz[a]; if (!b || !b.lease || b.owner !== 'player') return fail('It is not let.'); b.lease.renew = !!c; return ok(); }
+      case 'endLease': { const b = s.biz[a]; if (!b || !b.lease) return fail('It is not let.'); if (!leaseBreakable(s, b)) return fail('The lease runs until day ' + b.lease.until + '. You can end it early only if the rent falls 2 days behind.'); endLease(s, b, 'You take ' + empById(a).name + ' back from ' + (s.people[b.lease.pid] || {}).name + '.'); return ok(); }
       case 'giftCrown': {
         const R = s.realm; if (!R || isRuler(s)) return fail('There is no one to give it to.');
         const n = Math.round(a); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
@@ -4429,6 +4441,7 @@
       case 'hireManager': {
         // a: 'shop' or 'biz', b: its id, c: the person
         const o = a === 'shop' ? shopById(s, b) : s.biz[b];
+        if (o && o.lease) return fail('It is let: the tenant runs it.');
         if (!o || (a === 'biz' && o.owner !== 'player')) return fail('That is not your business.');
         if (o.manager) return fail('It already has a manager.');
         const cand = managerCandidates(s, a, b).find(x => x.pid === c); if (!cand) return fail('They cannot take the post.');
@@ -4683,7 +4696,7 @@
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,

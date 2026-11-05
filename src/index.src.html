@@ -2984,7 +2984,7 @@ function myBusinesses(s) {
   Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => {
     const town = b.town || 'hearthmoor', key = Object.keys(Sim.LOCS).find(k => Sim.LOCS[k].biz === b.id || Sim.LOCS[k].emp === b.id);
     const last = b.lastProfit != null ? b.lastProfit : null;
-    out.push({ town, ref: ['biz', b.id], name: Sim.empById(b.id).name, go: key && town === here ? key : null, line: b.lease ? `${esc(TOWN_NAMES[town] || town)} \u00b7 let \u00b7 <b>${b.lease.rent}c</b> a day${b.lease.behind ? ' \u00b7 ' + b.lease.behind + ' days behind' : ''}` : `${esc(TOWN_NAMES[town] || town)}${b.lease ? ' \u00b7 let out' : ' \u00b7 ' + b.staff.length + ' staff'}${b.lastSold ? ' \u00b7 sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + (b.lastSold === 1 ? ' sale' : ' sales')) : ''}${last != null ? ' \u00b7 <b>' + money(last) + '</b> last day' : ''}${b.slump ? ' \u00b7 bad spell' : ''}${b.closed ? ' \u00b7 closed' : ''}` });
+    out.push({ town, ref: ['biz', b.id], name: Sim.empById(b.id).name, go: key && town === here ? key : null, full: b.lease ? `${esc(TOWN_NAMES[town] || town)} \u00b7 leased to ${esc(((s.people[b.lease.pid] || {}).name || 'a tenant').split(' ')[0])} until day ${b.lease.until || '?'} \u00b7 <b>${b.lease.rent}c</b> a day${b.lease.behind ? ' \u00b7 ' + b.lease.behind + ' days behind' : ''}` : null, line: b.lease ? `${esc(TOWN_NAMES[town] || town)} \u00b7 <b>${b.lease.rent}c</b> a day${b.lease.behind ? ' \u00b7 ' + b.lease.behind + ' behind' : ''}` : `${esc(TOWN_NAMES[town] || town)}${b.lease ? ' \u00b7 let out' : ' \u00b7 ' + b.staff.length + ' staff'}${b.lastSold ? ' \u00b7 sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + (b.lastSold === 1 ? ' sale' : ' sales')) : ''}${last != null ? ' \u00b7 <b>' + money(last) + '</b> last day' : ''}${b.slump ? ' \u00b7 bad spell' : ''}${b.closed ? ' \u00b7 closed' : ''}` });
   });
   return out;
 }
@@ -3108,7 +3108,7 @@ function businessTowns(s) {
   if (!t0) { const h = townHere(); t0 = count(h) ? h : (towns.find(count) || h); }
   let html = `<div class="seg towns" role="tablist">${towns.map(t => `<button type="button" role="tab" aria-pressed="${t === t0}" data-c='${JSON.stringify(['ui', 'btown', t])}'>${TOWN_NAMES[t]}${count(t) ? ` <b class="num">${count(t)}</b>` : ''}</button>`).join('')}</div>`;
   const here = mine.filter(x => x.town === t0);
-  html += here.length ? `<div class="grid2">${here.map(x => `<div class="box"><h5>${esc(x.name)}</h5><p>${x.line}</p><div class="acts">${B_('Manage', ['ui', 'manage', x.ref])}${x.go && x.go !== UI.loc ? B_('Go there', ['goto', x.go], 'alt') : ''}</div></div>`).join('')}</div>` : `<p>You own nothing in ${TOWN_NAMES[t0]} yet.</p>`;
+  html += here.length ? `<div class="grid2">${here.map(x => `<div class="box"><h5>${esc(x.name)}</h5><p>${x.full || x.line}</p><div class="acts">${B_('Manage', ['ui', 'manage', x.ref])}${x.go && x.go !== UI.loc ? B_('Go there', ['goto', x.go], 'alt') : ''}</div></div>`).join('')}</div>` : `<p>You own nothing in ${TOWN_NAMES[t0]} yet.</p>`;
   if (t0 === 'hearthmoor') {
     const free = Sim.PLOTS.map((p, i) => i).filter(i => !Sim.shopOnPlot(s, i) && (!Sim.PLOTS[i].grant || s.village.landGranted));
     if (!s.shops.length) html += `<p>Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the shops on the square, then open your own on an empty lot.</p>`;
@@ -3177,7 +3177,7 @@ function pageManage(s) {
   if (F[0] === 'biz') {
     const b = s.biz[F[1]];
     if (!b || b.owner !== 'player') return `<p>That business is no longer yours.</p><div class="acts">${all}</div>`;
-    return `<h3>${esc(Sim.empById(b.id).name)}</h3><p class="lead">${esc(TOWN_NAMES[b.town || 'hearthmoor'])} · just this business.</p><div class="acts">${all}</div><div class="grid2">${bizBox(s, b)}${managerBox(s, 'biz', b.id, 'Manager')}</div>`;
+    return `<h3>${esc(Sim.empById(b.id).name)}</h3><p class="lead">${esc(TOWN_NAMES[b.town || 'hearthmoor'])} · just this business.</p><div class="acts">${all}</div><div class="grid2">${bizBox(s, b)}${b.lease ? '' : managerBox(s, 'biz', b.id, 'Manager')}</div>`;
   }
   return pageShops(s);
 }
@@ -3188,7 +3188,7 @@ function pageStaff(s, only) {
   else if (s.shops.length || owned.length) {
     html += `<h4>Managers</h4><p>Put someone you trust in charge, set a daily budget, and they run the place while you are elsewhere. Their reports and anything they need you for appear in the ledger.</p><div class="grid2">`;
     s.shops.forEach(x => { html += managerBox(s, 'shop', x.id, 'Your ' + TR[x.trade].name.toLowerCase()); });
-    owned.forEach(b => { html += managerBox(s, 'biz', b.id, Sim.empById(b.id).name); });
+    owned.filter(b => !b.lease).forEach(b => { html += managerBox(s, 'biz', b.id, Sim.empById(b.id).name); });
     html += `</div>`;
   }
   if (!s.shops.length) return html + (owned.length ? '' : `<p>Once you own a shop you can hire someone to run it while you do other things.</p>`);
@@ -3443,7 +3443,7 @@ const SignKit = (function () {
 function ownedBizCard(s, b, walking) {
   const e = Sim.empById(b.id), town = b.town || 'hearthmoor', m = b.manager, ar = e && e.x != null ? Sim.areaOf(town, e.x, e.z).name : '';
   const staff = b.staff.map(st => s.people[st.pid]).filter(Boolean);
-  let html = `<h2>${esc(e.name)} <span class="pill yes">yours</span>${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${esc(TOWN_NAMES[town])}${ar ? ', ' + ar : ''} · ${b.lease ? 'let to ' + esc((s.people[b.lease.pid] || {}).name || 'a tenant') + ' for ' + b.lease.rent + 'c a day' : (m ? 'run by your manager ' + esc(m.name) : 'no manager') + ' · ' + (staff.length ? staff.length + ' staff: ' + esc(staff.map(q => q.name.split(' ')[0]).join(', ')) : 'no staff')} · last day ${b.lastSold ? 'sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + ' lots') + ', ' : ''}${b.lastRevenue || 0}c in, ${money(b.lastProfit || 0)} profit${b.slump ? ' (a bad spell: ' + esc(b.slump.why) + ')' : ''} · worth about ${Sim.bizPrice(s, b.id)}c.</div>${walking}`;
+  let html = `<h2>${esc(e.name)} <span class="pill yes">yours</span>${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${esc(TOWN_NAMES[town])}${ar ? ', ' + ar : ''} · ${b.lease ? 'let to ' + esc((s.people[b.lease.pid] || {}).name || 'a tenant') + ' for ' + b.lease.rent + 'c a day' : (m ? 'run by your manager ' + esc(m.name) : 'no manager') + ' · ' + (staff.length ? staff.length + ' staff: ' + esc(staff.map(q => q.name.split(' ')[0]).join(', ')) : 'no staff')} ${b.lease ? '' : `· last day ${b.lastSold ? 'sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + ' lots') + ', ' : ''}${b.lastRevenue || 0}c in, ${money(b.lastProfit || 0)} profit${b.slump ? ' (a bad spell: ' + esc(b.slump.why) + ')' : ''}`} · worth about ${Sim.bizPrice(s, b.id)}c.</div>${walking}`;
   if (b.disrepair) html += `<div class="why">Needs mending: takings are down by a third.</div>`;
   const acts = [B_('Manage', ['ui', 'manage', ['biz', b.id]])];
   if (b.disrepair) acts.push(B_('Mend it · ' + (b.repairCost || 30) + 'c', ['repairBiz', b.id], 'alt', s.coins < (b.repairCost || 30)));
@@ -3558,12 +3558,12 @@ function pageRealm(s) {
 function bizBox(s, b) {
   const e = Sim.empById(b.id), own = b.owner === 'player', owner = own ? null : s.people[b.owner];
   const staff = b.staff.map(st => ({ st, p: s.people[st.pid] }));
-  let html = `<div class="box"><h5>${esc(e.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h5><dl class="kv"><dt>Owner</dt><dd>${own ? 'You' : esc(owner.name)}</dd><dt>Trade</dt><dd>${esc(Sim.tradeName(b.trade))}</dd><dt>Last day</dt><dd>${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit</dd><dt>Staff</dt><dd>${staff.length ? esc(staff.map(x => x.p.name).join(', ')) : 'none'}</dd></dl>`;
+  let html = `<div class="box"><h5>${esc(e.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h5><dl class="kv"><dt>Owner</dt><dd>${own ? 'You' : esc(owner.name)}</dd><dt>Trade</dt><dd>${esc(Sim.tradeName(b.trade))}</dd>${own && b.lease ? `<dt>Rent to you</dt><dd>${b.lease.rent}c a day` : `<dt>Last day</dt><dd>${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit`}</dd><dt>Staff</dt><dd>${staff.length ? esc(staff.map(x => x.p.name).join(', ')) : 'none'}</dd></dl>`;
   if (!own) { const price = Sim.bizPrice(s, b.id); html += `<div class="acts">${B_('Buy for ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)}</div><p>${esc(owner.name)} stays on as your manager, and the staff work for you.</p>`; }
   else {
     const val = Sim.bizPrice(s, b.id);
-    if (b.lease) { const q = s.people[b.lease.pid]; html += `<p>Let to <b>${esc(q ? q.name : 'someone')}</b> for ${b.lease.rent}c a day${b.lease.behind ? `, ${b.lease.behind} days behind` : ''}. They run it and keep what it earns above the rent.</p><div class="acts">${B_('End the lease', ['endLease', b.id], 'alt')}</div>`; }
-    else { const lc = Sim.leaseCandidates(s, b.id); html += `<p>Worth about <b>${val}c</b>.${lc.length ? ' Or let it to someone who will run it and pay you rent:' : ''}</p><div class="acts">${lc.slice(0, 2).map(c => B_('Let to ' + esc(c.name) + ' · ' + c.offer + 'c a day', ['leaseBiz', b.id, null, c.pid], 'alt')).join('')}${b.forSale ? B_('Take off the market (asking ' + b.forSale + 'c)', ['listForSale', 'biz', b.id, 0], 'alt') : B_('Put up for sale at ' + Math.round(val * 1.1) + 'c', ['listForSale', 'biz', b.id, Math.round(val * 1.1)], 'alt')}</div>`; }
+    if (b.lease) { const q = s.people[b.lease.pid], L0 = b.lease, can = Sim.leaseBreakable(s, b); html += `<p>Leased to <b>${esc(q ? q.name : 'someone')}</b> for ${L0.rent}c a day${L0.until ? `, until day ${L0.until} (${L0.term}-day lease)` : ''}${L0.behind ? `, <b>${L0.behind} days behind</b>` : ''}. They run it, choose its staff, and keep what it earns above the rent.</p><p><label><input type="checkbox" data-c='${JSON.stringify(['leaseRenew', b.id, null, !L0.renew])}' ${L0.renew ? 'checked' : ''}> Renew when the term is up</label></p><div class="acts">${can ? B_('End the lease', ['endLease', b.id], 'alt') : ''}</div>${can ? '' : '<p class="why">Neither of you can break it before then, unless the rent falls 2 days behind.</p>'}`; }
+    else { const lc = Sim.leaseCandidates(s, b.id); html += `<p>Worth about <b>${val}c</b>.${lc.length ? ' Or let it to someone who will run it and pay you rent:' : ''}</p><div class="acts">${(lc.length ? `<div class="seg" role="group" aria-label="Lease term">${[14, 30, 60].map(d => `<button type="button" aria-pressed="${(UI.leaseTerm || 30) === d}" data-c='${JSON.stringify(['ui', 'leaseTerm', d])}'>${d} days</button>`).join('')}</div>` : '') + lc.slice(0, 2).map(c => B_('Lease to ' + esc(c.name) + ' · ' + Sim.leaseRent(c.offer, UI.leaseTerm || 30) + 'c a day', ['leaseBiz', b.id, UI.leaseTerm || 30, c.pid], 'alt')).join('')}${b.forSale ? B_('Take off the market (asking ' + b.forSale + 'c)', ['listForSale', 'biz', b.id, 0], 'alt') : B_('Put up for sale at ' + Math.round(val * 1.1) + 'c', ['listForSale', 'biz', b.id, Math.round(val * 1.1)], 'alt')}</div>`; }
     if (b.lease) return html + `</div>`;
     html += staff.map(({ st, p }) => `<div class="staffrow"><span>${esc(p.name)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${st.wage}c</output><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'fs' + p.id ? B_('Yes, let go', ['fireStaff', b.id, p.id], 'warn') : B_('Let go&hellip;', ['ui', 'confirm', 'fs' + p.id], 'alt')}</div>`).join('');
     const seekers = Sim.living(s).filter(p => !p.job && !p.retired && !p.kid && (p.town || 'hearthmoor') === (b.town || 'hearthmoor'));
@@ -4177,6 +4177,7 @@ function uiCmd(k, v) {
     else { const was = UI.focus; UI.focus = null; UI.tab = 'shops'; if (was && was[0] === 'biz') { const b = G.biz[was[1]]; if (b) UI.btown = b.town || 'hearthmoor'; } else if (was) UI.btown = 'hearthmoor'; }
     if (UI.overlay !== 'book') openBook(); else renderBook(true); return;
   }
+  if (k === 'leaseTerm') { UI.leaseTerm = v; renderBook(); return; }
   if (k === 'btown') { UI.btown = v; UI.focus = null; UI.tab = 'shops'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
   if (k === 'ptown') { UI.ptown = v; renderBook(true); return; }
   if (k === 'tree') { UI.tree = v; UI.treeB = null; UI.tab = 'tree'; if (UI.overlay !== 'book') openBook('tree'); else renderBook(true); return; }
@@ -5014,7 +5015,8 @@ const NOTES = [
     'Hearthmoor no longer slowly empties: when there is a roof free, a worker or a young family arrives from Ashford.',
     'Where a building stands sets its price. Houses and businesses cost more in richer towns (Crownmere about twice Hearthmoor) and more in the heart of town than on its edge. Signs and cards say which part of town a place is in.',
     'A business you buy in Hearthmoor now shows your own card when you walk up: staff, manager, what it sold and earned yesterday, and Manage. Shops you do not own have a Buy button beside Ask for work.',
-    'The Businesses list at the top, and the Shops page, show what each place earned yesterday, and what bought businesses sold. A business you have let shows just the rent it pays you each day.'
+    'The Businesses list at the top, and the Shops page, show what each place earned yesterday, and what bought businesses sold. A business you lease out shows the rent it pays you each day instead.',
+    'Leases now have a term: 14, 30 or 60 days (a longer lease is a coin cheaper a day). Neither you nor the tenant can break it early unless the rent falls 2 days behind. It renews when the term is up unless you untick Renew. While it is leased, the tenant runs it: you cannot hire, fire, set wages, hire a manager or sell it.'
   ] },
   { v: '0.35', date: '5 November', title: 'Signs and seals', items: [
     'Every house you can buy has a FOR SALE sign by its door. Walk up to it to see who owns it, who lives there, the rent and its condition, and buy it on the spot.',
