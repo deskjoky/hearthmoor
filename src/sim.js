@@ -239,6 +239,22 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
   const minuteOfDay = t => ((t % DAY) + DAY) % DAY;
   const hourOf = s => minuteOfDay(s.t) / 60;
+  /* ---------- the calendar: twelve months of five days, a year of sixty days, four seasons ----------
+     The game begins on the first day of spring. People age with the calendar by default (a year every 60 days);
+     Settings offers quicker lives for those who want to see generations come and go. */
+  const MONTH_DAYS = 5, YEAR_DAYS = 60;
+  const MONTHS = ['Thawmonth', 'Seedmonth', 'Blossom', 'Highsun', 'Haymonth', 'Goldmonth', 'Reaping', 'Applefall', 'Leaffall', 'Frostmonth', 'Deepwinter', 'Snowmelt'];
+  const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+  function calendar(s) { const d = (s.day || 1) - 1, m = Math.floor(d / MONTH_DAYS) % 12; return { year: Math.floor(d / YEAR_DAYS) + 1, month: m, monthName: MONTHS[m], dom: d % MONTH_DAYS + 1, season: SEASONS[Math.floor(m / 3)] }; }
+  const seasonOf = s => calendar(s).season;
+  // what each season does to the land and the roads
+  const SEASON_FX = {
+    spring: { grain: 0.7, wood: 1, ore: 1, fuel: 1, travel: 1, theft: 1, mood: 0 },
+    summer: { grain: 1.1, wood: 1, ore: 1.05, fuel: 0.8, travel: 1.25, theft: 0.9, mood: 3 },
+    autumn: { grain: 1.7, wood: 1.1, ore: 1, fuel: 1.1, travel: 1.05, theft: 0.9, mood: 1 },
+    winter: { grain: 0.45, wood: 1.15, ore: 0.8, fuel: 1.4, travel: 0.6, theft: 1.35, mood: -6 }
+  };
+  const seasonFx = s => SEASON_FX[seasonOf(s)] || SEASON_FX.spring;
   function clock(t) {
     const m = Math.floor(minuteOfDay(t));
     return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
@@ -331,7 +347,7 @@
   /* ---------- new game ---------- */
   function newGame(seed, name) {
     const s = {
-      v: VERSION, ageRate: 4, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
+      v: VERSION, ageRate: YEAR_DAYS, t: 6 * 60, day: 1, rng: (seed | 0) || 12345, coins: 5, name: name || 'Wren',
       player: { x: P.home.x, z: P.home.z, face: 0, dest: null, action: null, inv: { grain: 0, wood: 0, ore: 0 } },
       shops: [], nextShop: 1, job: null, trades: { bakery: 0, smithy: 0, tavern: 0, joinery: 0 },
       agents: [], nextId: 1, schedule: [], applicants: [], ledger: [], events: [], rec: freshRecords(), stats: null, village: freshVillage()
@@ -377,7 +393,7 @@
       const when = () => base + (o + rand(s) * (c - o - 0.6)) * 60;
       const share = shopShare(s, shop), vr = (T.villagerRate * (v.shortage ? 0.5 : 1) + (v.projects.lanterns ? 0.08 : 0)) * Math.min(1, share * 1.15) * (shop.manager ? 1.2 : 1);
       villagers(s).filter(p => p.purse >= shop.price && !p.kid && !p.held && !(p.job && ['guard', 'lord', 'steward', 'taxman'].includes(p.job.office))).forEach(p => { if (rand(s) < vr) sched.push({ at: when(), pid: p.id, shop: shop.id }); });
-      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1)));
+      const n = Math.max(0, Math.round((Ti.travelers + (v.projects.pave ? 1 : 0) + (v.projects.road ? 1 : 0) + Math.floor(rand(s) * 3) - 1) * TOLLS[v.toll].travelers * (s.offices && s.offices.watch ? 1.12 : 1) * seasonFx(s).travel));
       for (let i = 0; i < Math.round(n * Math.min(1, share * 1.15 + 0.2)); i++) sched.push({ at: when(), id: null, shop: shop.id });
     }
     if (s.day % 7 === 0) sched.push({ at: base + 10 * 60, id: null, shop: null, taxman: true });
@@ -524,6 +540,21 @@
   }
   function report(s, text) { s.reports = s.reports || []; s.reports.unshift({ day: s.day, text }); if (s.reports.length > 40) s.reports.length = 40; }
   function releaseManager(s, m, why) { const p = m && s.people[m.pid]; if (p && p.job && p.job.type === 'manage') { p.job = null; plog(s, p, why || 'No longer a manager.'); } }
+  // a dishonest manager may skim the takings; the books show it sooner or later, and sometimes an honest one is wrongly suspected
+  function managerFraud(s, m, town, name, did) {
+    const mp = s.people[m.pid]; if (!mp) return;
+    if (m.honest == null) m.honest = Math.round(rand(s) * 100) / 100;
+    if (m.honest < 0.3 && rand(s) < 0.04 + (m.skim ? 0.15 : 0)) { const x = Math.min(Math.max(0, s.coins), 3 + Math.floor(rand(s) * 8)); if (x > 0) { spend(s, x); mp.purse += x; m.skim = (m.skim || 0) + x; } }
+    const C = town === 'hearthmoor' ? s.justice : s.courts && s.courts[town];
+    if (!C || (C.cases || []).some(k => k.status === 'open' && k.kind === 'fraud' && k.accused === mp.id)) return;
+    const guilty = m.skim > 0 && rand(s) < 0.06 + m.skim / 200, mistaken = !m.skim && rand(s) < 0.004;
+    if (!guilty && !mistaken) return;
+    const value = guilty ? m.skim : 8 + Math.floor(rand(s) * 15);
+    const c = newCase(s, 'fraud', { accused: mp.id, accuser: null, victim: 'player', value, where: name, truth: guilty ? 'guilty' : 'mistaken', excuse: guilty ? null : ['A cart of supplies was held at the toll gate; the receipts came a week late.', 'The missing coin was paid to a carpenter for repairs; the bill was filed under the wrong day.', 'The till was short because a customer paid in a foreign coin the clerk could not change.'][Math.floor(rand(s) * 3)], what: value + 'c missing from the takings of ' + name, claim: 'The books of ' + name + ' are ' + value + 'c short, and ' + mp.name + ' keeps them.' }, C);
+    c.hidden = evidencePool(s, c); if (guilty) m.skim = 0;
+    did.push('the books are ' + value + 'c short, and a fraud case is open against ' + m.name);
+    event(s, 'The books of ' + name + ' are ' + value + 'c short. A case against ' + mp.name + ', your manager, is open in ' + C.name + '.', 'bad');
+  }
   function managersDay(s, entry) {
     // anyone whose business has gone (sold, seized) goes back to looking for work
     for (const p of living(s)) if (p.job && p.job.type === 'manage' && !managerOf(s, p.job.kind, p.job.ref)) { p.job = null; plog(s, p, 'The business they managed changed hands.'); }
@@ -555,6 +586,7 @@
       if (ss.tooExpensive > Math.max(3, ss.sold * 0.5) && shop.goods >= tierOf(shop).out && shop.price > floor) { shop.price--; did.push('lowered the price to ' + shop.price + 'c (' + ss.tooExpensive + ' turned away)'); }
       else if (ss.soldOut > 0 && ss.tooExpensive <= 1 && shop.price < Math.round(T.wtp * 1.4)) { shop.price++; did.push('raised the price to ' + shop.price + 'c (sold out)'); }
       if (m.skill < 0.85 && rand(s) < (1.15 - m.skill) * 0.2) { const loss = 1 + Math.floor(rand(s) * 4); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
+      managerFraud(s, m, 'hearthmoor', managedName(s, 'shop', shop.id), did);
       const e = entry.shops.find(x => x.id === shop.id);
       report(s, managedName(s, 'shop', shop.id).replace(/^your/, 'Your') + ' (' + m.name + '): ' + (e ? e.revenue + 'c in, ' + e.profit + 'c profit' : 'quiet day') + (did.length ? '. ' + did.join('; ') + '.' : '.'));
     }
@@ -579,6 +611,7 @@
         else { b.disrepair = true; b.repairCost = cost; s.decisions = s.decisions || []; s.decisions.push({ id: (s.nextDecision = (s.nextDecision || 0) + 1), day: s.day, biz: b.id, cost, text: m.name + ' writes from ' + name + ': ' + what + '. Mending it costs ' + cost + 'c, more than the budget you gave. Until it is fixed, takings are down by a third.' }); did.push(what + ' (too costly to mend without you: see the ledger)'); event(s, 'A decision from ' + name + ': ' + what + '. Mending it costs ' + cost + 'c.', 'bad'); }
       }
       if (rand(s) < (1.15 - m.skill) * 0.18) { const loss = 2 + Math.floor(rand(s) * 6); spend(s, loss); did.push('lost ' + loss + 'c through a careless mistake'); }
+      managerFraud(s, m, town, name, did);
       report(s, name + ' (' + m.name + '): ' + (b.lastRevenue || 0) + 'c in, ' + (b.lastProfit || 0) + 'c profit' + (did.length ? '. ' + did.join('; ') + '.' : '.'));
     }
   }
@@ -1526,8 +1559,11 @@
     for (const t in TOWN_GOODS) for (const g of GOODS) {
       // merchants' carts bring the town's usual imports (or carry off its usual surplus), and only slowly
       // close a shortage or a glut, so a market that runs short stays short for a week or two: worth hauling to
-      const T = TOWN_GOODS[t], st = s.goods[t][g], carts = 0.8 * (T.use[g] - T.make[g]) + 0.1 * (goodsTarget(t, g) - st);
-      s.goods[t][g] = Math.max(4, Math.round(st + T.make[g] * (0.85 + rand(s) * 0.3) - T.use[g] * (0.85 + rand(s) * 0.3) + carts));
+      // the season moves what the land gives and what the town burns; carts make up only half the difference,
+      // so grain is dear by late winter and cheap after the harvest
+      const T = TOWN_GOODS[t], st = s.goods[t][g], fx = seasonFx(s), mk = T.make[g] * (fx[g] || 1), us = T.use[g] * (g === 'wood' ? fx.fuel : 1);
+      const carts = 0.8 * (T.use[g] - T.make[g]) + 0.5 * ((us - mk) - (T.use[g] - T.make[g])) + 0.1 * (goodsTarget(t, g) - st);
+      s.goods[t][g] = Math.max(4, Math.round(st + mk * (0.85 + rand(s) * 0.3) - us * (0.85 + rand(s) * 0.3) + carts));
     }
     // now and then a blight, a flood, a lost convoy or a bumper year shakes one market
     if (rand(s) < 0.16) {
@@ -1555,7 +1591,7 @@
     const E = ECON[trade]; if (!E) return 0;
     const folk = living(s).filter(p => townOf(p) === t && !p.kid && p.age >= 14);
     const work = folk.length ? folk.filter(p => p.job || p.retired).length / folk.length : 0.8;
-    return (folk.length * E.rate * (0.55 + 0.55 * work) + TOWN_GOODS[t].travellers * E.rate) * E.qty;
+    return (folk.length * E.rate * (0.55 + 0.55 * work) + TOWN_GOODS[t].travellers * seasonFx(s).travel * E.rate) * E.qty;
   }
   function inputCost(s, t, trade, units) { const E = ECON[trade] || {}; return Object.keys(E.inputs || {}).reduce((a, g) => a + E.inputs[g] * goodsPrice(s, t, g), 0) * units; }
   // the share of the village's custom that comes to one of your lot shops
@@ -1691,7 +1727,7 @@
         }
       }
       // mood drifts with circumstances
-      const target = (p.job || p.kid ? 60 : 30) + (p.home ? 15 : -20) + (p.kid ? 0 : p.purse > 30 ? 10 : p.purse < 5 ? -10 : 0) + (s.village.projects.well ? 5 : 0);
+      const target = (p.job || p.kid ? 60 : 30) + seasonFx(s).mood + (p.home ? 15 : -20) + (p.kid ? 0 : p.purse > 30 ? 10 : p.purse < 5 ? -10 : 0) + (s.village.projects.well ? 5 : 0);
       p.mood = Math.round(clamp(p.mood + (target - p.mood) * 0.3, 0, 100));
       // debts grow: the Ashford moneylender takes 2% a day
       if (p.purse < 0) p.purse -= Math.max(1, Math.ceil(-p.purse * INTEREST));
@@ -1705,7 +1741,7 @@
   /* ---------- a whole life: everyone ages, marries, has children, grows old and dies, and what they leave passes on ----------
      A year passes every few game days (s.ageRate: 0 means ageing is off). Birthdays are spread over the year, so a
      generation never all grows old at once. */
-  const AGE_RATES = { off: 0, slow: 6, normal: 4, fast: 3 };
+  const AGE_RATES = { off: 0, calendar: YEAR_DAYS, steady: 15, quick: 4 };
   const bdayOf = (s, p) => { const n = parseInt(String(p.id).slice(1), 10) || 0; return (n * 7 + 3) % Math.max(1, s.ageRate || 1); };
   const sameFamily = (a, b) => (a.parents || []).some(id => (b.parents || []).includes(id)) || (a.parents || []).includes(b.id) || (b.parents || []).includes(a.id);
   const childrenOf = (s, p) => Object.values(s.people).filter(q => (q.parents || []).includes(p.id));
@@ -3447,8 +3483,8 @@
     const L = {
       trade: [[owned >= 3, 'own 3 shops or businesses (you have ' + owned + ')'], [supply >= 3, 'deliver 3 supply contracts (' + supply + ')']],
       treasury: [[R.council.trade === 'player' || (s.player.seatsHeld || []).includes('trade'), 'serve first as Master of Trade'], [netWorth(s) >= 2500, 'be worth 2,500c (' + netWorth(s) + 'c)'], [!R.embezzled, 'never have taken from the treasury']],
-      war: [[patrol >= 300, 'pay 300c for patrols on the roads (' + patrol + 'c)'], [clear >= 1, 'clear one road of bandits by contract (' + clear + ')']],
-      law: [[!!rec.everElder, 'have served as Elder of a town'], [kept >= 2, 'keep 2 promises (' + kept + ')']]
+      war: [[patrol >= 300, 'pay 300c for patrols on the roads (' + patrol + 'c)'], [clear >= 1, 'clear one road of bandits by contract (' + clear + ')'], [yourLordships(s).some(id => ((s.bandits || {})[id] || 0) < 25), 'keep the roads of your own lands safe (bandits under 25)']],
+      law: [[!!rec.everElder, 'have served as Elder of a town'], [kept >= 2, 'keep 2 promises (' + kept + ')'], [(rec.fairVerdicts || 0) >= 3, 'judge 3 cases by the evidence (' + (rec.fairVerdicts || 0) + ')'], [!(s.justice && s.justice.secrets.some(x => x.exposed && x.weight >= 2)), 'have no proven abuse of office against you']]
     }[k] || [];
     return L.filter(x => !x[0]).map(x => x[1]);
   }
@@ -3792,8 +3828,9 @@
     return { k, name: f > 0.7 ? 'in the heart of town' : f > 0.4 ? 'near the market' : f > 0.15 ? 'a quiet street' : 'on the edge of town' };
   }
   const placeFactor = (town, x, z) => (LAND[town || 'hearthmoor'] || 1) * areaOf(town, x, z).k;
-  function houseValue(s, h) { return Math.round((40 + h.rent * 45) * placeFactor(h.town, h.x, h.z) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
+  function houseValue(s, h) { if (h.rent0 == null) h.rent0 = h.rent; const fair = Math.min(h.rent, Math.max(1, h.rent0) * 1.25), lived = h.tenants.length || (s.player && s.player.house === h.id) ? 1 : 0.9; return Math.round((40 + fair * 45) * lived * placeFactor(h.town, h.x, h.z) * marketOf(s, h.town) * (1 + 0.22 * (h.comfort || 0)) * (1 - Math.min(0.4, (h.wear || 0) / 160))); }
   function propertyDay(s) {
+    for (const h of s.houses) if (h.rent0 == null) h.rent0 = h.rent;
     propertyMarket(s);
     for (const h of s.houses) if (h.owner === 'player') h.wear = Math.min(100, (h.wear || 0) + 0.4);
     // let businesses: the tenant pays you each day, or falls behind
@@ -3877,8 +3914,8 @@
      honest and dishonest choices; and the people who know what you did. The Elder of Hearthmoor holds the
      village's justice; the council can be left to hear routine cases; the Lord Justice and the crown hear appeals. */
   const DUTIES = { market: 'Market patrol', homes: 'Round the houses', hall: 'Watch house and hall', road: 'The east road', cells: 'Guarding the cells', yours: 'Guarding your property' };
-  const J_WAGE = 5, J_KIT = 10, J_DETAIN_MAX = 3, J_HEAR_BY = 4;
-  const CRIME = { theft: 'Theft', assault: 'Assault', corruption: 'Corruption', order: 'Held on order' };
+  const J_WAGE = 5, J_KIT = 10, J_DETAIN_MAX = 3, J_HEAR_BY = 1;
+  const CRIME = { theft: 'Theft', assault: 'Assault', corruption: 'Corruption', order: 'Held on order', smuggling: 'Smuggling', poaching: 'Poaching', fraud: 'Fraud', hoarding: 'Hoarding' };
   function setupJustice(s) {
     if (s.justice || !s.people || !s.gov) return s.justice;
     const J = s.justice = { id: 'hearthmoor', name: 'Hearthmoor', place: 'the watch house cells', authority: 'Elder of Hearthmoor', watch: [], cells: 2, bunks: 3, condition: 90, cases: [], prisoners: [], closed: [], secrets: [], nextCase: 1, nextSecret: 1, delegate: 'none', fear: 0, deterUntil: 0, log: [], unpaid: 0, wrongful: 0 };
@@ -3943,10 +3980,18 @@
       if (c.kind === 'theft') pool.push({ text: an + ' was seen near ' + c.where + ' that evening.', w: 2 }, { text: an + ' paid off ' + Math.max(2, Math.round(c.value / 2)) + 'c of debts the next morning, coin no one knew they had.', w: 2 }, { text: 'A neighbour heard ' + an + ' boasting at the well.', w: 1 });
       if (c.kind === 'assault') pool.push({ text: an + '’s knuckles were cut and bruised the next day.', w: 2 }, { text: 'Two drinkers saw ' + an + ' and the victim quarrelling before it happened.', w: 2 });
       if (c.kind === 'corruption') pool.push({ text: 'The chest book is ' + c.value + 'c short in the weeks ' + an + ' kept it.', w: 3 }, { text: an + ' bought a new cloak and a pig this month on an officer’s pay.', w: 1 });
+      if (c.kind === 'smuggling') { pool.push({ text: 'Bales of ' + (c.good || 'cloth') + ' in ' + an + '\u2019s store carry no customs seal.', w: 3 }, { text: 'A boatman says ' + an + ' landed cargo at night below the harbour wall.', w: 2 }); if (c.guard && s.people[c.guard]) pool.push({ text: 'The watchman ' + s.people[c.guard].name + ' was paid to look the other way.', w: 1 }); }
+      if (c.kind === 'poaching') { pool.push({ text: 'Snares and a deer hide were found behind ' + an + '\u2019s house.', w: 3 }); pool.push(c.organiser && s.people[c.organiser] ? { text: s.people[c.organiser].name + ' buys the venison and pays the hunters.', w: 1 } : { text: an + '\u2019s family has been short of food all winter.', w: 0 }); }
+      if (c.kind === 'fraud') pool.push({ text: 'The tallies and the ledger do not agree: ' + c.value + 'c is unaccounted for.', w: 3 }, { text: an + ' has been spending freely this month.', w: 1 });
+      if (c.kind === 'hoarding') pool.push({ text: an + ' bought far more ' + (c.good || 'grain') + ' than any business needs, just as the price rose.', w: 3 }, { text: 'A clerk heard ' + an + ' say they would sell when the town was desperate.', w: 2 });
     } else {
       if (c.kind === 'theft') pool.push({ text: an + ' was at work all that evening; three people say so.', w: -3 }, { text: 'The latch on ' + c.where + ' was forced from inside, not from the street.', w: -1 });
       if (c.kind === 'assault') pool.push({ text: an + ' was at home with family; the neighbours heard them all evening.', w: -3 });
       if (c.kind === 'corruption') pool.push({ text: 'The chest book balances to the coin.', w: -3 });
+      if (c.kind === 'smuggling') pool.push({ text: 'The bales carry the customs seal after all; the clerk had misfiled them.', w: -3 });
+      if (c.kind === 'poaching') pool.push({ text: an + ' was snaring rabbits on common land, not in the King\u2019s forest.', w: -3 });
+      if (c.kind === 'fraud') pool.push({ text: c.excuse || 'Floods held up the goods on the road; they came the following week.', w: -3 });
+      if (c.kind === 'hoarding') pool.push({ text: an + ' lays in stock every autumn for the winter; the cellar books for years past show the same.', w: -3 });
       if (c.truth === 'lie') pool.push({ text: xn + ' owes ' + an + ' money and has been heard cursing them.', w: -2 });
       else pool.push({ text: 'The description given fits half the village.', w: -1 });
     }
@@ -3957,7 +4002,7 @@
     if (vil.length < 6) return;
     const deter = s.day < J.deterUntil ? 0.6 : 1, poor = vil.filter(p => p.hungry || p.purse < 6).length;
     // theft: hunger and empty purses drive it; patrols around the market and the houses deter it
-    const pTheft = 0.16 * deter * (1 + poor / 6) * (1 - 0.55 * (cov.market + cov.homes) / 2);
+    const pTheft = 0.16 * deter * seasonFx(s).theft * (1 + poor / 6) * (1 - 0.55 * (cov.market + cov.homes) / 2);
     if (rand(s) < pTheft) {
       const thief = pickBy(s, vil.filter(p => !isHousehold(p) && !(p.job && p.job.type === 'watch')), p => (p.hungry ? 3 : 0) + (p.purse < 6 ? 2 : 0) + (p.mood < 35 ? 1 : 0) + 0.2);
       const sy = s.shops.filter(x => x.goods >= 2), shopsYou = sy.length && rand(s) < 0.35 * (1 - cov.yours) ? sy[Math.floor(rand(s) * sy.length)] : null;
@@ -3975,6 +4020,7 @@
         jlog(s, 'Theft reported: ' + c.what + '. ' + accused.name + ' is accused.', 'bad');
       }
     }
+    if (s.realm && s.realm.laws.forestLaw && rand(s) < 0.08 * (1 + poor / 4)) poaching(s, J, vil);
     // assault: bad tempers in a hungry village, a brawl after the tavern
     const pAssault = 0.06 * deter * (1 - 0.5 * cov.market);
     if (rand(s) < pAssault) {
@@ -4038,7 +4084,8 @@
         c.witnesses.forEach(w => { if (!w.shown && rand(s) < 0.5) w.shown = true; });
         c.investigating--;
       }
-      // a held suspect must be heard in time, or let go
+      // a held suspect must be heard in time, or let go; the council hears a held case it has been given on the day
+      { const routine0 = c.kind !== 'corruption' && c.value < 15; const del0 = !judge || J.delegate === 'all' || (J.delegate === 'minor' && routine0); if (c.held && del0 && s.day >= c.deadline) { councilHears(s, c); continue; } }
       if (c.held && s.day > c.deadline) { release(s, c.accused, 'Held past the hearing day without a hearing, so the watch had to let them go.'); c.held = false; jlog(s, 'No hearing was held for ' + s.people[c.accused].name + ' in time: they walk free.', 'info'); }
       // routine cases go to the council when you have handed them over, or when you are not the judge
       const routine = c.kind !== 'corruption' && c.value < 15 && !(s.people[c.accused] && s.people[c.accused].job && s.people[c.accused].job.type === 'office');
@@ -4058,6 +4105,7 @@
       if (J.condition < 40 && rand(s) < 0.08 * (1 - cov.cells)) { release(s, pr.pid, 'Slipped out of the rotten cell.'); jlog(s, p.name + ' has escaped from the watch house. The cell needs mending.', 'bad'); }
     }
     // fines owed are paid off a little at a time, or worked off
+    for (const C2 of allCourts(s)) for (const c of C2.closed.slice(0, 20)) if (c.workLeft > 0) { const p = s.people[c.accused]; if (!p || p.status !== 'here' || p.held) continue; c.workLeft--; chestOf(s, C2).chest += 3; p.mood = clamp(p.mood - 2, 0, 100); if (!c.workLeft) plog(s, p, 'Finished their days of work for the ' + (C2.id === 'hearthmoor' ? 'village' : 'town') + '.'); }
     for (const c of J.closed.slice(0, 20)) if (c.fineOwed > 0) {
       const p = s.people[c.accused]; if (!p || p.status !== 'here') { c.fineOwed = 0; continue; }
       const pay = Math.min(c.fineOwed, Math.max(0, Math.min(3, p.purse - 4)));
@@ -4092,7 +4140,8 @@
   // the council hears by the weight of evidence, leaning a little towards the well-off
   function councilHears(s, c) {
     const A = s.people[c.accused], w = caseWeight(c) + (A && A.purse > 80 ? -1 : 0);
-    if (w >= 3) decide(s, c, 'guilty', { restitution: true, fine: c.kind === 'corruption' ? 10 : 4, days: c.kind === 'assault' ? 1 : 0 }, 'the council');
+    const K = c.kind;
+    if (w >= 3) decide(s, c, 'guilty', K === 'poaching' ? (c.organiser ? { fine: 8, organiser: true } : { work: 2 }) : K === 'fraud' ? { restitution: true, fine: 6 } : K === 'hoarding' ? { fine: 20 } : { restitution: true, fine: K === 'corruption' ? 10 : 4, days: K === 'assault' ? 1 : 0, work: K === 'theft' ? 2 : 0 }, 'the council');
     else decide(s, c, 'dismiss', {}, 'the council');
   }
   // the decision itself, and what it does to people
@@ -4102,33 +4151,77 @@
     c.status = 'closed'; c.decidedBy = by; c.weight = w; c.verdict = verdict; J.cases = J.cases.filter(x => x !== c);
     if (c.held && verdict === 'dismiss') release(s, c.accused, 'Released: the case was dismissed.');
     c.held = false;
+    if (c.kind === 'hoarding' && verdict !== 'dismiss') { const T = s.towns && s.towns[J.id]; if (T && T.hoard && T.hoard.pid === c.accused) { s.goods[J.id][T.hoard.good] += T.hoard.qty; T.hoard = null; } }
+    if (verdict === 'negotiate') {
+      c.outcome = (A ? A.name : 'They') + ' agree to put the stock back on sale, and no charge is brought.'; if (A) A.opinion = clamp((A.opinion || 0) + 5, -100, 100);
+      J.closed.unshift(c); jlog(s, 'Hoarding: ' + c.outcome, 'info', J); return;
+    }
+    if (verdict === 'mercy') {
+      // found guilty, and pardoned openly for a stated reason: lawful mercy, judged by the town on its merits
+      const deserving = A && (A.hungry || A.purse < 20 || (c.kind === 'poaching' && !c.organiser)) && c.value <= 30;
+      c.outcome = 'Found guilty by ' + by + ', and pardoned' + (pen.reason ? ' because ' + pen.reason : '') + '.'; c.mercy = true;
+      if (c.held) release(s, c.accused, 'Pardoned at the hearing.'); c.held = false;
+      if (A) A.opinion = clamp((A.opinion || 0) + 15, -100, 100);
+      if (vic) vic.opinion = clamp((vic.opinion || 0) - 6, -100, 100);
+      if (by === 'you') { if (J.id === 'hearthmoor') approve(s, 'elder', deserving ? 2 : -3); else { const T = s.towns && s.towns[J.id]; if (T) T.approval = clamp((T.approval || 50) + (deserving ? 2 : -3), 0, 100); } }
+      J.closed.unshift(c); if (J.closed.length > 30) J.closed.length = 30;
+      jlog(s, CRIME[c.kind] + ' case against ' + (A ? A.name : 'someone') + ': ' + c.outcome + (deserving ? ' People think it fair.' : ' Some say it is favour, not mercy.'), 'info', J); return;
+    }
     if (verdict === 'dismiss') {
       c.outcome = 'Dismissed by ' + by + '.';
       if (A) { A.opinion = clamp((A.opinion || 0) + (by === 'you' ? 6 : 2), -100, 100); }
       if (vic && c.truth === 'guilty') vic.opinion = clamp((vic.opinion || 0) - (by === 'you' ? 8 : 3), -100, 100);
     } else {
       const parts = [];
-      if (pen.restitution && A && c.value) { const pay = Math.min(c.value, Math.max(0, A.purse)); A.purse -= pay; if (vic) vic.purse += pay; else if (c.victim === 'chest') s.village.chest += pay; else if (c.victim === 'player') { earn(s, pay); s.stats.restitution = (s.stats.restitution || 0) + pay; } parts.push('repay ' + pay + 'c' + (pay < c.value ? ' (all they had)' : '')); }
+      if (pen.restitution && A && c.value) { const pay = Math.min(c.value, Math.max(0, A.purse)); A.purse -= pay; if (vic) vic.purse += pay; else if (c.victim === 'chest') chestOf(s, J).chest += pay; else if (c.victim === 'crown' && s.realm) s.realm.treasury += pay; else if (c.victim === 'player') { earn(s, pay); s.stats.restitution = (s.stats.restitution || 0) + pay; } parts.push('repay ' + pay + 'c' + (pay < c.value ? ' (all they had)' : '')); }
       if (pen.fine && A) { const f = Math.round(pen.fine), now = Math.min(f, Math.max(0, A.purse - 2)); A.purse -= now; c.fineTo = pen.fineTo === 'you' ? 'you' : 'chest'; if (c.fineTo === 'you') { earn(s, now); s.stats.fines = (s.stats.fines || 0) + now; } else s.village.chest += now; c.fineOwed = f - now; parts.push('a fine of ' + f + 'c' + (c.fineOwed ? ' (' + c.fineOwed + 'c to be paid off or worked off)' : '')); }
+      if (pen.work && A) { const wd = clamp(Math.round(pen.work), 1, 10); c.workLeft = wd; parts.push(wd + (wd === 1 ? ' day' : ' days') + ' of work for the ' + (J.id === 'hearthmoor' ? 'village' : 'town')); }
       if (pen.days && A) { const d = clamp(Math.round(pen.days), 1, maxDays(J)); if (!isHeld(A) && cellsFree(s, J) <= 0) parts.push('no cell free, so no time inside'); else { if (!isHeld(A)) hold(s, A.id, c, 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(), s.day + d, J); const pr = J.prisoners.find(x => x.pid === A.id); if (pr) { pr.until = s.day + d; pr.sentence = true; pr.reason = 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(); } parts.push(d + (d === 1 ? ' day' : ' days') + ' in the cells'); } }
       else if (c.held) release(s, c.accused, 'Released after the hearing.');
       c.outcome = 'Found guilty by ' + by + (parts.length ? ': ' + parts.join(', ') : ': a warning') + '.';
       if (A) { A.opinion = clamp((A.opinion || 0) - (by === 'you' ? 15 : 5), -100, 100); A.mood = clamp(A.mood - 10, 0, 100); A.rep = Math.max(0, (A.rep || 0) - 10); }
       fam.forEach(q => q.opinion = clamp((q.opinion || 0) - (by === 'you' ? 6 : 2), -100, 100));
       if (vic) vic.opinion = clamp((vic.opinion || 0) + (by === 'you' ? 6 : 2), -100, 100);
-      if (c.truth === 'guilty') J.deterUntil = Math.max(J.deterUntil, s.day + 8);
+      if (c.truth !== 'guilty' && c.witnesses.some(x => x.leaned > 0)) s.justice.secrets.filter(x => x.kind === 'threat' && x.caseId === c.id).forEach(x => { x.weight += 2; x.text += ', and an innocent person was convicted on it'; });
+      if (c.truth === 'guilty') J.deterUntil = Math.max(J.deterUntil || 0, s.day + 8);
       else { J.wrongful++; c.wrongful = true; if (A) { A.grudge = (A.grudge || 0) + 1; } }
     }
     J.closed.unshift(c); if (J.closed.length > 30) J.closed.length = 30;
     if (pen.confiscate && A && verdict === 'guilty') confiscate(s, c, A, pen.confiscate);
+    if (verdict === 'guilty') guiltyExtras(s, c, A, pen, by, J);
+    if (by === 'you' && ((verdict === 'guilty' && w >= 3) || (verdict === 'dismiss' && w < 3))) s.rec.fairVerdicts = (s.rec.fairVerdicts || 0) + 1;
     if (by === 'you' && s.gov && J.id === 'hearthmoor') approve(s, 'elder', verdict === 'guilty' ? (w >= 3 ? 2 : w <= 0 ? -3 : 0) : (w >= 4 ? -3 : 1));
     jlog(s, CRIME[c.kind] + ' case against ' + (A ? A.name : 'someone') + ': ' + c.outcome, 'info', J);
   }
 
+  // what follows a guilty verdict in the newer crimes: cargo seized, the organiser charged, a thieving manager let go
+  function guiltyExtras(s, c, A, pen, by, J) {
+    if (c.kind === 'smuggling' && pen.seize) {
+      const v = Math.round(c.value * 1.5);
+      if (pen.seize === 'you') { earn(s, v); s.stats.seized = (s.stats.seized || 0) + v; secret(s, 'seized', 'you kept ' + v + 'c of seized ' + (c.good || 'cargo') + ' instead of handing it to ' + J.name, [c.accused, c.guard].concat(s.gov ? s.gov.council.slice(0, 1) : []), 1 + Math.floor(v / 40), J.id, c.id); c.outcome = c.outcome.replace(/\.$/, ', and the cargo is seized (' + v + 'c, to you).'); }
+      else { const ch = chestOf(s, J); if (ch) ch.chest = (ch.chest || 0) + v; c.outcome = c.outcome.replace(/\.$/, ', and the cargo is seized for the ' + (J.id === 'hearthmoor' ? 'village' : 'town') + ' chest (' + v + 'c).'); }
+    }
+    if (c.kind === 'smuggling' && c.guard && s.people[c.guard] && caseWeight(c) >= 3) { const g = s.people[c.guard]; if (g.job && g.job.what === TOWN_WATCH_JOB[J.id]) { g.job = null; plog(s, g, 'Dismissed from the guard for taking a smuggler\u2019s coin.'); jlog(s, g.name + ' is dismissed from the guard for looking the other way.', 'info', J); } }
+    if (c.kind === 'poaching' && pen.organiser && c.organiser && s.people[c.organiser]) {
+      const O = s.people[c.organiser], k = newCase(s, 'poaching', { accused: O.id, accuser: null, victim: 'crown', value: c.value * 2, where: 'the King\u2019s forest', truth: 'guilty', what: 'paying hunters to take the King\u2019s deer', claim: (A ? A.name : 'The hunter') + ' names ' + O.name + ' as the one who paid for the deer.' }, J);
+      k.hidden = evidencePool(s, k); k.evidence.push({ text: (A ? A.name : 'The hunter') + ' testifies against ' + O.name + '.', w: 2 }); c.outcome = c.outcome.replace(/\.$/, '; ' + O.name + ' is charged as the organiser.');
+    }
+    if (c.kind === 'fraud' && c.victim === 'player' && A) {
+      for (const sh of s.shops || []) if (sh.manager && sh.manager.pid === A.id) { releaseManager(s, sh.manager, 'Dismissed for skimming the takings.'); sh.manager = null; c.outcome = c.outcome.replace(/\.$/, ', and dismissed as manager.'); }
+      for (const b of Object.values(s.biz || {})) if (b.manager && b.manager.pid === A.id) { releaseManager(s, b.manager, 'Dismissed for skimming the takings.'); b.manager = null; c.outcome = c.outcome.replace(/\.$/, ', and dismissed as manager.'); }
+    }
+  }
+
   /* ---------- what you did, and who knows it ---------- */
-  function secret(s, kind, text, knownBy, weight, where) {
-    const J = s.justice;
-    const k = { id: J.nextSecret++, kind, text, day: s.day, knownBy: Array.from(new Set(knownBy.filter(Boolean))), weight: weight || 1, exposed: false, demanded: false, where: where || 'hearthmoor' };
+  // how bad an abuse is: what it did, how much it took, and whether you have done it before
+  function secret(s, kind, text, knownBy, weight, where, caseId) {
+    const J = s.justice, ids = Array.from(new Set(knownBy.filter(id => id && id !== 'player')));
+    const prior = Math.min(2, J.secrets.filter(x => x.kind === kind).length);
+    // what each person who knows has to gain or lose by speaking
+    const prim = ids[0], P0 = s.people[prim], council = new Set(s.gov ? s.gov.council : []);
+    const roleOf = id => { const q = s.people[id]; if (id === prim) return kind === 'bribe' ? 'beneficiary' : 'victim'; if (q && P0 && (q.spouse === prim || (q.parents || []).includes(prim) || (P0.parents || []).includes(id))) return 'family'; if (council.has(id)) return 'official'; return 'witness'; };
+    const sources = ids.map(id => ({ pid: id, role: roleOf(id) }));
+    const k = { id: J.nextSecret++, kind, text, day: s.day, sources, heard: [], knownBy: ids.slice(), weight: (weight || 1) + prior, exposed: false, demanded: false, where: where || 'hearthmoor', caseId: caseId || null };
     J.secrets.push(k); J.fear = clamp(J.fear + 4 * (weight || 1), 0, 100);
     return k;
   }
@@ -4136,21 +4229,33 @@
     const J = s.justice, g = s.gov, council = new Set(g ? g.council : []);
     for (const k of J.secrets) {
       if (k.exposed || k.buried) continue;
-      // people who dislike you, or are honest, talk; fear keeps mouths shut
-      for (const id of k.knownBy.slice()) {
-        const p = s.people[id]; if (!p || p.status !== 'here') continue;
-        const talk = 0.03 + (p.opinion < 0 ? 0.05 : 0) + (p.grudge ? 0.05 : 0) - J.fear / 400;
-        if (rand(s) < talk) { const t = villagers(s).filter(q => !q.kid && !k.knownBy.includes(q.id)); const q = t[Math.floor(rand(s) * t.length)]; if (q) k.knownBy.push(q.id); }
+      // each person who knows has their own reasons: a victim wants it known, a family member less so, a witness
+      // fears for their place, and whoever profited keeps quiet unless they turn on you. Fear shuts mouths; rumour
+      // spreads it further, but hearsay is not evidence.
+      if (!k.sources) { k.sources = k.knownBy.map(id => ({ pid: id, role: 'witness' })); k.heard = []; }
+      for (const src of k.sources) {
+        const p = s.people[src.pid]; if (!p || p.status !== 'here' || (k.paid || {})[src.pid]) continue;
+        if (rand(s) < talkChance(s, p, src.role)) { const t = villagers(s).filter(q => !q.kid && !k.knownBy.includes(q.id)); const q = t[Math.floor(rand(s) * t.length)]; if (q) { k.heard.push(q.id); k.knownBy.push(q.id); } }
       }
+      for (const id of k.heard.slice()) { const p = s.people[id]; if (p && rand(s) < 0.03) { const t = villagers(s).filter(q => !q.kid && !k.knownBy.includes(q.id)); const q = t[Math.floor(rand(s) * t.length)]; if (q) { k.heard.push(q.id); k.knownBy.push(q.id); } } }
       // someone who knows may ask a price for keeping quiet
-      if (!k.demanded && rand(s) < 0.04) { const who = k.knownBy.map(id => s.people[id]).find(p => p && p.status === 'here' && p.opinion < 20 && !council.has(p.id)); if (who) { k.demanded = { pid: who.id, amount: 15 + Math.floor(rand(s) * 25), day: s.day }; jlog(s, who.name + ' knows what happened (' + k.text + ') and wants ' + k.demanded.amount + 'c to keep quiet.', 'bad'); } }
+      if (!k.demanded && rand(s) < 0.04) { const who = (k.sources || []).filter(x => x.role !== 'victim').map(x => s.people[x.pid]).find(p => p && p.status === 'here' && p.opinion < 20 && !council.has(p.id)); if (who) { k.demanded = { pid: who.id, amount: 15 + Math.floor(rand(s) * 25), day: s.day }; jlog(s, who.name + ' knows what happened (' + k.text + ') and wants ' + k.demanded.amount + 'c to keep quiet.', 'bad'); } }
       if (k.demanded && k.demanded.day && s.day - k.demanded.day > 3 && !k.demanded.paid) { k.knownBy.push(...villagers(s).filter(q => !q.kid).slice(0, 3).map(q => q.id)); k.demanded.day = null; }
-      // two councillors who know it is enough for an inquiry
-      const onCouncil = k.knownBy.filter(id => council.has(id)).length;
-      if (k.where && k.where !== 'hearthmoor') { if (k.knownBy.length >= 10) { k.exposed = true; royalInquiry(s, k); } continue; }
-      if (onCouncil >= 2 || k.knownBy.length >= 12) { k.exposed = true; openInquiry(s, k); }
+      // rumour reaching the council starts an inquiry only if someone who saw it is willing to say so
+      const willing = witnessesFor(s, k), onCouncil = k.knownBy.filter(id => council.has(id)).length;
+      if (k.where && k.where !== 'hearthmoor') { if (willing.length && k.knownBy.length >= 8) { k.exposed = true; royalInquiry(s, k); } continue; }
+      if (willing.length && (onCouncil >= 1 || k.knownBy.length >= 10)) { k.exposed = true; openInquiry(s, k); }
     }
     if (J.inquiry && s.day >= J.inquiry.day) closeInquiry(s);
+  }
+  function talkChance(s, p, role) {
+    const fear = s.justice.fear, likes = (p.opinion || 0) > 40;
+    const base = { victim: 0.1, family: 0.07, witness: 0.035 + (p.honest > 0.7 ? 0.03 : 0), official: 0.05, beneficiary: (p.opinion || 0) < -30 ? 0.03 : 0 }[role] || 0.03;
+    return Math.max(0, base + (p.grudge ? 0.04 : 0) - fear / 500 - (likes ? 0.04 : 0));
+  }
+  // who would stand up and say it: those who saw it themselves, are not too afraid, and are not bought or loyal
+  function witnessesFor(s, k) {
+    return (k.sources || []).filter(src => { const p = s.people[src.pid]; if (!p || p.status !== 'here' || (k.paid || {})[src.pid] || src.role === 'beneficiary') return false; return ((p.opinion || 0) < 25 || src.role === 'victim') && s.justice.fear < 70 + (src.role === 'victim' ? 20 : 0); });
   }
   function openInquiry(s, k) {
     const J = s.justice; if (J.inquiry) { J.inquiry.charges.push(k.id); return; }
@@ -4161,8 +4266,10 @@
   function closeInquiry(s) {
     const J = s.justice, I = J.inquiry; J.inquiry = null;
     const ks = I.charges.map(id => J.secrets.find(x => x.id === id)).filter(Boolean), weight = ks.reduce((a, k) => a + k.weight, 0);
-    const knowers = new Set(ks.flatMap(k => k.knownBy)).size, defence = (s.gov.approval.elder || 50) / 20 + J.fear / 30;
-    const score = weight * 2 + knowers / 3 - defence;
+    // an inquiry weighs testimony, not gossip: each person who saw it and will say so counts, rumour barely at all
+    const testify = new Set(ks.flatMap(k => witnessesFor(s, k).map(x => x.pid))).size, heard = new Set(ks.flatMap(k => k.heard || [])).size;
+    const defence = (s.gov.approval.elder || 50) / 20 + J.fear / 30;
+    const score = weight * 1.5 + testify * 2 + Math.min(1, heard / 8) - defence;
     let out;
     if (s.offices.elder !== 'player' && !I.you) out = 'The inquiry finds against the old Elder. It is noted in the village book.';
     else if (s.offices.elder !== 'player') { if (score >= 3) { const fine = 10 * weight; spend(s, fine); s.stats.fines = (s.stats.fines || 0) - fine; s.village.chest += fine; addStanding(s, -10, 'the inquiry finds you abused your office while Elder.'); out = 'Though you are no longer Elder, the inquiry finds you abused the office, and you must repay ' + fine + 'c to the chest.'; } else out = 'The inquiry into your time as Elder finds nothing it can prove.'; }
@@ -4179,7 +4286,7 @@
     setupCourts(s);
     const v = s.village, judge = youJudge(s), cs = () => { for (const C of allCourts(s)) { const k = C.cases.find(x => x.id === a); if (k) return k; } return null; };
     // for a case, the judge is whoever holds that court: the Elder here, the lord in a town, the crown in Crownmere
-    const needCourt = k => canJudge(s, courtOf(s, k)) ? null : fail(courtOf(s, k).id === 'hearthmoor' ? 'Only the Elder of Hearthmoor can do that here.' : 'That is for ' + courtOf(s, k).authority + ' to decide.');
+    const needCourt = k => canJudge(s, courtOf(s, k)) || tradeJudge(s, k) ? null : fail(courtOf(s, k).id === 'hearthmoor' ? 'Only the Elder of Hearthmoor can do that here.' : 'That is for ' + courtOf(s, k).authority + ' to decide.');
     const needJudge = () => judge ? null : fail('Only the Elder of Hearthmoor ' + (s.offices.elder === 'player' ? 'of age ' : '') + 'can do that here.');
     switch (name) {
       case 'jRecruit': { if (needJudge()) return needJudge(); const p = s.people[a]; if (!p || !guardCandidates(s).includes(p)) return fail('They cannot join the watch.'); if (J.watch.length >= J.bunks) return fail('The watch house sleeps ' + J.bunks + ' guards. Build more bunks first.'); if (v.chest < J_KIT) return fail('The chest needs ' + J_KIT + 'c for their kit.'); const from = p.job ? occupation(s, p) : null; const kit = (enlist(s, p, b || 'market'), 'the smith'); jlog(s, p.name + ' joins the village watch' + (from ? ', leaving work as ' + from.toLowerCase() : '') + '. Their kit cost the chest ' + J_KIT + 'c.'); return ok(); }
@@ -4214,12 +4321,14 @@
         if (pen.days > maxDays(CH)) return fail((CH.id === 'hearthmoor' ? 'The Elder' : 'This court') + ' can order ' + maxDays(CH) + ' days at most' + (CH.id === 'hearthmoor' ? '; more is for the lord\u2019s court.' : '.'));
         if (c === 'guilty' && pen.fine > maxFine(CH)) return fail('This court can fine ' + maxFine(CH) + 'c at most.');
         if (pen.confiscate && CH.id === 'hearthmoor') return fail('The Elder cannot take property; that is for a lord or the crown.');
-        if (pen.confiscate === 'take') secret(s, 'seized', 'you took ' + (A ? A.name : 'someone') + '\u2019s property for yourself', [k.accused, k.accuser].concat(living(s).filter(q => q.spouse === k.accused || (q.parents || []).includes(k.accused)).map(q => q.id)), 3, CH.id);
+        if (pen.confiscate === 'take') secret(s, 'seized', 'you took ' + (A ? A.name : 'someone') + '\u2019s property for yourself', [k.accused, k.accuser].concat(living(s).filter(q => q.spouse === k.accused || (q.parents || []).includes(k.accused)).map(q => q.id)), 3, CH.id, k.id);
         // judging against the evidence is an abuse, and someone always notices
-        if (c === 'guilty' && (w <= 0 || k.kind === 'order')) secret(s, 'unjust', 'you convicted ' + (A ? A.name : 'someone') + ' with nothing against them', [k.accused, k.accuser].concat(living(s).filter(q => q.spouse === k.accused || (q.parents || []).includes(k.accused)).map(q => q.id)), 2, CH.id);
-        if (c === 'dismiss' && w >= 4) secret(s, 'shielded', 'you let ' + (A ? A.name : 'someone') + ' go though the evidence was clear', [k.accuser].concat(watchPeople(s).guards.slice(0, 1).map(x => x.p.id)), 1);
-        if (c === 'guilty' && pen.fineTo === 'you' && pen.fine) secret(s, 'pocketed', 'you kept a ' + pen.fine + 'c fine for yourself', [k.accused].concat(watchPeople(s).guards.slice(0, 1).map(x => x.p.id)), 1);
-        decide(s, k, c === 'guilty' ? 'guilty' : 'dismiss', pen, 'you');
+        if (c === 'guilty' && (w <= 0 || k.kind === 'order')) secret(s, 'unjust', 'you knowingly convicted ' + (A ? A.name : 'someone') + ' with nothing against them', [k.accused, k.accuser].concat(living(s).filter(q => q.spouse === k.accused || (q.parents || []).includes(k.accused)).map(q => q.id)), 3, CH.id, k.id);
+        if (c === 'dismiss' && w >= 4) secret(s, 'shielded', 'you let ' + (A ? A.name : 'someone') + ' go though the evidence was clear', [k.accuser].concat(watchPeople(s).guards.slice(0, 1).map(x => x.p.id)), 1 + (k.value >= 25 ? 1 : 0), CH.id, k.id);
+        if (c === 'guilty' && pen.fineTo === 'you' && pen.fine) secret(s, 'pocketed', 'you kept a ' + pen.fine + 'c fine for yourself', [k.accused].concat(watchPeople(s).guards.slice(0, 1).map(x => x.p.id)), 1 + Math.floor(pen.fine / 30), CH.id, k.id);
+        if (c === 'negotiate' && k.kind !== 'hoarding') return fail('There is nothing to negotiate in this case.');
+        if (pen.seize && k.kind !== 'smuggling') return fail('There is no cargo to seize.');
+        decide(s, k, ['guilty', 'mercy', 'negotiate'].includes(c) ? c : 'dismiss', pen, 'you');
         return ok();
       }
       case 'jBribe': {
@@ -4227,7 +4336,7 @@
         const br = s.people[k.bribe.pid]; if (!br) { k.bribe = null; return fail('They have gone.'); }
         if (!b) { k.bribe.refused = true; br.opinion = clamp((br.opinion || 0) - 10, -100, 100); approve(s, 'elder', 1); jlog(s, 'You turn away ' + br.name + '’s purse.'); return ok(); }
         const amt = Math.min(k.bribe.amount, Math.max(0, br.purse)); br.purse -= amt; earn(s, amt); s.stats.bribes = (s.stats.bribes || 0) + amt;
-        secret(s, 'bribe', 'you took ' + amt + 'c from ' + br.name + ' over the ' + CRIME[k.kind].toLowerCase() + ' case', [br.id], 2, courtOf(s, k).id);
+        secret(s, 'bribe', 'you took ' + amt + 'c from ' + br.name + ' over the ' + CRIME[k.kind].toLowerCase() + ' case', [br.id].concat(k.bribe.wants === 'dismiss' && k.accuser && k.accuser !== 'player' ? [k.accuser] : []), 1 + Math.floor(amt / 30), courtOf(s, k).id, k.id);
         const want = k.bribe.wants; k.bribe = null;
         decide(s, k, want === 'convict' ? 'guilty' : 'dismiss', want === 'convict' ? { restitution: true, fine: 5 } : {}, 'you');
         return ok();
@@ -4235,7 +4344,7 @@
       case 'jLean': {
         const k = cs(); if (!k) return fail('No such case.'); if (needCourt(k)) return needCourt(k); const w = k.witnesses.find(x => x.pid === b); if (!w) return fail('No such witness.');
         const p = s.people[b]; const scared = rand(s) < 0.45 + J.fear / 200 - (p.opinion > 30 ? 0.1 : 0);
-        if (scared) { w.leaned = c === 'guilty' ? 3 : -3; w.shown = true; w.says = p.name.split(' ')[0] + ' now says something quite different.'; p.opinion = clamp((p.opinion || 0) - 15, -100, 100); secret(s, 'threat', 'you frightened ' + p.name + ' into changing their story', [p.id], 1); jlog(s, p.name + ' changes their story.'); }
+        if (scared) { w.leaned = c === 'guilty' ? 3 : -3; w.shown = true; w.says = p.name.split(' ')[0] + ' now says something quite different.'; p.opinion = clamp((p.opinion || 0) - 15, -100, 100); secret(s, 'threat', 'you frightened ' + p.name + ' into changing their story', [p.id], 1, courtOf(s, k).id, k.id); jlog(s, p.name + ' changes their story.'); }
         else { p.opinion = clamp((p.opinion || 0) - 25, -100, 100); const sec = secret(s, 'threat', 'you tried to frighten ' + p.name + ' off their evidence', [p.id].concat(s.gov.council.slice(0, 1)), 1); jlog(s, p.name + ' will not be frightened, and goes straight to the council.', 'bad'); }
         return ok();
       }
@@ -4256,7 +4365,7 @@
       case 'jHush': {
         const k = J.secrets.find(x => x.id === a); if (!k || !k.demanded || k.demanded.paid) return fail('No one is asking.');
         const q = s.people[k.demanded.pid];
-        if (b) { if (s.coins < k.demanded.amount) return fail('You need ' + k.demanded.amount + 'c.'); spend(s, k.demanded.amount); s.stats.hush = (s.stats.hush || 0) + k.demanded.amount; if (q) q.purse += k.demanded.amount; k.demanded.paid = true; k.knownBy = k.knownBy.filter(id => id !== k.demanded.pid || rand(s) < 0.3); jlog(s, 'You pay ' + (q ? q.name : 'them') + ' to keep quiet.'); }
+        if (b) { if (s.coins < k.demanded.amount) return fail('You need ' + k.demanded.amount + 'c.'); spend(s, k.demanded.amount); s.stats.hush = (s.stats.hush || 0) + k.demanded.amount; if (q) q.purse += k.demanded.amount; k.demanded.paid = true; k.paid = Object.assign(k.paid || {}, { [k.demanded.pid]: true }); jlog(s, 'You pay ' + (q ? q.name : 'them') + ' to keep quiet.'); }
         else { k.demanded.day = s.day - 3; jlog(s, 'You refuse to pay. ' + (q ? q.name : 'They') + ' will talk.', 'bad'); }
         return ok();
       }
@@ -4318,6 +4427,9 @@
     }
     return s.courts;
   }
+  // the Master of Trade hears market abuses, smuggling and contract fraud wherever they happen
+  const TRADE_CASES = ['hoarding', 'smuggling', 'fraud'];
+  const tradeJudge = (s, c) => !!(c && TRADE_CASES.includes(c.kind) && s.realm && s.realm.council.trade === 'player');
   const canJudge = (s, C) => !C ? false : C.id === 'hearthmoor' ? youJudge(s) : C.id === 'crownmere' ? isRuler(s) : !!(s.realm && regionLord(s, C.id) === 'player');
   const maxDays = C => C.id === 'hearthmoor' ? J_DETAIN_MAX : C.id === 'crownmere' ? 20 : 10;
   const maxFine = C => C.id === 'hearthmoor' ? 40 : C.id === 'crownmere' ? 200 : 100;
@@ -4327,6 +4439,10 @@
     const C = courtOf(s, c), T = chestOf(s, C), b = A.job && A.job.role === 'owner' && s.biz[A.job.biz], h = s.houses.find(x => x.owner === A.id && !x.tenants.includes(A.id)) || null;
     const what = b || h; if (!what) { c.outcome += ' They owned nothing to take.'; return; }
     const name = b ? empById(b.id).name : h.name, worth = b ? bizPrice(s, b.id) : houseValue(s, h);
+    // the law may take what was lost or gained by the crime, and the court's largest fine, no more
+    const cap = (c.value || 0) * 2 + maxFine(C);
+    if (mode === 'lawful' && worth > cap) { c.outcome += ' ' + name + ' (worth ' + worth + 'c) is more than the law allows for this offence (' + cap + 'c), so it is not taken.'; return; }
+    if (mode === 'take') { const k0 = s.justice.secrets.find(x => x.kind === 'seized' && x.caseId === c.id); if (k0) { k0.weight += Math.floor(worth / 300); k0.text += ' (' + name + ', worth ' + worth + 'c)'; } }
     if (mode === 'take') {
       if (b) { if (A.job) loseJob(s, A, 'Their business was taken by ' + s.name + '.'); b.owner = 'player'; b.staff = b.staff.filter(x => x.pid !== A.id); } else { h.owner = 'player'; }
       c.outcome += ' You took ' + name + ' for yourself.';
@@ -4346,6 +4462,10 @@
     const cov = clamp((T.watchN || 0) / Math.max(1, T.watchWant || 2), 0, 1.5), deter = s.day < (C.deterUntil || 0) ? 0.6 : 1;
     if (rand(s) > Math.min(0.45, folk.length / 1500) * (1.3 - 0.5 * cov) * deter) return;
     const k = rand(s), poor = p => (p.hungry ? 3 : 0) + (p.purse < 6 ? 2 : 0) + 0.3;
+    const R = s.realm, port = { eastwatch: 1, crownmere: 0.5, oakbridge: 0.3 }[id] || 0;
+    // high tariffs make smuggling pay; Forest Law makes hunting a crime
+    if (port && rand(s) < 0.25 * port * (R ? R.tariff : 1)) { townSmuggling(s, C, folk); return; }
+    if (R && R.laws.forestLaw && (id === 'greenhaven' || id === 'ironcrest') && rand(s) < 0.35) { poaching(s, C, folk); return; }
     if (k < 0.55) {
       const thief = pickBy(s, folk, poor), victim = pickBy(s, folk.filter(p => p !== thief && p.purse > 25), p => Math.min(5, p.purse / 50));
       if (!thief || !victim) return;
@@ -4368,6 +4488,38 @@
       c.hidden = evidencePool(s, c);
     }
   }
+  function bringsToYou(s, C, c) {
+    const mode = C.delegate || (C.id === 'crownmere' ? 'sensitive' : 'serious'), A = s.people[c.accused];
+    const sensitive = c.kind === 'corruption' || c.kind === 'smuggling' || c.kind === 'hoarding' || (A && (A.noble || (A.job && A.job.type === 'office') || (s.towns[C.id] && (s.towns[C.id].mayor === A.id || (s.towns[C.id].council || []).includes(A.id))))) || c.value >= 60;
+    if (mode === 'none') return false; if (mode === 'sensitive') return sensitive;
+    return sensitive || c.value >= 25 || c.kind === 'assault' || c.kind === 'fraud';
+  }
+  // the captain and the steward hear what is left to them, by the evidence; a royal judge in Crownmere
+  function localHears(s, C, c) {
+    const T = s.towns[C.id], w = caseWeight(c), A = s.people[c.accused], by = C.id === 'crownmere' ? 'the royal judges' : 'the captain and the steward';
+    if (c.kind === 'hoarding') { if (w >= 3) decide(s, c, 'guilty', { fine: 40 }, by); else decide(s, c, 'negotiate', {}, by); return; }
+    // punishment follows the harm: small thefts and a hungry poacher work it off; smuggled cargo is seized; the organiser is charged
+    const K = c.kind, pen = K === 'smuggling' ? { fine: Math.round(c.value / 2), seize: 'chest' } : K === 'poaching' ? (c.organiser ? { fine: 10, organiser: true } : A && A.hungry ? { work: 2 } : { fine: 8 }) : K === 'fraud' ? { restitution: true, fine: 15, days: c.value >= 30 ? 2 : 0 } : { restitution: true, fine: K === 'corruption' ? 30 : c.value >= 30 ? 15 : 6, days: K === 'assault' ? 2 : K === 'corruption' ? 3 : 0, work: K === 'theft' ? (c.value >= 30 ? 3 : 2) : 0 };
+    if (w >= 3) decide(s, c, 'guilty', pen, by);
+    else decide(s, c, 'dismiss', {}, by);
+    if (w >= 3 && c.kind === 'corruption' && A && T && T.mayor === A.id) { const nx = (T.council || []).map(x => s.people[x]).find(p => p && p.status === 'here' && p !== A); if (nx) { T.mayor = nx.id; jlog(s, A.name + ' is removed as ' + T.title + ' of ' + C.name + '. ' + nx.name + ' takes their place.', 'info', C); } }
+  }
+  function townSmuggling(s, C, folk) {
+    const R = s.realm, owners = folk.filter(p => p.job && (p.job.role === 'owner' || (p.job.what || '').includes('dock'))), A = owners[Math.floor(rand(s) * owners.length)]; if (!A) return;
+    const guilty = rand(s) < 0.7, good = ['cloth', 'wine', 'salt', 'spice'][Math.floor(rand(s) * 4)], value = Math.round((20 + rand(s) * 50) * (R ? R.tariff : 1));
+    if (guilty) { A.purse += value; if (R) R.treasury -= value; }
+    const guard = rand(s) < 0.3 ? folk.find(p => p.job && p.job.what === TOWN_WATCH_JOB[C.id]) : null;
+    const c = newCase(s, 'smuggling', { accused: A.id, accuser: null, victim: 'crown', value, good, guard: guard ? guard.id : null, where: 'the harbour', truth: guilty ? 'guilty' : 'mistaken', what: good + ' landed in ' + C.name + ' without paying ' + value + 'c in duty', claim: 'The customs clerks say ' + A.name + ' brought in ' + good + ' without paying the duty.' }, C);
+    c.hidden = evidencePool(s, c);
+  }
+  function poaching(s, C, folk) {
+    const hunter = pickBy(s, folk.filter(p => !p.job || p.job.type === 'commons'), p => (p.hungry ? 4 : 0.5)); if (!hunter) return;
+    const rich = folk.filter(p => p.job && p.job.role === 'owner' && p.purse > 100), org = rand(s) < 0.35 && rich.length ? rich[Math.floor(rand(s) * rich.length)] : null, guilty = rand(s) < 0.8;
+    const value = org ? 25 + Math.floor(rand(s) * 20) : 6 + Math.floor(rand(s) * 10);
+    if (guilty) { hunter.ate = (hunter.ate || 0) + 4; hunter.purse += org ? 6 : 0; if (org) org.purse += value; }
+    const c = newCase(s, 'poaching', { accused: hunter.id, accuser: null, victim: 'crown', value, organiser: guilty && org ? org.id : null, where: 'the King’s forest', truth: guilty ? 'guilty' : 'mistaken', what: 'deer taken from the King’s forest near ' + C.name, claim: 'The forester says ' + hunter.name + ' has been taking the King’s deer.' }, C);
+    c.hidden = evidencePool(s, c);
+  }
   function courtsDay(s) {
     setupCourts(s); if (!s.courts) return;
     for (const C of Object.values(s.courts)) {
@@ -4377,18 +4529,12 @@
       for (const c of C.cases.slice()) {
         if (c.status !== 'open') continue;
         if (c.investigating > 0) { if (c.hidden.length && rand(s) < 0.5) c.evidence.push(c.hidden.splice(Math.floor(rand(s) * c.hidden.length), 1)[0]); c.witnesses.forEach(w => { if (!w.shown && rand(s) < 0.5) w.shown = true; }); c.investigating--; }
+        // which cases reach you: as lord, the serious ones (unless you hand them all over); as the crown, only the sensitive ones
+        c.delegated = !((mine && bringsToYou(s, C, c)) || tradeJudge(s, c)) && !c.requested;
+        if (c.held && c.delegated && s.day >= c.deadline) { localHears(s, C, c); continue; }
         if (c.held && s.day > c.deadline) { release(s, c.accused, 'Held past the hearing day without a hearing, and let go.'); c.held = false; }
-        // serious cases go to the lord; the captain's men deal with the rest
-        const serious = c.kind === 'corruption' || c.value >= 25 || c.kind === 'assault';
-        c.delegated = !(mine && serious);
         if (!c.asked && (c.delegated || s.day - c.day >= 2)) { c.investigating = 3; c.asked = true; }
-        if ((c.delegated && s.day - c.day >= 4) || s.day - c.day >= 8) {
-          const w = caseWeight(c), A = s.people[c.accused];
-          if (w >= 3) decide(s, c, 'guilty', { restitution: true, fine: c.kind === 'corruption' ? 30 : 10, days: c.kind === 'assault' ? 3 : c.kind === 'corruption' ? 5 : 1 }, C.id === 'crownmere' ? 'the royal judges' : 'the captain and the steward');
-          else decide(s, c, 'dismiss', {}, C.id === 'crownmere' ? 'the royal judges' : 'the captain and the steward');
-          // a convicted mayor or councillor loses their place
-          if (w >= 3 && c.kind === 'corruption' && A && T.mayor === A.id) { const nx = (T.council || []).map(x => s.people[x]).find(p => p && p.status === 'here' && p !== A); if (nx) { T.mayor = nx.id; jlog(s, A.name + ' is removed as ' + T.title + ' of ' + C.name + '. ' + nx.name + ' takes their place.', 'info', C); } }
-        }
+        if ((c.delegated && s.day - c.day >= 4) || s.day - c.day >= 8) { localHears(s, C, c); }
       }
       C.cases = C.cases.filter(c => c.status === 'open');
       for (const pr of C.prisoners.slice()) { const p = s.people[pr.pid]; if (!p || p.status !== 'here') { C.prisoners = C.prisoners.filter(x => x !== pr); continue; } if (pr.until != null && s.day >= pr.until) release(s, pr.pid, pr.sentence ? 'Served their time in ' + C.place + '.' : 'Released.'); else if (C.condition < 35 && rand(s) < 0.06) { release(s, pr.pid, 'Escaped from ' + C.place + '.'); jlog(s, p.name + ' has escaped from ' + C.place + '.', 'bad', C); } }
@@ -4397,15 +4543,23 @@
       const m = T.mayor && s.people[T.mayor];
       if (m && m.status === 'here') { if (m.honest == null) m.honest = Math.round(rand(s) * 100) / 100; if (m.honest < 0.35 && T.chest > 80 && rand(s) < 0.04) { const x = 5 + Math.floor(rand(s) * 20); T.chest -= x; m.purse += x; T.skims = (T.skims || []).concat({ pid: m.id, amount: x, day: s.day }).slice(-20); } }
       // a merchant cornering a good, which only the Master of Trade will look into
-      if (!T.hoard && rand(s) < 0.012 && s.goods && s.goods[C.id]) { const owners = townFolk(s, C.id).filter(p => p.job && p.job.role === 'owner' && p.purse > 150); const o = owners[Math.floor(rand(s) * owners.length)]; if (o) { const g = GOODS[Math.floor(rand(s) * GOODS.length)], q = Math.min(Math.round(s.goods[C.id][g] * 0.4), 60); if (q > 5) { s.goods[C.id][g] -= q; T.hoard = { pid: o.id, good: g, qty: q, day: s.day }; } } }
-      if (T.hoard && s.day - T.hoard.day > 25) { s.goods[C.id][T.hoard.good] += T.hoard.qty; T.hoard = null; }
+      if (!T.hoard && rand(s) < (seasonOf(s) === 'autumn' ? 0.02 : 0.01) && s.goods && s.goods[C.id]) { const owners = townFolk(s, C.id).filter(p => p.job && p.job.role === 'owner' && p.purse > 150); const o = owners[Math.floor(rand(s) * owners.length)]; if (o) { const g = GOODS[Math.floor(rand(s) * GOODS.length)], q = Math.min(Math.round(s.goods[C.id][g] * 0.4), 60); if (q > 5) { s.goods[C.id][g] -= q; T.hoard = { pid: o.id, good: g, qty: q, day: s.day, deliberate: rand(s) < (seasonOf(s) === 'autumn' ? 0.45 : 0.7) }; } } }
+      if (T.hoard && s.day - T.hoard.day > 25 && !(s.courts[C.id] && s.courts[C.id].cases.some(x => x.kind === 'hoarding' && x.accused === T.hoard.pid))) { s.goods[C.id][T.hoard.good] += T.hoard.qty; T.hoard = null; }
     }
     // soldiers back from the roads bring prisoners of their own
     const R = s.realm; if (R && R.military) R.military = R.military.filter(m => s.day - m.day < 30);
+    if (R && s.bandits) {
+      // what became of the bandits you sentenced
+      (R.pressed || []).forEach(x => { if (!x.done && s.day - x.day >= 8) { x.done = true; const gone = Math.round(x.n * (0.2 + rand(s) * 0.3)), stay = x.n - gone; if (gone) s.bandits[x.region] = (s.bandits[x.region] || 0) + gone * 4; if (stay >= 3) { const g = R.regions[x.region]; if (g) g.garrison = Math.min(3, g.garrison + 1); } realmLog(s, gone ? gone + ' of the pressed bandits have deserted' + (stay >= 3 ? '; the rest strengthen the garrison.' : '.') : 'The pressed bandits have settled into the garrison.', gone ? 'bad' : 'good'); } });
+      (R.parolees || []).forEach(x => { if (!x.done && s.day - x.day >= 6) { x.done = true; const back = Math.round(x.n * (0.15 + rand(s) * 0.35)); if (back) { s.bandits[x.region] = (s.bandits[x.region] || 0) + back * 5; realmLog(s, back + ' of the pardoned bandits are back on the roads of ' + REGIONS[x.region] + '.', 'bad'); } else realmLog(s, 'The pardoned bandits have kept their oath.', 'good'); } });
+      (R.banditPrison || []).forEach(x => { if (s.day < x.until) R.treasury -= x.n; });
+      R.banditPrison = (R.banditPrison || []).filter(x => s.day < x.until); R.pressed = (R.pressed || []).filter(x => !x.done); R.parolees = (R.parolees || []).filter(x => !x.done); R.workGang = (R.workGang || []).filter(x => s.day < x.until);
+    }
   }
   // abuses out in the regions reach the crown's ears in the end
   function royalInquiry(s, k) {
     const R = s.realm; if (!R) return;
+    if (!witnessesFor(s, k).length) { jlog(s, 'Rumours about you reach the court, but no one will swear to them.', 'info'); return; }
     const fine = 40 * k.weight; spend(s, fine); s.stats.fines = (s.stats.fines || 0) - fine; R.treasury += fine; R.favour = clamp(R.favour - 8 * k.weight, 0, 100);
     for (const id in R.regions) { const l = regionLord(s, id), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) - 8 * k.weight, -100, 100); }
     let out = 'Word reaches the crown that ' + k.text + '. You pay ' + fine + 'c into the treasury and your favour at court falls.';
@@ -4425,6 +4579,8 @@
         // the lord sets how big the town's guard is: more men cost the town chest more, and the town feels safer
         if (!C || !canJudge(s, C)) return fail('Only the lord funds the guard.'); const T = s.towns[a]; T.watchMul = clamp(Math.round(b * 4) / 4, 0.75, 1.5); return ok();
       }
+      case 'xDelegate': { if (!C || !canJudge(s, C)) return fail('Not your court.'); if (!['serious', 'sensitive', 'none'].includes(b)) return fail('Unknown.'); C.delegate = b; return ok(); }
+      case 'xRequest': { for (const C2 of Object.values(s.courts)) { const k = C2.cases.find(x => x.id === a); if (k) { if (!canJudge(s, C2) && !tradeJudge(s, k)) return fail('That case is not for you.'); k.requested = true; k.delegated = false; return ok(); } } return fail('No such case.'); }
       case 'xFund': { if (!C || !canJudge(s, C)) return fail('Not your town.'); const n = Math.round(b); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.'); spend(s, n); s.towns[a].chest += n; s.stats.given = (s.stats.given || 0) + n; jlog(s, 'You give ' + n + 'c from your own purse to the chest of ' + C.name + '.', 'info', C); return ok(); }
       case 'xAudit': {
         if (!seat('treasury')) return fail('Only the Lord Treasurer or the crown audits the town chests.');
@@ -4439,9 +4595,12 @@
         if (!seat('trade')) return fail('Only the Master of Trade or the crown looks into the markets.');
         if (R.lastMarket != null && s.day - R.lastMarket < 5) return fail('Your men are still at the last inquiry.');
         R.lastMarket = s.day; const hits = [];
-        for (const id in s.towns) { const T = s.towns[id]; if (T.hoard && rand(s) < 0.8) { const o = s.people[T.hoard.pid], f = Math.min(80, o ? Math.max(0, o.purse) : 0); s.goods[id][T.hoard.good] += T.hoard.qty; if (o) { o.purse -= f; o.opinion = clamp((o.opinion || 0) - 30, -100, 100); } R.treasury += f; hits.push((o ? o.name : 'a merchant') + ' was hoarding ' + T.hoard.qty + ' ' + T.hoard.good + ' in ' + REGIONS[id] + ' (fined ' + f + 'c, the stock released)'); T.hoard = null; } }
+        // finding a hoard opens a case: laying in stock for winter is lawful, cornering a market to starve a town is not
+        for (const id in s.towns) { const T = s.towns[id], Cx = s.courts[id]; if (T.hoard && !T.hoard.cased && Cx && rand(s) < 0.8) { const o = s.people[T.hoard.pid]; if (!o) continue; T.hoard.cased = true;
+          const k = newCase(s, 'hoarding', { accused: o.id, accuser: null, victim: 'town', value: Math.round(T.hoard.qty * goodsPrice(s, id, T.hoard.good)), good: T.hoard.good, where: REGIONS[id] + '\u2019s market', truth: T.hoard.deliberate ? 'guilty' : 'lawful', what: o.name + ' holds ' + T.hoard.qty + ' ' + T.hoard.good + ' off the market in ' + Cx.name, claim: 'Your clerks find ' + T.hoard.qty + ' ' + T.hoard.good + ' in ' + o.name + '\u2019s stores while the price climbs.' }, Cx);
+          k.hidden = evidencePool(s, k); k.investigating = 2; hits.push(o.name + ' holding ' + T.hoard.qty + ' ' + T.hoard.good + ' in ' + REGIONS[id]); } }
         if (R.monopoly) hits.push(s.people[R.monopoly.pid].name + '’s grip on the bakeries can be broken with the charter');
-        realmLog(s, hits.length ? 'Your market inquiry finds: ' + hits.join('; ') + '.' : 'Your market inquiry finds the markets honest.', hits.length ? 'good' : 'info'); return ok();
+        realmLog(s, hits.length ? 'Your market inquiry finds: ' + hits.join('; ') + '. The cases are yours to hear.' : 'Your market inquiry finds the markets honest.', hits.length ? 'good' : 'info'); return ok();
       }
       case 'xSoldiers': {
         if (!seat('war')) return fail('Only the Marshal or the crown commands soldiers.');
@@ -4456,8 +4615,12 @@
       case 'xMartial': {
         if (!seat('war')) return fail('Only the Marshal tries military prisoners.');
         const M = R.military || []; if (!M.length) return fail('There are no military prisoners.');
-        const n = M.reduce((x, m) => x + m.n, 0); R.military = [];
-        if (b === 'press') { for (const id in R.regions) R.regions[id].garrison = Math.min(3, R.regions[id].garrison + (n >= 4 ? 1 : 0)); realmLog(s, n + ' captured bandits are pressed into the garrisons.', 'info'); }
+        const n = M.reduce((x, m) => x + m.n, 0), from = M[0].region; R.military = [];
+        // pressed men may desert; pardoned men may go back to the roads; prisoners cost the treasury; work mends the roads
+        if (b === 'press') { R.pressed = (R.pressed || []).concat({ n, day: s.day, region: from }); realmLog(s, n + ' captured bandits are pressed into the garrisons. Whether they stay is another matter.', 'info'); }
+        else if (b === 'prison') { R.banditPrison = (R.banditPrison || []).concat({ n, until: s.day + 20, region: from }); realmLog(s, n + ' bandits go to the castle dungeon for twenty days, at 1c a day each from the treasury.', 'info'); }
+        else if (b === 'work') { const g = R.regions[from]; if (g) g.roads = Math.min(3, (g.roads || 0) + 1); R.workGang = (R.workGang || []).concat({ n, until: s.day + 15, region: from }); realmLog(s, n + ' bandits are set to mend the roads of ' + REGIONS[from] + ' under guard.', 'info'); }
+        else if (b === 'pardon') { R.parolees = (R.parolees || []).concat({ n, day: s.day, region: from }); for (const id in s.towns) s.towns[id].approval = clamp((s.towns[id].approval || 50) + 1, 0, 100); realmLog(s, n + ' bandits are pardoned on their oath to keep the peace.', 'info'); }
         else { for (const id in s.bandits) if (typeof s.bandits[id] === 'number') s.bandits[id] = Math.max(0, s.bandits[id] - 5); R.favour = clamp(R.favour + 2, 0, 100); for (const id in s.towns) s.towns[id].approval = clamp((s.towns[id].approval || 50) - 1, 0, 100); realmLog(s, n + ' bandits are hanged at the crossroads. The roads go quiet for a while; the towns shiver.', 'info'); }
         return ok();
       }
@@ -5015,7 +5178,10 @@
       case 'seekSeat': {
         const R = s.realm; if (!R || R.exile) return fail('Not now.');
         if (!COUNCIL[a]) return fail('No such office.'); if (R.council[a] === 'player') return fail('You already hold it.');
-        const held0 = Object.keys(COUNCIL).find(k => R.council[k] === 'player'), path = s.player.councilPath || (held0 && COUNCIL_PATH[held0]); if (path && path !== COUNCIL_PATH[a]) return fail('You walk ' + PATH_NAME[path] + '. ' + COUNCIL[a] + ' is on ' + PATH_NAME[COUNCIL_PATH[a]] + ', and that road is shut to you.');
+        // one seat at a time: to change roads you resign first, wait, and earn the new seat on its own terms
+        const held0 = Object.keys(COUNCIL).find(k => R.council[k] === 'player');
+        if (held0 && COUNCIL_PATH[held0] !== COUNCIL_PATH[a]) return fail('You sit as ' + COUNCIL[held0] + ', on ' + PATH_NAME[COUNCIL_PATH[held0]] + '. Resign that seat first if you want to change roads.');
+        if (!held0 && s.player.resignedSeat != null && s.day - s.player.resignedSeat < 10) return fail('You resigned from the council on day ' + s.player.resignedSeat + '. The King will not take you back for ten days.');
         { const need = seatNeeds(s, a); if (need.length) return fail('To be ' + COUNCIL[a] + ' you must first ' + need.join('; ') + '.'); }
         if (!yourLordships(s).length) return fail('Only a lord sits on the royal council.');
         if (alliesOf(s).length < 2) return fail('You need at least two allies among the lords or the people of influence (you have ' + alliesOf(s).length + ').');
@@ -5027,6 +5193,12 @@
         R.council[a] = 'player'; R.favour = clamp(R.favour - 5, 0, 100);
         s.player.councilPath = COUNCIL_PATH[a]; s.player.seatsHeld = Array.from(new Set((s.player.seatsHeld || []).concat(a)));
         realmLog(s, 'The King names you ' + COUNCIL[a] + ' of Alderwyn. You sit on the royal council, on ' + PATH_NAME[COUNCIL_PATH[a]] + '.', 'story'); return ok();
+      }
+      case 'resignSeat': {
+        const R = s.realm; if (!R) return fail('Not now.'); const k = Object.keys(COUNCIL).find(x => R.council[x] === 'player'); if (!k) return fail('You hold no council seat.');
+        R.council[k] = noble(s, { name: nameForNoble(s), age: 45, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' when ' + s.name + ' resigned.' }).id;
+        s.player.resignedSeat = s.day; s.player.councilPath = null; R.favour = clamp(R.favour - 3, 0, 100);
+        realmLog(s, 'You resign as ' + COUNCIL[k] + '. Another takes the seat.', 'info'); return ok();
       }
       case 'undermineKing': {
         const R = s.realm; if (!R || isRuler(s)) return fail('Not now.'); if (!yourSeats(s).length) return fail('Only a councillor can sway the court against the King.');
@@ -5477,9 +5649,9 @@
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
-    newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
+    calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
     relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR

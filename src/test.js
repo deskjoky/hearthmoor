@@ -1,7 +1,7 @@
 // Headless tests for the Hearthmoor simulation. Run: node test.js
 const Sim = require('./sim.js');
 // most tests look at one system at a time, so the world does not age in them; the life-cycle tests turn it back on
-const newGameRaw = Sim.newGame, newGameAging = (...a) => { const s = newGameRaw(...a); s.bandits = null; return s; }; Sim.newGame = (...a) => { const s = newGameAging(...a); s.ageRate = 0; return s; };
+const newGameRaw = Sim.newGame, newGameAging = (...a) => { const s = newGameRaw(...a); s.bandits = null; s.ageRate = 4; return s; }; Sim.newGame = (...a) => { const s = newGameAging(...a); s.ageRate = 0; return s; };
 let failures = 0;
 function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + msg); } else console.log('  ok: ' + msg); }
 function runIdle(s, max = 3000) { let m = 0; while ((s.player.dest || s.player.action) && m < max) { Sim.step(s, 1); m++; } return m; }
@@ -589,7 +589,8 @@ console.log('19. The Elder\u2019s powers: the village works, officers, and the o
 console.log('20. A whole life: ageing, marriage, children, death and inheritance');
 {
   const s = newGameAging(110);
-  check(s.ageRate === 4, 'by default a year passes every four days');
+  check(newGameRaw(109).ageRate === Sim.YEAR_DAYS && Sim.YEAR_DAYS === 60, 'by default a year is the calendar year: twelve months of five days');
+  check(s.ageRate === 4, 'this test ages the world quickly: a year every four days');
   const age0 = Sim.living(s).map(p => [p.id, p.age]);
   Sim.advance(s, 1440 * 4);
   const aged = age0.filter(([id, a]) => s.people[id].status === 'here' && s.people[id].age === a + 1).length;
@@ -796,7 +797,8 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   check(!Sim.cmd(s, 'claimCrown').ok, 'waiting is not enough: you need allies, a war chest, the towns and the new ruler exposed');
   const lords = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== 'player' && l !== R.king).slice(0, 3); lords.forEach(l => { s.people[l].opinion = 40; });
   lords.forEach(l => Sim.cmd(s, 'rallyAlly', l)); Sim.cmd(s, 'warChest', 600);
-  for (let round = 0; round < 3; round++) { s.coins += 1500; rally(); for (let d = 0; d < 15; d++) { away(); Sim.advance(s, 1440); } }
+  // winter can cost a point or two of the towns' goodwill, so keep rallying until support is there (at most five rounds)
+  for (let round = 0; round < 5 && (round < 3 || Sim.supportOf(s) < 67); round++) { s.coins += 1500; rally(); for (let d = 0; d < 15; d++) { away(); Sim.advance(s, 1440); } }
   for (let d = 0; d < 12 && R.kingSupport >= 50; d++) { court(); Sim.cmd(s, 'exposeRuler'); away(); Sim.advance(s, 1440); }
   court(); const rr = Sim.cmd(s, 'claimCrown');
   check(rr.ok && Sim.isRuler(s) && !R.exile, 'with sworn allies, a war chest, the towns and the new ruler exposed, you take the crown back' + (rr.ok ? '' : ': ' + rr.msg));
@@ -865,7 +867,7 @@ console.log('31. Law and order: the watch, cases, cells, and the people who know
   C('jRelease', vil[2].id); const c4 = mk(vil[4]); C('jArrest', c4.id);
   check(vil[4].held && Sim.income(s, vil[4]) === 0, vil[4].name + ', your worker, is held: no work and no wage');
   for (let d = 0; d < 6; d++) Sim.advance(s, 1440);
-  check(!vil[4].held && !c4.held, 'not heard within four days, they are released');
+  check(!vil[4].held && !c4.held, 'not heard by the next day, they are released');
   // an unpayable fine is paid off or worked off, never more prison
   const poor = vil[5]; poor.purse = 3; const c5 = mk(poor); C('jHear', c5.id, { fine: 30 }, 'guilty');
   const owed0 = c5.fineOwed; for (let d = 0; d < 5; d++) Sim.advance(s, 1440);
@@ -912,7 +914,10 @@ console.log('32. Courts of the towns, and the crown’s hand');
   // confiscation: lawful forfeiture against taking it yourself
   const ownerB = Object.values(s.biz).find(b => b.town === 'greenhaven' && s.people[b.owner] && s.people[b.owner].status === 'here' && b.trade !== 'estate');
   if (ownerB) { const own = s.people[ownerB.owner], ch0 = s.towns.greenhaven.chest; const c3 = mk(C.greenhaven, own, { kind: 'corruption' });
-    check(X('jHear', c3.id, { confiscate: 'lawful' }, 'guilty').ok && ownerB.owner !== 'player' && s.towns.greenhaven.chest > ch0, 'lawful forfeiture: ' + Sim.empById(ownerB.id).name + ' is sold for the town chest, not for you'); }
+    const small = mk(C.greenhaven, own, { kind: 'theft', value: 10 }); X('jHear', small.id, { confiscate: 'lawful' }, 'guilty');
+    check(ownerB.owner === own.id && /more than the law allows/.test(small.outcome), 'a 10c theft cannot cost them a business worth ' + Sim.bizPrice(s, ownerB.id) + 'c');
+    c3.value = Math.ceil(Sim.bizPrice(s, ownerB.id) / 2);
+    check(X('jHear', c3.id, { confiscate: 'lawful' }, 'guilty').ok && ownerB.owner !== 'player' && s.towns.greenhaven.chest > ch0, 'lawful forfeiture for a ' + c3.value + 'c fraud on the chest: ' + Sim.empById(ownerB.id).name + ' is sold for the town chest, not for you'); }
   const ownerB2 = Object.values(s.biz).find(b => b.town === 'greenhaven' && b.owner !== 'player' && s.people[b.owner] && s.people[b.owner].status === 'here' && !b.closed && b.trade !== 'estate');
   if (ownerB2) { const own = s.people[ownerB2.owner]; const c4 = mk(C.greenhaven, own, { kind: 'corruption' }); const n0 = s.justice.secrets.length;
     check(X('jHear', c4.id, { confiscate: 'take' }, 'guilty').ok && ownerB2.owner === 'player' && s.justice.secrets.length > n0, 'taking it for yourself works, and is a theft someone remembers'); }
@@ -930,6 +935,74 @@ console.log('32. Courts of the towns, and the crown’s hand');
   const k0 = Object.keys(Sim.COUNCIL).find(k => R.council[k] && R.council[k] !== 'player'), old = R.council[k0];
   check(X('xDismiss', k0).ok && R.council[k0] !== old, 'the crown dismisses a councillor and names another');
   check(s.ledger.slice(1).every(e => !e.unexplained), 'lands, fines and seizures all have lines in your books');
+}
+
+console.log('33. The calendar, the seasons, and justice in proportion');
+{
+  const s = newGameRaw(33); s.ageRate = 0; Sim.applyStart(s, 'lord'); s.coins = 4000; Sim.advance(s, 1440);
+  const cal = d => Sim.calendar({ day: d });
+  check(cal(1).monthName === 'Thawmonth' && cal(1).dom === 1 && cal(5).dom === 5 && cal(6).monthName === 'Seedmonth', 'months are five days long');
+  check(cal(46).season === 'winter' && cal(31).season === 'autumn' && cal(61).year === 2 && cal(61).season === 'spring', 'twelve months make a sixty-day year, in four seasons');
+  check(Sim.SEASON_FX.autumn.grain > 1 && Sim.SEASON_FX.winter.grain < 1 && Sim.SEASON_FX.winter.fuel > 1 && Sim.SEASON_FX.winter.travel < 1, 'harvest in autumn; in winter the fields are bare, fires burn and fewer travel');
+  const C = s.courts, R = s.realm, X = (...a) => Sim.cmd(s, ...a);
+  const folk = Sim.living(s).filter(p => p.town === 'greenhaven' && !p.kid && p.status === 'here' && !p.held && !(p.job && p.job.role === 'owner'));
+  const mk = (p, o) => { const c = Object.assign({ id: s.justice.nextCase++, kind: 'theft', day: s.day, status: 'open', evidence: [{ text: 'x', w: 4 }], hidden: [], witnesses: [], investigating: 0, held: false, accused: p.id, accuser: null, victim: 'chest', value: 8, where: 'the market', truth: 'guilty', what: 'test', claim: 'test', authority: C.greenhaven.authority, court: 'greenhaven' }, o || {}); C.greenhaven.cases.push(c); return c; };
+  // waiting for a hearing is a day, not a season
+  const a1 = mk(folk[0]); X('jArrest', a1.id);
+  check(a1.held && a1.deadline === s.day + 1, 'someone arrested must be heard by the next day');
+  // mercy is lawful
+  folk[1].hungry = true; folk[1].purse = 2; const op = folk[1].opinion || 0; const m1 = mk(folk[1]);
+  check(X('jHear', m1.id, { reason: 'they were hungry' }, 'mercy').ok && m1.verdict === 'mercy' && /pardoned because they were hungry/.test(m1.outcome) && (folk[1].opinion || 0) > op, 'a guilty verdict with an open pardon is lawful mercy, and remembered kindly');
+  // community work: the town gains, the convicted keeps their liberty
+  const ch0 = s.towns.greenhaven.chest, w1 = mk(folk[2]); X('jHear', w1.id, { work: 2 }, 'guilty');
+  check(w1.workLeft === 2 && !folk[2].held, 'two days of work for the town, not the cells');
+  Sim.advance(s, 1440 * 3);
+  check(!w1.workLeft && s.towns.greenhaven.chest !== ch0, 'the work is done and the town has its value');
+  // the house price is what the house earns, not what you ask
+  const h = s.houses.find(x => x.owner === 'player' && x.tenants.length) || s.houses.find(x => x.tenants.length);
+  if (h) { const own0 = h.owner; h.owner = 'player'; h.rent0 = h.rent0 || h.rent; const v0 = Sim.houseValue(s, h), r0 = h.rent; h.rent = r0 * 20; const v1 = Sim.houseValue(s, h); h.rent = r0; h.owner = own0;
+    check(v1 <= v0 * 1.3, 'raising the rent twentyfold does not make the house worth twenty times as much (' + v0 + 'c to ' + v1 + 'c)'); }
+  // the council: one seat at a time, and you can change roads
+  R.council.law = 'player'; s.player.councilPath = 'law';
+  check(!X('seekSeat', 'war').ok, 'you cannot hold two seats on different roads');
+  check(X('resignSeat').ok && R.council.law !== 'player' && !X('seekSeat', 'war').ok, 'you can resign, but must wait before seeking another seat');
+  for (const id in s.bandits) s.bandits[id] = 50;
+  check(Sim.seatNeeds(s, 'war').some(n => /bandits/.test(n)), 'the Marshal’s seat asks for safe roads in your lands, not just coin spent');
+  // hoarding: negotiate, and the stock comes back to market
+  const hoarder = Sim.living(s).find(p => p.town === 'greenhaven' && p.job && p.job.role === 'owner' && p.status === 'here');
+  const T = s.towns.greenhaven, g0 = s.goods.greenhaven.grain; T.hoard = { pid: hoarder.id, good: 'grain', qty: 30, day: s.day, deliberate: true }; s.goods.greenhaven.grain = Math.max(0, g0 - 30);
+  const hc = mk(hoarder, { kind: 'hoarding', victim: 'chest', value: 0, good: 'grain' });
+  check(X('jHear', hc.id, {}, 'negotiate').ok && !T.hoard && s.goods.greenhaven.grain >= g0 - 0.01 - 0, 'a hoarder agrees to put the grain back on sale');
+  // smuggling: cargo seized for the town, or for you, which is remembered
+  const sm = mk(folk[3], { kind: 'smuggling', victim: 'crown', value: 40, good: 'wine' }), tc0 = T.chest;
+  X('jHear', sm.id, { fine: 20, seize: 'chest' }, 'guilty');
+  check(T.chest >= tc0 + 60 && /cargo is seized/.test(sm.outcome), 'smuggled wine is seized for the town chest');
+  const sm2 = mk(folk[4], { kind: 'smuggling', victim: 'crown', value: 40, good: 'salt' }), coins0 = s.coins, n0 = s.justice.secrets.length;
+  X('jHear', sm2.id, { seize: 'you' }, 'guilty');
+  check(s.coins === coins0 + 60 && s.justice.secrets.length > n0, 'keeping the seized salt yourself pays, and someone knows');
+  // poaching: charge the man who paid for the deer
+  const orgP = Sim.living(s).find(p => p.town === 'greenhaven' && p.job && p.job.role === 'owner' && p.status === 'here' && p !== hoarder) || hoarder;
+  const pc = mk(folk[5], { kind: 'poaching', victim: 'crown', value: 30, organiser: orgP.id });
+  X('jHear', pc.id, { fine: 5, organiser: true }, 'guilty');
+  check(C.greenhaven.cases.some(k => k.kind === 'poaching' && k.accused === orgP.id), 'the hunter names the organiser, ' + orgP.name + ', and a case opens against them');
+  // bandits: more fates than the rope
+  R.council.war = 'player'; const fates = ['press', 'prison', 'work', 'pardon', 'hang'].map(f => { R.military = [{ n: 4, region: 'ironcrest' }]; return X('xMartial', null, f).ok; });
+  check(fates.every(Boolean) && (R.banditPrison || []).length && (R.workGang || []).length && (R.parolees || []).length && (R.pressed || []).length, 'captured bandits can be hanged, pressed, imprisoned, set to work or pardoned');
+  for (let d = 0; d < 22; d++) Sim.advance(s, 1440);
+  check(!(R.banditPrison || []).some(x => x.until < s.day), 'the dungeon lets them go when their time is up');
+  R.council.war = null;
+  // fraud: a dishonest manager skims, the books show it, and the court lets them go
+  const b = Object.values(s.biz).find(x => x.town === 'greenhaven' && x.owner !== 'player' && x.trade !== 'estate' && !x.closed), mp = folk[6];
+  b.owner = 'player'; b.manager = { pid: mp.id, name: mp.name, wage: 5, budget: 5, skill: 1, honest: 0 }; mp.job = { type: 'manage', kind: 'biz', ref: b.id };
+  let fc = null; for (let d = 0; d < 60 && !fc; d++) { Sim.advance(s, 1440); fc = C.greenhaven.cases.find(k => k.kind === 'fraud' && k.accused === mp.id); }
+  check(fc && fc.victim === 'player' && fc.value > 0, 'a dishonest manager skims the takings and the books show it (' + (fc ? fc.value : 0) + 'c)');
+  if (fc) { fc.evidence.push({ text: 'x', w: 4 }); X('jHear', fc.id, { restitution: true, fine: 10 }, 'guilty'); check(!b.manager, 'convicted of fraud, the manager is dismissed'); }
+  // the ruler's courts: most cases are heard locally
+  const t2 = newGameRaw(34); t2.ageRate = 0; Sim.applyStart(t2, 'lord'); t2.realm.crown = 'player'; for (const id in t2.realm.regions) t2.realm.regions[id].lord = 'player';
+  let mine = 0, all = 0; for (let d = 0; d < 20; d++) { Sim.advance(t2, 1440); }
+  for (const Cx of Object.values(t2.courts)) for (const c of Cx.closed.concat(Cx.cases)) { all++; if (c.decidedBy === 'you' || (!c.delegated && c.status === 'open')) mine++; }
+  check(all > 5 && mine <= all * 0.5, 'a ruler of every court sees ' + mine + ' of ' + all + ' cases; the rest are heard by the captains');
+  check(s.ledger.slice(1).every(e => !e.unexplained), 'skimmed takings, seized cargo and restitution all have lines in your books');
 }
 
 }
