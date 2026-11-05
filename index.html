@@ -7698,7 +7698,7 @@ function myBusinesses(s) {
   Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => {
     const town = b.town || 'hearthmoor', key = Object.keys(Sim.LOCS).find(k => Sim.LOCS[k].biz === b.id || Sim.LOCS[k].emp === b.id);
     const last = b.lastProfit != null ? b.lastProfit : null;
-    out.push({ town, ref: ['biz', b.id], name: Sim.empById(b.id).name, go: key && town === here ? key : null, line: `${esc(TOWN_NAMES[town] || town)}${b.lease ? ' \u00b7 let out' : ' \u00b7 ' + b.staff.length + ' staff'}${b.lastSold ? ' \u00b7 sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + (b.lastSold === 1 ? ' sale' : ' sales')) : ''}${last != null ? ' \u00b7 <b>' + money(last) + '</b> last day' : ''}${b.slump ? ' \u00b7 bad spell' : ''}${b.closed ? ' \u00b7 closed' : ''}` });
+    out.push({ town, ref: ['biz', b.id], name: Sim.empById(b.id).name, go: key && town === here ? key : null, line: b.lease ? `${esc(TOWN_NAMES[town] || town)} \u00b7 let \u00b7 <b>${b.lease.rent}c</b> a day${b.lease.behind ? ' \u00b7 ' + b.lease.behind + ' days behind' : ''}` : `${esc(TOWN_NAMES[town] || town)}${b.lease ? ' \u00b7 let out' : ' \u00b7 ' + b.staff.length + ' staff'}${b.lastSold ? ' \u00b7 sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + (b.lastSold === 1 ? ' sale' : ' sales')) : ''}${last != null ? ' \u00b7 <b>' + money(last) + '</b> last day' : ''}${b.slump ? ' \u00b7 bad spell' : ''}${b.closed ? ' \u00b7 closed' : ''}` });
   });
   return out;
 }
@@ -9720,7 +9720,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0255';
+const BUILD = '2026.11.05.0315';
 const NOTES = [
   { v: '0.36', date: '5 November', title: 'Good years and bad', items: [
     'Markets now stay short or glutted for a week or two. Now and then a blight, a flood, a flooded mine or a bumper year shakes one town\u2019s grain, wood or ore, and you hear about it, so hauling goods there pays.',
@@ -9728,7 +9728,7 @@ const NOTES = [
     'Hearthmoor no longer slowly empties: when there is a roof free, a worker or a young family arrives from Ashford.',
     'Where a building stands sets its price. Houses and businesses cost more in richer towns (Crownmere about twice Hearthmoor) and more in the heart of town than on its edge. Signs and cards say which part of town a place is in.',
     'A business you buy in Hearthmoor now shows your own card when you walk up: staff, manager, what it sold and earned yesterday, and Manage. Shops you do not own have a Buy button beside Ask for work.',
-    'The Businesses list at the top, and the Shops page, show what each place earned yesterday, and what bought businesses sold.'
+    'The Businesses list at the top, and the Shops page, show what each place earned yesterday, and what bought businesses sold. A business you have let shows just the rent it pays you each day.'
   ] },
   { v: '0.35', date: '5 November', title: 'Signs and seals', items: [
     'Every house you can buy has a FOR SALE sign by its door. Walk up to it to see who owns it, who lives there, the rent and its condition, and buy it on the spot.',
