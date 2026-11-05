@@ -85,6 +85,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .minimap { position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + 66px); right: max(12px, calc(env(safe-area-inset-right, 0px) + 6px)); width: 116px; padding: 0; border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .minimap canvas { width: 116px; height: 116px; border-radius: 50%; border: 3px solid #e8d6ae; box-shadow: 0 0 0 1px #5b4630, 0 3px 10px rgba(0,0,0,.45); background: #7d8f55; display: block; }
 .minimap span { font: 400 13px var(--f-display); color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 5px; padding: 1px 8px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.dialog { position: fixed; z-index: 7; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); width: min(560px, calc(100% - 32px)); background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 22px rgba(0,0,0,.5); padding: 12px 14px 10px; }
+.dialog p { margin: 0 0 8px; font: 400 17px/1.45 var(--f-display); color: var(--ink); }
+.dialog .dacts { display: flex; justify-content: flex-end; align-items: center; gap: 8px; } .dialog .dacts span { margin-right: auto; font-size: 12px; color: var(--ink-soft); }
 .sticks { display: none; } /* the controls work without anything drawn on screen */
 .stick { position: fixed; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(241, 227, 194, .45); background: radial-gradient(circle, rgba(20,14,10,.18), rgba(20,14,10,.38)); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); opacity: .55; transition: opacity .15s; }
 .stick.l { left: calc(max(16px, env(safe-area-inset-left, 0px)) + 18px); }
@@ -357,6 +360,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .tsub { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 6px 0 16px; font-size: 16px; }
 .rule { height: 10px; margin: 0 auto 14px; width: 70%; background: radial-gradient(circle, var(--seal) 0 3px, transparent 3.5px) center/14px 10px no-repeat, linear-gradient(var(--line), var(--line)) center/100% 1px no-repeat; }
 .tmenu { display: grid; gap: 8px; position: relative; }
+.namerow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .namerow input { width: 100%; }
 .cc { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin-top: 8px; }
 .cc > span { font-family: var(--f-display); font-size: 15px; color: var(--ink-soft); }
 .cc .seg { flex-wrap: wrap; }
@@ -432,6 +436,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
 <canvas id="world" aria-label="The village of Hearthmoor"></canvas>
 <button type="button" class="minimap" id="minimap" hidden aria-label="Open the map"><canvas id="miniCv" width="232" height="232"></canvas><span id="miniName">Hearthmoor</span></button>
+<div class="dialog" id="dialog" hidden role="dialog" aria-live="polite"></div>
 <header class="hud" id="hud" hidden>
   <div class="strip">
     <button class="icon-btn" id="menuBtn" type="button" aria-label="Pause and open the menu"><span></span></button>
@@ -614,16 +619,16 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   /* ---------- the realm around the village ---------- */
   const REALM = {
-    lord: 'Lord Edric Varrow', lordShort: 'Lord Varrow', elder: 'Elder Brannoch', steward: 'Steward Merrin', king: 'King Aldwin', capital: 'Highcrown',
-    towns: ['Ashford', 'Kellmere', 'Highcrown']
+    lord: 'Lord Edric Varrow', lordShort: 'Lord Varrow', elder: 'Elder Brannoch', steward: 'Steward Merrin', king: 'King Aldwin', capital: 'Crownmere',
+    towns: ['Ashford', 'Kellmere', 'Crownmere']
   };
   const RUMORS = [
     'Ashford’s river barges are carrying twice the grain this year. Their mayor is getting rich.',
     'Kellmere’s mines found a new seam of iron. Smiths there pay well for good charcoal.',
-    'They say ' + 'King Aldwin' + ' is calling his lords to Highcrown before winter.',
+    'They say ' + 'King Aldwin' + ' is calling his lords to Crownmere before winter.',
     'Bandits were seen on the Ashford road last week. Travel in daylight.',
     'Lord Varrow keeps to his manor. His steward does the real work.',
-    'In Highcrown a shopkeeper bought a seat on the city council. Coin opens doors there.',
+    'In Crownmere a shopkeeper bought a seat on the city council. Coin opens doors there.',
     'Kellmere and Ashford are quarrelling over the toll bridge again.',
     'A village that feeds its own in a lean year is remembered by its lord.'
   ];
@@ -874,7 +879,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (!v.contract && s.shops.length && rand(s) < 0.5) {
       const shop = s.shops[Math.floor(rand(s) * s.shops.length)], T = TRADES[shop.trade], Ti = tierOf(shop);
       const qty = Math.max(2, Ti.out * 2 + Math.floor(rand(s) * 3));
-      v.contract = { trade: shop.trade, qty, reward: Math.round(qty * T.price * 1.6), until: s.day + 3, who: ['A drover bound for Ashford', 'A Kellmere mining crew', 'A wagon train to Highcrown', 'The innkeeper at Ashford'][Math.floor(rand(s) * 4)] };
+      v.contract = { trade: shop.trade, qty, reward: Math.round(qty * T.price * 1.6), until: s.day + 3, who: ['A drover bound for Ashford', 'A Kellmere mining crew', 'A wagon train to Crownmere', 'The innkeeper at Ashford'][Math.floor(rand(s) * 4)] };
       event(s, v.contract.who + ' wants ' + goodsName(shop.trade, qty) + ' delivered to the Trading Post by day ' + v.contract.until + ' for ' + v.contract.reward + 'c.', 'story');
     }
     // the council hears a dispute every few days
@@ -1646,8 +1651,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function bodyOf(s, p) { const a = indexOf(s.agents, 'pid').get(p.id); return a && a.pid === p.id ? a : null; }
   // where you live: your hut, or a house you have bought and moved into
-  function yourHouse(s) { const id = s.player && s.player.house; const h = id ? houseById(s, id) : null; return h && h.owner === 'player' ? h : null; }
-  function yourTown(s) { const h = yourHouse(s); return h && h.town && h.town !== 'hearthmoor' ? h.town : undefined; }
+  // the seat of a region you hold: Varrow Manor becomes your family's manor, Stane Keep your keep
+  const SEAT_STYLE = { hearthmoor: f => f + ' Manor', greenhaven: f => f + ' Hall', oakbridge: f => f + ' Keep', ironcrest: f => f + ' Keep', eastwatch: f => 'Castle ' + f, crownmere: () => 'Crownmere Castle' };
+  function seatName(s, id) { return SEAT_STYLE[id] ? SEAT_STYLE[id](familyName(s)) : 'the seat of ' + REGIONS[id]; }
+  function yourSeat(s) { const id = s.player && s.player.seat; return id && s.realm && regionLord(s, id) === 'player' ? id : null; }
+  function yourHouse(s) { if (s.player && s.player.seat && yourSeat(s)) return null; const id = s.player && s.player.house; const h = id ? houseById(s, id) : null; return h && h.owner === 'player' ? h : null; }
+  function yourTown(s) { const st = yourSeat(s); if (st) return st === 'hearthmoor' ? undefined : st; const h = yourHouse(s); return h && h.town && h.town !== 'hearthmoor' ? h.town : undefined; }
   // the shape of a house on the ground: which way its door faces, and whether it is a tall townhouse
   function houseShape(h) {
     const i = +String(h.id).replace(/^[a-z]+/, ''), L = h.town === 'oakbridge' ? OAK.houses : h.town === 'crownmere' ? CM.houses : h.town === 'greenhaven' ? GH.houses : null;
@@ -1656,7 +1665,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return { face: Math.atan2(P.center.x - h.x, P.center.z - h.z), tall: (h.cap || 0) >= 4, kind: 'hearthmoor' };
   }
   function doorOf(h) { const f = houseShape(h).face; return { x: h.x + Math.sin(f) * 4.2, z: h.z + Math.cos(f) * 4.2 }; }
-  function homeOfYou(s) { const h = yourHouse(s); return h ? { x: h.x, z: h.z, name: h.name, town: h.town || 'hearthmoor', house: h } : { x: P.home.x, z: P.home.z, name: 'your hut', town: 'hearthmoor', house: null }; }
+  function homeOfYou(s) { const st = yourSeat(s); if (st) { const pt = SEATS()[st]; return { x: pt.x, z: pt.z, name: seatName(s, st), town: st, house: null, seat: st }; } const h = yourHouse(s); return h ? { x: h.x, z: h.z, name: h.name, town: h.town || 'hearthmoor', house: h } : { x: P.home.x, z: P.home.z, name: 'your hut', town: 'hearthmoor', house: null }; }
   // everyone who lives with you follows you to a new home
   function bringFamily(s, why) {
     const T = yourTown(s), tn = T || 'hearthmoor';
@@ -1675,7 +1684,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (!p.home) return null;
     if (p.home === 'manor') return MANOR_HOME;
     if (p.home.startsWith('seat:')) { const st = SEATS()[p.home.slice(5)]; return st ? { x: st.x, z: st.z } : null; }
-    if (p.home === 'you') { const H = yourHouse(s); return H ? { x: H.x + 1.5, z: H.z + 1.5 } : { x: P.home.x + 1.5, z: P.home.z + 1.5 }; }
+    if (p.home === 'you') { const H = homeOfYou(s); return { x: H.x + 1.5, z: H.z + 1.5 }; }
     if (p.home.startsWith('biz:')) { const e = empById(p.home.slice(4)); return { x: e.x, z: e.z }; }
     const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
   }
@@ -1956,7 +1965,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
       const cap = bizCap(s, b), D0 = dem[key], sold = E.flat ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap : 0);
-      const revenue = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1));
+      const revenue = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       b.lastSold = Math.round(sold);
       let wages = 0;
       for (const st of b.staff) {
@@ -2254,6 +2263,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' after ' + s.name + ' died.' }).id;
       for (const id in R.regions) if (R.regions[id].lord === 'player') { if (blood && (R.favour >= 20 || isRuler(s))) realmLog(s, h.name + ' inherits ' + REGIONS[id] + ', and the crown recognises the claim.', 'story'); else { R.regions[id].lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' returns to the crown: ' + (blood ? 'the court does not recognise the heir' : 'no child of the blood can take it') + '.', 'story'); } }
       if (isRuler(s) && !blood) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without a child of the blood'); }
+      if (s.player.seat && regionLord(s, s.player.seat) !== 'player') s.player.seat = null;
       else if (isRuler(s)) realmLog(s, h.name + ' is crowned ruler of Alderwyn in the Great Hall of the Realm.', 'story');
     }
     // the heir steps into your shoes: your coin and property, their own purse, part of your standing, and the town's memory of your family
@@ -2287,13 +2297,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     old.name = s.name; old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
     if (s.offices.elder === 'player') s.offices.elder = null;
     if (s.offices.lord === 'player') { s.offices.lord = null; replaceLord(s, 'the old lord died without an heir'); }
-    if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; }
+    if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; s.player.seat = null; }
     s.houses.filter(h => h.owner === 'player').forEach(h => { h.owner = 'office:lord'; });
     Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => { b.closed = true; b.manager = null; });
     s.shops.slice().forEach(sh => { if (sh.worker && sh.worker.pid && s.people[sh.worker.pid]) s.people[sh.worker.pid].job = null; });
     s.shops = []; s.coins = 5; s.job = null; s.village.council = false; s.village.standing = 0; s.player.horse = null; s.player.riding = false;
     s.name = name || 'Wren'; s.player.x = P.home.x; s.player.z = P.home.z;
-    const gen = Y.generation; s.you = null; const Z = you(s); Z.generation = gen + 1; Z.sex = sex || 'm'; Z.age = 20;
+    const gen = Y.generation; s.you = null; const Z = you(s); Z.generation = gen + 1; Z.sex = sex || 'm'; Z.age = 20; if (s.name.includes(' ')) Z.family = s.name.split(' ').slice(1).join(' ');
     s.pendingDeath = null;
     event(s, 'A newcomer arrives in Hearthmoor with 5 coins: ' + s.name + '. The world remembers those who came before.', 'story');
   }
@@ -2744,7 +2754,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const lid = s.offices.lord;
     if (lid && lid !== 'player' && g.approval.lord < 25) {
       g.petitions++;
-      if (g.petitions >= 2) { notes.push('A second petition against ' + lordTitle(s) + ' goes to King Aldwin in Highcrown.'); after.push(() => replaceLord(s, 'the village petitioned the King against him twice')); }
+      if (g.petitions >= 2) { notes.push('A second petition against ' + lordTitle(s) + ' goes to King Aldwin in Crownmere.'); after.push(() => replaceLord(s, 'the village petitioned the King against him twice')); }
       else notes.push('The moot sends a petition to King Aldwin against ' + lordTitle(s) + '. If nothing changes, a second will follow.');
     } else if (g.approval.lord >= 35) g.petitions = 0;
     g.lastMoot = { day: s.day, notes: notes.slice() };
@@ -2802,12 +2812,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const stw = s.offices.steward && s.offices.steward !== 'player' ? s.people[s.offices.steward] : null;
     let heir;
     if (stw && stw.status === 'here' && (stw.rep || 0) >= 40) heir = stw;
-    else { heir = newPerson(s, { name: ['Aldous Penrith', 'Hamon Grey', 'Bertram Ashe'][Math.floor(rand(s) * 3)], age: 40 + Math.floor(rand(s) * 12), purse: 300, palette: 2 }); heir.log.push({ day: s.day, text: 'Sent from Highcrown by King Aldwin to hold Hearthmoor.' }); }
+    else { heir = newPerson(s, { name: ['Aldous Penrith', 'Hamon Grey', 'Bertram Ashe'][Math.floor(rand(s) * 3)], age: 40 + Math.floor(rand(s) * 12), purse: 300, palette: 2 }); heir.log.push({ day: s.day, text: 'Sent from Crownmere by King Aldwin to hold Hearthmoor.' }); }
     const oldName = old ? old.name : 'the lord';
     appoint(s, 'lord', heir.id);
     if (old) { old.rep = Math.max(0, (old.rep || 0) - 40); plog(s, old, 'Stripped of Hearthmoor by the King: ' + why + '.'); if (!old.home && old.status === 'here') { const h = vacancy(s, 99); if (h) moveIn(s, old, h); } }
     g.approval.lord = 55; g.petitions = 0; g.lordDebtDays = 0;
-    let msg = 'King Aldwin strips ' + oldName + ' of Hearthmoor: ' + why + '. ' + heir.name + (heir === stw ? ', the steward who ran his estate,' : ', a knight from Highcrown,') + ' is the new Lord.';
+    let msg = 'King Aldwin strips ' + oldName + ' of Hearthmoor: ' + why + '. ' + heir.name + (heir === stw ? ', the steward who ran his estate,' : ', a knight from Crownmere,') + ' is the new Lord.';
     if (heir === stw) {
       // the new lord names a steward on merit: the Elder or a councillor
       const pick = [s.offices.elder].concat(g.council).map(id => id && id !== 'player' ? s.people[id] : null).filter(p => p && p.status === 'here').sort((a, b) => (b.rep || 0) - (a.rep || 0))[0];
@@ -3754,7 +3764,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     marketPeace: { name: 'The Market Peace', say: 'Watchmen in every market. Towns feel safe; it costs the treasury 6c a day.' },
     forestLaw: { name: 'Forest Law', say: 'The royal forests are closed to commoners. +10c a day to the treasury; the towns resent it.' },
     guildCharters: { name: 'Guild Charters', say: 'The guilds set their own prices. The guilds love it; the lords do not.' },
-    harshJustice: { name: 'Harsh Justice', say: 'Hangings at the crossroads. Bandits stay away; the towns are uneasy.' }
+    harshJustice: { name: 'Harsh Justice', say: 'Hangings at the crossroads. Bandits stay away; the towns are uneasy.' },
+    fairCourts: { name: 'The Fair Courts', say: 'Ambrose Fell\u2019s reform: favour can no longer be bought so easily, and theft from the treasury is hunted down. The towns approve; the lords grumble.' }
   };
   const SEATS = () => ({ crownmere: { x: CM.castle.x, z: CM.castle.z + 10 }, oakbridge: { x: OAK.keep.x, z: OAK.keep.z + 9 }, greenhaven: { x: GH.estate.x + 9, z: GH.estate.z }, ironcrest: { x: IC.keep.x + 8, z: IC.keep.z + 6 }, eastwatch: { x: EW.keep.x, z: EW.keep.z - 12 }, hearthmoor: MANOR_HOME });
   function noble(s, o) { const p = newPerson(s, Object.assign({ purse: 600, palette: 4, retired: true, rep: 70, mood: 70 }, o)); p.log = [{ day: s.day, text: o.why || 'Of noble blood.' }]; return p; }
@@ -3777,6 +3788,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const council = { treasury: courtier('Hugo Wendle', 61, 'Lord Treasurer of Alderwyn.').id, trade: courtier('Margery Cole', 50, 'Master of Trade.').id, war: courtier('Ralph Durrant', 55, 'Marshal of Alderwyn.').id, law: courtier('Ambrose Fell', 63, 'Lord Justice.').id };
     s.realm = { king: king.id, prince: prince.id, crown: 'king', regions, council, favour: 0, kingSupport: 60, treasury: 1500, taxRate: 1, tariff: 1, laws: { marketPeace: true, forestLaw: false, guildCharters: false, harshJustice: false }, levies: 120, support: { lords: 40, guilds: 40, court: 0, towns: 40 }, rival: null, exile: null, lowDays: 0, debtDays: 0, log: [], offer: null, crowned: null };
     s.bandits = { oakbridge: 20, greenhaven: 15, hearthmoor: 10, crownmere: 10, ironcrest: 30, eastwatch: 25, lastRaid: null };
+    setupFigures(s);
   }
   function realmLog(s, text, kind) { const R = s.realm; R.log.unshift({ day: s.day, text }); if (R.log.length > 30) R.log.length = 30; event(s, text, kind || 'info'); }
   const isRuler = s => !!(s.realm && s.realm.crown === 'player');
@@ -3790,11 +3802,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const lords = Object.keys(R.regions).map(id => { const l = regionLord(s, id); return l === 'player' ? 100 : l && s.people[l] ? op01(s.people[l]) : 50; });
     const owners = Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').map(b => s.people[b.owner]).filter(Boolean);
     const mine = Object.values(s.biz).filter(b => b.owner === 'player').length;
-    let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
+    const mono = R.monopoly && !((R.figures || []).find(f => f.kind === 'merchant') || {}).ally ? 10 : 0;
+    let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - mono - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
     const tw = Object.keys(TOWNS).map(t => { const f = living(s).filter(p => townOf(p) === t && !p.kid); return f.length ? avg(f.slice(0, 120).map(op01)) : 50; });
-    let towns = avg(tw) * 0.75 + (s.village ? s.village.standing : 0) * 0.15 + 10 - (isRuler(s) ? (R.taxRate - 1) * 35 + (R.laws.forestLaw ? 8 : 0) + (R.laws.harshJustice ? 6 : 0) - (R.laws.marketPeace ? 6 : 0) : 0);
+    let towns = avg(tw) * 0.75 + (s.village ? s.village.standing : 0) * 0.15 + 10 + (R.laws.fairCourts ? 8 : 0) - (isRuler(s) ? (R.taxRate - 1) * 35 + (R.laws.forestLaw ? 8 : 0) + (R.laws.harshJustice ? 6 : 0) - (R.laws.marketPeace ? 6 : 0) : 0);
     let court = R.favour + yourSeats(s).length * 6 + yourLordships(s).length * 4;
-    let lordAvg = avg(lords) - (isRuler(s) && R.laws.guildCharters ? 10 : 0) - (isRuler(s) && R.debtDays > 5 ? 15 : 0);
+    let lordAvg = avg(lords) - (R.laws.fairCourts ? 6 : 0) - (isRuler(s) && R.laws.guildCharters ? 10 : 0) - (isRuler(s) && R.debtDays > 5 ? 15 : 0);
     S.lords = Math.round(clamp(lordAvg, 0, 100)); S.guilds = Math.round(clamp(guilds, 0, 100)); S.court = Math.round(clamp(court, 0, 100)); S.towns = Math.round(clamp(towns, 0, 100));
     return Math.round((S.lords + S.guilds + S.court + S.towns) / 4);
   }
@@ -3839,7 +3852,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   // a day at court
   function realmDay(s) {
     const R = s.realm; if (!R) return;
-    banditDay(s);
+    setupFigures(s);
+    banditDay(s); contractDay(s); promiseDay(s); goodRuleDay(s); treasuryWatch(s);
+    if (s.day % 7 === 3) figuresWeek(s);
+    { const m = (R.figures || []).find(f => f.kind === 'merchant'); if (m && m.ally) { const n = Object.values(s.biz).filter(b => b.owner === m.pid).length; if (n) earn(s, n * 2); } }
     // the old king's standing drifts; hard times and raids wear it down
     R.kingSupport = clamp(R.kingSupport + (58 - R.kingSupport) * 0.03 + (rand(s) - 0.55) * 3 - (s.bandits && s.bandits.lastRaid && s.bandits.lastRaid.day === s.day ? 1.5 : 0), 5, 95);
     R.favour = clamp(R.favour - 0.15, 0, 100);
@@ -3878,12 +3894,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (R.rival && R.rival.strength > R.levies + sup * 2) fallFromThrone(s, R.rival.name + '’s army takes Crownmere');
       else if (R.lowDays >= 6) fallFromThrone(s, 'the lords and the court abandon you');
     }
-    if (R.exile && !R.exile.done && s.day - R.exile.since >= 30) { R.exile.done = true; realmLog(s, 'Time has passed since your fall. Old friends write to you: if you can win the realm back to your side, the crown may yet be yours again.', 'story'); }
   }
   function nameForNoble(s) { const F = ['Hugh', 'Walter', 'Cecily', 'Geoffrey', 'Matilda', 'Roger', 'Eleanor', 'Baldwin', 'Joan', 'Simon'], L = ['Vane', 'Ashworth', 'Grayle', 'Monfort', 'Thorne', 'Beaumont', 'Corbet', 'Lacy']; return F[Math.floor(rand(s) * F.length)] + ' ' + L[Math.floor(rand(s) * L.length)]; }
   function vacantSeat(s, id) {
     const R = s.realm, g = R.regions[id]; if (g.lord) return;
-    if (R.favour >= 50 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: 150 }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
+    if (R.favour >= 50 && totalDeeds(s) >= 1 && !R.offer && !R.exile) { R.offer = { kind: 'lordship', region: id, day: s.day, fee: 150 }; g.lord = null; realmLog(s, 'The lordship of ' + REGIONS[id] + ' stands empty. The King offers it to you, for a fee of 150c and your oath. Answer at the castle or on the Realm page.', 'story'); return; }
     if (R.offer && R.offer.region === id && s.day - R.offer.day < 5) return;
     const n = noble(s, { name: nameForNoble(s), age: 40 + Math.floor(rand(s) * 15), town: id === 'hearthmoor' ? undefined : id, home: 'seat:' + id, why: 'Granted ' + REGIONS[id] + ' by the crown.' });
     n.noble = id; g.lord = n.id; if (R.offer && R.offer.region === id) R.offer = null;
@@ -3913,8 +3928,152 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     for (const id of yourLordships(s)) { if (R.regions[id].lord === 'office') { s.offices.lord = null; replaceLord(s, 'the old ruler fell'); } else if (R.regions[id].lord === 'player') { R.regions[id].lord = null; } }
     for (const k of yourSeats(s)) R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' by the new king.' }).id;
     const seized = Math.round(Math.max(0, s.coins) * 0.5); spend(s, seized);
-    R.favour = 0; R.exile = { since: s.day, why, seized };
-    realmLog(s, 'You have lost the crown: ' + why + '. You flee into exile, stripped of your lordships and council seats, and ' + seized + 'c is seized. You are free, and you can rebuild. In time the realm may take you back.', 'bad');
+    R.favour = 0; R.exile = { since: s.day, why, seized, allies: [], fund: 0 }; R.embezzled = 0;
+    if (s.player.seat) { s.player.seat = null; bringFamily(s, 'Fled the seat with ' + s.name + '.'); }
+    realmLog(s, 'You have lost the crown: ' + why + '. You flee into exile, stripped of your lordships and council seats, and ' + seized + 'c is seized. To come back you will need sworn allies, a war chest, the towns behind you, and the new ruler\u2019s failings laid bare.', 'bad');
+  }
+  /* ================= power earned by deeds (Stage V) =================
+     Contracts from the lords and towns, promises to keep, regions governed well, and three people of
+     influence with aims of their own. Gifts and feasts still help, but less each time. */
+  const REGION_GOODS = { hearthmoor: 'grain', greenhaven: 'grain', oakbridge: 'wood', crownmere: 'grain', ironcrest: 'wood', eastwatch: 'wood' };
+  function deedsIn(s, id) { const R = s.realm; return (R.deeds && R.deeds[id]) || 0; }
+  const totalDeeds = s => s.realm && s.realm.deeds ? Object.values(s.realm.deeds).reduce((a, b) => a + b, 0) : 0;
+  function addDeed(s, id, text) { const R = s.realm; R.deeds = R.deeds || {}; R.deeds[id] = (R.deeds[id] || 0) + 1; realmLog(s, text, 'good'); }
+  // repeated gifts and feasts count for less: each one in the last fortnight halves the next
+  function diminish(s, key) { const R = s.realm; R.patron = R.patron || {}; const recent = (R.patron[key] || []).filter(d => s.day - d < 14); R.patron[key] = recent.concat([s.day]); return Math.pow(0.5, recent.length); }
+  function alliesOf(s) {
+    const R = s.realm, out = [];
+    for (const id in R.regions) { const l = regionLord(s, id); if (l && l !== 'player' && s.people[l] && l !== R.king && (s.people[l].opinion || 0) >= 40) out.push(s.people[l].name); }
+    for (const f of R.figures || []) if (f.ally && s.people[f.pid] && s.people[f.pid].status !== 'dead' && !out.includes(s.people[f.pid].name)) out.push(s.people[f.pid].name);
+    return out;
+  }
+  // contracts: the realm's lords and towns ask for things to be done
+  function contractDay(s) {
+    const R = s.realm; R.contracts = (R.contracts || []).filter(c => !c.done);
+    for (const c of R.contracts) {
+      if (c.taken && c.kind === 'clear' && s.bandits && (s.bandits || {})[c.region] < 20) completeContract(s, c);
+      else if (s.day > c.until) {
+        if (c.taken) { const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) - 10, -100, 100); realmLog(s, 'You failed to ' + c.what + ' in time. ' + (q ? q.name + ' remembers.' : ''), 'bad'); s.rec.contractsMissed = (s.rec.contractsMissed || 0) + 1; }
+        c.done = true;
+      }
+    }
+    R.contracts = R.contracts.filter(c => !c.done);
+    if (R.contracts.filter(c => !c.taken).length < 3 && rand(s) < 0.6) {
+      const ids = Object.keys(R.regions), id = ids[Math.floor(rand(s) * ids.length)], who = regionLord(s, id) === 'player' ? (TOWNS[id] ? TOWNS[id].name + ' council' : 'the village') : lordName(s, id);
+      const k = rand(s), n0 = R.contractN = (R.contractN || 0) + 1;
+      let c;
+      if (k < 0.45) { const g = rand(s) < 0.5 ? REGION_GOODS[id] : GOODS[Math.floor(rand(s) * 3)], n = 10 + Math.floor(rand(s) * 3) * 5; c = { n: n0, kind: 'supply', region: id, good: g, qty: n, reward: Math.round(n * goodsPrice(s, id, g) * 1.7 + 10), what: 'deliver ' + n + ' ' + (g === 'wood' ? 'timber' : g === 'ore' ? 'iron ore' : g) + ' to the market in ' + REGIONS[id] }; }
+      else if (k < 0.75) { const w = 10 + Math.floor(rand(s) * 3) * 5, coin = 40 + Math.floor(rand(s) * 4) * 20; c = { n: n0, kind: 'repair', region: id, good: 'wood', qty: w, cost: coin, reward: Math.round(coin * 0.5 + w * 3), what: 'repair the ' + ['bridge', 'town walls', 'mill race', 'road', 'granary'][Math.floor(rand(s) * 5)] + ' in ' + REGIONS[id] + ' (' + coin + 'c and ' + w + ' timber)' }; }
+      else { c = { n: n0, kind: 'clear', region: id, reward: 90, what: 'clear the bandits from the roads of ' + REGIONS[id] + ' (danger under 20)' }; if (((s.bandits || {})[id] || 0) < 25) c = null; }
+      if (c) { c.who = who; c.until = s.day + 6; c.day = s.day; R.contracts.push(c); }
+    }
+  }
+  function completeContract(s, c) {
+    const R = s.realm; c.done = true; earn(s, c.reward);
+    const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
+    for (const p of living(s)) if (townOf(p) === c.region && !p.kid && rand(s) < 0.35) p.opinion = clamp((p.opinion || 0) + 4, -100, 100);
+    if (s.towns && s.towns[c.region]) s.towns[c.region].approval = clamp(s.towns[c.region].approval + 2, 0, 100);
+    s.rec.contractsDone = (s.rec.contractsDone || 0) + 1;
+    addDeed(s, c.region, 'You ' + c.what.replace(/^deliver/, 'delivered').replace(/^repair/, 'repaired').replace(/^clear/, 'cleared') + ', as ' + c.who + ' asked. ' + c.reward + 'c, and ' + (q ? q.name + '’s' : 'the town’s') + ' gratitude.');
+  }
+  // promises: now and then a lord asks for your word
+  function promiseDay(s) {
+    const R = s.realm; R.promises = R.promises || [];
+    for (const pr of R.promises) {
+      if (pr.state !== 'given') continue;
+      const ok = ((s.bandits || {})[pr.region] || 0) < 30, q = s.people[pr.pid];
+      if (!ok) { pr.state = 'broken'; R.broken = (R.broken || 0) + 1; if (q) q.opinion = clamp((q.opinion || 0) - 30, -100, 100); realmLog(s, 'You gave ' + (q ? q.name : 'a lord') + ' your word the roads of ' + REGIONS[pr.region] + ' would stay safe, and they did not. Your word counts for less now.', 'bad'); }
+      else if (s.day >= pr.until) { pr.state = 'kept'; R.kept = (R.kept || 0) + 1; if (q) q.opinion = clamp((q.opinion || 0) + 25, -100, 100); addDeed(s, pr.region, 'You kept your word to ' + (q ? q.name : 'the lord') + ': the roads of ' + REGIONS[pr.region] + ' stayed safe for a week.'); }
+    }
+    R.promises = R.promises.filter(p => p.state === 'asked' ? s.day - p.day < 4 : s.day - p.day < 30);
+    if (!R.promises.some(p => p.state === 'asked' || p.state === 'given') && rand(s) < 0.15) {
+      const ids = Object.keys(R.regions).filter(id => { const l = regionLord(s, id); return l && l !== 'player' && l !== R.king && s.people[l]; });
+      if (ids.length) { const id = ids[Math.floor(rand(s) * ids.length)], q = s.people[regionLord(s, id)]; R.promises.push({ region: id, pid: q.id, day: s.day, state: 'asked' }); realmLog(s, q.name + ' asks for your word that the roads of ' + REGIONS[id] + ' will stay safe for a week. Answer on the Realm page.', 'story'); }
+    }
+  }
+  // good government: a lord whose roads are safe and whose markets thrive earns a name for it
+  function goodRuleDay(s) {
+    const R = s.realm; R.goodDays = R.goodDays || {};
+    for (const id of yourLordships(s)) { const good = ((s.bandits || {})[id] || 0) < 30 && marketOf(s, id) >= 0.98; R.goodDays[id] = good ? (R.goodDays[id] || 0) + 1 : 0; if (R.goodDays[id] === 10) addDeed(s, id, 'Ten days of safe roads and busy markets: ' + REGIONS[id] + ' is known to be well governed.'); }
+  }
+  // the treasury: what a ruler takes for themself may be found out
+  function treasuryWatch(s) {
+    const R = s.realm; if (!(R.embezzled > 0)) return;
+    const reform = (R.figures || []).find(f => f.kind === 'reformer'), keen = reform && !reform.ally ? 2 : 1;
+    if (rand(s) < Math.min(0.5, R.embezzled / 2500 * keen)) {
+      const owed = Math.round(R.embezzled * 1.25);
+      for (const id in R.regions) { const l = regionLord(s, id); if (l && l !== 'player' && s.people[l]) s.people[l].opinion = clamp((s.people[l].opinion || 0) - 10, -100, 100); }
+      R.favour = clamp(R.favour - 15, 0, 100);
+      if (s.coins >= owed) { spend(s, owed); R.treasury += owed; realmLog(s, 'An inquiry finds you took ' + R.embezzled + 'c from the treasury. You must repay ' + owed + 'c, and the lords think less of you.', 'bad'); R.embezzled = 0; }
+      else if (isRuler(s) && R.embezzled >= 600) { R.embezzled = 0; fallFromThrone(s, 'an inquiry proves you robbed the treasury, and the council removes you'); }
+      else { realmLog(s, 'An inquiry finds you took ' + R.embezzled + 'c from the treasury and cannot repay it. The lords and the court turn against you.', 'bad'); R.favour = 0; R.embezzled = Math.round(R.embezzled * 0.5); }
+    }
+  }
+  // three people of influence, each with an aim
+  function setupFigures(s) {
+    const R = s.realm; if (R.figures) return;
+    const merchant = Object.values(s.people).find(p => p.name === 'Julian Marchant') || noble(s, { name: 'Julian Marchant', age: 46, town: 'eastwatch', why: 'Merchant of Eastwatch.' });
+    const lord = s.people[R.regions.ironcrest.lord] || noble(s, { name: 'Gareth Stane', age: 58, town: 'ironcrest', home: 'seat:ironcrest' });
+    let heir = Object.values(s.people).find(p => (p.parents || []).includes(lord.id) && p.status === 'here');
+    if (!heir) { heir = newPerson(s, { name: 'Aldo Stane', age: 22, town: 'ironcrest', home: 'seat:ironcrest', purse: 80, retired: true }); heir.parents = [lord.id]; heir.log = [{ day: s.day, text: 'Heir to Ironcrest.' }]; }
+    const reformer = s.people[R.council.law] || noble(s, { name: 'Ambrose Fell', age: 63, town: 'crownmere', home: 'seat:crownmere' });
+    R.figures = [
+      { kind: 'merchant', pid: merchant.id, aim: 'a monopoly on bread: five bakeries under his name', trade: 'bakery', progress: 0, ally: false, foe: false },
+      { kind: 'lord', pid: lord.id, heirPid: heir.id, aim: 'the crown’s promise that ' + heir.name + ' will hold Ironcrest after him', progress: 0, ally: false, foe: false },
+      { kind: 'reformer', pid: reformer.id, aim: 'the Fair Courts: an end to bought favour and theft from the treasury', progress: 0, ally: false, foe: false }
+    ];
+    R.figures.forEach(f => { s.people[f.pid].figure = f.kind; });
+  }
+  function figuresWeek(s) {
+    const R = s.realm; setupFigures(s);
+    for (const f of R.figures) {
+      const q = s.people[f.pid]; if (!q || q.status === 'dead') continue;
+      if (f.kind === 'merchant') {
+        const mine = Object.values(s.biz).filter(b => b.owner === q.id && b.trade === f.trade).length; f.progress = mine;
+        if (mine < 5) {
+          const target = Object.values(s.biz).filter(b => b.trade === f.trade && !b.closed && b.owner !== 'player' && b.owner !== q.id && !b.lease).sort((a, b) => bizPrice(s, a.id) - bizPrice(s, b.id))[0];
+          if (target) { const price = bizPrice(s, target.id); q.purse = Math.max(q.purse, price + 50); const old = s.people[target.owner]; q.purse -= price; if (old) { old.purse += price; if (old.job && old.job.biz === target.id) { old.job = null; plog(old ? s : s, old, 'Sold ' + empById(target.id).name + ' to ' + q.name + '.'); } } target.owner = q.id; f.progress = mine + 1; realmLog(s, q.name + ' buys ' + empById(target.id).name + ' (' + TOWNS[target.town || 'hearthmoor'].name + '). He now owns ' + f.progress + ' of the five bakeries he wants.', 'info'); }
+        }
+        if (f.progress >= 5 && !R.monopoly) { R.monopoly = { trade: f.trade, pid: q.id }; realmLog(s, q.name + ' controls enough bakeries to set the price of bread across Alderwyn. Bread costs more everywhere, and the guilds are uneasy.' + (f.ally ? ' As his partner, you share in it.' : ''), f.ally ? 'info' : 'bad'); }
+      } else if (f.kind === 'lord') {
+        if (!f.done) f.progress = Math.min(5, f.progress + 1);
+        if (yourLordships(s).includes('ironcrest') || (R.lastSought === 'ironcrest' && s.day - (R.lastSoughtDay || 0) < 14)) f.foe = true;
+        if (f.foe && !f.ally) { R.favour = clamp(R.favour - 3, 0, 100); if (yourLordships(s).includes('ironcrest') && s.bandits) s.bandits.ironcrest = Math.min(100, (s.bandits.ironcrest || 0) + 8); realmLog(s, q.name + ' speaks against you at court' + (yourLordships(s).includes('ironcrest') ? ', and his old men-at-arms look the other way while bandits work the Ironcrest road' : '') + '.', 'bad'); }
+      } else if (f.kind === 'reformer') {
+        if (!f.done) f.progress = Math.min(5, f.progress + (R.laws.fairCourts ? 0 : 1));
+        if (f.foe && R.embezzled > 0) R.embezzled = Math.round(R.embezzled * 1.2);
+      }
+    }
+  }
+  // exile: the way back is won by deeds, not by waiting
+  function exileReady(s) {
+    const R = s.realm, E = R.exile; if (!E) return null;
+    const need = { allies: (E.allies || []).length >= 3, fund: (E.fund || 0) >= 600, towns: R.support.towns >= 55, exposed: R.kingSupport < 50 };
+    return need;
+  }
+  /* ----- how you begin: from nothing, or further up the ladder ----- */
+  const STARTS = {
+    normal: { name: 'From nothing', say: 'Arrive in Hearthmoor with 5 coins and work your way up.' },
+    merchant: { name: 'A merchant', say: 'You know the baker\u2019s trade and own a Bread Stand in Hearthmoor, with 150 coins put by.' },
+    elder: { name: 'The Elder', say: 'You are Elder of Hearthmoor, with a bakery, the council behind you and 400 coins.' },
+    lord: { name: 'A lord', say: 'You are lord of Greenhaven, living at its hall, with a bakery in Hearthmoor and 1,200 coins.' },
+    ruler: { name: 'The ruler', say: 'Old King Aldwin has given you the crown. You rule Alderwyn from Crownmere castle, with 2,000 coins of your own.' }
+  };
+  function applyStart(s, mode) {
+    if (!STARTS[mode] || mode === 'normal') return;
+    const v = s.village, Y = you(s), R = s.realm;
+    s.trades.bakery = Math.max(s.trades.bakery || 0, LEARN_SHIFTS);
+    s.coins = 60; cmd(s, 'open', 1, 'bakery');
+    s.coins = { merchant: 150, elder: 400, lord: 1200, ruler: 2000 }[mode];
+    s.start = mode;
+    if (mode === 'elder' || mode === 'lord' || mode === 'ruler') {
+      v.step = 9; v.council = true; v.landGranted = true; v.standing = 80; v.chest = Math.max(v.chest, 150);
+      if (mode === 'elder') { const old = s.offices.elder && s.people[s.offices.elder]; appoint(s, 'elder', 'player'); if (old) old.retired = true; if (s.gov) s.gov.approval.elder = 65; }
+    }
+    if (mode === 'lord' || mode === 'ruler') { Y.age = Math.max(Y.age, mode === 'ruler' ? 32 : 28); s.people[Y.pid].age = Y.age; R.favour = 55; R.deeds = { greenhaven: 1 }; }
+    if (mode === 'lord') { const old = s.people[R.regions.greenhaven.lord]; if (old) { old.retired = true; old.noble = null; } R.regions.greenhaven.lord = 'player'; cmd(s, 'moveToSeat', 'greenhaven'); const st = STAGE.greenhaven; s.player.x = st.x; s.player.z = st.z; }
+    if (mode === 'ruler') { R.kept = 1; crownYou(s, 'King Aldwin, old and tired, names you his successor'); s.player.seat = 'crownmere'; bringFamily(s, 'Moved into Crownmere castle.'); const st = STAGE.crownmere; s.player.x = st.x; s.player.z = st.z; }
+    event(s, STARTS[mode].say, 'story');
   }
   /* buying, renting and firing */
   /* ----- property: what it is worth, keeping it up, letting it, and selling it ----- */
@@ -4427,8 +4586,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       case 'giftCrown': {
         const R = s.realm; if (!R || isRuler(s)) return fail('There is no one to give it to.');
         const n = Math.round(a); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
-        spend(s, n); R.favour = clamp(R.favour + n / 15, 0, 100); s.rec.given = (s.rec.given || 0) + n;
-        event(s, 'You give ' + n + 'c to the King\u2019s treasury. Your favour at court rises to ' + Math.round(R.favour) + '.', 'good'); return ok();
+        const dm = diminish(s, 'crown') * (R.laws.fairCourts ? 0.5 : 1), gain = Math.min(20, n / 15) * dm; spend(s, n); R.favour = clamp(R.favour + gain, 0, 100); s.rec.given = (s.rec.given || 0) + n;
+        event(s, 'You give ' + n + 'c to the King\u2019s treasury. Your favour at court rises by ' + Math.round(gain) + ' to ' + Math.round(R.favour) + (dm < 1 ? ' (gifts count for less when they come often)' : '') + '.', 'good'); return ok();
       }
       case 'attendCourt': {
         const R = s.realm; if (!R || isRuler(s)) return fail('You are the court.');
@@ -4441,6 +4600,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const R = s.realm; const o = R && R.offer; if (!o) return fail('No lordship is on offer.');
         const g = R.regions[o.region]; R.offer = null;
         if (name === 'refuseLordship') { vacantSeat(s, o.region); return ok(); }
+        if (yourLordships(s).some(x => x !== 'crownmere')) { vacantSeat(s, o.region); return fail('You already hold a region; the King gives ' + REGIONS[o.region] + ' to another.'); }
         if (s.coins < o.fee) { vacantSeat(s, o.region); return fail('You could not pay the fee; the King gives it to another.'); }
         spend(s, o.fee); g.lord = 'player'; R.favour = clamp(R.favour + 5, 0, 100);
         realmLog(s, 'You swear your oath to the King and are made ' + (you(s).sex === 'f' ? 'Lady' : 'Lord') + ' of ' + REGIONS[o.region] + '. Its taxes are yours, and so are its roads, patrols and garrison.', 'story'); return ok();
@@ -4450,6 +4610,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const R = s.realm; if (!R || R.exile) return fail(R && R.exile ? 'No lord will give up lands to an exile.' : 'Not yet.');
         const g = R.regions[a]; if (!g || g.lord === 'crown') return fail('Those are the Crown Lands.');
         if (regionLord(s, a) === 'player') return fail('It is already yours.');
+        { const held = yourLordships(s).filter(x => x !== 'crownmere'); if (held.length) return fail('You already hold ' + REGIONS[held[0]] + '. A lord holds one region at a time: give it up first, on the Realm page.'); }
+        R.lastSought = a; R.lastSoughtDay = s.day;
+        if (deedsIn(s, a) < 1) return fail('The King grants lands to those who have served them. Do something for ' + REGIONS[a] + ' first: take one of its contracts, or keep a promise to its lord.');
         if (R.favour < 55) return fail('You need more favour at court (55; you have ' + Math.round(R.favour) + ').');
         const fee = 400; if (s.coins < fee) return fail('The fee for a lordship is ' + fee + 'c.');
         const cur = regionLord(s, a), L0 = cur && s.people[cur], weak = !L0 || L0.status !== 'here' || (L0.rep || 0) < 45 || L0.purse < 50 || (a === 'hearthmoor' && s.gov && s.gov.approval.lord < 45);
@@ -4475,6 +4638,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const R = s.realm; if (!R || R.exile) return fail('Not now.');
         if (!COUNCIL[a]) return fail('No such office.'); if (R.council[a] === 'player') return fail('You already hold it.');
         if (!yourLordships(s).length) return fail('Only a lord sits on the royal council.');
+        if (alliesOf(s).length < 2) return fail('You need at least two allies among the lords or the people of influence (you have ' + alliesOf(s).length + ').');
+        if (!yourLordships(s).some(id => deedsIn(s, id) >= 2 || ((R.goodDays || {})[id] || 0) >= 10)) return fail('Show that you govern well first: ten days of safe roads and busy markets in your lands, or two deeds done there.');
         if (R.favour < 65) return fail('You need more favour at court (65; you have ' + Math.round(R.favour) + ').');
         const old = s.people[R.council[a]]; if (old) { old.opinion = clamp((old.opinion || 0) - 30, -100, 100); plog(s, old, 'Replaced as ' + COUNCIL[a] + ' by ' + s.name + '.'); }
         R.council[a] = 'player'; R.favour = clamp(R.favour - 5, 0, 100);
@@ -4493,31 +4658,98 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (a === 'lords') {
           const ls = Object.keys(R.regions).map(id => regionLord(s, id)).filter(l => l && l !== 'player' && s.people[l] && l !== R.king);
           const c = ls.length * 120; if (s.coins < c) return fail('Gifts fit for ' + ls.length + ' lords cost ' + c + 'c.');
-          spend(s, c); ls.forEach(l => { const q = s.people[l]; q.opinion = clamp((q.opinion || 0) + 14, -100, 100); plog(s, q, 'Received a fine gift from ' + s.name + '.'); });
+          const dm = diminish(s, 'lords'); spend(s, c); ls.forEach(l => { const q = s.people[l]; q.opinion = clamp((q.opinion || 0) + Math.round(14 * dm), -100, 100); plog(s, q, 'Received a fine gift from ' + s.name + '.'); });
           event(s, 'You send gifts to ' + ls.length + ' lords of the realm: horses, plate and wine. They think better of you.', 'good');
         } else if (a === 'guilds') {
           const c = 300; if (s.coins < c) return fail('A guild feast costs ' + c + 'c.');
-          spend(s, c); Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').forEach(b => { const q = s.people[b.owner]; if (q) q.opinion = clamp((q.opinion || 0) + 7, -100, 100); });
+          const dm = diminish(s, 'guilds'); spend(s, c); Object.values(s.biz).filter(b => !b.closed && b.owner !== 'player').forEach(b => { const q = s.people[b.owner]; if (q) q.opinion = clamp((q.opinion || 0) + Math.round(7 * dm), -100, 100); });
           event(s, 'You hold a feast for the guild masters of every town in the Guildhall of Crownmere. The guilds speak well of you.', 'good');
         } else if (a === 'town') {
           const folk = living(s).filter(q => townOf(q) === b && !q.kid); const c = Math.max(40, Math.round(folk.length * 0.6));
           if (!folk.length) return fail('No such town.'); if (s.coins < c) return fail('A feast for ' + TOWNS[b].name + ' costs ' + c + 'c.');
-          spend(s, c); folk.forEach(q => { q.opinion = clamp((q.opinion || 0) + 12, -100, 100); q.mood = clamp(q.mood + 6, 0, 100); });
+          const dm = diminish(s, 'town:' + b); spend(s, c); folk.forEach(q => { q.opinion = clamp((q.opinion || 0) + Math.round(12 * dm), -100, 100); q.mood = clamp(q.mood + 6, 0, 100); });
           if (s.towns && s.towns[b]) s.towns[b].approval = clamp(s.towns[b].approval + 2, 0, 100);
           event(s, 'You lay on a feast for the people of ' + TOWNS[b].name + ': roast meat, bread and ale in the square. They will remember it.', 'good');
         } else return fail('No such thing.');
         computeSupport(s); return ok();
+      }
+      case 'takeContract': {
+        const R = s.realm, c = R && (R.contracts || []).find(x => x.n === a); if (!c || c.done) return fail('That contract has gone.');
+        if (c.taken) return fail('You already took it.'); if (R.contracts.filter(x => x.taken).length >= 2) return fail('You can hold two contracts at a time.');
+        c.taken = true; c.delivered = 0; event(s, 'You agree to ' + c.what + ' by day ' + c.until + ' for ' + c.who + '.', 'info'); return ok();
+      }
+      case 'fulfil': {
+        const R = s.realm, c = R && (R.contracts || []).find(x => x.n === a && x.taken && !x.done); if (!c) return fail('No such contract.');
+        if (c.kind === 'clear') return fail('This one is done when the roads of ' + REGIONS[c.region] + ' are safe (danger under 20). Pay for patrols there.');
+        if (marketHere(s) !== c.region) return fail('Bring it to the market in ' + REGIONS[c.region] + '.');
+        if (c.kind === 'repair' && s.coins < c.cost) return fail('The repair needs ' + c.cost + 'c as well as the timber.');
+        const n = Math.min(p.inv[c.good] || 0, c.qty - (c.delivered || 0)); if (n <= 0) return fail('You have no ' + (c.good === 'wood' ? 'timber' : c.good) + ' with you.');
+        p.inv[c.good] -= n; c.delivered = (c.delivered || 0) + n;
+        if (c.delivered < c.qty) return ok('Delivered ' + n + '. ' + (c.qty - c.delivered) + ' more to go.');
+        if (c.kind === 'repair') spend(s, c.cost);
+        completeContract(s, c); return ok();
+      }
+      case 'givePromise': case 'refusePromise': {
+        const R = s.realm, pr = R && (R.promises || []).find(x => x.state === 'asked'); if (!pr) return fail('No one is asking.');
+        if (name === 'refusePromise') { pr.state = 'refused'; const q = s.people[pr.pid]; if (q) q.opinion = clamp((q.opinion || 0) - 3, -100, 100); return ok(); }
+        pr.state = 'given'; pr.until = s.day + 7; event(s, 'You give your word: the roads of ' + REGIONS[pr.region] + ' will stay safe (danger under 30) until day ' + pr.until + '.', 'info'); return ok();
+      }
+      case 'backFigure': case 'opposeFigure': {
+        const R = s.realm; setupFigures(s); const f = R.figures.find(x => x.kind === a), q = f && s.people[f.pid]; if (!q || q.status === 'dead') return fail('They are gone.');
+        const back = name === 'backFigure';
+        if (f.kind === 'merchant') {
+          if (back) { if (s.coins < 200) return fail('He wants 200c invested in his venture.'); spend(s, 200); f.ally = true; f.foe = false; q.opinion = clamp((q.opinion || 0) + 40, -100, 100); realmLog(s, 'You invest 200c with ' + q.name + '. He counts you a partner: 2c a day from each business he owns, and his voice among the guilds.', 'good'); }
+          else { if (!(isRuler(s) || R.council.trade === 'player')) return fail('Only the Master of Trade or the ruler can refuse him a royal charter.'); R.monopoly = null; R.charterRefused = true; f.foe = true; f.ally = false; q.opinion = clamp((q.opinion || 0) - 60, -100, 100); realmLog(s, 'You refuse ' + q.name + ' a charter over bread. His monopoly will not stand, and he will not forget it.', 'story'); }
+        } else if (f.kind === 'lord') {
+          const heir = s.people[f.heirPid];
+          if (back) { if (R.favour < 10) return fail('You need some favour at court to speak for his heir.'); R.favour = clamp(R.favour - 10, 0, 100); f.ally = true; f.foe = false; f.done = true; q.opinion = clamp((q.opinion || 0) + 50, -100, 100); realmLog(s, 'You speak at court for ' + (heir ? heir.name : 'his heir') + '\u2019s right to Ironcrest. ' + q.name + ' is your ally.', 'good'); }
+          else { f.foe = true; f.ally = false; q.opinion = clamp((q.opinion || 0) - 40, -100, 100); realmLog(s, 'You oppose ' + q.name + '\u2019s plans for his heir. He becomes your enemy at court.', 'story'); }
+        } else {
+          if (back) { if ((R.embezzled || 0) > 0) return fail('He will not stand beside someone who has taken from the treasury. Repay it first.'); f.ally = true; f.foe = false; q.opinion = clamp((q.opinion || 0) + 40, -100, 100); f.progress = Math.min(5, f.progress + 2);
+            if (isRuler(s) || f.progress >= 5) { R.laws.fairCourts = true; f.done = true; realmLog(s, 'The Fair Courts are proclaimed, with your backing. ' + q.name + ' is your ally.', 'good'); } else realmLog(s, 'You back ' + q.name + '\u2019s reform at court. He is your ally.', 'good'); }
+          else { f.foe = true; f.ally = false; q.opinion = clamp((q.opinion || 0) - 40, -100, 100); realmLog(s, 'You oppose the Fair Courts. ' + q.name + ' will be watching the treasury closely.', 'story'); }
+        }
+        computeSupport(s); return ok();
+      }
+      case 'rallyAlly': {
+        const R = s.realm, E = R && R.exile; if (!E) return fail('Only an exile needs to rally allies.');
+        const q = s.people[a]; if (!q || q.status === 'dead') return fail('They are gone.'); if (E.allies.includes(a)) return fail('They are already sworn to you.');
+        if ((q.opinion || 0) < 25) return fail(q.name + ' does not think well enough of you (needs 25; ' + Math.round(q.opinion || 0) + ').'); if (s.coins < 80) return fail('Winning a sworn ally costs 80c in gifts.');
+        spend(s, 80); E.allies.push(a); realmLog(s, q.name + ' swears to support your return.', 'good'); return ok();
+      }
+      case 'warChest': { const R = s.realm, E = R && R.exile; if (!E) return fail('Not in exile.'); const n = Math.round(a); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.'); spend(s, n); E.fund = (E.fund || 0) + n; event(s, 'Your war chest holds ' + E.fund + 'c.', 'info'); return ok(); }
+      case 'exposeRuler': {
+        const R = s.realm, E = R && R.exile; if (!E) return fail('Not in exile.'); if (townAt(p.x, p.z) !== 'crownmere') return fail('The proof of the new ruler\u2019s failings is in Crownmere.');
+        if (E.lastExpose && s.day - E.lastExpose < 3) return fail('Lie low for a few days before you try again.'); E.lastExpose = s.day;
+        if (rand(s) < 0.7) { R.kingSupport = clamp(R.kingSupport - 9, 5, 95); realmLog(s, 'Your people spread proof of the new ruler\u2019s failures through the capital. Their standing falls to ' + Math.round(R.kingSupport) + '.', 'good'); }
+        else { const t = Math.round(Math.max(0, s.coins) * 0.1); spend(s, t); realmLog(s, 'Your agents are caught in Crownmere. You pay ' + t + 'c to free them.', 'bad'); }
+        return ok();
+      }
+      case 'moveToSeat': {
+        const R = s.realm, id = (a && regionLord(s, a) === 'player') ? a : yourLordships(s).find(x => x !== 'crownmere') || (isRuler(s) ? 'crownmere' : null);
+        if (!id) return fail('You hold no seat to move into.');
+        if (s.player.seat === id) return fail('You already live there.');
+        for (const q of living(s)) if (q.home === 'seat:' + id && q.id !== R.king) { q.home = null; const h = vacancy(s, 99, townOf(q)); if (h) moveIn(s, q, h); plog(s, q, 'Moved out of the seat of ' + REGIONS[id] + ' for ' + s.name + '.'); }
+        s.player.seat = id; bringFamily(s, 'Moved into ' + seatName(s, id) + ' with ' + s.name + '.');
+        realmLog(s, 'You move into ' + seatName(s, id) + ', the seat of ' + REGIONS[id] + '. It carries your family\u2019s name now.', 'story'); return ok();
+      }
+      case 'renounceLordship': {
+        const R = s.realm; if (!R || regionLord(s, a) !== 'player' || a === 'crownmere') return fail('That is not yours to give up.');
+        if (R.regions[a].lord === 'office') { s.offices.lord = null; replaceLord(s, s.name + ' gave the lordship back to the crown'); } else { R.regions[a].lord = null; vacantSeat(s, a); }
+        if (s.player.seat === a) { s.player.seat = null; bringFamily(s, 'Left the seat of ' + REGIONS[a] + '.'); }
+        realmLog(s, 'You give ' + REGIONS[a] + ' back to the crown.', 'info'); return ok();
       }
       case 'claimCrown': {
         const R = s.realm; if (!R) return fail('Not yet.'); if (isRuler(s)) return fail('The crown is already yours.');
         const sup = computeSupport(s);
         if (!R.exile && !yourLordships(s).length) return fail('You must hold a lordship first.');
         if (!R.exile && !yourSeats(s).length) return fail('You must sit on the royal council first.');
-        if (R.exile && !R.exile.done) return fail('It is too soon after your fall. Rebuild your support first.');
+        if (R.exile) { const ex = exileReady(s); if (!(ex.allies && ex.fund && ex.towns && ex.exposed)) return fail('To come back you need three sworn allies (' + (R.exile.allies || []).length + '), a war chest of 600c (' + (R.exile.fund || 0) + 'c), the towns behind you (' + R.support.towns + ' of 55), and the new ruler\u2019s failings exposed (their standing ' + Math.round(R.kingSupport) + ', under 50).'); }
+        else { if (alliesOf(s).length < 3) return fail('You need three allies to claim the crown (you have ' + alliesOf(s).length + ').'); if (!(R.kept > 0)) return fail('No one follows a claimant whose word is untested. Keep a promise to a lord first.'); }
         const need = 65;
         if (sup < need) return fail('Your support is ' + sup + '. You need ' + need + ' to claim the crown.');
         const K = s.people[R.king];
-        if (K && K.status === 'here' && R.kingSupport >= (R.exile ? 60 : 45)) { R.favour = clamp(R.favour - 30, 0, 100); realmLog(s, 'You claim the crown, but the court stands by King ' + K.name.split(' ')[0] + '. The claim fails, and your favour falls.', 'bad'); return ok(); }
+        if (K && K.status === 'here' && R.kingSupport >= (R.exile ? 50 : 45)) { R.favour = clamp(R.favour - 30, 0, 100); realmLog(s, 'You claim the crown, but the court stands by King ' + K.name.split(' ')[0] + '. The claim fails, and your favour falls.', 'bad'); return ok(); }
         crownYou(s, R.exile ? 'You return from exile with the realm behind you' : 'The lords, the guilds and the court turn to you, and the old King gives way'); return ok();
       }
       case 'rule': {
@@ -4527,8 +4759,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         else if (a === 'tariff') R.tariff = clamp(Math.round(b * 4) / 4, 0, 3);
         else if (a === 'levies') R.levies = clamp(Math.round(b / 10) * 10, 0, 600);
         else if (a === 'law' && LAWS[b]) R.laws[b] = !R.laws[b];
-        else if (a === 'draw') { const n = Math.min(Math.round(b), Math.max(0, R.treasury)); R.treasury -= n; earn(s, n); R.favour = clamp(R.favour - n / 40, 0, 100); event(s, 'You take ' + n + 'c from the treasury for your own use. The court notices.', 'info'); }
-        else if (a === 'give') { const n = Math.min(Math.round(b), Math.max(0, s.coins)); spend(s, n); R.treasury += n; event(s, 'You put ' + n + 'c of your own into the treasury.', 'good'); }
+        else if (a === 'draw') { const n = Math.min(Math.round(b), Math.max(0, R.treasury)); R.treasury -= n; earn(s, n); R.embezzled = (R.embezzled || 0) + n; R.favour = clamp(R.favour - n / 40, 0, 100); event(s, 'You take ' + n + 'c from the treasury for your own use. The court notices.', 'info'); }
+        else if (a === 'give') { const n = Math.min(Math.round(b), Math.max(0, s.coins)); spend(s, n); R.treasury += n; R.embezzled = Math.max(0, (R.embezzled || 0) - n); event(s, 'You put ' + n + 'c of your own into the treasury.', 'good'); }
         else if (a === 'payRival' && R.rival) { const n = Math.round(R.rival.strength * 6); if (R.treasury < n) return fail('Buying off ' + R.rival.name + ' would cost ' + n + 'c from the treasury.'); R.treasury -= n; realmLog(s, 'You pay ' + R.rival.name + ' ' + n + 'c to give up the claim and leave the realm.', 'info'); R.rival = null; }
         else return fail('Nothing to set.');
         computeSupport(s); return ok();
@@ -4864,7 +5096,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
@@ -7206,6 +7438,7 @@ function cardHTML(s) {
   if (here === 'oakbridge') return `<h2>The Oak Bridge</h2><div class="sub">A stone bridge on two great piers over the river Alder, built where an oak ferry once crossed. The town pays for its upkeep out of the market fees.</div>${walking}`;
   if (here === 'lots') return landCard(s, walking);
   if (here === 'home') return s.player.house ? `<h2>Your old hut</h2><div class="sub">Still yours. You live in ${esc(Sim.yourHouse(s) ? Sim.yourHouse(s).name : 'a house')} now.</div>${walking}<div class="acts">${B_('Move back in', ['moveToHut'], 'alt')}${B_('Open the map', ['ui', 'map'], 'alt')}</div>` : `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
+  if (here === 'myhome' && Sim.yourSeat(s)) { const hm = Sim.homeOfYou(s); return `<h2>${esc(hm.name)}</h2><div class="sub">Your seat as ${Sim.yourSeat(s) === 'crownmere' ? 'ruler of Alderwyn' : 'lord of ' + esc(Sim.REGIONS[Sim.yourSeat(s)])}, and your family\u2019s home.</div>${walking}<div class="acts">${B_('The Realm', ['page', 'realm'], 'alt')}</div>`; }
   if (here === 'myhome') { const h = Sim.yourHouse(s); if (h) { const fam = Object.values(s.people).filter(q => q.home === 'you' && q.status === 'here'); return `<h2>${esc(h.name)}</h2><div class="sub">Your home${fam.length ? ', with ' + esc(fam.map(q => q.name.split(' ')[0]).join(', ')) : ''}.</div>${walking}<div class="acts">${B_('Property', ['page', 'property'], 'alt')}</div>`; } }
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
   if (Lh && Lh.name) return `<h2>${esc(Lh.name)}</h2><div class="sub">${esc(PLACE_NOTE[here] || '')}</div>${walking}`;
@@ -7274,7 +7507,7 @@ function renderCard(force) {
   // a place you merely walk past shows only its name; tap the tab to open it
   const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
   // a town's market square: buy and sell here too
-  { const mt = here && Object.keys(Sim.MARKET_AT).find(t => t !== 'hearthmoor' && Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; }
+  { const mt = here && Object.keys(Sim.MARKET_AT).find(t => Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) { const cs = ((G.realm && G.realm.contracts) || []).filter(c => c.taken && c.region === mt && c.kind !== 'clear'); if (cs.length) html += `<div class="acts">${cs.map(c => B_('Deliver for ' + esc(c.who) + ' (' + (c.delivered || 0) + '/' + c.qty + ')', ['fulfil', c.n])).join('')}</div>`; if (mt !== 'hearthmoor') html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; } }
   // a door you can go through
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
@@ -7300,7 +7533,7 @@ document.addEventListener('click', e => {
 });
 
 function hud(s) {
-  if ((s.player.house || null) !== (UI.myHouse === undefined ? 'x' : UI.myHouse)) { UI.myHouse = s.player.house || null; syncMyHome(); }
+  { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
   $('clock').textContent = `Day ${s.day} · ${Sim.clock(s.t)}`;
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
   const inv = s.player.inv, chips = [];
@@ -7308,6 +7541,7 @@ function hud(s) {
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
   if (s.player.horse) chips.push(`<span class="chip num btn" data-c='["ride"]' role="button" tabindex="0">${s.player.riding ? 'Riding ' + esc(s.player.horse.name) + ' · get down' : 'Mount ' + esc(s.player.horse.name)}</span>`);
   if (s.job) { const e = Sim.empById(s.job.emp), on = Sim.inShift(s); chips.push(`<span class="chip num ${on ? 'on' : ''}">${on ? 'On shift' : 'Job'}: ${esc(e.name)} ${shiftText(e)}</span>`); }
+  { const w = waypointPos(); if (w) chips.push(`<span class="chip num btn" data-c='["ui","clearWaypoint"]' role="button" tabindex="0">Finding ${esc(w.name.split(' ')[0])}${w.near ? ' \u00b7 ' + Math.round(Math.hypot(s.player.x - w.x, s.player.z - w.z)) + ' m' : ' \u00b7 in ' + esc(TOWN_NAMES[w.town])} \u00d7</span>`); }
   if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
   s.shops.forEach(x => chips.push(`${TR[x.trade].name}: <b>${x.goods}</b> ${TR[x.trade].product}${x.worker ? ' · ' + esc(x.worker.name) : ''}`));
   const html = chips.map(c => c.startsWith('<span') ? c : `<span class="chip num">${c}</span>`).join('');
@@ -7522,7 +7756,7 @@ function personDetail(s, pr) {
   return `<div class="pdetail"><dl class="kv"><dt>Age</dt><dd>${pr.age}</dd><dt>Work</dt><dd>${esc(Sim.occupation(s, pr))}</dd><dt>Earns</dt><dd>about ${Sim.income(s, pr)}c a day</dd><dt>Home</dt><dd>${esc(Sim.homeText(s, pr))}</dd><dt>Respect</dt><dd>${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ', on the council' : ''}</dd><dt>Purse</dt><dd>${pr.purse}c</dd><dt>Mood</dt><dd>${Math.round(pr.mood)}/100</dd><dt>Of you</dt><dd>${opinionText(pr.opinion)} (${pr.opinion})</dd></dl>
     ${mine.length ? `<p><b>${mine.join(' ')}</b></p>` : ''}
     ${familyLine(s, pr)}
-    <div class="acts">${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
+    <div class="acts">${pr.status === 'here' ? B_('Find them', ['ui', 'findPerson', pr.id]) : ''}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
 const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch' };
@@ -7645,6 +7879,22 @@ function pageRealm(s) {
       ${mineS.length ? `<p>As a councillor you can quietly turn the court against the King, once a day, at a risk of being overheard.</p><div class="acts">${B_('Whisper against the King', ['undermineKing'], 'alt')}</div>` : ''}
       <div class="acts">${B_('Claim the crown', ['claimCrown'], 'warn', !(mineL.length && (mineS.length || R.exile)))}</div></div>`;
   }
+  // what you have done, and who stands with you
+  const allies = Sim.alliesOf(s), deeds = R.deeds || {};
+  h += `<h4>Deeds and allies</h4><div class="box"><dl class="kv"><dt>Deeds done</dt><dd>${Object.keys(deeds).length ? Object.keys(deeds).map(id => esc(Sim.REGIONS[id]) + ' ' + deeds[id]).join(', ') : 'none yet'}</dd><dt>Promises kept</dt><dd>${R.kept || 0}${R.broken ? ' (broken ' + R.broken + ')' : ''}</dd><dt>Allies</dt><dd>${allies.length ? esc(allies.join(', ')) : 'none yet'}</dd>${R.embezzled ? `<dt>Taken from the treasury</dt><dd class="debt">${R.embezzled}c</dd>` : ''}</dl>
+    <p>A lordship needs a deed done in that region. A council seat needs two allies and a name for good government. The crown needs three allies and a promise kept.</p></div>`;
+  const pr = (R.promises || []).find(x => x.state === 'asked' || x.state === 'given');
+  if (pr) { const q = s.people[pr.pid]; h += `<div class="why">${pr.state === 'asked' ? `<b>${esc(q ? q.name : 'A lord')}</b> asks your word that the roads of ${esc(Sim.REGIONS[pr.region])} will stay safe (danger under 30) for a week.<div class="acts">${B_('Give my word', ['givePromise'])}${B_('Decline', ['refusePromise'], 'alt')}</div>` : `You have promised ${esc(q ? q.name : 'a lord')} the roads of ${esc(Sim.REGIONS[pr.region])} stay safe until day ${pr.until}. Danger now: ${Math.round((s.bandits || {})[pr.region] || 0)}.`}</div>`; }
+  const cs = R.contracts || [];
+  h += `<h4>Contracts</h4>${cs.length ? `<div class="grid2">${cs.map(c => `<div class="box"><h5>${esc(c.who)}</h5><p>Wants you to ${esc(c.what)} by day ${c.until}. Pays <b>${c.reward}c</b>.${c.taken && c.qty ? ' Delivered ' + (c.delivered || 0) + ' of ' + c.qty + '.' : ''}</p><div class="acts">${c.taken ? (c.kind === 'clear' ? `<span class="pill">Taken: danger ${Math.round((s.bandits || {})[c.region] || 0)}</span>` : `<span class="pill">Taken: bring it to the market in ${esc(Sim.REGIONS[c.region])}</span>`) : B_('Take it on', ['takeContract', c.n], 'alt')}</div></div>`).join('')}</div>` : '<p>No one is asking for anything just now. New contracts come every few days.</p>'}`;
+  const figs = R.figures || [];
+  if (figs.length) h += `<h4>People of influence</h4><div class="grid2">${figs.map(f => { const q = s.people[f.pid]; if (!q || q.status === 'dead') return ''; return `<div class="box"><h5>${esc(q.name)}${f.ally ? ' <span class="pill">ally</span>' : f.foe ? ' <span class="pill bad">against you</span>' : ''}</h5><p>${esc(Sim.occupation(s, q))}. Wants ${esc(f.aim)}.${f.kind === 'merchant' ? ' He owns ' + f.progress + ' of five.' : ''}</p><div class="acts">${f.ally ? '' : B_(f.kind === 'merchant' ? 'Invest with him · 200c' : f.kind === 'lord' ? 'Speak for his heir · 10 favour' : 'Back his reform', ['backFigure', f.kind], 'alt')}${f.foe ? '' : B_(f.kind === 'merchant' ? 'Refuse his charter' : 'Oppose', ['opposeFigure', f.kind], 'alt')}</div></div>`; }).join('')}</div>`;
+  if (R.exile) { const ex = Sim.exileReady(s) || {}, E = R.exile, tick = b => b ? '\u2713' : '\u2717';
+    const cands = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== 'player' && l !== R.king && s.people[l] && !E.allies.includes(l));
+    h += `<h4>The way back</h4><div class="box"><p>${tick(ex.allies)} Three sworn allies (${E.allies.length}) \u00b7 ${tick(ex.fund)} A war chest of 600c (${E.fund || 0}c) \u00b7 ${tick(ex.towns)} The towns behind you (${R.support.towns} of 55) \u00b7 ${tick(ex.exposed)} The new ruler\u2019s failings exposed (standing ${Math.round(R.kingSupport)}, under 50)</p>
+      <div class="acts">${cands.slice(0, 4).map(l => B_('Rally ' + esc(s.people[l].name) + ' · 80c', ['rallyAlly', l], 'alt')).join('')}${B_('Add 100c to the war chest', ['warChest', 100], 'alt', s.coins < 100)}${B_('Expose the ruler (in Crownmere)', ['exposeRuler'], 'alt')}</div></div>`; }
+  { const held = Sim.yourLordships(s).filter(x => x !== 'crownmere'), st = Sim.yourSeat(s);
+    if (held.length || Sim.isRuler(s)) h += `<div class="acts">${!st ? B_('Move into your seat', ['moveToSeat']) : ''}${held.map(id => B_('Give up ' + esc(Sim.REGIONS[id]), ['renounceLordship', id], 'alt')).join('')}</div>`; }
   // the regions
   h += `<h4>The regions</h4><div class="grid2">${Object.keys(R.regions).map(id => {
     const g = R.regions[id], mine = Sim.regionLord(s, id) === 'player', bl = Math.round((s.bandits && s.bandits[id]) || 0), danger = bl > 60 ? 'bandits raiding' : bl > 40 ? 'bandits about' : bl > 20 ? 'some thieves' : 'quiet';
@@ -8231,12 +8481,12 @@ function renderTitle() {
       const sw = (key, list) => `<div class="swatches" role="group">${list.map((c, i) => `<button type="button" class="sw" aria-label="${key} ${i + 1}" aria-pressed="${L0[key] === i}" style="background:${c}" data-c='${JSON.stringify(['ui', 'look', key, i])}'></button>`).join('')}</div>`;
       const sg = (key, list) => `<div class="seg" role="group">${list.map(([v, n]) => `<button type="button" aria-pressed="${L0[key] === v}" data-c='${JSON.stringify(['ui', 'look', key, v])}'>${n}</button>`).join('')}</div>`;
       left = `${back}<h3>Who are you?</h3>
-        <label for="newName">Your name</label><input type="text" id="newName" maxlength="18" value="${esc(UI.newName)}" autocomplete="off">
+        <div class="namerow"><div><label for="newFirst">First name</label><input type="text" id="newFirst" maxlength="12" value="${esc(UI.newFirst || 'Wren')}" autocomplete="off"></div><div><label for="newLast">Family name</label><input type="text" id="newLast" maxlength="14" value="${esc(UI.newLast || '')}" placeholder="e.g. Ashby" autocomplete="off"></div></div>
         <div class="cc"><span>Body</span>${sg('body', LOOKS.body)}<span>Skin</span>${sw('skin', LOOKS.skin)}<span>Hair</span>${sg('hair', LOOKS.hair)}<span>Hair colour</span>${sw('hairColor', LOOKS.hairColor)}<span>Clothes</span>${sw('tunic', LOOKS.tunic)}</div>`;
-      right = `<div class="ccprev">${lookSVG(L0)}<p><span id="ccName">${esc(UI.newName || 'Wren')}</span>, arriving in Hearthmoor with 5 coins and a backpack.</p></div>
+      right = `<div class="ccprev">${lookSVG(L0)}<p><span id="ccName">${esc(fullNewName())}</span>, arriving in Hearthmoor with a backpack.</p></div>
         <div class="tmenu"><button type="button" class="tbtn primary" data-c='["ui","newStep",1]'>Choose a save slot &rarr;</button></div>`;
     } else {
-    left = `<button type="button" class="back" data-c='["ui","newStep",0]'>&larr; Back to your character</button><h3>A new life</h3><p>You arrive in Hearthmoor with 5 coins. Find work, learn a trade, and build from there.</p><div class="ccprev small">${lookSVG(L0)}<p><b>${esc(UI.newName || 'Wren')}</b></p></div>`;
+    left = `<button type="button" class="back" data-c='["ui","newStep",0]'>&larr; Back to your character</button><h3>A new life</h3><p>Start from nothing, as the game was meant to be played, or further up the ladder.</p><div class="tmenu">${Object.keys(Sim.STARTS).map(k => `<button type="button" class="tbtn slotbtn ${(UI.startMode || 'normal') === k ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'startMode', k])}'>${esc(Sim.STARTS[k].name)}<small>${esc(Sim.STARTS[k].say)}</small></button>`).join('')}</div><div class="ccprev small">${lookSVG(L0)}<p><b>${esc(fullNewName())}</b></p></div>`;
     right = `<label>Save in</label><div class="tmenu">${infos.map((info, i) => `<button type="button" class="tbtn slotbtn ${UI.newSlot === i + 1 ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'newSlot', i + 1])}'>Slot ${i + 1}<small>${slotLine(info)}</small></button>`).join('')}</div>
       ${infos[UI.newSlot - 1] ? `<p class="warnline">Slot ${UI.newSlot} holds a game. Starting here replaces it.</p>` : ''}
       <div class="tmenu" style="margin-top:8px"><button type="button" class="tbtn primary" data-c='["ui","begin"]'>Begin</button></div>`;
@@ -8256,7 +8506,7 @@ function renderTitle() {
 }
 function enterGame(game, n) {
   if (Interior.active()) Interior.leave(true); UI.inside = null; UI.myHouse = undefined;
-  G = game; slot = n; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
+  UI.dialog = []; G = game; slot = n; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
   meta.lastSlot = n; saveMeta();
   resetMeshes(); focus.set(G.player.x, 0, G.player.z); solidKey = '';
   ['title', 'book', 'pause'].forEach(id => $(id).hidden = true);
@@ -8274,6 +8524,9 @@ function toTitle() {
 }
 function resetMeshes() { for (const [, g] of agentMeshes) dropChar(g); agentMeshes.clear(); for (const [, g] of workerMeshes) dropChar(g); workerMeshes.clear(); }
 
+// your name: a first name, and a family name if you give one
+const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+function fullNewName() { const f = cap1((UI.newFirst || '').replace(/\s+/g, '')) || 'Wren', l = cap1((UI.newLast || '').replace(/\s+/g, '')); return l ? f + ' ' + l : f; }
 function uiCmd(k, v) {
   if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
   if (k === 'tab') { UI.tab = v; UI.confirm = null; renderBook(true); return; }
@@ -8304,6 +8557,12 @@ function uiCmd(k, v) {
   if (k === 'testSound') { Snd.unlock(); setTimeout(() => { Snd.play('great'); const el = $('sndStatus'); if (el) el.textContent = Snd.status() + ' If you still hear nothing, turn the volume up with the side buttons.'; }, 120); return; }
   if (k === 'closeNotes') { $('scroll').hidden = true; meta.seenNotes = NOTES[0].v; saveMeta(); return; }
   if (k === 'reload') { saveNow(); meta.seenNotes = null; saveMeta(); location.reload(); return; }
+  if (k === 'dialogNext') { UI.dialog.shift(); renderDialog(); return; }
+  if (k === 'dialogEnd') { UI.dialog = []; renderDialog(); return; }
+  if (k === 'findPerson') { const q = G.people[v]; if (!q) return; UI.waypoint = v; const a = G.agents.find(x => x.pid === v), t = Sim.townOf(q);
+    closeOverlay(); if (UI.inside) Interior.leave();
+    toast(a ? q.name + ' is marked: follow the gold light, or the gold mark on the minimap.' : q.name + ' is in ' + TOWN_NAMES[t] + '. The minimap points the way; travel there and the mark will find them.', 'info', true); return; }
+  if (k === 'clearWaypoint') { UI.waypoint = null; return; }
   if (k === 'who') { UI.person = v; UI.tab = 'people'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
   if (k === 'person') { UI.person = v; if (v && UI.overlay !== 'book') { UI.tab = 'people'; openBook(); } else renderBook(); return; }
   if (k === 'pview') { UI.pauseView = v; UI.exportText = ''; renderPause(true); return; }
@@ -8320,13 +8579,14 @@ function uiCmd(k, v) {
   }
   if (k === 'quitTitle') { toTitle(); return; }
   if (k === 'continue') { const n = meta.lastSlot, g = n && readSlot(n); if (g) enterGame(g, n); else { UI.titleView = 'load'; renderTitle(); } return; }
-  if (k === 'look') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newLook[v] = arguments[2]; renderTitle(); return; }
-  if (k === 'newStep') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newStep = v; renderTitle(); return; }
-  if (k === 'newSlot') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newSlot = v; renderTitle(); return; }
+  if (k === 'startMode') { UI.startMode = v; renderTitle(); return; }
+  if (k === 'look') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newLook[v] = arguments[2]; renderTitle(); return; }
+  if (k === 'newStep') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newStep = v; renderTitle(); return; }
+  if (k === 'newSlot') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newSlot = v; renderTitle(); return; }
   if (k === 'begin') {
-    const name = (UI.newName || '').trim().slice(0, 18) || 'Wren';
+    const name = fullNewName();
     UI.newName = name;
-    const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); Sim.you(g).sex = g.look.body === 'f' ? 'f' : 'm'; UI.newStep = 0;
+    const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); Sim.you(g).sex = g.look.body === 'f' ? 'f' : 'm'; Sim.applyStart(g, UI.startMode || 'normal'); UI.newStep = 0;
     enterGame(g, UI.newSlot || 1); return;
   }
   if (k === 'load') { const g = readSlot(v); if (g) enterGame(g, v); else { UI.importMsg = 'That slot could not be read.'; renderTitle(); } return; }
@@ -8344,7 +8604,7 @@ document.addEventListener('input', e => {
     Sim.cmd(G, 'setPrice', shop.id, +e.target.value);
     $('pv-' + shop.id).textContent = shop.price + 'c'; $('pw-' + shop.id).textContent = willText(shop);
   }
-  if (id === 'newName') { UI.newName = e.target.value; const c = $('ccName'); if (c) c.textContent = e.target.value || 'Wren'; }
+  if (id === 'newFirst' || id === 'newLast') { if (id === 'newFirst') UI.newFirst = e.target.value.trim(); else UI.newLast = e.target.value.trim(); const c = $('ccName'); if (c) c.textContent = fullNewName(); }
 });
 document.addEventListener('change', e => { const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
@@ -8363,14 +8623,43 @@ window.addEventListener('pagehide', saveNow);
 window.addEventListener('beforeunload', saveNow);
 
 /* ----- main loop ----- */
+UI.dialog = [];
+function pagesOf(text) {
+  if (text.length <= 240) return [text];
+  const parts = text.match(/[^.!?]+[.!?]+["\u201d\u2019]?\s*|.+$/g) || [text], out = []; let cur = '';
+  for (const p of parts) { if ((cur + p).length > 240 && cur) { out.push(cur.trim()); cur = ''; } cur += p; }
+  if (cur.trim()) out.push(cur.trim()); return out;
+}
+function renderDialog() {
+  const el = $('dialog'); if (!el) return;
+  if (!UI.dialog.length || UI.mode !== 'play') { el.hidden = true; return; }
+  const more = UI.dialog.length > 1;
+  el.innerHTML = `<p>${esc(UI.dialog[0])}</p><div class="dacts">${more ? `<span class="num">${UI.dialog.length - 1} more</span>` : ''}${more ? B_('Next', ['ui', 'dialogNext']) + B_('Skip', ['ui', 'dialogEnd'], 'alt') : B_('Done', ['ui', 'dialogNext'])}</div>`;
+  el.hidden = false;
+}
 function drainEvents() {
   if (!G || !G.events.length) return;
   const fresh = G.events.slice(); G.events.length = 0;
-  const coins = fresh.filter(e => e.kind === 'coin'), rest = fresh.filter(e => e.kind !== 'coin');
+  // spoken lines wait in a dialogue box until you tap on, so nothing has to be read in a hurry
+  const said = fresh.filter(e => /["\u201c]/.test(e.text));
+  if (said.length) { said.forEach(e => pagesOf(e.text).forEach(t => UI.dialog.push(t))); renderDialog(); }
+  const coins = fresh.filter(e => e.kind === 'coin'), rest = fresh.filter(e => e.kind !== 'coin' && !said.includes(e));
   rest.slice(-2).forEach(e => toast(e.text, e.kind));
   if (coins.length) toast(coins.length === 1 ? coins[0].text : `${coins.length} sales just now.`, 'coin');
 }
 let last = performance.now(), uiTimer = 0;
+/* ----- a waypoint on someone you went looking for ----- */
+function waypointPos() {
+  const id = UI.waypoint; if (!id || !G) return null; const q = G.people[id]; if (!q || q.status !== 'here') { UI.waypoint = null; return null; }
+  const a = G.agents.find(x => x.pid === id); if (a) return { x: a.x, z: a.z, near: true, name: q.name };
+  const t = Sim.townOf(q), T = TOWNS[t]; return { x: t === 'hearthmoor' ? 0 : T.x, z: t === 'hearthmoor' ? 4 : T.z, near: false, name: q.name, town: t };
+}
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 30, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xf5cf73, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide })); beam.visible = false; scene.add(beam);
+function syncWaypoint() {
+  const w = waypointPos(); beam.visible = !!(w && w.near && !UI.inside);
+  if (!w) return;
+  if (w.near) { beam.position.set(w.x, standH(w.x, w.z) + 15, w.z); if (Math.hypot(G.player.x - w.x, G.player.z - w.z) < 3.5) { toast('You have found ' + w.name + '.', 'info', true); UI.waypoint = null; beam.visible = false; } }
+}
 /* ================= the minimap: a small chart of the streets around you, north at the top ================= */
 const Mini = (function () {
   const items = [];   // drawn in layer order: {L, k, ...}
@@ -8454,6 +8743,7 @@ const Mini = (function () {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const dot = (x, z, c, r) => { const sx = N / 2 + (x - px) * S, sz = N / 2 + (z - pz) * S; if (Math.hypot(sx - N / 2, sz - N / 2) > N / 2 - 6) return; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx, sz, r, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#2a1d12'; ctx.stroke(); };
     for (const m of mineMarks()) dot(m.x, m.z, COL.mine, 5);
+    { const w = waypointPos(); if (w) { let sx = N / 2 + (w.x - px) * S, sz = N / 2 + (w.z - pz) * S; const dx = sx - N / 2, dz = sz - N / 2, dd = Math.hypot(dx, dz), lim = N / 2 - 12; if (dd > lim) { sx = N / 2 + dx / dd * lim; sz = N / 2 + dz / dd * lim; } ctx.save(); ctx.translate(sx, sz); ctx.rotate(Math.atan2(dz, dx) + Math.PI / 2); ctx.beginPath(); if (dd > lim) { ctx.moveTo(0, -10); ctx.lineTo(8, 6); ctx.lineTo(-8, 6); } else { ctx.moveTo(0, -9); ctx.lineTo(7, 0); ctx.lineTo(0, 9); ctx.lineTo(-7, 0); } ctx.closePath(); ctx.fillStyle = '#f5cf73'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#2a1d12'; ctx.stroke(); ctx.restore(); } }
     // you: a view cone for where the camera looks, and an arrow
     const c = N / 2, dx = -Math.sin(yaw), dz = -Math.cos(yaw), a = Math.atan2(dz, dx);
     const g = ctx.createRadialGradient(c, c, 4, c, c, N * 0.34); g.addColorStop(0, 'rgba(255,244,214,.55)'); g.addColorStop(1, 'rgba(255,244,214,0)');
@@ -8477,7 +8767,7 @@ const Mini = (function () {
       if (el.hidden === show) el.hidden = !show;
       if (!show) return;
       acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85, ironcrest: 65, eastwatch: 80 }[t] || 60; })();
-      if (acc < 0.1 && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
+      if (acc < 0.1 && !UI.waypoint && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
       if (acc < 0.1) return;
       acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
       draw(p.x, p.z, cam.yaw, R);
@@ -8672,7 +8962,7 @@ const Interior = (function () {
     for (const a of s.agents) {
       const p = a.pid && s.people[a.pid]; if (!p || p.status !== 'here') continue;
       if (d.kind === 'home') { if (p.home === 'you' && (a.indoors || near(a, 12))) out.push({ a, p, role: night ? 'bed' : 'home' }); continue; }
-      if (d.kind === 'castle') { if (p.home === 'seat:' + d.seat && hr >= 8 && hr < 20) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
+      if (d.kind === 'castle') { if ((p.home === 'seat:' + d.seat && hr >= 8 && hr < 20) || (d.lead === 'nobody' && p.home === 'you' && (a.indoors || near(a, 30)))) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
       const staff = p.job && p.job.type === 'biz' && p.job.biz === d.bizId;
       if (staff && near(a, 16) && !night) out.push({ a, p, role: 'staff' });
       else if (!staff && !a.moving && near(a, 9) && out.length < 12) out.push({ a, p, role: 'guest' });
@@ -8783,6 +9073,7 @@ function insideOf(key) {
   if (KEEPS[key]) { const [rg, size, title, banner, trim] = KEEPS[key], R = s.realm, lord = R ? Sim.regionLord(s, rg) : null, lp = lord && lord !== 'player' ? s.people[lord] : null, Lk = L[key];
     return { kind: 'castle', size, title, note: lord === 'player' ? 'Your hall.' : lp ? (rg === 'crownmere' ? 'King ' + lp.name.split(' ')[0] + ' holds court here.' : lp.name + '\u2019s hall.') : '', x: Lk.x, z: Lk.z, door, seat: rg, lead: lord, banner, trim }; }
   if (key === 'home') return { kind: 'home', size: 'hut', title: 'Your hut', note: s.player.house ? 'Your old hut, still yours.' : 'Small and draughty, but yours.', x: Lh.x, z: Lh.z, door, comfort: s.player.hutComfort || 0 };
+  if (key === 'myhome' && Sim.yourSeat(s)) { const st = Sim.yourSeat(s), hm = Sim.homeOfYou(s); return { kind: 'castle', size: st === 'crownmere' ? 'great' : 'hall', title: 'The hall of ' + hm.name, note: 'Your seat.', x: hm.x, z: hm.z, door, seat: st, lead: 'nobody', banner: '#2f6b3a', trim: '#efe9d8' }; }
   if (key === 'myhome') { const h = Sim.yourHouse(s); if (!h) return null; const sh = Sim.houseShape(h); return { kind: 'home', size: sh.tall ? 'tall' : 'home', title: h.name, note: 'Your home.', x: h.x, z: h.z, door, house: h, comfort: h.comfort || 0 }; }
   if (Lh.emp) { const e = Sim.empById(Lh.emp); return { kind: 'biz', trade: e.trade, title: e.name, note: e.boss + '’s ' + (TR[e.trade] ? TR[e.trade].name.toLowerCase() : e.trade) + '.', x: e.x, z: e.z, door, bizId: Lh.emp }; }
   if (Lh.plot != null) { const sh = Sim.shopOnPlot(s, Lh.plot); if (!sh) return null; const pl = Sim.PLOTS[Lh.plot]; return { kind: 'biz', trade: sh.trade, title: 'Your ' + TR[sh.trade].name.toLowerCase(), note: Sim.tierOf(sh).name + '.', x: pl.x, z: pl.z, door, shop: sh }; }
@@ -8791,6 +9082,10 @@ function insideOf(key) {
 }
 // your bought house is a place on the map like any other
 function syncMyHome() {
+  const st = G && Sim.yourSeat(G);
+  const SEAT_LOC = { hearthmoor: 'manor', greenhaven: null, oakbridge: 'oakkeep', ironcrest: 'ickeep', eastwatch: 'ewkeep', crownmere: 'cmcastle' }, BASE = { manor: 'Varrow Manor', oakkeep: 'Oakbridge Keep', ickeep: 'Stane Keep', ewkeep: 'Eastwatch Castle', cmcastle: 'Crownmere Castle' };
+  for (const k in BASE) if (L[k]) L[k].name = BASE[k];
+  if (st) { const hm = Sim.homeOfYou(G), k = SEAT_LOC[st]; if (k && L[k]) L[k].name = hm.name; L.myhome = { x: hm.x, z: hm.z + 4, r: 4, name: hm.name + ' (home)', town: st === 'hearthmoor' ? undefined : st, seat: st }; L.home.name = 'Your old hut'; return; }
   const h = G && Sim.yourHouse(G);
   if (h) { const dr = Sim.doorOf(h); L.myhome = { x: dr.x, z: dr.z, r: 3.4, name: h.name + ' (home)', town: h.town && h.town !== 'hearthmoor' ? h.town : undefined }; L.home.name = 'Your old hut'; }
   else { delete L.myhome; L.home.name = 'Your Hut'; }
@@ -8799,14 +9094,14 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
-  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
   syncCamera(G, dt, t);
   if (G) Mini.update(dt);
-  if (G && UI.mode === 'play') syncSkylines(focus.x, focus.z);
+  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); }
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
   if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
@@ -9062,8 +9357,21 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.04.2327';
+const BUILD = '2026.11.05.0023';
 const NOTES = [
+  { v: '0.34', date: '5 November', title: 'Making it matter', items: [
+    'One fair economy. Every business, yours or not, now sells into the same demand: a town\u2019s grown people and its travellers, shared between every seller of that trade by how many hands each has. Ingredients cost what the town\u2019s market charges that day, and bigger towns cost more to trade in but have more custom to win. Your Hearthmoor shops now share the village\u2019s custom with Gerd, Hollin, Ysolde and Ash.',
+    'Grain, timber and iron ore have their own stock and price in every town. Greenhaven grows grain cheaply, Ironcrest digs iron, and the cities pay more for both. You can buy and sell at every town\u2019s market, and the Trading Post shows what each town pays, so carrying goods between towns can pay.',
+    'Contracts: the lords and towns ask for goods delivered, repairs paid for and roads cleared of bandits. Take up to two at a time from the Realm page. Lords also ask for your word that their roads will stay safe for a week; keep it, and they remember.',
+    'Power is earned by deeds. Gifts and feasts still help, but each one in a fortnight counts for half the last. A lordship now needs a deed done in that region. A council seat needs two allies and a name for good government. The crown needs three allies and a promise kept.',
+    'Three people of influence: Julian Marchant, buying up bakeries for a monopoly on bread; Gareth Stane, lord of Ironcrest, fighting for his son\u2019s right to inherit; and Ambrose Fell, the Lord Justice, pressing for the Fair Courts. Back them or oppose them; each changes what you can do.',
+    'Taking money from the treasury as ruler can be found out: you must repay it with a fine, the lords think less of you, and if you cannot pay, the council removes you.',
+    'Exile is a chapter of its own: win back three sworn allies, raise a war chest, win over the towns and expose the new ruler\u2019s failings. Waiting alone no longer brings you back.',
+    'A lord holds one region at a time. You can move into its seat, which takes your family\u2019s name: Varrow Manor becomes your manor, Stane Keep your keep. The ruler lives in Crownmere castle.',
+    'Choose a first and a family name for your character. And choose how you begin: from nothing, as a merchant with a Bread Stand, as the Elder of Hearthmoor, as lord of Greenhaven, or as ruler of Alderwyn.',
+    'Find people: on anyone\u2019s page in the Ledger, tap "Find them" for a gold light over them and a mark on the minimap. If they are in another town, the minimap points the way.',
+    'If you die and carry on as a young child, a regent runs the family\u2019s affairs until they come of age at 16. Your village council seat now falls vacant at a death, and can be won back at a moot.'
+  ] },
   { v: '0.33', date: '4 November', title: 'All of Alderwyn, and its crown', items: [
     'Two new towns. Ironcrest, about 200 people on a mountain shelf above Crownmere: mines driven into the crags, smelters, charcoal burners and Stane Keep. Eastwatch, about 480 people in a walled port on the sea: quays, warehouses, ships at the piers, a shipyard, a lighthouse and the Warden\u2019s castle. Roads run up to Ironcrest from Crownmere and east to Eastwatch from Oakbridge, over new bridges on the Alder.',
     'The realm has a King, a Prince, six regional lords and a royal council (Lord Treasurer, Master of Trade, Marshal and Lord Justice). A new Realm page in the Ledger shows them all, and your standing with each.',

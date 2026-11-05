@@ -129,16 +129,16 @@
 
   /* ---------- the realm around the village ---------- */
   const REALM = {
-    lord: 'Lord Edric Varrow', lordShort: 'Lord Varrow', elder: 'Elder Brannoch', steward: 'Steward Merrin', king: 'King Aldwin', capital: 'Highcrown',
-    towns: ['Ashford', 'Kellmere', 'Highcrown']
+    lord: 'Lord Edric Varrow', lordShort: 'Lord Varrow', elder: 'Elder Brannoch', steward: 'Steward Merrin', king: 'King Aldwin', capital: 'Crownmere',
+    towns: ['Ashford', 'Kellmere', 'Crownmere']
   };
   const RUMORS = [
     'Ashford’s river barges are carrying twice the grain this year. Their mayor is getting rich.',
     'Kellmere’s mines found a new seam of iron. Smiths there pay well for good charcoal.',
-    'They say ' + 'King Aldwin' + ' is calling his lords to Highcrown before winter.',
+    'They say ' + 'King Aldwin' + ' is calling his lords to Crownmere before winter.',
     'Bandits were seen on the Ashford road last week. Travel in daylight.',
     'Lord Varrow keeps to his manor. His steward does the real work.',
-    'In Highcrown a shopkeeper bought a seat on the city council. Coin opens doors there.',
+    'In Crownmere a shopkeeper bought a seat on the city council. Coin opens doors there.',
     'Kellmere and Ashford are quarrelling over the toll bridge again.',
     'A village that feeds its own in a lean year is remembered by its lord.'
   ];
@@ -389,7 +389,7 @@
     if (!v.contract && s.shops.length && rand(s) < 0.5) {
       const shop = s.shops[Math.floor(rand(s) * s.shops.length)], T = TRADES[shop.trade], Ti = tierOf(shop);
       const qty = Math.max(2, Ti.out * 2 + Math.floor(rand(s) * 3));
-      v.contract = { trade: shop.trade, qty, reward: Math.round(qty * T.price * 1.6), until: s.day + 3, who: ['A drover bound for Ashford', 'A Kellmere mining crew', 'A wagon train to Highcrown', 'The innkeeper at Ashford'][Math.floor(rand(s) * 4)] };
+      v.contract = { trade: shop.trade, qty, reward: Math.round(qty * T.price * 1.6), until: s.day + 3, who: ['A drover bound for Ashford', 'A Kellmere mining crew', 'A wagon train to Crownmere', 'The innkeeper at Ashford'][Math.floor(rand(s) * 4)] };
       event(s, v.contract.who + ' wants ' + goodsName(shop.trade, qty) + ' delivered to the Trading Post by day ' + v.contract.until + ' for ' + v.contract.reward + 'c.', 'story');
     }
     // the council hears a dispute every few days
@@ -2264,7 +2264,7 @@
     const lid = s.offices.lord;
     if (lid && lid !== 'player' && g.approval.lord < 25) {
       g.petitions++;
-      if (g.petitions >= 2) { notes.push('A second petition against ' + lordTitle(s) + ' goes to King Aldwin in Highcrown.'); after.push(() => replaceLord(s, 'the village petitioned the King against him twice')); }
+      if (g.petitions >= 2) { notes.push('A second petition against ' + lordTitle(s) + ' goes to King Aldwin in Crownmere.'); after.push(() => replaceLord(s, 'the village petitioned the King against him twice')); }
       else notes.push('The moot sends a petition to King Aldwin against ' + lordTitle(s) + '. If nothing changes, a second will follow.');
     } else if (g.approval.lord >= 35) g.petitions = 0;
     g.lastMoot = { day: s.day, notes: notes.slice() };
@@ -2322,12 +2322,12 @@
     const stw = s.offices.steward && s.offices.steward !== 'player' ? s.people[s.offices.steward] : null;
     let heir;
     if (stw && stw.status === 'here' && (stw.rep || 0) >= 40) heir = stw;
-    else { heir = newPerson(s, { name: ['Aldous Penrith', 'Hamon Grey', 'Bertram Ashe'][Math.floor(rand(s) * 3)], age: 40 + Math.floor(rand(s) * 12), purse: 300, palette: 2 }); heir.log.push({ day: s.day, text: 'Sent from Highcrown by King Aldwin to hold Hearthmoor.' }); }
+    else { heir = newPerson(s, { name: ['Aldous Penrith', 'Hamon Grey', 'Bertram Ashe'][Math.floor(rand(s) * 3)], age: 40 + Math.floor(rand(s) * 12), purse: 300, palette: 2 }); heir.log.push({ day: s.day, text: 'Sent from Crownmere by King Aldwin to hold Hearthmoor.' }); }
     const oldName = old ? old.name : 'the lord';
     appoint(s, 'lord', heir.id);
     if (old) { old.rep = Math.max(0, (old.rep || 0) - 40); plog(s, old, 'Stripped of Hearthmoor by the King: ' + why + '.'); if (!old.home && old.status === 'here') { const h = vacancy(s, 99); if (h) moveIn(s, old, h); } }
     g.approval.lord = 55; g.petitions = 0; g.lordDebtDays = 0;
-    let msg = 'King Aldwin strips ' + oldName + ' of Hearthmoor: ' + why + '. ' + heir.name + (heir === stw ? ', the steward who ran his estate,' : ', a knight from Highcrown,') + ' is the new Lord.';
+    let msg = 'King Aldwin strips ' + oldName + ' of Hearthmoor: ' + why + '. ' + heir.name + (heir === stw ? ', the steward who ran his estate,' : ', a knight from Crownmere,') + ' is the new Lord.';
     if (heir === stw) {
       // the new lord names a steward on merit: the Elder or a councillor
       const pick = [s.offices.elder].concat(g.council).map(id => id && id !== 'player' ? s.people[id] : null).filter(p => p && p.status === 'here').sort((a, b) => (b.rep || 0) - (a.rep || 0))[0];
@@ -3561,6 +3561,30 @@
     const need = { allies: (E.allies || []).length >= 3, fund: (E.fund || 0) >= 600, towns: R.support.towns >= 55, exposed: R.kingSupport < 50 };
     return need;
   }
+  /* ----- how you begin: from nothing, or further up the ladder ----- */
+  const STARTS = {
+    normal: { name: 'From nothing', say: 'Arrive in Hearthmoor with 5 coins and work your way up.' },
+    merchant: { name: 'A merchant', say: 'You know the baker\u2019s trade and own a Bread Stand in Hearthmoor, with 150 coins put by.' },
+    elder: { name: 'The Elder', say: 'You are Elder of Hearthmoor, with a bakery, the council behind you and 400 coins.' },
+    lord: { name: 'A lord', say: 'You are lord of Greenhaven, living at its hall, with a bakery in Hearthmoor and 1,200 coins.' },
+    ruler: { name: 'The ruler', say: 'Old King Aldwin has given you the crown. You rule Alderwyn from Crownmere castle, with 2,000 coins of your own.' }
+  };
+  function applyStart(s, mode) {
+    if (!STARTS[mode] || mode === 'normal') return;
+    const v = s.village, Y = you(s), R = s.realm;
+    s.trades.bakery = Math.max(s.trades.bakery || 0, LEARN_SHIFTS);
+    s.coins = 60; cmd(s, 'open', 1, 'bakery');
+    s.coins = { merchant: 150, elder: 400, lord: 1200, ruler: 2000 }[mode];
+    s.start = mode;
+    if (mode === 'elder' || mode === 'lord' || mode === 'ruler') {
+      v.step = 9; v.council = true; v.landGranted = true; v.standing = 80; v.chest = Math.max(v.chest, 150);
+      if (mode === 'elder') { const old = s.offices.elder && s.people[s.offices.elder]; appoint(s, 'elder', 'player'); if (old) old.retired = true; if (s.gov) s.gov.approval.elder = 65; }
+    }
+    if (mode === 'lord' || mode === 'ruler') { Y.age = Math.max(Y.age, mode === 'ruler' ? 32 : 28); s.people[Y.pid].age = Y.age; R.favour = 55; R.deeds = { greenhaven: 1 }; }
+    if (mode === 'lord') { const old = s.people[R.regions.greenhaven.lord]; if (old) { old.retired = true; old.noble = null; } R.regions.greenhaven.lord = 'player'; cmd(s, 'moveToSeat', 'greenhaven'); const st = STAGE.greenhaven; s.player.x = st.x; s.player.z = st.z; }
+    if (mode === 'ruler') { R.kept = 1; crownYou(s, 'King Aldwin, old and tired, names you his successor'); s.player.seat = 'crownmere'; bringFamily(s, 'Moved into Crownmere castle.'); const st = STAGE.crownmere; s.player.x = st.x; s.player.z = st.z; }
+    event(s, STARTS[mode].say, 'story');
+  }
   /* buying, renting and firing */
   /* ----- property: what it is worth, keeping it up, letting it, and selling it ----- */
   const COMFORT = [{ name: 'Bare', cost: 0 }, { name: 'Homely', cost: 80 }, { name: 'Comfortable', cost: 180 }, { name: 'Fine', cost: 360 }];
@@ -4582,7 +4606,7 @@
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;

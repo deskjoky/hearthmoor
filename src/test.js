@@ -749,7 +749,7 @@ console.log('27. Bandits on the roads');
 
 console.log('28. To the throne of Alderwyn by deeds, and back from exile');
 {
-  const s = Sim.newGame(190), R = s.realm, cm = Sim.STAGE.crownmere, at = (x, z) => { s.player.x = x; s.player.z = z; }, away = () => at(0, 4), court = () => at(cm.x, cm.z);
+  const s = newGameRaw(190); s.ageRate = 0; const R = s.realm, cm = Sim.STAGE.crownmere, at = (x, z) => { s.player.x = x; s.player.z = z; }, away = () => at(0, 4), court = () => at(cm.x, cm.z);
   const atMarket = t => { const L = Sim.LOCS[Sim.MARKET_AT[t]]; at(L.x, L.z); };
   check(R.crown === 'king' && Object.keys(R.regions).every(id => Sim.lordName(s, id) !== 'no one') && R.figures.length === 3, 'the realm has a King, six lords and three people of influence');
   s.coins = 6000; court();
@@ -778,21 +778,51 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   for (let d = 0; d < 8; d++) { s.bandits.oakbridge = 5; away(); Sim.advance(s, 1440); }
   check(R.kept >= 1, 'you keep it');
   for (let d = 0; d < 12; d++) { court(); Sim.cmd(s, 'undermineKing'); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); }
-  Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'guilds'); for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t);
-  R.kingSupport = Math.min(R.kingSupport, 40); court(); const sup = Sim.computeSupport(s);
+  const rally = () => { Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'guilds'); for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t); };
+  for (let round = 0; round < 3; round++) { rally(); for (let d = 0; d < 15; d++) { court(); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); s.bandits.eastwatch = 5; } }
+  rally(); R.kingSupport = Math.min(R.kingSupport, 40); court(); const sup = Sim.computeSupport(s);
   const rc = Sim.cmd(s, 'claimCrown'); check(rc.ok && Sim.isRuler(s), 'with ' + Sim.alliesOf(s).length + ' allies, a kept promise and support of ' + sup + ', you are crowned' + (rc.ok ? '' : ': ' + rc.msg));
-  const t0 = R.treasury; Sim.cmd(s, 'rule', 'draw', 700); check(R.embezzled === 700, 'taking 700c from the treasury is remembered');
+  R.treasury = Math.max(R.treasury, 1000); Sim.cmd(s, 'rule', 'draw', 700); check(R.embezzled === 700, 'taking 700c from the treasury is remembered');
   R.figures.find(f => f.kind === 'reformer').ally = false; s.coins = 0; for (let d = 0; d < 30 && Sim.isRuler(s); d++) { away(); Sim.advance(s, 1440); }
   check(!Sim.isRuler(s) && R.exile, 'an inquiry finds the theft, you cannot repay, and the council removes you: exile');
   s.coins = 3000; court();
   check(!Sim.cmd(s, 'claimCrown').ok, 'waiting is not enough: you need allies, a war chest, the towns and the new ruler exposed');
   const lords = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== 'player' && l !== R.king).slice(0, 3); lords.forEach(l => { s.people[l].opinion = 40; });
   lords.forEach(l => Sim.cmd(s, 'rallyAlly', l)); Sim.cmd(s, 'warChest', 600);
-  for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t);
+  for (let round = 0; round < 3; round++) { s.coins += 1500; rally(); for (let d = 0; d < 15; d++) { away(); Sim.advance(s, 1440); } }
   for (let d = 0; d < 12 && R.kingSupport >= 50; d++) { court(); Sim.cmd(s, 'exposeRuler'); away(); Sim.advance(s, 1440); }
   court(); const rr = Sim.cmd(s, 'claimCrown');
   check(rr.ok && Sim.isRuler(s) && !R.exile, 'with sworn allies, a war chest, the towns and the new ruler exposed, you take the crown back' + (rr.ok ? '' : ': ' + rr.msg));
   const back = Sim.deserialize(Sim.serialize(s)); check(back.realm.crown === 'player' && back.realm.figures.length === 3, 'the realm saves and loads');
+}
+
+console.log('29. One fair economy, and how you begin');
+{
+  const s = newGameRaw(200); s.ageRate = 0;
+  const gp = t => Sim.goodsPrice(s, t, 'grain'), op = t => Sim.goodsPrice(s, t, 'ore');
+  check(gp('greenhaven') < gp('crownmere') && op('ironcrest') < op('crownmere'), 'grain is cheapest in Greenhaven (' + gp('greenhaven').toFixed(1) + 'c) and iron in Ironcrest (' + op('ironcrest').toFixed(1) + 'c); Crownmere pays more for both');
+  const L = Sim.LOCS[Sim.MARKET_AT.ironcrest]; s.player.x = L.x; s.player.z = L.z; s.coins = 100;
+  const p0 = Sim.goodsPrice(s, 'ironcrest', 'ore'); check(Sim.cmd(s, 'buy', 'ore', 20).ok && s.player.inv.ore === 20, 'you buy 20 iron ore at the Ironcrest market');
+  check(Sim.goodsPrice(s, 'ironcrest', 'ore') > p0, 'buying it pushes the local price up');
+  const C = Sim.LOCS[Sim.MARKET_AT.crownmere]; s.player.x = C.x; s.player.z = C.z; const c0 = s.coins;
+  check(Sim.cmd(s, 'sell', 'ore', 20).ok && s.coins > c0 + 20, 'carried to Crownmere it sells for ' + (s.coins - c0) + 'c: trade pays, but not without limit');
+  // every business on the same rules
+  const g2 = newGameRaw(201); g2.ageRate = 0; g2.bandits = null; g2.coins = 2000; g2.trades.bakery = 5; Sim.cmd(g2, 'open', 1, 'bakery'); const sh = g2.shops[0];
+  check(Sim.shopShare(g2, sh) < 0.7, 'your Bread Stand shares the village’s bread trade with Gerd’s Bakehouse (' + Math.round(Sim.shopShare(g2, sh) * 100) + '% of it)');
+  Sim.cmd(g2, 'buyBiz', 'o_bell'); for (let d = 0; d < 4; d++) Sim.advance(g2, 1440);
+  const paybacks = Object.values(g2.biz).filter(b => !b.closed && b.lastProfit > 0 && b.trade !== 'estate').map(b => Sim.bizPrice(g2, b.id) / b.lastProfit);
+  check(paybacks.length > 50 && Math.min(...paybacks) > 8, 'no business pays for itself in under a week: the quickest takes ' + Math.round(Math.min(...paybacks)) + ' days');
+  // starts
+  for (const m of ['merchant', 'elder', 'lord', 'ruler']) {
+    const g = Sim.newGame(210, 'Josh Bales'); Sim.applyStart(g, m);
+    const okm = m === 'merchant' ? g.shops.length === 1 : m === 'elder' ? g.offices.elder === 'player' : m === 'lord' ? Sim.yourLordships(g).includes('greenhaven') && Sim.homeOfYou(g).name === 'Bales Hall' : Sim.isRuler(g) && Sim.homeOfYou(g).name === 'Crownmere Castle';
+    check(okm, 'starting as ' + Sim.STARTS[m].name.toLowerCase() + ': ' + Sim.STARTS[m].say);
+  }
+  // a child heir has a regent
+  const g3 = newGameRaw(220); g3.bandits = null; g3.village.council = true; g3.village.step = 6; const Y = Sim.you(g3);
+  const kid = Sim.living(g3).find(q => q.kid && q.age >= 6 && q.age <= 10); kid.parents = [Y.pid]; kid.home = 'you'; g3.pendingDeath = { day: 1, age: 70 };
+  Sim.cmd(g3, 'carryOn', kid.id); const Y3 = Sim.you(g3);
+  check(Y3.age < 16 && Y3.regent && !g3.village.council && !Sim.cmd(g3, 'buyBiz', 'o_bell').ok, 'carrying on as a ' + Y3.age + '-year-old: ' + Y3.regent.name + ' is regent, the council seat falls vacant, and you cannot sign for a business yet');
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

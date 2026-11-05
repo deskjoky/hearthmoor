@@ -71,6 +71,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .minimap { position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + 66px); right: max(12px, calc(env(safe-area-inset-right, 0px) + 6px)); width: 116px; padding: 0; border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .minimap canvas { width: 116px; height: 116px; border-radius: 50%; border: 3px solid #e8d6ae; box-shadow: 0 0 0 1px #5b4630, 0 3px 10px rgba(0,0,0,.45); background: #7d8f55; display: block; }
 .minimap span { font: 400 13px var(--f-display); color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 5px; padding: 1px 8px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.dialog { position: fixed; z-index: 7; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); width: min(560px, calc(100% - 32px)); background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 22px rgba(0,0,0,.5); padding: 12px 14px 10px; }
+.dialog p { margin: 0 0 8px; font: 400 17px/1.45 var(--f-display); color: var(--ink); }
+.dialog .dacts { display: flex; justify-content: flex-end; align-items: center; gap: 8px; } .dialog .dacts span { margin-right: auto; font-size: 12px; color: var(--ink-soft); }
 .sticks { display: none; } /* the controls work without anything drawn on screen */
 .stick { position: fixed; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(241, 227, 194, .45); background: radial-gradient(circle, rgba(20,14,10,.18), rgba(20,14,10,.38)); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); opacity: .55; transition: opacity .15s; }
 .stick.l { left: calc(max(16px, env(safe-area-inset-left, 0px)) + 18px); }
@@ -343,6 +346,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .tsub { text-align: center; font-family: var(--f-display); font-style: italic; color: var(--ink-soft); margin: 6px 0 16px; font-size: 16px; }
 .rule { height: 10px; margin: 0 auto 14px; width: 70%; background: radial-gradient(circle, var(--seal) 0 3px, transparent 3.5px) center/14px 10px no-repeat, linear-gradient(var(--line), var(--line)) center/100% 1px no-repeat; }
 .tmenu { display: grid; gap: 8px; position: relative; }
+.namerow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .namerow input { width: 100%; }
 .cc { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin-top: 8px; }
 .cc > span { font-family: var(--f-display); font-size: 15px; color: var(--ink-soft); }
 .cc .seg { flex-wrap: wrap; }
@@ -415,6 +419,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
 <canvas id="world" aria-label="The village of Hearthmoor"></canvas>
 <button type="button" class="minimap" id="minimap" hidden aria-label="Open the map"><canvas id="miniCv" width="232" height="232"></canvas><span id="miniName">Hearthmoor</span></button>
+<div class="dialog" id="dialog" hidden role="dialog" aria-live="polite"></div>
 <header class="hud" id="hud" hidden>
   <div class="strip">
     <button class="icon-btn" id="menuBtn" type="button" aria-label="Pause and open the menu"><span></span></button>
@@ -2801,6 +2806,7 @@ function cardHTML(s) {
   if (here === 'oakbridge') return `<h2>The Oak Bridge</h2><div class="sub">A stone bridge on two great piers over the river Alder, built where an oak ferry once crossed. The town pays for its upkeep out of the market fees.</div>${walking}`;
   if (here === 'lots') return landCard(s, walking);
   if (here === 'home') return s.player.house ? `<h2>Your old hut</h2><div class="sub">Still yours. You live in ${esc(Sim.yourHouse(s) ? Sim.yourHouse(s).name : 'a house')} now.</div>${walking}<div class="acts">${B_('Move back in', ['moveToHut'], 'alt')}${B_('Open the map', ['ui', 'map'], 'alt')}</div>` : `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
+  if (here === 'myhome' && Sim.yourSeat(s)) { const hm = Sim.homeOfYou(s); return `<h2>${esc(hm.name)}</h2><div class="sub">Your seat as ${Sim.yourSeat(s) === 'crownmere' ? 'ruler of Alderwyn' : 'lord of ' + esc(Sim.REGIONS[Sim.yourSeat(s)])}, and your family\u2019s home.</div>${walking}<div class="acts">${B_('The Realm', ['page', 'realm'], 'alt')}</div>`; }
   if (here === 'myhome') { const h = Sim.yourHouse(s); if (h) { const fam = Object.values(s.people).filter(q => q.home === 'you' && q.status === 'here'); return `<h2>${esc(h.name)}</h2><div class="sub">Your home${fam.length ? ', with ' + esc(fam.map(q => q.name.split(' ')[0]).join(', ')) : ''}.</div>${walking}<div class="acts">${B_('Property', ['page', 'property'], 'alt')}</div>`; } }
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
   if (Lh && Lh.name) return `<h2>${esc(Lh.name)}</h2><div class="sub">${esc(PLACE_NOTE[here] || '')}</div>${walking}`;
@@ -2869,7 +2875,7 @@ function renderCard(force) {
   // a place you merely walk past shows only its name; tap the tab to open it
   const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
   // a town's market square: buy and sell here too
-  { const mt = here && Object.keys(Sim.MARKET_AT).find(t => t !== 'hearthmoor' && Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; }
+  { const mt = here && Object.keys(Sim.MARKET_AT).find(t => Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) { const cs = ((G.realm && G.realm.contracts) || []).filter(c => c.taken && c.region === mt && c.kind !== 'clear'); if (cs.length) html += `<div class="acts">${cs.map(c => B_('Deliver for ' + esc(c.who) + ' (' + (c.delivered || 0) + '/' + c.qty + ')', ['fulfil', c.n])).join('')}</div>`; if (mt !== 'hearthmoor') html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; } }
   // a door you can go through
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
@@ -2895,7 +2901,7 @@ document.addEventListener('click', e => {
 });
 
 function hud(s) {
-  if ((s.player.house || null) !== (UI.myHouse === undefined ? 'x' : UI.myHouse)) { UI.myHouse = s.player.house || null; syncMyHome(); }
+  { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
   $('clock').textContent = `Day ${s.day} · ${Sim.clock(s.t)}`;
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
   const inv = s.player.inv, chips = [];
@@ -2903,6 +2909,7 @@ function hud(s) {
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
   if (s.player.horse) chips.push(`<span class="chip num btn" data-c='["ride"]' role="button" tabindex="0">${s.player.riding ? 'Riding ' + esc(s.player.horse.name) + ' · get down' : 'Mount ' + esc(s.player.horse.name)}</span>`);
   if (s.job) { const e = Sim.empById(s.job.emp), on = Sim.inShift(s); chips.push(`<span class="chip num ${on ? 'on' : ''}">${on ? 'On shift' : 'Job'}: ${esc(e.name)} ${shiftText(e)}</span>`); }
+  { const w = waypointPos(); if (w) chips.push(`<span class="chip num btn" data-c='["ui","clearWaypoint"]' role="button" tabindex="0">Finding ${esc(w.name.split(' ')[0])}${w.near ? ' \u00b7 ' + Math.round(Math.hypot(s.player.x - w.x, s.player.z - w.z)) + ' m' : ' \u00b7 in ' + esc(TOWN_NAMES[w.town])} \u00d7</span>`); }
   if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
   s.shops.forEach(x => chips.push(`${TR[x.trade].name}: <b>${x.goods}</b> ${TR[x.trade].product}${x.worker ? ' · ' + esc(x.worker.name) : ''}`));
   const html = chips.map(c => c.startsWith('<span') ? c : `<span class="chip num">${c}</span>`).join('');
@@ -3117,7 +3124,7 @@ function personDetail(s, pr) {
   return `<div class="pdetail"><dl class="kv"><dt>Age</dt><dd>${pr.age}</dd><dt>Work</dt><dd>${esc(Sim.occupation(s, pr))}</dd><dt>Earns</dt><dd>about ${Sim.income(s, pr)}c a day</dd><dt>Home</dt><dd>${esc(Sim.homeText(s, pr))}</dd><dt>Respect</dt><dd>${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ', on the council' : ''}</dd><dt>Purse</dt><dd>${pr.purse}c</dd><dt>Mood</dt><dd>${Math.round(pr.mood)}/100</dd><dt>Of you</dt><dd>${opinionText(pr.opinion)} (${pr.opinion})</dd></dl>
     ${mine.length ? `<p><b>${mine.join(' ')}</b></p>` : ''}
     ${familyLine(s, pr)}
-    <div class="acts">${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
+    <div class="acts">${pr.status === 'here' ? B_('Find them', ['ui', 'findPerson', pr.id]) : ''}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
 const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch' };
@@ -3240,6 +3247,22 @@ function pageRealm(s) {
       ${mineS.length ? `<p>As a councillor you can quietly turn the court against the King, once a day, at a risk of being overheard.</p><div class="acts">${B_('Whisper against the King', ['undermineKing'], 'alt')}</div>` : ''}
       <div class="acts">${B_('Claim the crown', ['claimCrown'], 'warn', !(mineL.length && (mineS.length || R.exile)))}</div></div>`;
   }
+  // what you have done, and who stands with you
+  const allies = Sim.alliesOf(s), deeds = R.deeds || {};
+  h += `<h4>Deeds and allies</h4><div class="box"><dl class="kv"><dt>Deeds done</dt><dd>${Object.keys(deeds).length ? Object.keys(deeds).map(id => esc(Sim.REGIONS[id]) + ' ' + deeds[id]).join(', ') : 'none yet'}</dd><dt>Promises kept</dt><dd>${R.kept || 0}${R.broken ? ' (broken ' + R.broken + ')' : ''}</dd><dt>Allies</dt><dd>${allies.length ? esc(allies.join(', ')) : 'none yet'}</dd>${R.embezzled ? `<dt>Taken from the treasury</dt><dd class="debt">${R.embezzled}c</dd>` : ''}</dl>
+    <p>A lordship needs a deed done in that region. A council seat needs two allies and a name for good government. The crown needs three allies and a promise kept.</p></div>`;
+  const pr = (R.promises || []).find(x => x.state === 'asked' || x.state === 'given');
+  if (pr) { const q = s.people[pr.pid]; h += `<div class="why">${pr.state === 'asked' ? `<b>${esc(q ? q.name : 'A lord')}</b> asks your word that the roads of ${esc(Sim.REGIONS[pr.region])} will stay safe (danger under 30) for a week.<div class="acts">${B_('Give my word', ['givePromise'])}${B_('Decline', ['refusePromise'], 'alt')}</div>` : `You have promised ${esc(q ? q.name : 'a lord')} the roads of ${esc(Sim.REGIONS[pr.region])} stay safe until day ${pr.until}. Danger now: ${Math.round((s.bandits || {})[pr.region] || 0)}.`}</div>`; }
+  const cs = R.contracts || [];
+  h += `<h4>Contracts</h4>${cs.length ? `<div class="grid2">${cs.map(c => `<div class="box"><h5>${esc(c.who)}</h5><p>Wants you to ${esc(c.what)} by day ${c.until}. Pays <b>${c.reward}c</b>.${c.taken && c.qty ? ' Delivered ' + (c.delivered || 0) + ' of ' + c.qty + '.' : ''}</p><div class="acts">${c.taken ? (c.kind === 'clear' ? `<span class="pill">Taken: danger ${Math.round((s.bandits || {})[c.region] || 0)}</span>` : `<span class="pill">Taken: bring it to the market in ${esc(Sim.REGIONS[c.region])}</span>`) : B_('Take it on', ['takeContract', c.n], 'alt')}</div></div>`).join('')}</div>` : '<p>No one is asking for anything just now. New contracts come every few days.</p>'}`;
+  const figs = R.figures || [];
+  if (figs.length) h += `<h4>People of influence</h4><div class="grid2">${figs.map(f => { const q = s.people[f.pid]; if (!q || q.status === 'dead') return ''; return `<div class="box"><h5>${esc(q.name)}${f.ally ? ' <span class="pill">ally</span>' : f.foe ? ' <span class="pill bad">against you</span>' : ''}</h5><p>${esc(Sim.occupation(s, q))}. Wants ${esc(f.aim)}.${f.kind === 'merchant' ? ' He owns ' + f.progress + ' of five.' : ''}</p><div class="acts">${f.ally ? '' : B_(f.kind === 'merchant' ? 'Invest with him · 200c' : f.kind === 'lord' ? 'Speak for his heir · 10 favour' : 'Back his reform', ['backFigure', f.kind], 'alt')}${f.foe ? '' : B_(f.kind === 'merchant' ? 'Refuse his charter' : 'Oppose', ['opposeFigure', f.kind], 'alt')}</div></div>`; }).join('')}</div>`;
+  if (R.exile) { const ex = Sim.exileReady(s) || {}, E = R.exile, tick = b => b ? '\u2713' : '\u2717';
+    const cands = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== 'player' && l !== R.king && s.people[l] && !E.allies.includes(l));
+    h += `<h4>The way back</h4><div class="box"><p>${tick(ex.allies)} Three sworn allies (${E.allies.length}) \u00b7 ${tick(ex.fund)} A war chest of 600c (${E.fund || 0}c) \u00b7 ${tick(ex.towns)} The towns behind you (${R.support.towns} of 55) \u00b7 ${tick(ex.exposed)} The new ruler\u2019s failings exposed (standing ${Math.round(R.kingSupport)}, under 50)</p>
+      <div class="acts">${cands.slice(0, 4).map(l => B_('Rally ' + esc(s.people[l].name) + ' · 80c', ['rallyAlly', l], 'alt')).join('')}${B_('Add 100c to the war chest', ['warChest', 100], 'alt', s.coins < 100)}${B_('Expose the ruler (in Crownmere)', ['exposeRuler'], 'alt')}</div></div>`; }
+  { const held = Sim.yourLordships(s).filter(x => x !== 'crownmere'), st = Sim.yourSeat(s);
+    if (held.length || Sim.isRuler(s)) h += `<div class="acts">${!st ? B_('Move into your seat', ['moveToSeat']) : ''}${held.map(id => B_('Give up ' + esc(Sim.REGIONS[id]), ['renounceLordship', id], 'alt')).join('')}</div>`; }
   // the regions
   h += `<h4>The regions</h4><div class="grid2">${Object.keys(R.regions).map(id => {
     const g = R.regions[id], mine = Sim.regionLord(s, id) === 'player', bl = Math.round((s.bandits && s.bandits[id]) || 0), danger = bl > 60 ? 'bandits raiding' : bl > 40 ? 'bandits about' : bl > 20 ? 'some thieves' : 'quiet';
@@ -3826,12 +3849,12 @@ function renderTitle() {
       const sw = (key, list) => `<div class="swatches" role="group">${list.map((c, i) => `<button type="button" class="sw" aria-label="${key} ${i + 1}" aria-pressed="${L0[key] === i}" style="background:${c}" data-c='${JSON.stringify(['ui', 'look', key, i])}'></button>`).join('')}</div>`;
       const sg = (key, list) => `<div class="seg" role="group">${list.map(([v, n]) => `<button type="button" aria-pressed="${L0[key] === v}" data-c='${JSON.stringify(['ui', 'look', key, v])}'>${n}</button>`).join('')}</div>`;
       left = `${back}<h3>Who are you?</h3>
-        <label for="newName">Your name</label><input type="text" id="newName" maxlength="18" value="${esc(UI.newName)}" autocomplete="off">
+        <div class="namerow"><div><label for="newFirst">First name</label><input type="text" id="newFirst" maxlength="12" value="${esc(UI.newFirst || 'Wren')}" autocomplete="off"></div><div><label for="newLast">Family name</label><input type="text" id="newLast" maxlength="14" value="${esc(UI.newLast || '')}" placeholder="e.g. Ashby" autocomplete="off"></div></div>
         <div class="cc"><span>Body</span>${sg('body', LOOKS.body)}<span>Skin</span>${sw('skin', LOOKS.skin)}<span>Hair</span>${sg('hair', LOOKS.hair)}<span>Hair colour</span>${sw('hairColor', LOOKS.hairColor)}<span>Clothes</span>${sw('tunic', LOOKS.tunic)}</div>`;
-      right = `<div class="ccprev">${lookSVG(L0)}<p><span id="ccName">${esc(UI.newName || 'Wren')}</span>, arriving in Hearthmoor with 5 coins and a backpack.</p></div>
+      right = `<div class="ccprev">${lookSVG(L0)}<p><span id="ccName">${esc(fullNewName())}</span>, arriving in Hearthmoor with a backpack.</p></div>
         <div class="tmenu"><button type="button" class="tbtn primary" data-c='["ui","newStep",1]'>Choose a save slot &rarr;</button></div>`;
     } else {
-    left = `<button type="button" class="back" data-c='["ui","newStep",0]'>&larr; Back to your character</button><h3>A new life</h3><p>You arrive in Hearthmoor with 5 coins. Find work, learn a trade, and build from there.</p><div class="ccprev small">${lookSVG(L0)}<p><b>${esc(UI.newName || 'Wren')}</b></p></div>`;
+    left = `<button type="button" class="back" data-c='["ui","newStep",0]'>&larr; Back to your character</button><h3>A new life</h3><p>Start from nothing, as the game was meant to be played, or further up the ladder.</p><div class="tmenu">${Object.keys(Sim.STARTS).map(k => `<button type="button" class="tbtn slotbtn ${(UI.startMode || 'normal') === k ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'startMode', k])}'>${esc(Sim.STARTS[k].name)}<small>${esc(Sim.STARTS[k].say)}</small></button>`).join('')}</div><div class="ccprev small">${lookSVG(L0)}<p><b>${esc(fullNewName())}</b></p></div>`;
     right = `<label>Save in</label><div class="tmenu">${infos.map((info, i) => `<button type="button" class="tbtn slotbtn ${UI.newSlot === i + 1 ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'newSlot', i + 1])}'>Slot ${i + 1}<small>${slotLine(info)}</small></button>`).join('')}</div>
       ${infos[UI.newSlot - 1] ? `<p class="warnline">Slot ${UI.newSlot} holds a game. Starting here replaces it.</p>` : ''}
       <div class="tmenu" style="margin-top:8px"><button type="button" class="tbtn primary" data-c='["ui","begin"]'>Begin</button></div>`;
@@ -3851,7 +3874,7 @@ function renderTitle() {
 }
 function enterGame(game, n) {
   if (Interior.active()) Interior.leave(true); UI.inside = null; UI.myHouse = undefined;
-  G = game; slot = n; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
+  UI.dialog = []; G = game; slot = n; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
   meta.lastSlot = n; saveMeta();
   resetMeshes(); focus.set(G.player.x, 0, G.player.z); solidKey = '';
   ['title', 'book', 'pause'].forEach(id => $(id).hidden = true);
@@ -3869,6 +3892,9 @@ function toTitle() {
 }
 function resetMeshes() { for (const [, g] of agentMeshes) dropChar(g); agentMeshes.clear(); for (const [, g] of workerMeshes) dropChar(g); workerMeshes.clear(); }
 
+// your name: a first name, and a family name if you give one
+const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+function fullNewName() { const f = cap1((UI.newFirst || '').replace(/\s+/g, '')) || 'Wren', l = cap1((UI.newLast || '').replace(/\s+/g, '')); return l ? f + ' ' + l : f; }
 function uiCmd(k, v) {
   if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
   if (k === 'tab') { UI.tab = v; UI.confirm = null; renderBook(true); return; }
@@ -3899,6 +3925,12 @@ function uiCmd(k, v) {
   if (k === 'testSound') { Snd.unlock(); setTimeout(() => { Snd.play('great'); const el = $('sndStatus'); if (el) el.textContent = Snd.status() + ' If you still hear nothing, turn the volume up with the side buttons.'; }, 120); return; }
   if (k === 'closeNotes') { $('scroll').hidden = true; meta.seenNotes = NOTES[0].v; saveMeta(); return; }
   if (k === 'reload') { saveNow(); meta.seenNotes = null; saveMeta(); location.reload(); return; }
+  if (k === 'dialogNext') { UI.dialog.shift(); renderDialog(); return; }
+  if (k === 'dialogEnd') { UI.dialog = []; renderDialog(); return; }
+  if (k === 'findPerson') { const q = G.people[v]; if (!q) return; UI.waypoint = v; const a = G.agents.find(x => x.pid === v), t = Sim.townOf(q);
+    closeOverlay(); if (UI.inside) Interior.leave();
+    toast(a ? q.name + ' is marked: follow the gold light, or the gold mark on the minimap.' : q.name + ' is in ' + TOWN_NAMES[t] + '. The minimap points the way; travel there and the mark will find them.', 'info', true); return; }
+  if (k === 'clearWaypoint') { UI.waypoint = null; return; }
   if (k === 'who') { UI.person = v; UI.tab = 'people'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
   if (k === 'person') { UI.person = v; if (v && UI.overlay !== 'book') { UI.tab = 'people'; openBook(); } else renderBook(); return; }
   if (k === 'pview') { UI.pauseView = v; UI.exportText = ''; renderPause(true); return; }
@@ -3915,13 +3947,14 @@ function uiCmd(k, v) {
   }
   if (k === 'quitTitle') { toTitle(); return; }
   if (k === 'continue') { const n = meta.lastSlot, g = n && readSlot(n); if (g) enterGame(g, n); else { UI.titleView = 'load'; renderTitle(); } return; }
-  if (k === 'look') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newLook[v] = arguments[2]; renderTitle(); return; }
-  if (k === 'newStep') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newStep = v; renderTitle(); return; }
-  if (k === 'newSlot') { UI.newName = ($('newName') || {}).value || UI.newName; UI.newSlot = v; renderTitle(); return; }
+  if (k === 'startMode') { UI.startMode = v; renderTitle(); return; }
+  if (k === 'look') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newLook[v] = arguments[2]; renderTitle(); return; }
+  if (k === 'newStep') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newStep = v; renderTitle(); return; }
+  if (k === 'newSlot') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newSlot = v; renderTitle(); return; }
   if (k === 'begin') {
-    const name = (UI.newName || '').trim().slice(0, 18) || 'Wren';
+    const name = fullNewName();
     UI.newName = name;
-    const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); Sim.you(g).sex = g.look.body === 'f' ? 'f' : 'm'; UI.newStep = 0;
+    const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); Sim.you(g).sex = g.look.body === 'f' ? 'f' : 'm'; Sim.applyStart(g, UI.startMode || 'normal'); UI.newStep = 0;
     enterGame(g, UI.newSlot || 1); return;
   }
   if (k === 'load') { const g = readSlot(v); if (g) enterGame(g, v); else { UI.importMsg = 'That slot could not be read.'; renderTitle(); } return; }
@@ -3939,7 +3972,7 @@ document.addEventListener('input', e => {
     Sim.cmd(G, 'setPrice', shop.id, +e.target.value);
     $('pv-' + shop.id).textContent = shop.price + 'c'; $('pw-' + shop.id).textContent = willText(shop);
   }
-  if (id === 'newName') { UI.newName = e.target.value; const c = $('ccName'); if (c) c.textContent = e.target.value || 'Wren'; }
+  if (id === 'newFirst' || id === 'newLast') { if (id === 'newFirst') UI.newFirst = e.target.value.trim(); else UI.newLast = e.target.value.trim(); const c = $('ccName'); if (c) c.textContent = fullNewName(); }
 });
 document.addEventListener('change', e => { const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
@@ -3958,14 +3991,43 @@ window.addEventListener('pagehide', saveNow);
 window.addEventListener('beforeunload', saveNow);
 
 /* ----- main loop ----- */
+UI.dialog = [];
+function pagesOf(text) {
+  if (text.length <= 240) return [text];
+  const parts = text.match(/[^.!?]+[.!?]+["\u201d\u2019]?\s*|.+$/g) || [text], out = []; let cur = '';
+  for (const p of parts) { if ((cur + p).length > 240 && cur) { out.push(cur.trim()); cur = ''; } cur += p; }
+  if (cur.trim()) out.push(cur.trim()); return out;
+}
+function renderDialog() {
+  const el = $('dialog'); if (!el) return;
+  if (!UI.dialog.length || UI.mode !== 'play') { el.hidden = true; return; }
+  const more = UI.dialog.length > 1;
+  el.innerHTML = `<p>${esc(UI.dialog[0])}</p><div class="dacts">${more ? `<span class="num">${UI.dialog.length - 1} more</span>` : ''}${more ? B_('Next', ['ui', 'dialogNext']) + B_('Skip', ['ui', 'dialogEnd'], 'alt') : B_('Done', ['ui', 'dialogNext'])}</div>`;
+  el.hidden = false;
+}
 function drainEvents() {
   if (!G || !G.events.length) return;
   const fresh = G.events.slice(); G.events.length = 0;
-  const coins = fresh.filter(e => e.kind === 'coin'), rest = fresh.filter(e => e.kind !== 'coin');
+  // spoken lines wait in a dialogue box until you tap on, so nothing has to be read in a hurry
+  const said = fresh.filter(e => /["\u201c]/.test(e.text));
+  if (said.length) { said.forEach(e => pagesOf(e.text).forEach(t => UI.dialog.push(t))); renderDialog(); }
+  const coins = fresh.filter(e => e.kind === 'coin'), rest = fresh.filter(e => e.kind !== 'coin' && !said.includes(e));
   rest.slice(-2).forEach(e => toast(e.text, e.kind));
   if (coins.length) toast(coins.length === 1 ? coins[0].text : `${coins.length} sales just now.`, 'coin');
 }
 let last = performance.now(), uiTimer = 0;
+/* ----- a waypoint on someone you went looking for ----- */
+function waypointPos() {
+  const id = UI.waypoint; if (!id || !G) return null; const q = G.people[id]; if (!q || q.status !== 'here') { UI.waypoint = null; return null; }
+  const a = G.agents.find(x => x.pid === id); if (a) return { x: a.x, z: a.z, near: true, name: q.name };
+  const t = Sim.townOf(q), T = TOWNS[t]; return { x: t === 'hearthmoor' ? 0 : T.x, z: t === 'hearthmoor' ? 4 : T.z, near: false, name: q.name, town: t };
+}
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 30, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xf5cf73, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide })); beam.visible = false; scene.add(beam);
+function syncWaypoint() {
+  const w = waypointPos(); beam.visible = !!(w && w.near && !UI.inside);
+  if (!w) return;
+  if (w.near) { beam.position.set(w.x, standH(w.x, w.z) + 15, w.z); if (Math.hypot(G.player.x - w.x, G.player.z - w.z) < 3.5) { toast('You have found ' + w.name + '.', 'info', true); UI.waypoint = null; beam.visible = false; } }
+}
 /* ================= the minimap: a small chart of the streets around you, north at the top ================= */
 const Mini = (function () {
   const items = [];   // drawn in layer order: {L, k, ...}
@@ -4049,6 +4111,7 @@ const Mini = (function () {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const dot = (x, z, c, r) => { const sx = N / 2 + (x - px) * S, sz = N / 2 + (z - pz) * S; if (Math.hypot(sx - N / 2, sz - N / 2) > N / 2 - 6) return; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx, sz, r, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#2a1d12'; ctx.stroke(); };
     for (const m of mineMarks()) dot(m.x, m.z, COL.mine, 5);
+    { const w = waypointPos(); if (w) { let sx = N / 2 + (w.x - px) * S, sz = N / 2 + (w.z - pz) * S; const dx = sx - N / 2, dz = sz - N / 2, dd = Math.hypot(dx, dz), lim = N / 2 - 12; if (dd > lim) { sx = N / 2 + dx / dd * lim; sz = N / 2 + dz / dd * lim; } ctx.save(); ctx.translate(sx, sz); ctx.rotate(Math.atan2(dz, dx) + Math.PI / 2); ctx.beginPath(); if (dd > lim) { ctx.moveTo(0, -10); ctx.lineTo(8, 6); ctx.lineTo(-8, 6); } else { ctx.moveTo(0, -9); ctx.lineTo(7, 0); ctx.lineTo(0, 9); ctx.lineTo(-7, 0); } ctx.closePath(); ctx.fillStyle = '#f5cf73'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#2a1d12'; ctx.stroke(); ctx.restore(); } }
     // you: a view cone for where the camera looks, and an arrow
     const c = N / 2, dx = -Math.sin(yaw), dz = -Math.cos(yaw), a = Math.atan2(dz, dx);
     const g = ctx.createRadialGradient(c, c, 4, c, c, N * 0.34); g.addColorStop(0, 'rgba(255,244,214,.55)'); g.addColorStop(1, 'rgba(255,244,214,0)');
@@ -4072,7 +4135,7 @@ const Mini = (function () {
       if (el.hidden === show) el.hidden = !show;
       if (!show) return;
       acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85, ironcrest: 65, eastwatch: 80 }[t] || 60; })();
-      if (acc < 0.1 && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
+      if (acc < 0.1 && !UI.waypoint && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
       if (acc < 0.1) return;
       acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
       draw(p.x, p.z, cam.yaw, R);
@@ -4267,7 +4330,7 @@ const Interior = (function () {
     for (const a of s.agents) {
       const p = a.pid && s.people[a.pid]; if (!p || p.status !== 'here') continue;
       if (d.kind === 'home') { if (p.home === 'you' && (a.indoors || near(a, 12))) out.push({ a, p, role: night ? 'bed' : 'home' }); continue; }
-      if (d.kind === 'castle') { if (p.home === 'seat:' + d.seat && hr >= 8 && hr < 20) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
+      if (d.kind === 'castle') { if ((p.home === 'seat:' + d.seat && hr >= 8 && hr < 20) || (d.lead === 'nobody' && p.home === 'you' && (a.indoors || near(a, 30)))) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
       const staff = p.job && p.job.type === 'biz' && p.job.biz === d.bizId;
       if (staff && near(a, 16) && !night) out.push({ a, p, role: 'staff' });
       else if (!staff && !a.moving && near(a, 9) && out.length < 12) out.push({ a, p, role: 'guest' });
@@ -4378,6 +4441,7 @@ function insideOf(key) {
   if (KEEPS[key]) { const [rg, size, title, banner, trim] = KEEPS[key], R = s.realm, lord = R ? Sim.regionLord(s, rg) : null, lp = lord && lord !== 'player' ? s.people[lord] : null, Lk = L[key];
     return { kind: 'castle', size, title, note: lord === 'player' ? 'Your hall.' : lp ? (rg === 'crownmere' ? 'King ' + lp.name.split(' ')[0] + ' holds court here.' : lp.name + '\u2019s hall.') : '', x: Lk.x, z: Lk.z, door, seat: rg, lead: lord, banner, trim }; }
   if (key === 'home') return { kind: 'home', size: 'hut', title: 'Your hut', note: s.player.house ? 'Your old hut, still yours.' : 'Small and draughty, but yours.', x: Lh.x, z: Lh.z, door, comfort: s.player.hutComfort || 0 };
+  if (key === 'myhome' && Sim.yourSeat(s)) { const st = Sim.yourSeat(s), hm = Sim.homeOfYou(s); return { kind: 'castle', size: st === 'crownmere' ? 'great' : 'hall', title: 'The hall of ' + hm.name, note: 'Your seat.', x: hm.x, z: hm.z, door, seat: st, lead: 'nobody', banner: '#2f6b3a', trim: '#efe9d8' }; }
   if (key === 'myhome') { const h = Sim.yourHouse(s); if (!h) return null; const sh = Sim.houseShape(h); return { kind: 'home', size: sh.tall ? 'tall' : 'home', title: h.name, note: 'Your home.', x: h.x, z: h.z, door, house: h, comfort: h.comfort || 0 }; }
   if (Lh.emp) { const e = Sim.empById(Lh.emp); return { kind: 'biz', trade: e.trade, title: e.name, note: e.boss + '’s ' + (TR[e.trade] ? TR[e.trade].name.toLowerCase() : e.trade) + '.', x: e.x, z: e.z, door, bizId: Lh.emp }; }
   if (Lh.plot != null) { const sh = Sim.shopOnPlot(s, Lh.plot); if (!sh) return null; const pl = Sim.PLOTS[Lh.plot]; return { kind: 'biz', trade: sh.trade, title: 'Your ' + TR[sh.trade].name.toLowerCase(), note: Sim.tierOf(sh).name + '.', x: pl.x, z: pl.z, door, shop: sh }; }
@@ -4386,6 +4450,10 @@ function insideOf(key) {
 }
 // your bought house is a place on the map like any other
 function syncMyHome() {
+  const st = G && Sim.yourSeat(G);
+  const SEAT_LOC = { hearthmoor: 'manor', greenhaven: null, oakbridge: 'oakkeep', ironcrest: 'ickeep', eastwatch: 'ewkeep', crownmere: 'cmcastle' }, BASE = { manor: 'Varrow Manor', oakkeep: 'Oakbridge Keep', ickeep: 'Stane Keep', ewkeep: 'Eastwatch Castle', cmcastle: 'Crownmere Castle' };
+  for (const k in BASE) if (L[k]) L[k].name = BASE[k];
+  if (st) { const hm = Sim.homeOfYou(G), k = SEAT_LOC[st]; if (k && L[k]) L[k].name = hm.name; L.myhome = { x: hm.x, z: hm.z + 4, r: 4, name: hm.name + ' (home)', town: st === 'hearthmoor' ? undefined : st, seat: st }; L.home.name = 'Your old hut'; return; }
   const h = G && Sim.yourHouse(G);
   if (h) { const dr = Sim.doorOf(h); L.myhome = { x: dr.x, z: dr.z, r: 3.4, name: h.name + ' (home)', town: h.town && h.town !== 'hearthmoor' ? h.town : undefined }; L.home.name = 'Your old hut'; }
   else { delete L.myhome; L.home.name = 'Your Hut'; }
@@ -4394,14 +4462,14 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
-  if (UI.mode === 'play' && !UI.overlay && !document.hidden) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else walkPlayer(G, dt); const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
   syncCamera(G, dt, t);
   if (G) Mini.update(dt);
-  if (G && UI.mode === 'play') syncSkylines(focus.x, focus.z);
+  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); }
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
   if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
@@ -4659,6 +4727,19 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.34', date: '5 November', title: 'Making it matter', items: [
+    'One fair economy. Every business, yours or not, now sells into the same demand: a town\u2019s grown people and its travellers, shared between every seller of that trade by how many hands each has. Ingredients cost what the town\u2019s market charges that day, and bigger towns cost more to trade in but have more custom to win. Your Hearthmoor shops now share the village\u2019s custom with Gerd, Hollin, Ysolde and Ash.',
+    'Grain, timber and iron ore have their own stock and price in every town. Greenhaven grows grain cheaply, Ironcrest digs iron, and the cities pay more for both. You can buy and sell at every town\u2019s market, and the Trading Post shows what each town pays, so carrying goods between towns can pay.',
+    'Contracts: the lords and towns ask for goods delivered, repairs paid for and roads cleared of bandits. Take up to two at a time from the Realm page. Lords also ask for your word that their roads will stay safe for a week; keep it, and they remember.',
+    'Power is earned by deeds. Gifts and feasts still help, but each one in a fortnight counts for half the last. A lordship now needs a deed done in that region. A council seat needs two allies and a name for good government. The crown needs three allies and a promise kept.',
+    'Three people of influence: Julian Marchant, buying up bakeries for a monopoly on bread; Gareth Stane, lord of Ironcrest, fighting for his son\u2019s right to inherit; and Ambrose Fell, the Lord Justice, pressing for the Fair Courts. Back them or oppose them; each changes what you can do.',
+    'Taking money from the treasury as ruler can be found out: you must repay it with a fine, the lords think less of you, and if you cannot pay, the council removes you.',
+    'Exile is a chapter of its own: win back three sworn allies, raise a war chest, win over the towns and expose the new ruler\u2019s failings. Waiting alone no longer brings you back.',
+    'A lord holds one region at a time. You can move into its seat, which takes your family\u2019s name: Varrow Manor becomes your manor, Stane Keep your keep. The ruler lives in Crownmere castle.',
+    'Choose a first and a family name for your character. And choose how you begin: from nothing, as a merchant with a Bread Stand, as the Elder of Hearthmoor, as lord of Greenhaven, or as ruler of Alderwyn.',
+    'Find people: on anyone\u2019s page in the Ledger, tap "Find them" for a gold light over them and a mark on the minimap. If they are in another town, the minimap points the way.',
+    'If you die and carry on as a young child, a regent runs the family\u2019s affairs until they come of age at 16. Your village council seat now falls vacant at a death, and can be won back at a moot.'
+  ] },
   { v: '0.33', date: '4 November', title: 'All of Alderwyn, and its crown', items: [
     'Two new towns. Ironcrest, about 200 people on a mountain shelf above Crownmere: mines driven into the crags, smelters, charcoal burners and Stane Keep. Eastwatch, about 480 people in a walled port on the sea: quays, warehouses, ships at the piers, a shipyard, a lighthouse and the Warden\u2019s castle. Roads run up to Ironcrest from Crownmere and east to Eastwatch from Oakbridge, over new bridges on the Alder.',
     'The realm has a King, a Prince, six regional lords and a royal council (Lord Treasurer, Master of Trade, Marshal and Lord Justice). A new Realm page in the Ledger shows them all, and your standing with each.',
