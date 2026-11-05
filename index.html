@@ -2035,10 +2035,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const revenue0 = E.flat ? E.flat : Math.round(sold * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
       // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
-      if (!b.slump && !E.flat && rand(s) < 0.012) { const why = ['a price war with a rival', 'a spoiled batch and a bad name', 'sickness in the house', 'a fire in the back room', 'a feud with the guild'][Math.floor(rand(s) * 5)]; b.slump = { until: s.day + 10 + Math.floor(rand(s) * 16), why }; if (b.owner === 'player') event(s, empById(id).name + ' has hit a bad spell: ' + why + '. Takings will be down for a few weeks.', 'bad'); else if (own) plog(s, own, empById(id).name + ' hit a bad spell: ' + why + '.'); }
+      if (!b.slump && !E.flat && rand(s) < 0.007) { const why = ['a price war with a rival', 'a spoiled batch and a bad name', 'sickness in the house', 'a fire in the back room', 'a feud with the guild'][Math.floor(rand(s) * 5)]; b.slump = { until: s.day + 10 + Math.floor(rand(s) * 16), why }; if (b.owner === 'player') event(s, empById(id).name + ' has hit a bad spell: ' + why + '. Takings will be down for a few weeks.', 'bad'); else if (own) plog(s, own, empById(id).name + ' hit a bad spell: ' + why + '.'); }
       if (b.slump && s.day >= b.slump.until) b.slump = null;
-      const knack = own && !lessee ? 0.55 + 0.5 * Math.min(1.2, own.skill || 0.9) : b.manager ? 0.6 + 0.4 * Math.min(1.3, b.manager.skill || 1) : 1;
-      const revenue = Math.round(revenue0 * (E.flat ? 1 : knack * (b.slump ? 0.45 : 1)));
+      const knack = own && !lessee ? 0.72 + 0.3 * Math.min(1.2, own.skill || 0.9) : b.manager ? 0.6 + 0.4 * Math.min(1.3, b.manager.skill || 1) : 1;
+      const revenue = Math.round(revenue0 * (E.flat ? 1 : knack * (b.slump ? 0.55 : 1)));
       b.lastSold = Math.round(sold);
       let wages = 0;
       for (const st of b.staff) {
@@ -2073,7 +2073,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (seek) { seek.job = { type: 'biz', biz: id, role: 'hand' }; b.staff.push({ pid: seek.id, wage: 7 }); plog(s, seek, 'Hired by ' + own.name + ' at ' + empById(id).name + '.'); event(s, own.name + ' hired ' + seek.name + ' at ' + empById(id).name + '.', 'info'); }
       }
       b.lossDays = avg(b.profits) < 0 ? (b.lossDays || 0) + 1 : Math.max(0, (b.lossDays || 0) - 2);
-      if ((own.purse <= 0 && b.profits.every(x => x < 0)) || (b.lossDays >= 18 && own.purse < 120) || b.lossDays >= 30) {
+      if ((own.purse <= 0 && b.profits.every(x => x < 0)) || (b.lossDays >= 20 && own.purse < 80) || b.lossDays >= 40) {
         b.closed = true;
         b.staff.slice().forEach(st => loseJob(s, person(s, st.pid), empById(id).name + ' closed its doors.'));
         loseJob(s, own, 'Their business, ' + empById(id).name + ', failed.');
@@ -2445,7 +2445,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         }
       }
       if (p.job && p.job.type === 'biz' && p.job.role === 'hand' && (p.tenure || 0) >= 12 && p.purse >= 70 && (p.rep || 0) >= 25) {
-        const here = townOf(p), shut = Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player' && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player');
+        const here = townOf(p), shutOk = b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player' && s.day - (b.closedOn || 0) >= 6, shut = Object.values(s.biz).find(b => shutOk(b) && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(shutOk);
         if (shut) {
           loseJob(s, p, 'Left to run a shop of their own.');
           p.purse -= 60; shut.owner = p.id; shut.closed = false; shut.profits = [4, 4, 4]; shut.staff = []; p.job = { type: 'biz', biz: shut.id, role: 'owner' };
@@ -2467,18 +2467,18 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     // newcomers arrive when there is a roof to be had: a lone worker, or a young family from Ashford.
     // A village that is shrinking draws them in faster; a crowded one, hardly at all.
     const jobless = villagers(s).filter(idleAdult).length, pop = villagers(s).length, roof = vacancy(s, 4);
-    if (roof && jobless <= 2 && rand(s) < (pop < 32 ? 0.35 : pop < 40 ? 0.1 : 0.02)) {
+    if (roof && (jobless <= 2 || pop < 34) && rand(s) < (pop < 30 ? 0.5 : pop < 34 ? 0.3 : pop < 40 ? 0.08 : 0.02)) {
       const SUR = ['Ashby', 'Brook', 'Carter', 'Fletcher', 'Mason', 'Wright', 'Cooper', 'Hayward', 'Fowler', 'Reeve', 'Webb', 'Lowe', 'Pike', 'Thorne', 'Woodall', 'Rook'];
       const used = new Set(Object.values(s.people).map(p => p.name)), pickName = (L, fam) => { for (let k = 0; k < 12; k++) { const n = L[Math.floor(rand(s) * L.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } return null; };
       const fam = SUR[Math.floor(rand(s) * SUR.length)], family = roof.cap - roof.tenants.length >= 2 && rand(s) < 0.65;
       const a = pickName(BABY_M, fam), b = family ? pickName(BABY_F, fam) : null;
       if (a) {
-        const man = newPerson(s, { name: a, age: 20 + Math.floor(rand(s) * 12), purse: 20, sex: 'm' }); moveIn(s, man, roof); man.log.push({ day: s.day, text: 'Arrived from Ashford looking for work.' }); addBody(s, man, P.road);
+        const man = newPerson(s, { name: a, age: 20 + Math.floor(rand(s) * 12), purse: 70, sex: 'm', job: { type: 'commons', what: ['field', 'forest', 'pit'][Math.floor(rand(s) * 3)] } }); moveIn(s, man, roof); plog(s, man, 'Arrived from Ashford looking for work, with some savings.'); addBody(s, man, P.road);
         let who = a;
         if (b) {
-          const wife = newPerson(s, { name: b, age: man.age - 2 + Math.floor(rand(s) * 4), purse: 10, sex: 'f' }); wife.spouse = man.id; man.spouse = wife.id; moveIn(s, wife, roof); wife.log.push({ day: s.day, text: 'Came to Hearthmoor with her husband ' + a + '.' }); addBody(s, wife, P.road);
+          const wife = newPerson(s, { name: b, age: man.age - 2 + Math.floor(rand(s) * 4), purse: 40, sex: 'f', job: rand(s) < 0.6 ? { type: 'commons', what: 'field' } : null }); wife.spouse = man.id; man.spouse = wife.id; moveIn(s, wife, roof); plog(s, wife, 'Came to Hearthmoor with her husband ' + a + '.'); addBody(s, wife, P.road);
           const kids = Math.min(roof.cap - roof.tenants.length, Math.floor(rand(s) * 3));
-          for (let k = 0; k < kids; k++) { const f = rand(s) < 0.5, n = pickName(f ? BABY_F : BABY_M, fam); if (!n) break; const c = newPerson(s, { name: n, age: 1 + Math.floor(rand(s) * 9), purse: 0, sex: f ? 'f' : 'm' }); c.kid = true; c.parents = [wife.id, man.id]; c.hh = man.id; moveIn(s, c, roof); c.log.push({ day: s.day, text: 'Came to Hearthmoor with the family.' }); addBody(s, c, P.road); }
+          for (let k = 0; k < kids; k++) { const f = rand(s) < 0.5, n = pickName(f ? BABY_F : BABY_M, fam); if (!n) break; const c = newPerson(s, { name: n, age: 1 + Math.floor(rand(s) * 9), purse: 0, sex: f ? 'f' : 'm' }); c.kid = true; c.parents = [wife.id, man.id]; c.hh = man.id; moveIn(s, c, roof); plog(s, c, 'Came to Hearthmoor with the family.'); addBody(s, c, P.road); }
           who = 'The ' + fam + ' family';
         }
         s.rec.newcomers = (s.rec.newcomers || 0) + 1;
@@ -9718,8 +9718,16 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.0240';
+const BUILD = '2026.11.05.0250';
 const NOTES = [
+  { v: '0.36', date: '5 November', title: 'Good years and bad', items: [
+    'Markets now stay short or glutted for a week or two. Now and then a blight, a flood, a flooded mine or a bumper year shakes one town\u2019s grain, wood or ore, and you hear about it, so hauling goods there pays.',
+    'Businesses no longer all thrive. A sharp owner sells more than a dull one, and any place can hit a bad spell for a few weeks. One that keeps losing money closes, and before long someone (one of its old hands, or a newcomer from Ashford) reopens it.',
+    'Hearthmoor no longer slowly empties: when there is a roof free, a worker or a young family arrives from Ashford.',
+    'Where a building stands sets its price. Houses and businesses cost more in richer towns (Crownmere about twice Hearthmoor) and more in the heart of town than on its edge. Signs and cards say which part of town a place is in.',
+    'A business you buy in Hearthmoor now shows your own card when you walk up: staff, manager, what it sold and earned yesterday, and Manage. Shops you do not own have a Buy button beside Ask for work.',
+    'The Businesses list at the top, and the Shops page, show what each place earned yesterday, and what bought businesses sold.'
+  ] },
   { v: '0.35', date: '5 November', title: 'Signs and seals', items: [
     'Every house you can buy has a FOR SALE sign by its door. Walk up to it to see who owns it, who lives there, the rent and its condition, and buy it on the spot.',
     'Once it is yours the sign says YOURS (or HOME). Use it to move in, set the rent, evict a tenant, improve or repair the house, or put it up for sale.',

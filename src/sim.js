@@ -1934,7 +1934,7 @@
         }
       }
       if (p.job && p.job.type === 'biz' && p.job.role === 'hand' && (p.tenure || 0) >= 12 && p.purse >= 70 && (p.rep || 0) >= 25) {
-        const here = townOf(p), shut = Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player' && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player');
+        const here = townOf(p), shutOk = b => b.closed && (b.town || 'hearthmoor') === here && b.owner !== 'player' && s.day - (b.closedOn || 0) >= 6, shut = Object.values(s.biz).find(b => shutOk(b) && b.trade === s.biz[p.job.biz].trade) || Object.values(s.biz).find(shutOk);
         if (shut) {
           loseJob(s, p, 'Left to run a shop of their own.');
           p.purse -= 60; shut.owner = p.id; shut.closed = false; shut.profits = [4, 4, 4]; shut.staff = []; p.job = { type: 'biz', biz: shut.id, role: 'owner' };
@@ -1956,18 +1956,18 @@
     // newcomers arrive when there is a roof to be had: a lone worker, or a young family from Ashford.
     // A village that is shrinking draws them in faster; a crowded one, hardly at all.
     const jobless = villagers(s).filter(idleAdult).length, pop = villagers(s).length, roof = vacancy(s, 4);
-    if (roof && (jobless <= 2 || pop < 30) && rand(s) < (pop < 32 ? 0.35 : pop < 40 ? 0.1 : 0.02)) {
+    if (roof && (jobless <= 2 || pop < 34) && rand(s) < (pop < 30 ? 0.5 : pop < 34 ? 0.3 : pop < 40 ? 0.08 : 0.02)) {
       const SUR = ['Ashby', 'Brook', 'Carter', 'Fletcher', 'Mason', 'Wright', 'Cooper', 'Hayward', 'Fowler', 'Reeve', 'Webb', 'Lowe', 'Pike', 'Thorne', 'Woodall', 'Rook'];
       const used = new Set(Object.values(s.people).map(p => p.name)), pickName = (L, fam) => { for (let k = 0; k < 12; k++) { const n = L[Math.floor(rand(s) * L.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } return null; };
       const fam = SUR[Math.floor(rand(s) * SUR.length)], family = roof.cap - roof.tenants.length >= 2 && rand(s) < 0.65;
       const a = pickName(BABY_M, fam), b = family ? pickName(BABY_F, fam) : null;
       if (a) {
-        const man = newPerson(s, { name: a, age: 20 + Math.floor(rand(s) * 12), purse: 20, sex: 'm' }); moveIn(s, man, roof); man.log.push({ day: s.day, text: 'Arrived from Ashford looking for work.' }); addBody(s, man, P.road);
+        const man = newPerson(s, { name: a, age: 20 + Math.floor(rand(s) * 12), purse: 70, sex: 'm', job: { type: 'commons', what: ['field', 'forest', 'pit'][Math.floor(rand(s) * 3)] } }); moveIn(s, man, roof); plog(s, man, 'Arrived from Ashford looking for work, with some savings.'); addBody(s, man, P.road);
         let who = a;
         if (b) {
-          const wife = newPerson(s, { name: b, age: man.age - 2 + Math.floor(rand(s) * 4), purse: 10, sex: 'f' }); wife.spouse = man.id; man.spouse = wife.id; moveIn(s, wife, roof); wife.log.push({ day: s.day, text: 'Came to Hearthmoor with her husband ' + a + '.' }); addBody(s, wife, P.road);
+          const wife = newPerson(s, { name: b, age: man.age - 2 + Math.floor(rand(s) * 4), purse: 40, sex: 'f', job: rand(s) < 0.6 ? { type: 'commons', what: 'field' } : null }); wife.spouse = man.id; man.spouse = wife.id; moveIn(s, wife, roof); plog(s, wife, 'Came to Hearthmoor with her husband ' + a + '.'); addBody(s, wife, P.road);
           const kids = Math.min(roof.cap - roof.tenants.length, Math.floor(rand(s) * 3));
-          for (let k = 0; k < kids; k++) { const f = rand(s) < 0.5, n = pickName(f ? BABY_F : BABY_M, fam); if (!n) break; const c = newPerson(s, { name: n, age: 1 + Math.floor(rand(s) * 9), purse: 0, sex: f ? 'f' : 'm' }); c.kid = true; c.parents = [wife.id, man.id]; c.hh = man.id; moveIn(s, c, roof); c.log.push({ day: s.day, text: 'Came to Hearthmoor with the family.' }); addBody(s, c, P.road); }
+          for (let k = 0; k < kids; k++) { const f = rand(s) < 0.5, n = pickName(f ? BABY_F : BABY_M, fam); if (!n) break; const c = newPerson(s, { name: n, age: 1 + Math.floor(rand(s) * 9), purse: 0, sex: f ? 'f' : 'm' }); c.kid = true; c.parents = [wife.id, man.id]; c.hh = man.id; moveIn(s, c, roof); plog(s, c, 'Came to Hearthmoor with the family.'); addBody(s, c, P.road); }
           who = 'The ' + fam + ' family';
         }
         s.rec.newcomers = (s.rec.newcomers || 0) + 1;
