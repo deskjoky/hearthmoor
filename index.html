@@ -523,7 +523,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 (function (root) {
   'use strict';
 
-  const VERSION = 13;
+  const VERSION = 14;
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -885,7 +885,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     initGov(s);
     setupOakbridge(s);
     setupGreenhaven(s);
-    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s);
+    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupNewTown(s, 'dawnport'); setupRealm(s); setupValdoria(s);
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
@@ -1802,7 +1802,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function officeHolder(s, office) { return s.offices[office]; }
   function holderName(s, office) { const h = s.offices[office]; return h === 'player' ? s.name : h && s.people[h] ? s.people[h].name : 'nobody'; }
   // women and men: known from their names (and their titles), so old saves need nothing new
-  const FEMALE = new Set(['Alda', 'Alys', 'Avice', 'Beatrix', 'Cecily', 'Constance', 'Dulcie', 'Eda', 'Edda', 'Edith', 'Elsie', 'Faye', 'Freya', 'Gerd', 'Gisela', 'Hawise', 'Helewise', 'Hilda', 'Ida', 'Imogen', 'Isabel', 'Isolde', 'Joan', 'Jocelyn', 'Katrin', 'Lettice', 'Linnet', 'Mabyn', 'Maren', 'Maud', 'Meriel', 'Merrin', 'Muriel', 'Nell', 'Nesta', 'Orabel', 'Ottilie', 'Petra', 'Philippa', 'Quenby', 'Rohese', 'Rosamund', 'Sabine', 'Sela', 'Sibyl', 'Tamsin', 'Tibby', 'Tiffany', 'Tilly', 'Una', 'Wynn', 'Yseult', 'Alys', 'Mabel', 'Agnes', 'Elsbeth', 'Annis', 'Margery', 'Alice', 'Emma', 'Mother', 'Goodwife', 'Widow', 'Lady']);
+  const VAL_F = ['Marisol', 'Ines', 'Catalina', 'Leonor', 'Beatriz', 'Elvira', 'Ximena', 'Sancha', 'Aldonza', 'Teresa', 'Blanca', 'Mencia', 'Juana', 'Olalla', 'Urraca', 'Constanza', 'Rosalind', 'Pilar'];
+  const VAL_M = ['Rodrigo', 'Alvaro', 'Diego', 'Gonzalo', 'Inigo', 'Fernan', 'Sancho', 'Pelayo', 'Tomas', 'Bernat', 'Jaume', 'Ramon', 'Marti', 'Lope', 'Nuno', 'Gaspar', 'Esteve', 'Oriol'];
+  const VAL_FAMILY = ['Ferrer', 'Vidal', 'Roca', 'Castell', 'Sola', 'Arenas', 'Delmar', 'Montaner', 'Vives', 'Puig', 'Serra', 'Bosch', 'Navarro', 'Medina', 'Torres', 'Salvat', 'Oliver', 'Rius', 'Cabrera', 'Fuster', 'Mirall', 'Prats', 'Soler', 'Valls'];
+  const FEMALE = new Set(VAL_F.concat(['Alda', 'Alys', 'Avice', 'Beatrix', 'Cecily', 'Constance', 'Dulcie', 'Eda', 'Edda', 'Edith', 'Elsie', 'Faye', 'Freya', 'Gerd', 'Gisela', 'Hawise', 'Helewise', 'Hilda', 'Ida', 'Imogen', 'Isabel', 'Isolde', 'Joan', 'Jocelyn', 'Katrin', 'Lettice', 'Linnet', 'Mabyn', 'Maren', 'Maud', 'Meriel', 'Merrin', 'Muriel', 'Nell', 'Nesta', 'Orabel', 'Ottilie', 'Petra', 'Philippa', 'Quenby', 'Rohese', 'Rosamund', 'Sabine', 'Sela', 'Sibyl', 'Tamsin', 'Tibby', 'Tiffany', 'Tilly', 'Una', 'Wynn', 'Yseult', 'Alys', 'Mabel', 'Agnes', 'Elsbeth', 'Annis', 'Margery', 'Alice', 'Emma', 'Mother', 'Goodwife', 'Widow', 'Lady']));
   const firstName = n => { const w = String(n || '').split(' '); return ['Old', 'Young', 'Elder', 'Steward', 'Lord', 'Mayor', 'Reeve'].includes(w[0]) && w[1] ? w[1] : w[0]; };
   function sexOf(p) { if (!p) return 'm'; if (p.sex) return p.sex; const w = String(p.name || '').split(' ')[0]; return FEMALE.has(w) || FEMALE.has(firstName(p.name)) ? 'f' : 'm'; }
   function newPerson(s, o) {
@@ -2061,7 +2064,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     oakbridge: { make: { grain: 15, wood: 22, ore: 0 }, use: { grain: 50, wood: 35, ore: 12 }, travellers: 40 },
     crownmere: { make: { grain: 25, wood: 15, ore: 0 }, use: { grain: 150, wood: 90, ore: 40 }, travellers: 120 },
     ironcrest: { make: { grain: 2, wood: 35, ore: 90 }, use: { grain: 40, wood: 30, ore: 20 }, travellers: 15 },
-    eastwatch: { make: { grain: 10, wood: 5, ore: 0 }, use: { grain: 70, wood: 60, ore: 15 }, travellers: 60 }
+    eastwatch: { make: { grain: 10, wood: 5, ore: 0 }, use: { grain: 70, wood: 60, ore: 15 }, travellers: 60 },
+    dawnport: { make: { grain: 40, wood: 4, ore: 0 }, use: { grain: 60, wood: 45, ore: 10 }, travellers: 55 }
   };
   // per trade: how often a grown person buys (visits a day), how much each time, the usual price,
   // the goods used per unit sold, and how many units one pair of hands can make in a day
@@ -3623,6 +3627,67 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   })();
   const IC_JOBS = { ic_mine: ['Miner', 'Cutting ore in the mine'], ic_smelt: ['Smelter hand', 'Tending the smelters'], ic_char: ['Charcoal burner', 'Burning charcoal'], ic_haul: ['Ore hauler', 'Hauling ore carts'], ic_watch: ['Watchman', 'Keeping the road gate'] };
   const EW_JOBS = { ew_dock: ['Docker', 'Unloading ships at the quay'], ew_fish: ['Fisher', 'Fishing from the boats'], ew_net: ['Net mender', 'Mending nets on the strand'], ew_sail: ['Sailor', 'Crewing a coaster'], ew_yard: ['Shipwright’s hand', 'Building a ship on the slip'], ew_watch: ['Harbour watchman', 'Watching the harbour gate'] };
+  /* ---------- Valdoria, across the Sundering Sea: Dawnport, and Stormrest Isle on the way ---------- */
+  // Valdoria's coast faces Alderwyn across about 760 m of open water. Dawnport is its great port: sandstone, red tiles,
+  // arcaded streets, a customs house on the quay and the Consul's palace on the rise behind the town.
+  const VSHORE = z => 1900 + 10 * Math.sin(z / 70) + 4 * Math.sin(z / 23);
+  const ISLE = { x: 1520, z: -330, r: 46 };
+  const DP = (function () {
+    const C = { x: 1990, z: -300 }, R = 104;
+    const T = makeTown({
+      id: 'dawnport', C, seed: 20231, R: R - 6, maxHouses: 104, tall: 0.6,
+      inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 3 && x > 1908,
+      avoid: (x, z, rad) => x < 1916 + rad || Math.hypot(x - 2084, z + 300) < 22 + rad || Math.hypot(x - 1934, z + 366) < 12 + rad,
+      streets: [
+        { name: 'the High Calle', w: 5.2, pts: [[1918, -300], [1960, -300], [2010, -300], [2062, -300]] },
+        { name: 'the Quay', w: 5.4, pts: [[1912, -392], [1912, -300], [1912, -210]], noHouses: true },
+        { name: 'Salt Street', w: 3.8, pts: [[1960, -300], [1964, -348], [1996, -386]] },
+        { name: 'Vine Street', w: 3.8, pts: [[1960, -300], [1964, -252], [1996, -214]] },
+        { name: 'the Arcade', w: 4.2, pts: [[2010, -300], [2014, -346], [2050, -360]] },
+        { name: 'Fountain Lane', w: 3.6, pts: [[2010, -300], [2014, -254], [2050, -240]] },
+        { name: 'Palace Steps', w: 4.4, pts: [[2062, -300], [2070, -300]], noHouses: true }
+      ],
+      plazas: [{ id: 'harbour', name: 'the Harbour Plaza', x: 1934, z: -300, r0: 4, r1: 13, w: 4 }, { id: 'mayor', name: 'the Plaza Mayor', x: 2010, z: -300, r0: 3, r1: 11, w: 3 }, { id: 'fish', name: 'the fish market', x: 1922, z: -238, r0: 2, r1: 7, w: 2 }],
+      marks: [{ x: 2084, z: -300, r: 20 }, { x: 1934, z: -366, r: 12 }, { x: 2040, z: -274, r: 6 }],
+      biz: [
+        ['d_gull', 'tavern', 'The Red Gull', 'Marisol Ferrer', 0, 0.12, 1, 'harbour'], ['d_vine', 'tavern', 'The Vine and Barrel', 'Rodrigo Vidal', 0, 0.62, -1, 'high'], ['d_lamp', 'tavern', 'The Lamplighter', 'Leonor Serra', 3, 0.5, 1, 'vine'],
+        ['d_oven1', 'bakery', 'Saint Olalla’s Ovens', 'Tomas Puig', 0, 0.42, -1, 'high'], ['d_oven2', 'bakery', 'The Fig Tree Bakery', 'Elvira Bosch', 4, 0.5, 1, 'arcade'],
+        ['d_forge', 'smithy', 'Anchor Forge', 'Gonzalo Roca', 2, 0.5, -1, 'salt'], ['d_fishm', 'butcher', 'The Fish Hall', 'Ximena Delmar', 0, 0.22, -1, 'harbour'], ['d_butch', 'butcher', 'Navarro Butchers', 'Lope Navarro', 5, 0.5, 1, 'fountain'],
+        ['d_yard', 'boatwright', 'Dawnport Shipwrights', 'Jaume Montaner', 2, 0.85, 1, 'salt'], ['d_cooper', 'cooper', 'The Wine Coopers', 'Bernat Vives', 3, 0.8, -1, 'vine'],
+        ['d_chand', 'chandler', 'Candle and Lamp', 'Teresa Sola', 4, 0.3, -1, 'arcade'], ['d_silk', 'weaver', 'The Silk Looms', 'Catalina Castell', 4, 0.8, 1, 'arcade'], ['d_tailor', 'tailor', 'Arcade Tailors', 'Ramon Oliver', 5, 0.8, -1, 'fountain'],
+        ['d_gold', 'goldsmith', 'The Counting House', 'Diego Medina', 0, 0.82, 1, 'high'], ['d_apoth', 'apothecary', 'The Orange Tree Apothecary', 'Ines Arenas', 5, 0.25, -1, 'fountain'],
+        ['d_cart', 'carter', 'Quay Carters', 'Nuno Torres', 1, 0.75, -1, 'quay'], ['d_mason', 'mason', 'Sandstone Masons', 'Pelayo Rius', 2, 0.25, 1, 'salt'], ['d_potter', 'potter', 'The Red Clay Pottery', 'Blanca Salvat', 3, 0.25, -1, 'vine'], ['d_tanner', 'tanner', 'Dawnport Tannery', 'Sancho Vidal', 1, 0.3, 1, 'quay']
+      ],
+      spots: { dp_dock: { x: 1916, z: -300, rx: 2.5, rz: 70 }, dp_fish: { x: 1918, z: -230, rx: 2, rz: 12 }, dp_salt: { x: 1960, z: -398, rx: 12, rz: 4 }, dp_sail: { x: 1916, z: -352, rx: 2, rz: 18 }, dp_vine: { x: 2030, z: -206, rx: 12, rz: 5 }, dp_watch: { x: 2060, z: -300, rx: 3, rz: 4 } },
+      board: { x: 1944, z: -288 }, entry: { x: 1918, z: -300 },
+      extra: { palace: { x: 2084, z: -300, face: -Math.PI / 2 }, customs: { x: 1934, z: -366, face: Math.PI / 2 }, fountain: { x: 2010, z: -300 }, quayX: 1910 }
+    });
+    return T;
+  })();
+  const DP_JOBS = { dp_dock: ['Docker', 'Unloading ships on the quay'], dp_fish: ['Fisher', 'Fishing from the boats'], dp_salt: ['Salt raker', 'Raking the salt pans'], dp_sail: ['Sailor', 'Crewing a merchant ship'], dp_vine: ['Vine dresser', 'Working the vineyards above the town'], dp_watch: ['Harbour guard', 'Keeping the quay for the Consul'] };
+  DP.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  TOWNS.dawnport = { name: 'Dawnport', x: DP.C.x, z: DP.C.z, r: 106, open: true, foreign: 'valdoria' };
+  LOCS.dpharbour = { x: 1934, z: -300, r: 11, name: 'the Harbour Plaza', town: 'dawnport' };
+  LOCS.dpquay = { x: 1916, z: -300, r: 8, name: 'Dawnport Quay', town: 'dawnport', port: 'dawnport' };
+  LOCS.dpcustoms = { x: 1934, z: -352, r: 6, name: 'the Customs House', town: 'dawnport' };
+  LOCS.dppalace = { x: 2064, z: -300, r: 6, name: 'the Consul’s Palace', town: 'dawnport' };
+  LOCS.dpplaza = { x: 2010, z: -300, r: 10, name: 'the Plaza Mayor', town: 'dawnport' };
+  DP.biz.forEach(b0 => { LOCS['db:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'dawnport' }; });
+  // the passage: ships sail from Eastwatch's quay, call at Stormrest Isle, and on to Dawnport. Anyone who can pay may go.
+  const PORTS = {
+    eastwatch: { x: 1128, z: -330, face: -Math.PI / 2, name: 'Eastwatch Quay' },
+    stormrest: { x: ISLE.x - 30, z: ISLE.z, face: Math.PI / 2, name: 'Stormrest Harbour' },
+    dawnport: { x: 1918, z: -300, face: Math.PI / 2, name: 'Dawnport Quay' }
+  };
+  LOCS.ewpassage = { x: PORTS.eastwatch.x, z: PORTS.eastwatch.z, r: 7, name: 'The Passage Office', town: 'eastwatch', port: 'eastwatch' };
+  LOCS.stormrest = { x: ISLE.x - 22, z: ISLE.z, r: 9, name: 'The Stormrest Inn', port: 'stormrest' };
+  const SAIL_MPM = 11;                       // a merchant ship makes about 11 m a game minute
+  const PASSAGE = { 'eastwatch-dawnport': 40, 'eastwatch-stormrest': 18, 'stormrest-dawnport': 24 };
+  const passageFare = (a, b) => PASSAGE[a + '-' + b] || PASSAGE[b + '-' + a] || 0;
+  const seaDist = (a, b) => Math.hypot(PORTS[a].x - PORTS[b].x, PORTS[a].z - PORTS[b].z) * 1.08;
+  // one winter day in five the sea is too rough to sail (the same days for everyone, so the forecast can be told)
+  const seaRough = (s, d) => calendar({ day: d || s.day }).season === 'winter' && (((d || s.day) * 2654435761) >>> 0) % 100 < 20;
+  const portHere = s => Object.keys(PORTS).find(k => Math.hypot(s.player.x - PORTS[k].x, s.player.z - PORTS[k].z) < 10) || null;
   IC.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
   EW.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
   ROADS.iron = [[CM.gate.x + Math.sin(CM.gate.face) * 30, CM.gate.z + Math.cos(CM.gate.face) * 30], [330, -806], [430, -812], [512, -830], [575, -880], [632, -975], [676, -1080], [698, -1150], [IC.entry.x, IC.entry.z]];
@@ -3642,8 +3707,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   IC.biz.forEach(b0 => { LOCS['ib:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'ironcrest' }; });
   EW.biz.forEach(b0 => { LOCS['eb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'eastwatch' }; });
   const CM_JOBS = { cm_fish: ['Fisher', 'Fishing from the quay'], cm_watch: ['City watchman', 'Keeping the King\u2019s Gate'], cm_castle: ['Castle servant', 'Serving at the castle'], cm_porter: ['Market porter', 'Carrying in the Great Market'], cm_mason: ['Mason', 'Working on the Great Hall'], cm_carter: ['Carter', 'Loading carts in the South Ward'], cm_wash: ['Washer', 'Washing linen at the lake'], cm_labour: ['Labourer', 'Labouring in the Old Town'] };
-  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW };
-  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS);
+  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW, dawnport: DP };
+  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS, DP_JOBS);
   /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
   const STAGE = {
     hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
@@ -3819,12 +3884,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   // Ironcrest and Eastwatch: families, businesses, common work and a town council, as in the other towns
   function setupNewTown(s, id) {
     if (!s.towns || s.towns[id]) return;
-    const L = LAYOUT[id], cfg = id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
+    const L = LAYOUT[id], cfg = id === 'dawnport' ? { seed: 717171, pop: 450, jobs: ['dp_dock', 'dp_dock', 'dp_dock', 'dp_fish', 'dp_fish', 'dp_salt', 'dp_salt', 'dp_sail', 'dp_vine', 'dp_vine', 'dp_watch'], title: 'Consul', chest: 650, rent: [5, 3], pre: 'd', fam: VAL_FAMILY, first: [VAL_F, VAL_M] } : id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
       : { seed: 616161, pop: 480, jobs: ['ew_dock', 'ew_dock', 'ew_dock', 'ew_fish', 'ew_fish', 'ew_net', 'ew_sail', 'ew_sail', 'ew_yard', 'ew_watch'], title: 'Harbourmaster', chest: 700, rent: [5, 3], pre: 'e', fam: ['Penhale', 'Trask', 'Brine', 'Keel', 'Tolley', 'Hook', 'Marchant', 'Rowe', 'Polgrean', 'Nance', 'Tremayne', 'Kitto', 'Jago', 'Pascoe', 'Rescorla'] };
     let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
     const used = new Set(Object.values(s.people).map(p => p.name));
-    const FIRST_F = FIRST.filter(n => FEMALE.has(n)), FIRST_M = FIRST.filter(n => !FEMALE.has(n)), FAM = cfg.fam.concat(FAMILY);
-    const nameFor = (fam, sex) => { const Ls = sex === 'f' ? FIRST_F : sex === 'm' ? FIRST_M : FIRST; for (let k = 0; k < 60; k++) { const n = Ls[Math.floor(r() * Ls.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsman ' + used.size; used.add(n); return n; };
+    const FIRST_F = cfg.first ? cfg.first[0] : FIRST.filter(n => FEMALE.has(n)), FIRST_M = cfg.first ? cfg.first[1] : FIRST.filter(n => !FEMALE.has(n)), FAM = cfg.first ? cfg.fam : cfg.fam.concat(FAMILY), FIRST_ALL = FIRST_F.concat(FIRST_M);
+    const nameFor = (fam, sex) => { const Ls = sex === 'f' ? FIRST_F : sex === 'm' ? FIRST_M : FIRST_ALL; for (let k = 0; k < 60; k++) { const n = Ls[Math.floor(r() * Ls.length)] + ' ' + fam; if (!used.has(n)) { used.add(n); return n; } } const n = 'Townsman ' + used.size; used.add(n); return n; };
     const hs = L.houses.map((h, i) => ({ id: cfg.pre + i, name: (h.tall ? 'Townhouse, ' : 'Cottage, ') + TOWNS[id].name, x: h.x, z: h.z, owner: 'town:' + id, rent: h.tall ? cfg.rent[0] : cfg.rent[1], cap: h.tall ? 6 : 4, tenants: [], town: id }));
     s.houses.push(...hs);
     const P0 = (o, h) => { const p = newPerson(s, Object.assign({ town: id, purse: 20 + Math.floor(r() * 30), palette: Math.floor(r() * 10) }, o)); if (h) moveIn(s, p, h); p.log = [{ day: s.day, text: 'Lives in ' + TOWNS[id].name + '.' }]; p.rep = 20; return p; };
@@ -3859,6 +3924,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const masters = landlords.slice().sort((a, b) => b.rep - a.rep || b.purse - a.purse), mayor = masters[0];
     s.towns[id] = { title: cfg.title, chest: cfg.chest, fee: 'normal', approval: 60, council: masters.slice(1, 5).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen ' + cfg.title + ' of ' + TOWNS[id].name + '.');
+  }
+  // Valdoria: its own crown and its own customs. For now it is a place to go and to trade; its queen, its laws and its
+  // dealings with Alderwyn come in the next part of the stage
+  function setupValdoria(s) {
+    if (s.valdoria) return;
+    s.valdoria = { name: 'Valdoria', ruler: 'Queen Ximena II', capital: 'Valdor', duty: 1.2, log: [] };
   }
   function setupCrownmere(s) {
     if (!s.towns || s.towns.crownmere) return;
@@ -3910,7 +3981,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     s.towns.crownmere = { title: 'Lord Mayor', chest: 1500, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen Lord Mayor of Crownmere by the guilds.');
   }
-  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150 };
+  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150, dawnport: 140 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
   function townFolk(s, id) { return living(s).filter(p => p.town === id); }
@@ -3945,7 +4016,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function townLog(s, T, text) { T.log.unshift({ day: s.day, text }); if (T.log.length > 20) T.log.length = 20; event(s, (TOWNS[T.id || 'oakbridge'] || TOWNS.oakbridge).name + ': ' + text, 'info'); }
   /* every town keeps a watch in proportion to its size: about one for every forty people, never fewer than two,
      and the capital a little more. They are townsfolk in a watchman's job, paid from the town chest. */
-  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch' };
+  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch', dawnport: 'dp_watch' };
   function watchTarget(s, id) { const pop = id === 'hearthmoor' ? villagers(s).length : townFolk(s, id).length, T = s.towns && s.towns[id]; return Math.max(2, Math.round(pop / (id === 'crownmere' ? 35 : 40) * ((T && T.watchMul) || 1))); }
   function townWatch(s, id, T) {
     const job = TOWN_WATCH_JOB[id]; if (!job) return;
@@ -4085,7 +4156,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const mine = Object.values(s.biz).filter(b => b.owner === 'player').length;
     const mono = R.monopoly && !((R.figures || []).find(f => f.kind === 'merchant') || {}).ally ? 10 : 0;
     let guilds = avg(owners.map(op01)) + Math.min(15, mine * 2) - mono - (isRuler(s) ? (R.taxRate - 1) * 40 + (R.tariff - 1) * 15 - (R.laws.guildCharters ? 15 : 0) : 0);
-    const tw = Object.keys(TOWNS).map(t => { const f = living(s).filter(p => townOf(p) === t && !p.kid); return f.length ? avg(f.slice(0, 120).map(op01)) : 50; });
+    const tw = Object.keys(TOWNS).filter(t => !TOWNS[t].foreign).map(t => { const f = living(s).filter(p => townOf(p) === t && !p.kid); return f.length ? avg(f.slice(0, 120).map(op01)) : 50; });
     let towns = avg(tw) * 0.75 + (s.village ? s.village.standing : 0) * 0.15 + 10 + (R.laws.fairCourts ? 8 : 0) - (isRuler(s) ? (R.taxRate - 1) * 35 + (R.laws.forestLaw ? 8 : 0) + (R.laws.harshJustice ? 6 : 0) - (R.laws.marketPeace ? 6 : 0) : 0);
     let court = R.favour + yourSeats(s).length * 6 + yourLordships(s).length * 4;
     let lordAvg = avg(lords) - (R.laws.fairCourts ? 6 : 0) - (isRuler(s) && R.laws.guildCharters ? 10 : 0) - (isRuler(s) && R.debtDays > 5 ? 15 : 0);
@@ -4140,7 +4211,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     R.petitions = (R.petitions || []).filter(q => { if (s.day < q.until) return true; answerPetition(s, q, -1); return false; });
     if (R.petitions.length >= 2 || rand(s) > 0.11) return;
     const kinds = [], winter = seasonOf(s) === 'winter' || calendar(s).month === 0;
-    const hungryTown = Object.keys(TOWNS).map(t => ({ t, n: living(s).filter(p => townOf(p) === t && !p.kid && p.hungry).length })).sort((a, b) => b.n - a.n)[0];
+    const hungryTown = Object.keys(TOWNS).filter(t => !TOWNS[t].foreign).map(t => ({ t, n: living(s).filter(p => townOf(p) === t && !p.kid && p.hungry).length })).sort((a, b) => b.n - a.n)[0];
     if (hungryTown && hungryTown.n >= (winter ? 3 : 6)) kinds.push('relief');
     const lords = Object.keys(R.regions).map(id => ({ id, l: regionLord(s, id) })).filter(x => x.l && x.l !== 'player' && s.people[x.l] && (s.people[x.l].opinion || 0) < 45);
     if (lords.length) kinds.push('defiance');
@@ -5251,7 +5322,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (!seat('treasury')) return fail('Only the Lord Treasurer or the crown audits the town chests.');
         if (R.lastAudit != null && s.day - R.lastAudit < 7) return fail('The clerks are still at the last audit (one a week).');
         R.lastAudit = s.day; const found = [];
-        for (const id in s.towns) { const T = s.towns[id]; if (!T.skims || !T.skims.length) continue; if (rand(s) < 0.75) { const tot = T.skims.reduce((x, y) => x + y.amount, 0), m = s.people[T.skims[0].pid]; const back = Math.min(tot, m ? Math.max(0, m.purse) : 0); if (m) m.purse -= back; T.chest += back; T.skims = []; found.push(REGIONS[id] + ': ' + tot + 'c taken by ' + (m ? m.name : 'its mayor') + ', ' + back + 'c recovered');
+        for (const id in s.towns) { const T = s.towns[id]; if (TOWNS[id] && TOWNS[id].foreign) continue; if (!T.skims || !T.skims.length) continue; if (rand(s) < 0.75) { const tot = T.skims.reduce((x, y) => x + y.amount, 0), m = s.people[T.skims[0].pid]; const back = Math.min(tot, m ? Math.max(0, m.purse) : 0); if (m) m.purse -= back; T.chest += back; T.skims = []; found.push(REGIONS[id] + ': ' + tot + 'c taken by ' + (m ? m.name : 'its mayor') + ', ' + back + 'c recovered');
           const Cx = s.courts[id]; if (Cx && m) { const k = newCase(s, 'corruption', { accused: m.id, accuser: null, victim: 'chest', value: tot, where: 'the town chest', truth: 'guilty', what: tot + 'c missing from the chest of ' + Cx.name, claim: 'The Lord Treasurer’s audit finds ' + tot + 'c gone from the chest of ' + Cx.name + ' while ' + m.name + ' held it.' }, Cx); k.evidence.push({ text: 'The audit books show the sums, day by day.', w: 3 }); } } }
         if (R.embezzled && !isRuler(s)) found.push('the royal treasury is short');
         realmLog(s, found.length ? 'Your audit finds: ' + found.join('; ') + '.' : 'Your audit finds every chest in order.', found.length ? 'good' : 'info'); if (found.length) R.favour = clamp(R.favour + 3, 0, 100); return ok();
@@ -5294,7 +5365,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (!seat('law')) return fail('Only the Lord Justice or the crown investigates officials.');
         if (R.lastMisconduct != null && s.day - R.lastMisconduct < 5) return fail('Your inquiry is still sitting.');
         R.lastMisconduct = s.day; const found = [];
-        for (const id in s.towns) { const T = s.towns[id], m = s.people[T.mayor]; if (T.skims && T.skims.length && m && rand(s) < 0.5) { const nx = (T.council || []).map(x => s.people[x]).find(p => p && p.status === 'here' && p !== m); if (nx) { T.mayor = nx.id; m.opinion = clamp((m.opinion || 0) - 40, -100, 100); found.push(m.name + ', removed as ' + T.title + ' of ' + REGIONS[id]); T.skims = []; } } }
+        for (const id in s.towns) { const T = s.towns[id], m = s.people[T.mayor]; if (TOWNS[id] && TOWNS[id].foreign) continue; if (T.skims && T.skims.length && m && rand(s) < 0.5) { const nx = (T.council || []).map(x => s.people[x]).find(p => p && p.status === 'here' && p !== m); if (nx) { T.mayor = nx.id; m.opinion = clamp((m.opinion || 0) - 40, -100, 100); found.push(m.name + ', removed as ' + T.title + ' of ' + REGIONS[id]); T.skims = []; } } }
         for (const C2 of Object.values(s.courts)) { const cap = s.people[C2.captain]; if (cap && cap.honest == null) cap.honest = rand(s); if (cap && cap.honest < 0.2 && rand(s) < 0.6) { C2.captain = null; found.push(cap.name + ', a captain who sold favours, dismissed in ' + C2.name); cap.honest = 0.5; } }
         realmLog(s, found.length ? 'Your inquiry into the king’s officers finds: ' + found.join('; ') + '.' : 'Your inquiry finds the officers honest.', found.length ? 'good' : 'info'); return ok();
       }
@@ -6033,6 +6104,22 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         event(s, 'You take the coach to ' + TOWNS[a].name + ' for ' + f + 'c. The journey takes ' + mins + ' minutes.', 'info');
         return { ok: true, mins };
       }
+      case 'sail': {
+        // passage by ship between Eastwatch, Stormrest Isle and Dawnport; ships sail by day, and not when a winter storm is up
+        const from = portHere(s); if (!from) return fail('Ships leave from the quay: the passage office in Eastwatch, or the quay in Dawnport.');
+        if (!PORTS[a] || a === from) return fail('No ship goes there.');
+        const h = hourOf(s); if (h < 7 || h >= 17) return fail('The last ship has sailed. The first leaves at seven in the morning.');
+        if (seaRough(s)) return fail('A storm is up on the Sundering Sea. No ship will sail today.');
+        const f = passageFare(from, a) + (p.horse ? 10 : 0); if (s.coins < f) return fail('The passage is ' + f + 'c' + (p.horse ? ' with your horse' : '') + '.');
+        spend(s, f); s.rec.fares = (s.rec.fares || 0) + f;
+        const via = (from === 'eastwatch' && a === 'dawnport') || (from === 'dawnport' && a === 'eastwatch');
+        const mins = Math.round(seaDist(from, a) / SAIL_MPM) + (via ? 25 : 0), P1 = PORTS[a];
+        s.player.x = P1.x + Math.sin(P1.face) * 3; s.player.z = P1.z + Math.cos(P1.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
+        s.rec.sailed = (s.rec.sailed || 0) + 1;
+        if (a === 'dawnport' && !s.rec.landedValdoria) { s.rec.landedValdoria = s.day; event(s, 'You step onto the quay at Dawnport. Sandstone, red tiles, the smell of salt pans and oranges: Valdoria.', 'story'); }
+        event(s, 'You sail to ' + P1.name + (via ? ' by way of Stormrest Isle' : '') + ' for ' + f + 'c. The crossing takes ' + mins + ' minutes.', 'info');
+        return { ok: true, mins };
+      }
       case 'journey': {
         // walk or ride the roads to another town
         if (!TOWNS[a] || !TOWNS[a].open) return fail('That road is not open yet.');
@@ -6320,11 +6407,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.v === 10) { s.v = 11; setupCrownmere(s); event(s, 'The roads to the capital are open: north from Oakbridge, and north-east from Greenhaven, to Crownmere on its lake.', 'story'); }
     if (s.v === 11) { s.v = 12; giveSurnames(s); generateAncestry(s); for (const a of s.agents) if (a.pid && s.people[a.pid]) a.name = s.people[a.pid].name; event(s, 'Every family now has a surname, and a married woman\u2019s maiden name is kept, so family trees show where everyone came from.', 'info'); }
     if (s.v === 12) { s.v = 13; setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupRealm(s); event(s, 'Two more roads are open: east from Oakbridge to the port of Eastwatch, and from Crownmere up into the mountains to Ironcrest. The kingdom of Alderwyn has lords, a court and a crown, and bandits on its roads.', 'story'); }
+    if (s.v === 13) { s.v = 14; setupNewTown(s, 'dawnport'); setupValdoria(s); event(s, 'Ships now sail from Eastwatch across the Sundering Sea, by way of Stormrest Isle, to Dawnport in Valdoria. Anyone who can pay the passage may go.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     return s;
   }
 
   const api = {
+    DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
@@ -6504,7 +6593,7 @@ function groundH(x, z) {
   const k = smooth01((Math.hypot(x / 64, (z - 4) / 56) - 1.3) / 0.7);
   if (k > 0) h = h * (1 - k) + worldH(x, z) * k;
   // towns sit on level ground
-  for (const id in TOWNS) { if (id === 'hearthmoor') continue; const T = TOWNS[id], d = Math.hypot(x - T.x, z - T.z) / T.r; if (d < 2) { const f = smooth01((d - 1.1) / 0.8); h = h * f + worldH(T.x, T.z) * (1 - f); } }
+  for (const id in TOWNS) { if (id === 'hearthmoor' || TOWNS[id].foreign) continue; const T = TOWNS[id], d = Math.hypot(x - T.x, z - T.z) / T.r; if (d < 2) { const f = smooth01((d - 1.1) / 0.8); h = h * f + worldH(T.x, T.z) * (1 - f); } }
   if (Math.abs(x - 470) < 260 && z > -1600 && z < 400) { const dv = segDist(x, z, RIVER); if (dv < 12) h -= (1 - dv / 12) * 3; }
   if (z < -700 && z > -1500 && x > -200 && x < 600) {
     const CMT = TOWNS.crownmere, cy = worldH(CMT.x, CMT.z);
@@ -6517,6 +6606,22 @@ function groundH(x, z) {
     const dg = segDist(x, z, GREEN); if (dg < 8) h -= (1 - dg / 8) * 2.4;            // the river Green
   }
   if (x > 1060) { const sx = 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31), inTown = Math.abs(z - -300) < 135 && x < 1137, edge = inTown ? 1137 : sx; if (x > edge - 10) { const sy = worldH(1060, -300) - 1.3; h = Math.min(h, h * (1 - smooth01((x - edge + 10) / 14)) + (sy - 3.5) * smooth01((x - edge + 10) / 14)); } }
+  // across the Sundering Sea: Stormrest Isle halfway, and the low sandstone coast of Valdoria beyond
+  if (x > 1300) {
+    const sy = worldH(1060, -300) - 1.3, floor = sy - 3.5;
+    const di = Math.hypot(x - Sim.ISLE.x, (z - Sim.ISLE.z) * 1.3);
+    if (di < 70) { const isle = sy + 1.8 + 3.2 * smooth01((40 - di) / 30) + 0.4 * Math.sin(x * 0.2) * Math.cos(z * 0.17); h = Math.max(h, floor * (1 - smooth01((70 - di) / 26)) + isle * smooth01((70 - di) / 26)); }
+    const vs = Sim.VSHORE(z), inPort = Math.abs(z + 300) < 96;
+    const edgeV = inPort ? 1909 : vs;
+    if (x > edgeV - 16) {
+      const dD = Math.hypot(x - Sim.DP.C.x, z - Sim.DP.C.z);
+      let land = sy + 2.4 + 0.35 * Math.sin(x * 0.05) * Math.cos(z * 0.04) + 0.3 * Math.sin((x + z) * 0.09);
+      land += smooth01((x - 2120) / 260) * 9 * (0.6 + 0.4 * Math.sin(z / 140));            // the hills of Valdoria rising inland
+      land += 3.2 * Math.exp(-((x - 2084) ** 2 + (z + 300) ** 2) / 700);                  // the rise under the Consul's palace
+      if (dD < 150) { const f = smooth01((dD - 100) / 50); land = land * f + (sy + 2.4 + (x > 2070 ? 3.2 * Math.exp(-((x - 2084) ** 2 + (z + 300) ** 2) / 700) : 0)) * (1 - f); }
+      const k = smooth01((x - edgeV + 16) / 14); h = floor * (1 - k) + land * k;
+    }
+  }
   const ds = segDist(x, z, STREAM); if (ds < 5) h -= (1 - ds / 5) * 1.7;
   const dr = Math.min(segDist(x, z, RACE), segDist(x, z, TAIL)); if (dr < 2.2) h -= (1 - dr / 2.2) * 0.85;
   const dp = Math.hypot(x - POND.x, z - POND.z); if (dp < POND.r + 2) h -= (1 - dp / (POND.r + 2)) * 1.1;
@@ -6579,6 +6684,7 @@ function wildClear(x, z) {
   return true;
 }
 const FARMS = [{ x: 150, z: 26, w: 46, d: 26 }, { x: 190, z: 14, w: 22, d: 18 }, { x: 378, z: -250, w: 36, d: 28 }, { x: 330, z: -300, w: 30, d: 22 }];
+const C_DRY = new THREE.Color('#b5a462');
 function buildTile(i, j) {
   const x0 = i * TILE, z0 = j * TILE;
   const g = new THREE.PlaneGeometry(TILE, TILE, TILE_RES, TILE_RES).toNonIndexed();
@@ -6594,6 +6700,7 @@ function buildTile(i, j) {
     if (Math.abs(x - 470) < 300) wet = Math.min(wet, segDist(x, z, RIVER) - 6);
     if (x < -100 && z < -300) wet = Math.min(wet, segDist(x, z, GREEN) - 3);
     if (wet < 4.5) C_TMP.lerp(C_BANK, 0.55);
+    if (x > 1880) C_TMP.lerp(C_DRY, 0.45);   // Valdoria's sun-dried grass
     if (y > 12) C_TMP.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
     if (y > 40) C_TMP.lerp(C_SNOW, Math.min(1, (y - 40) / 10));
     for (let q = 0; q < 3; q++) { col[(k + q) * 3] = C_TMP.r; col[(k + q) * 3 + 1] = C_TMP.g; col[(k + q) * 3 + 2] = C_TMP.b; }
@@ -7720,6 +7827,66 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; box(f, BEAMS
   flushBuild();
 })();
 
+/* ----- Valdoria: Dawnport, a sandstone port of arcades and red tiles, and Stormrest Isle out in the sea ----- */
+const VALDORIA = ['#a8322a', '#e2b53e'];   // Valdoria's colours: red and gold
+function valBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; box(f, BEAMS, x, y + h / 2 + 0.5, z, 0.1, h + 1, 0.1); box(f, VALDORIA[0], x + 0.5, y + h, z, 0.9, 1.3, 0.04, ry); box(f, VALDORIA[1], x + 0.5, y + h, z + 0.03, 0.9, 0.3, 0.02, ry); }
+const DP_TREES = [];
+function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6 : 3.4, f = new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry, 0)), new THREE.Vector3(1, 1, 1));
+  part(f, G_HEMI, '#5b4029', 0, 0.4, 0, 0, Math.PI, 0, B0 / 2, 1.8, L0 / 2); box(f, '#7a5634', 0, 0.45, 0, B0 - 0.4, 0.12, L0 - 2); box(f, '#5b4029', 0, 1.1, -L0 / 2 + 1.6, B0 - 0.6, 1.2, 2.4); box(f, '#5b4029', 0, 0.9, L0 / 2 - 1.4, B0 - 1.2, 0.8, 1.6);
+  box(f, '#4a3424', 0, 6.5, 1, 0.3, 13, 0.3); box(f, '#4a3424', 0, 10, 1, 7, 0.2, 0.2); box(f, '#e9e1cc', 0, 8.2, 1.15, 6.6, 3.4, 0.06); box(f, (flag || ALDERWYN)[0], 0, 13.3, 1, 0.06, 0.6, 1.2);
+  if (big) { box(f, '#4a3424', 0, 5, -4.6, 0.26, 10, 0.26); box(f, '#e9e1cc', 0, 6.4, -4.45, 4.6, 2.6, 0.06); } }
+(function buildDawnport() {
+  const O = Sim.DP, T = TOWNS.dawnport, rr = tileRand(91, 17), at = (x, z, ry) => fr(x, z, ry);
+  const SAND = '#d9c3a0', SAND2 = '#c4ab84', RED = '#a84a2c', RED2 = '#b8603c', SLATE = '#3f4a5a';
+  const chunkOf = (x, z) => Math.floor((x - T.x + 300) / 90) * 100 + Math.floor((z - T.z + 300) / 90);
+  const jobs = new Map(); const later = (x, z, fn) => { const k = chunkOf(x, z); if (!jobs.has(k)) jobs.set(k, []); jobs.get(k).push(fn); };
+  const between = (x0, z0, x1, z1, y, w, h, color) => box(new THREE.Matrix4().compose(new THREE.Vector3((x0 + x1) / 2, y, (z0 + z1) / 2), new THREE.Quaternion().setFromEuler(RX.set(0, Math.atan2(x1 - x0, z1 - z0), 0)), new THREE.Vector3(1, 1, 1)), color, 0, 0, 0, w, h, Math.hypot(x1 - x0, z1 - z0) + 0.5);
+  // pale streets of beaten sand and stone, and the squares
+  O.streets.forEach(st => later(st.pts[0][0], st.pts[0][1], () => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#a8916c', m: new THREE.Matrix4() })));
+  O.plazas.forEach(q => later(q.x, q.z, () => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), '#b39c78', 0, 0.06, 0)));
+  // the fountain in the Plaza Mayor, with orange trees round it
+  later(2010, -300, () => { const c = fr(2010, -300); part(c, new THREE.CylinderGeometry(3.4, 3.6, 0.9, 16), SAND2, 0, 0.45, 0); part(c, new THREE.CylinderGeometry(3.1, 3.1, 0.06, 16), '#4f8c9c', 0, 0.86, 0); part(c, new THREE.CylinderGeometry(0.5, 0.7, 2.6, 8), SAND, 0, 1.8, 0); part(c, new THREE.CylinderGeometry(1.4, 0.9, 0.4, 10), SAND, 0, 3.1, 0); valBanner(c, 0, 3.4, 0, 0, 2.2);
+    [[7, 7], [-7, 7], [7, -7], [-7, -7]].forEach(([x, z]) => { box(c, '#6b4a2e', x, 0.9, z, 0.3, 1.8, 0.3); part(c, G_HEMI, '#3f6b34', x, 1.6, z, 0, 0, 0, 1.5, 1.6, 1.5); for (let k = 0; k < 5; k++) part(c, G_HEMI, '#e8862c', x + Math.cos(k * 1.3) * 1.1, 2.1 + (k % 2) * 0.4, z + Math.sin(k * 1.3) * 1.1, 0, 0, 0, 0.16, 0.16, 0.16); }); });
+  later(1934, -300, () => { const c = fr(1934, -300); box(c, SAND2, 0, 2.4, 0, 0.6, 4.8, 0.6); valBanner(c, 0, 4.6, 0, 0, 2.4); });
+  // homes: sandstone and limewash under red tiles
+  O.houses.forEach((h, i) => later(h.x, h.z, () => townHouse(at(h.x, h.z, h.face), h, i + 51, { stone: SAND, stone2: SAND2, slate: RED, tile: RED, roofs: [RED, RED2, '#94432a', RED], walls: ['#ecdcbc', '#e2c9a0', '#f2e6cf', '#d8b88c', '#e9cfa8', '#f0dcc0'] })));
+  const SIGN = { bakery: '#c48a3f', tavern: '#a8322a', smithy: '#4a4744', butcher: '#8e2b22', chandler: '#e8d36a', tailor: '#6d5a78', cooper: '#6b4a2e', weaver: '#7a2f5a', potter: '#a8714d', carter: '#5b4029', boatwright: '#3f5a5a', goldsmith: '#e2b53e', apothecary: '#4f6b3a', mason: '#8b877c', tanner: '#6b4a2e' };
+  O.biz.forEach((b, i) => later(b.x, b.z, () => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 31, { stone: SAND, stone2: SAND2, slate: RED, tile: RED, roofs: [RED, RED2], sign: SIGN[b.trade] })));
+  // the Consul's palace on its rise: a sandstone hall, arcaded below, with towers and red and gold banners
+  later(O.palace.x, O.palace.z, () => { const f = at(O.palace.x, O.palace.z, O.palace.face);
+    box(f, SAND, 0, 5, 0, 26, 10, 14); box(f, SAND2, 0, 10.3, 0, 27, 0.6, 15); part(f, roofG(15.5, 27.5, 3.4), RED, 0, 10.6, 0);
+    for (let k = -11; k <= 11; k += 3.6) { box(f, SAND2, k, 2, 7.6, 0.8, 4, 0.8); } box(f, SAND2, 0, 4.3, 7.6, 25, 0.6, 1.2);
+    [[-13, -7], [13, -7], [-13, 7], [13, 7]].forEach(([x, z]) => { box(f, SAND2, x, 7.5, z, 4, 15, 4); part(f, new THREE.ConeGeometry(3.2, 4, 4), RED, x, 17, z, Math.PI / 4); });
+    for (let k = -9; k <= 9; k += 3) win(f, k, 7.4, 7.04, 1, 1.8, 0.06); box(f, '#3b2a1c', 0, 1.7, 7.3, 2.6, 3.4, 0.1);
+    valBanner(f, -13, 15, 9, 0, 3); valBanner(f, 13, 15, 9, 0, 3);
+    for (let s0 = 0; s0 < 5; s0++) box(f, SAND2, 0, 0.2 + s0 * 0.35, 9 + s0 * 1.6, 8, 0.4, 1.6); });
+  // the customs house on the quay, long and arcaded, where goods from Alderwyn pay the queen's duty
+  later(O.customs.x, O.customs.z, () => { const f = at(O.customs.x, O.customs.z, O.customs.face); box(f, SAND, 0, 3, 0, 20, 6, 9); part(f, roofG(9.6, 20.6, 2.6), RED, 0, 6, 0); for (let k = -9; k <= 9; k += 3) box(f, SAND2, k, 1.6, 4.9, 0.7, 3.2, 0.7); box(f, SAND2, 0, 3.4, 4.9, 20, 0.5, 1); box(f, '#2a1f16', 0, 1.6, 4.52, 2.4, 3, 0.08); valBanner(f, 0, 6.4, 4.6, 0, 2.6); for (let k = 0; k < 6; k++) part(f, G_BARREL, '#6b4a2e', -8 + k * 1.1, 0.35, 6.4); });
+  // the quay: a stone wall at the water's edge, timber piers, and ships alongside, Valdorian and Alderwyn
+  later(1912, -300, () => {
+    for (let z = -392; z < -208; z += 10) between(1909, z, 1909, z + 10, SEA_Y + 0.6, 3, 3.2, SAND2);
+    for (const pz of [-350, -300, -250]) { between(1907, pz, 1872, pz, SEA_Y + 0.9, 4, 0.4, '#6b4a2e'); for (let x = 1872; x <= 1906; x += 4) [-1.8, 1.8].forEach(dz => box(fr(x, pz + dz, 0, 0), '#4a3424', 0, SEA_Y - groundH(x, pz + dz) + 0.2, 0, 0.3, 2.4, 0.3)); }
+    seaShip(1878, -357, 0, true, VALDORIA); seaShip(1878, -293, Math.PI, true, ALDERWYN); seaShip(1876, -243, 0, false, VALDORIA); seaShip(1850, -320, 0.5, true, VALDORIA); });
+  // salt pans along the shore to the north, and vineyards on the slope to the south
+  later(1960, -400, () => { for (let k = 0; k < 6; k++) { const f = at(1938 + k * 9, -404); box(f, '#b9ad94', 0, 0.12, 0, 8.4, 0.24, 7); box(f, '#f2efe6', 0, 0.26, 0, 7.6, 0.04, 6.2); } for (let k = 0; k < 5; k++) part(at(1944 + k * 11, -414), new THREE.ConeGeometry(1.2, 1.4, 8), '#f4f1e8', 0, 0.7, 0); });
+  later(2030, -200, () => { for (let row = 0; row < 7; row++) for (let k = 0; k < 14; k++) { const x = 2004 + k * 3.8, z = -196 + row * 3.2; const f = at(x, z); box(f, '#6b4a2e', 0, 0.6, 0, 0.12, 1.2, 0.12); part(f, G_HEMI, row % 2 ? '#5f7d34' : '#4f6b2c', 0, 1.1, 0, 0, 0, 0, 0.9, 0.6, 0.9); } });
+  for (const [, fns] of jobs) { fns.forEach(fn => fn()); flushBuild(); }
+  // olive and orange trees about the town, cypresses on the hills
+  for (let k = 0, n = 0; k < 3000 && n < 90; k++) { const a = rr() * Math.PI * 2, d = 112 + rr() * 140, x = T.x + Math.cos(a) * d, z = T.z + Math.sin(a) * d; if (x < Sim.VSHORE(z) + 10 || Math.abs(z + 300) < 8) continue; n++; DP_TREES.push([x, z]); const g = fr(x, z, rr() * 6), sc = 0.8 + rr() * 0.5;
+    if (rr() < 0.4) { box(g, '#4a3a2a', 0, 2 * sc, 0, 0.5 * sc, 4 * sc, 0.5 * sc); part(g, new THREE.ConeGeometry(1.4 * sc, 7 * sc, 7), '#2f4f2a', 0, 6.5 * sc, 0); }
+    else { box(g, '#6b5a44', 0, 1 * sc, 0, 0.4 * sc, 2 * sc, 0.4 * sc); part(g, G_HEMI, rr() < 0.5 ? '#7d8c5a' : '#4f6b34', 0, 1.9 * sc, 0, 0, 0, 0, 2.2 * sc, 1.8 * sc, 2.2 * sc); } }
+  flushBuild();
+})();
+(function buildStormrest() {
+  const I = Sim.ISLE, at = (x, z, ry) => fr(x, z, ry), STONE2 = '#8b877c';
+  // the inn and the harbour wall on the lee side, the lighthouse on the headland, wind-bent pines and bare rock
+  { const f = at(I.x - 12, I.z, Math.PI / 2); box(f, '#a39d90', 0, 2.4, 0, 10, 4.8, 7); part(f, roofG(7.6, 10.6, 2.6), '#3f4a5a', 0, 4.8, 0); box(f, '#3b2a1c', 0, 1.4, 3.55, 1.2, 2.4, 0.08); win(f, -3, 2.6, 3.52, 1, 0.9, 0.06); win(f, 3, 2.6, 3.52, 1, 0.9, 0.06); box(f, BEAMS, 5.6, 2.8, 3.6, 0.12, 2, 0.12); box(f, '#2f5d7a', 5.6, 3.5, 4, 1.1, 0.7, 0.06); }
+  { const x0 = I.x - 30; for (let z = I.z - 14; z < I.z + 14; z += 4) box(fr(x0 - 4, z, 0, 0), '#6b4a2e', 0, SEA_Y - groundH(x0 - 4, z) + 0.9, 0, 9, 0.35, 4.2); seaShip(x0 - 16, I.z + 6, 0.2, false, ALDERWYN); }
+  { const lx = I.x + 30, lz = I.z - 22, f = new THREE.Matrix4().compose(new THREE.Vector3(lx, groundH(lx, lz), lz), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)); part(f, new THREE.CylinderGeometry(2, 2.8, 16, 12), '#e9e1cc', 0, 8, 0); [5, 10].forEach(y => part(f, new THREE.CylinderGeometry(2.6 - y * 0.04, 2.7 - y * 0.04, 1.1, 12), '#2b4a7a', 0, y, 0)); part(f, new THREE.CylinderGeometry(1.6, 1.6, 1.8, 10), '#3a3632', 0, 16.9, 0); box(f, '#ffd36a', 0, 16.9, 0, 2, 1.1, 2); part(f, new THREE.ConeGeometry(2, 1.6, 10), '#3a3632', 0, 18.6, 0); }
+  const rr = tileRand(57, 3); for (let k = 0; k < 40; k++) { const a = rr() * 6.28, d = 6 + rr() * 34, x = I.x + Math.cos(a) * d, z = I.z + Math.sin(a) * d / 1.3; if (Math.abs(x - (I.x - 12)) < 9 && Math.abs(z - I.z) < 8) continue; const g = fr(x, z, rr() * 6);
+    if (k % 3) part(g, new THREE.DodecahedronGeometry(1, 0), STONE2, 0, 0.4, 0, rr(), rr(), rr(), 1 + rr() * 2, 0.6 + rr(), 1 + rr() * 2); else { box(g, '#4a3a2a', 0, 1.6, 0, 0.4, 3.2, 0.4); part(g, new THREE.ConeGeometry(1.6, 4, 7), '#2f4a3a', 0.4, 4.2, 0, 0, 0, -0.25); } }
+  flushBuild();
+})();
 /* ----- skylines: from far off, each town is a shape on the horizon above the haze ----- */
 const SKYLINES = (function () {
   const out = [];
@@ -7731,6 +7898,7 @@ const SKYLINES = (function () {
   const OK = Sim.OAK, oy = worldH(TOWNS.oakbridge.x, TOWNS.oakbridge.z);
   add('oakbridge', [[BX, OK.keep.x, oy + 9, OK.keep.z, 12, 18, 12], [BX, OK.C.x, oy + 4, OK.C.z, 130, 8, 130], [BX, OK.hall.x, oy + 10, OK.hall.z, 4, 20, 4]]);
   add('ironcrest', [[BX, Sim.IC.keep.x, IC_Y + 7, Sim.IC.keep.z, 10, 14, 10], [CY, 784, IC_Y + 5, -1250, 2.6, 10, 2.6], [CY, 796, IC_Y + 5, -1262, 2.6, 10, 2.6], [BX, 700, IC_Y + 3, -1265, 120, 6, 110]]);
+  { const D = Sim.DP, dy = SEA_Y + 2.4; add('dawnport', [[BX, D.palace.x, dy + 9, D.palace.z, 16, 18, 28], [CY, D.palace.x - 7, dy + 10, D.palace.z - 13, 2.5, 20, 2.5], [CY, D.palace.x - 7, dy + 10, D.palace.z + 13, 2.5, 20, 2.5], [BX, D.C.x, dy + 4, D.C.z, 180, 8, 200], [BX, 1878, SEA_Y + 7, -357, 0.4, 14, 0.4]]); }
   add('eastwatch', [[CY, 1170, SEA_Y + 11, -442, 3, 22, 3], [BX, Sim.EW.keep.x, EW_Y + 8, Sim.EW.keep.z, 12, 18, 12], [BX, 1060, EW_Y + 4, -300, 220, 8, 240], [BX, 1158, SEA_Y + 7, -357, 0.4, 14, 0.4], [BX, 1158, SEA_Y + 7, -293, 0.4, 14, 0.4]]);
   return out;
 })();
@@ -8408,6 +8576,16 @@ const EW_SOLIDS = (function () {
   return out;
 })();
 const STAGE_SOLIDS = Object.values(Sim.STAGE).flatMap(st => { const ux = Math.cos(st.face), uz = -Math.sin(st.face), vx = Math.sin(st.face), vz = Math.cos(st.face), P = (u, v, r) => ({ c: 1, x: st.x + ux * u + vx * v, z: st.z + uz * u + vz * v, r }); return [P(-5, -2, 2.3), P(-3, -2, 2.3), P(3, 0.5, 1.6), P(3, -0.8, 1.4)]; });
+const DP_SOLIDS = (function () {
+  const O = Sim.DP, out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
+  O.houses.forEach(h => C(h.x, h.z, h.tall ? 3.3 : 2.8)); O.biz.forEach(b => C(b.x - Math.sin(b.face) * 0.3, b.z - Math.cos(b.face) * 0.3, 3.5));
+  for (let k = -12; k <= 12; k += 4) C(O.palace.x + 2, O.palace.z + k, 5); for (let k = -9; k <= 9; k += 4.5) C(O.customs.x, O.customs.z + k, 4.4);
+  C(2010, -300, 3.8); C(1934, -300, 0.8);
+  // the water's edge: the quay wall, then the natural shore north and south of the port
+  for (let z = -900; z < 400; z += 2) { const x = Math.abs(z + 300) < 92 ? 1908.5 : Sim.VSHORE(z) - 1; C(x, z, 1.4); }
+  return out;
+})();
+const ISLE_SOLIDS = (function () { const I = Sim.ISLE, out = []; for (let a = 0; a < Math.PI * 2; a += 0.05) out.push({ c: 1, x: I.x + Math.cos(a) * 50, z: I.z + Math.sin(a) * 50 / 1.3, r: 1.6 }); out.push({ c: 1, x: I.x - 12, z: I.z, r: 5.6 }, { c: 1, x: I.x + 30, z: I.z - 22, r: 3 }); return out; })();
 function solidsNow(s) {
   const out = staticSolids.slice(); out.push(...STAGE_SOLIDS);
   out.push(...tileSolidsNear(s.player.x, s.player.z));
@@ -8415,6 +8593,7 @@ function solidsNow(s) {
   if (Math.hypot(s.player.x - TOWNS.crownmere.x, s.player.z - TOWNS.crownmere.z) < TOWNS.crownmere.r + 40) { const px = s.player.x, pz = s.player.z; out.push(...CM_SOLIDS.filter(o => Math.abs(o.x - px) < 60 && Math.abs(o.z - pz) < 60), ...CM_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
   if (Math.hypot(s.player.x - TOWNS.ironcrest.x, s.player.z - TOWNS.ironcrest.z) < TOWNS.ironcrest.r + 60) out.push(...IC_SOLIDS, ...IC_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.eastwatch.x, s.player.z - TOWNS.eastwatch.z) < TOWNS.eastwatch.r + 120) { const px = s.player.x, pz = s.player.z; out.push(...EW_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70)); }
+  if (s.player.x > 1300) { const px = s.player.x, pz = s.player.z; out.push(...DP_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...ISLE_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...DP_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
   if (Math.hypot(s.player.x - TOWNS.oakbridge.x, s.player.z - TOWNS.oakbridge.z) < TOWNS.oakbridge.r + 40) out.push(...OAK_SOLIDS, ...OAK_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
   if (s.village.towerBuilt) out.push({ c: 1, x: L.tower.x, z: L.tower.z, r: 2 });
@@ -8584,6 +8763,7 @@ function act(c) {
     G.look = Object.assign({}, G.look || {}, { body: Sim.you(G).sex === 'f' ? 'f' : 'm', hair: c[0] === 'beginAgain' ? (Sim.you(G).sex === 'f' ? 'long' : 'short') : hm, hairColor: Math.max(0, LOOKS.hairColor.indexOf(pl.hairColor)) });
     rebuildPlayer(G.look); UI.sel = null; UI.loc = null; focus.set(G.player.x, 0, G.player.z); UI.confirm = null; closeOverlay();
   }
+  if (c[0] === 'sail' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   if (c[0] === 'coach' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   drainEvents();
   renderCard(true);
@@ -8765,6 +8945,11 @@ function cardHTML(s) {
   if (here === 'cmhall') return oakHallCard(s, walking, 'crownmere');
   if (here === 'icsquare') return oakHallCard(s, walking, 'ironcrest');
   if (here === 'ewharbour') return oakHallCard(s, walking, 'eastwatch');
+  if (here === 'dpharbour') return oakHallCard(s, walking, 'dawnport');
+  if (Lh && Lh.port) return portCard(s, Lh.port, walking);
+  if (here === 'dpcustoms') return `<h2>The Customs House</h2><div class="sub">Where the Queen of Valdoria\u2019s clerks weigh and seal everything landed at Dawnport. Goods from Alderwyn pay a duty of ${Math.round(((s.valdoria && s.valdoria.duty) || 1.2) * 100 - 100)}% here.</div>${walking}`;
+  if (here === 'dppalace') return `<h2>The Consul\u2019s Palace</h2><div class="sub">The seat of the Consul of Dawnport, who governs the port for ${esc((s.valdoria && s.valdoria.ruler) || 'the Queen')}. ${s.towns && s.towns.dawnport && s.people[s.towns.dawnport.mayor] ? 'The Consul is ' + esc(s.people[s.towns.dawnport.mayor].name) + '.' : ''} You are a foreigner here: Alderwyn\u2019s titles mean little, though its coin spends the same.</div>${walking}`;
+  if (here === 'dpplaza') return `<h2>The Plaza Mayor</h2><div class="sub">Dawnport\u2019s great square: a fountain under orange trees, arcades on every side, and the High Calle running from the quay to the palace steps.</div>${walking}`;
   if (here === 'cmmarket') { const T = s.towns && s.towns.crownmere; return `<h2>The Great Market</h2><div class="sub">The heart of the capital: two rings of stalls round the great fountain, a dozen shops and taverns facing the square, and traders from every town in Alderwyn. Stallholders pay the Lord Mayor ${T ? Sim.FEES[T.fee].coin + 'c' : 'a fee'} a day.</div>${walking}<div class="acts">${B_('The Guildhall', ['goto', 'cmhall'], 'alt')}${B_('Businesses', ['page', 'property'], 'alt')}</div>`; }
   if (here === 'cmcastle') { const R = s.realm, K = R && s.people[R.king]; return `<h2>Crownmere Castle</h2><div class="sub">${Sim.isRuler(s) ? 'Your castle, and the seat of your court.' : 'The royal castle on its hill above Crown Lake: the seat of ' + esc(K ? 'King ' + K.name : 'the King') + ' and his court.'}${R ? ' Your favour at court: ' + Math.round(R.favour) + '.' : ''}</div>${walking}<div class="acts">${!Sim.isRuler(s) ? B_('Attend court', ['attendCourt']) : ''}${B_('The Realm', ['page', 'realm'], 'alt')}</div>`; }
   if (here === 'cmgreat') return `<h2>The Great Hall of the Realm</h2><div class="sub">Where the lords of Alderwyn gather when the king calls them, and where laws are read and judgements given. Masons are still at work on its towers.</div>${walking}`;
@@ -9049,7 +9234,7 @@ function seasonBox(s) {
   return `<div class="box"><h5>${c.season.charAt(0).toUpperCase() + c.season.slice(1)}, ${c.dom} ${c.monthName} · ${c.next} in ${c.daysLeft} ${c.daysLeft === 1 ? 'day' : 'days'}</h5><p>Now: ${SEASON_SAY[c.season]}</p><p><b>Coming:</b> ${SEASON_SAY[c.next]}</p>${L.grain ? `<p>Prices at the Trading Post in Hearthmoor:</p><dl class="kv">${['grain', 'wood', 'ore'].map(trend).join('')}</dl>` : ''}${ups ? `<ul class="notes">${ups}</ul>` : ''}</div>`;
 }
 function businessTowns(s) {
-  const mine = myBusinesses(s), towns = Object.keys(TOWN_NAMES), count = t => mine.filter(x => x.town === t).length;
+  const mine = myBusinesses(s), count = t => mine.filter(x => x.town === t).length, towns = Object.keys(TOWN_NAMES).filter(t => !(TOWNS[t] && TOWNS[t].foreign) || count(t) || townHere() === t);
   let t0 = UI.btown;
   if (!t0) { const h = townHere(); t0 = count(h) ? h : (towns.find(count) || h); }
   let html = `<div class="seg towns" role="tablist">${towns.map(t => `<button type="button" role="tab" aria-pressed="${t === t0}" data-c='${JSON.stringify(['ui', 'btown', t])}'>${TOWN_NAMES[t]}${count(t) ? ` <b class="num">${count(t)}</b>` : ''}</button>`).join('')}</div>`;
@@ -9220,7 +9405,7 @@ function personDetail(s, pr) {
     <div class="acts">${pr.status === 'here' ? B_('Find them', ['ui', 'findPerson', pr.id]) : ''}${Sim.youJudge(s) && pr.status === 'here' && !pr.kid && !pr.held && (!pr.town || pr.town === 'hearthmoor') ? (UI.confirm === 'hold' + pr.id ? B_('Yes, have them held', ['jArrestOnWord', pr.id], 'warn') + B_('No', ['ui', 'confirm', null], 'alt') : B_('Have the watch hold them&hellip;', ['ui', 'confirm', 'hold' + pr.id], 'alt')) : ''}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
-const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch' };
+const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport' };
 const townHere = () => { const t = Sim.townAt(G.player.x, G.player.z); return t && TOWN_NAMES[t] && (t === 'hearthmoor' || Math.hypot(G.player.x - TOWNS[t].x, G.player.z - TOWNS[t].z) < TOWNS[t].r + 70) ? t : 'hearthmoor'; };
 function townPick(s) {
   const t = UI.ptown || townHere();
@@ -9427,6 +9612,17 @@ function landCard(s, walking) {
   const acts = isElder ? Object.keys(Sim.LAND_USES).map(k => { const U = Sim.LAND_USES[k]; return B_(`${esc(U.name)} · ${U.cost}c from the chest<small>${esc(U.text)}</small>`, ['openLand', k], 'alt', v.chest - U.cost < Sim.CHEST_FLOOR); }) : [];
   return `<h2>The Open Land</h2><div class="sub">Common land south of the village, staked out for whatever Hearthmoor needs as it grows. ${isElder ? 'As Elder, the choice is yours. It is paid from the village chest (' + v.chest + 'c).' : 'What becomes of it is the Elder\u2019s decision.'}</div>${walking}<div class="acts">${acts.join('')}</div>`;
 }
+// the passage office: ships across the Sundering Sea, by day, and not in a winter storm
+function portCard(s, id, walking) {
+  const P = Sim.PORTS[id], h = Sim.hourOf(s), open = h >= 7 && h < 17, rough = Sim.seaRough(s), horse = s.player.horse ? 10 : 0;
+  const title = id === 'eastwatch' ? 'The Passage Office' : id === 'stormrest' ? 'The Stormrest Inn' : 'Dawnport Quay';
+  const sub = id === 'eastwatch' ? 'Ships for the crossing to Valdoria: across the Sundering Sea by way of Stormrest Isle, to Dawnport. Anyone who can pay may go.' : id === 'stormrest' ? 'A lighthouse, a harbour wall and an inn on a bare rock halfway across the Sundering Sea. Ships call here both ways.' : 'Valdoria’s great harbour. Ships sail from here for Stormrest Isle and Eastwatch in Alderwyn.';
+  const acts = Object.keys(Sim.PORTS).filter(k => k !== id).map(k => { const f = Sim.passageFare(id, k) + horse, via = (id === 'eastwatch' && k === 'dawnport') || (id === 'dawnport' && k === 'eastwatch'), mins = Math.round(Sim.seaDist(id, k) / Sim.SAIL_MPM) + (via ? 25 : 0);
+    return B_(`Sail to ${esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, '').replace('Stormrest', 'Stormrest Isle'))} · ${f}c<small>about ${mins} min${via ? ', calling at Stormrest' : ''}</small>`, ['sail', k], '', !open || rough || s.coins < f); });
+  const note = rough ? 'A storm is up on the Sundering Sea. No ship sails today.' : !open ? 'Ships sail between seven in the morning and five in the afternoon.' : (Sim.calendar(s).season === 'winter' ? 'In winter, about one day in five is too rough to sail.' : '');
+  const fc = []; for (let d = 1; d <= 3; d++) if (Sim.seaRough(s, s.day + d)) fc.push(d === 1 ? 'tomorrow' : 'in ' + d + ' days');
+  return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}`;
+}
 function stageCard(s, id, walking) {
   const p = s.player, h = Sim.hourOf(s), running = h >= 6 && h < 19, acts = [];
   for (const to of ['hearthmoor', 'oakbridge', 'greenhaven', 'crownmere']) if (to !== id) { const f = Sim.fare(id, to), mins = Math.round(Sim.roadDist(id, to) / Sim.COACH_MPM); acts.push(B_(`Coach to ${TOWN_NAMES[to]} · ${f}c<small>about ${mins} min${running ? '' : ' · first coach at 6:00'}</small>`, ['coach', to], '', !running || s.coins < f)); }
@@ -9566,7 +9762,7 @@ function oakBizCard(s, Lh, walking) {
 }
 function oakHallCard(s, walking, id) {
   id = id || 'oakbridge';
-  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : 'Oakbridge Town Hall';
+  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'dawnport' ? 'The Harbour Plaza, Dawnport' : id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : 'Oakbridge Town Hall';
   if (!T) return `<h2>${HN}</h2>${walking}`;
   const m = s.people[T.mayor], who = id => s.people[id] ? esc(s.people[id].name) : '';
   const mTrade = m && m.job && s.biz[m.job.biz] ? Sim.tradeName(s.biz[m.job.biz].trade).toLowerCase() : 'merchant';
@@ -10478,6 +10674,10 @@ const Mini = (function () {
   // Ironcrest and Eastwatch, and the sea
   for (let z = -1500; z < 1000; z += 20) rect(1, 1140 + 16 * Math.sin(z / 95) + 210, z, 420, 22, 0, COL.water);
   rect(1, 1300, -300, 320, 270, 0, COL.water);
+  // the Sundering Sea out to Valdoria's shore, Stormrest Isle in the middle, and Dawnport
+  for (let z = -1500; z < 1000; z += 20) { const a = 1140 + 16 * Math.sin(z / 95), b = Math.abs(z + 300) < 92 ? 1909 : Sim.VSHORE(z); rect(1, (a + b) / 2, z, b - a, 22, 0, COL.water); }
+  circ(2, Sim.ISLE.x, Sim.ISLE.z, 48, '#8fa25e'); rect(4, Sim.ISLE.x - 12, Sim.ISLE.z, 7, 10, Math.PI / 2, COL.house);
+  { const O = Sim.DP; O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); rect(4, O.palace.x, O.palace.z, 14, 26, 0, COL.big); rect(4, O.customs.x, O.customs.z, 9, 20, 0, COL.big); [-350, -300, -250].forEach(z => line(3, [[1907, z], [1872, z]], 3, COL.road)); }
   for (const O of [Sim.IC, Sim.EW]) {
     O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street));
     O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house));
@@ -10536,7 +10736,7 @@ const Mini = (function () {
       if (acc < 0.1) return;
       acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
       draw(p.x, p.z, cam.yaw, R);
-      const t = townHere(), inTown = R !== 120, nm = inTown ? TOWN_NAMES[t] : 'On the road';
+      const t = townHere(), inTown = R !== 120, nm = inTown ? TOWN_NAMES[t] : Math.hypot(p.x - Sim.ISLE.x, p.z - Sim.ISLE.z) < 70 ? 'Stormrest Isle' : p.x > 1300 && p.x < 1880 ? 'The Sundering Sea' : p.x >= 1880 ? 'Valdoria' : 'On the road';
       if (nm !== lt) { $('miniName').textContent = nm; lt = nm; }
     }
   };
@@ -11123,7 +11323,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.1911';
+const BUILD = '2026.11.05.2207';
 const NOTES = [
   { v: '0.42', date: '5 November', title: 'Petitions to the crown', items: [
     'As ruler, now and then something comes that only the crown can answer: a town gone hungry asks for grain from the treasury; a lord frees a man your judges sent to his gaol and says your court has no business in his lands; the guilds ask for lower tariffs through a hard season. Each choice costs something either way. Answer on the Realm page (they also appear in Tasks); left six days, a petition counts as refused and the silence is noticed. The same kind will not come twice within fifteen days.',

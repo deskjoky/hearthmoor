@@ -1063,6 +1063,34 @@ console.log('35. Petitions to the crown, and markets that draw traders when shor
   check(noble > 0, 'within two months a noble is accused, and the case comes to the crown’s court');
 }
 
+console.log('36. Across the Sundering Sea: the passage, Stormrest Isle and Dawnport');
+{
+  const s = newGameRaw(37); s.ageRate = 0; Sim.advance(s, 60);
+  const folk = Sim.living(s).filter(p => p.town === 'dawnport');
+  check(folk.length >= 440 && folk.length <= 470 && s.towns.dawnport.title === 'Consul' && Object.values(s.biz).filter(b => b.town === 'dawnport').length === 19, 'Dawnport is a port of ' + folk.length + ' people with a Consul and 19 businesses');
+  check(folk.some(p => /^(Marisol|Rodrigo|Ximena|Inigo|Leonor|Gonzalo)/.test(p.name)) && Sim.TOWNS.dawnport.foreign === 'valdoria' && s.valdoria && s.valdoria.ruler, 'its people have Valdorian names, and it belongs to Valdoria, not Alderwyn');
+  const P = Sim.PORTS, X = (...a) => Sim.cmd(s, ...a);
+  s.player.x = 300; s.player.z = 0; check(!X('sail', 'dawnport').ok, 'ships only leave from the quay');
+  s.player.x = P.eastwatch.x; s.player.z = P.eastwatch.z; s.coins = 100; s.t = 5 * 60; s.day = 10;
+  check(!X('sail', 'dawnport').ok, 'no ship sails before seven');
+  s.t = 9 * 60; const c0 = s.coins, r = X('sail', 'dawnport');
+  check(r.ok && s.coins === c0 - 40 && Math.hypot(s.player.x - P.dawnport.x, s.player.z - P.dawnport.z) < 6 && r.mins > 60, 'the passage to Dawnport by way of Stormrest costs 40c and takes ' + r.mins + ' minutes');
+  check(Sim.townAt(s.player.x, s.player.z) === 'dawnport' && s.rec.landedValdoria, 'you step ashore in Dawnport');
+  const sr = X('sail', 'stormrest'); check(sr.ok && Sim.portHere(s) === 'stormrest', 'ships call at Stormrest Isle');
+  let rough = 0; for (let d = 46; d <= 60; d++) if (Sim.seaRough(s, d)) rough++; let calm = 0; for (let d = 1; d <= 45; d++) if (Sim.seaRough(s, d)) calm++;
+  check(rough >= 1 && rough <= 7 && calm === 0, 'only in winter is the sea sometimes too rough to sail (' + rough + ' of 15 winter days)');
+  s.day = [46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60].find(d => Sim.seaRough(s, d)) || 46; if (Sim.seaRough(s)) check(!X('sail', 'eastwatch').ok, 'on a stormy day no ship sails');
+  // Alderwyn's politics do not count Valdorians
+  const sup0 = Sim.supportOf(s); Sim.living(s).filter(p => p.town === 'dawnport').forEach(p => p.opinion = -100); Sim.computeSupport(s);
+  check(Math.abs(Sim.supportOf(s) - sup0) <= 1, 'Dawnport’s people have no say in Alderwyn’s support for you');
+  // an old save gains Dawnport
+  const old = JSON.parse(Sim.serialize(newGameRaw(38))); old.v = 13; delete old.towns.dawnport; delete old.valdoria;
+  for (const id in old.people) if (old.people[id].town === 'dawnport') delete old.people[id];
+  old.houses = old.houses.filter(h => h.town !== 'dawnport'); for (const id in old.biz) if (old.biz[id].town === 'dawnport') delete old.biz[id];
+  const up = Sim.deserialize(JSON.stringify(old));
+  check(up.towns.dawnport && up.valdoria && Sim.living(up).filter(p => p.town === 'dawnport').length >= 440, 'an old save gains Dawnport and its people when loaded');
+}
+
 }
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
