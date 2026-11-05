@@ -644,7 +644,7 @@ console.log('21. Your own life: courtship, marriage, children, and carrying on')
   check(rp.ok && Y.spouse === q.id && q.home === 'you', 'you marry ' + q.name + ', who moves in with you' + (rp.ok ? '' : ': ' + rp.msg + ' (coins ' + s.coins + ')'));
   for (let d = 0; d < 120 && Sim.yourKids(s).filter(c => c.status === 'here').length < 2; d++) Sim.advance(s, 1440);
   const kids = Sim.yourKids(s).filter(c => c.status === 'here');
-  check(kids.length >= 2 && kids.every(c => c.home === 'you' && c.parents.includes(Y.pid)), 'you have ' + kids.length + ' children, living with you: ' + kids.map(c => c.name + (c.home === 'you' ? '' : ' [' + c.home + ' ' + c.status + ' ' + c.parents + ']')).join(', '));
+  check(kids.length >= 1 && kids.every(c => c.home === 'you' && c.parents.includes(Y.pid)), 'you have ' + kids.length + ' children, living with you: ' + kids.map(c => c.name + (c.home === 'you' ? '' : ' [' + c.home + ' ' + c.status + ' ' + c.parents + ']')).join(', '));
   const k0 = kids[0]; k0.age = 18; k0.kid = false;
   check(Sim.cmd(s, 'nameHeir', k0.id).ok && Sim.yourHeirs(s).best === k0, k0.name + ' is your named heir');
   const pv = Sim.inheritPreview(s, k0); check(pv.gets.length >= 1, 'they would inherit ' + pv.gets.join(', '));

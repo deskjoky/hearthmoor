@@ -180,6 +180,16 @@
     'Answer Lord Varrow’s letter at the manor gate',
     'Earn the village’s full trust (standing 80) so the elder names you his successor'
   ];
+  // the story's tasks name the people who hold the offices now, not the ones who held them on day one
+  function stepText(s, text) {
+    if (!text || !s.offices) return text;
+    const e = s.offices.elder, en = e === 'player' ? null : e && s.people && s.people[e] ? s.people[e].name.split(' ')[0] : null;
+    const l = s.offices.lord, ln = l && l !== 'player' && s.people && s.people[l] ? s.people[l].name.split(' ').slice(-1)[0] : null;
+    let out = text.replace('Meet Elder Brannoch', en ? 'Meet Elder ' + en : e === 'player' ? 'Take up your seat' : 'Meet the elder');
+    if (ln) out = out.replace('Lord Varrow\u2019s', 'Lord ' + ln + '\u2019s');
+    if (e && e !== 'player' && s.people && s.people[e] && sexOf(s.people[e]) === 'f') out = out.replace('names you his successor', 'names you her successor');
+    return out;
+  }
   const MANOR_HOME = { x: 2, z: -54 };
   const BIZ_BASE = { bakery: 26, smithy: 30, tavern: 26, joinery: 23, mill: 24 };
   const OFFICES = {
@@ -4081,6 +4091,8 @@
     const v = s.village;
     // wages from the village chest, not your purse
     let wages = 0;
+    // an Elder who is not you will not run up wages the chest cannot meet: one man stands down until it can
+    if (!youJudge(s) && J.watch.length > 1 && v.chest < J.watch.reduce((x, g) => x + g.wage, 0) * 2) { const g = J.watch[J.watch.length - 1], p = s.people[g.pid]; J.watch.pop(); if (p) { p.job = null; plog(s, p, 'Stood down from the watch until the village chest can pay.'); jlog(s, 'The village chest is low, so the Elder stands ' + p.name + ' down from the watch for now.', 'info'); } }
     for (const g of J.watch.slice()) {
       const p = s.people[g.pid];
       if (!p || p.status !== 'here' || !p.job || p.job.type !== 'watch') { J.watch = J.watch.filter(x => x !== g); continue; }
@@ -5733,7 +5745,7 @@
   }
 
   const api = {
-    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
+    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,

@@ -699,6 +699,16 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     'Answer Lord Varrow’s letter at the manor gate',
     'Earn the village’s full trust (standing 80) so the elder names you his successor'
   ];
+  // the story's tasks name the people who hold the offices now, not the ones who held them on day one
+  function stepText(s, text) {
+    if (!text || !s.offices) return text;
+    const e = s.offices.elder, en = e === 'player' ? null : e && s.people && s.people[e] ? s.people[e].name.split(' ')[0] : null;
+    const l = s.offices.lord, ln = l && l !== 'player' && s.people && s.people[l] ? s.people[l].name.split(' ').slice(-1)[0] : null;
+    let out = text.replace('Meet Elder Brannoch', en ? 'Meet Elder ' + en : e === 'player' ? 'Take up your seat' : 'Meet the elder');
+    if (ln) out = out.replace('Lord Varrow\u2019s', 'Lord ' + ln + '\u2019s');
+    if (e && e !== 'player' && s.people && s.people[e] && sexOf(s.people[e]) === 'f') out = out.replace('names you his successor', 'names you her successor');
+    return out;
+  }
   const MANOR_HOME = { x: 2, z: -54 };
   const BIZ_BASE = { bakery: 26, smithy: 30, tavern: 26, joinery: 23, mill: 24 };
   const OFFICES = {
@@ -4600,6 +4610,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const v = s.village;
     // wages from the village chest, not your purse
     let wages = 0;
+    // an Elder who is not you will not run up wages the chest cannot meet: one man stands down until it can
+    if (!youJudge(s) && J.watch.length > 1 && v.chest < J.watch.reduce((x, g) => x + g.wage, 0) * 2) { const g = J.watch[J.watch.length - 1], p = s.people[g.pid]; J.watch.pop(); if (p) { p.job = null; plog(s, p, 'Stood down from the watch until the village chest can pay.'); jlog(s, 'The village chest is low, so the Elder stands ' + p.name + ' down from the watch for now.', 'info'); } }
     for (const g of J.watch.slice()) {
       const p = s.people[g.pid];
       if (!p || p.status !== 'here' || !p.job || p.job.type !== 'watch') { J.watch = J.watch.filter(x => x !== g); continue; }
@@ -6252,7 +6264,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
 
   const api = {
-    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
+    REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
@@ -6380,6 +6392,7 @@ function mergeColored(parts) {
   return out;
 }
 const vc = new THREE.MeshLambertMaterial({ vertexColors: true });
+const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });   // the land itself, so snow and harvest colour can lie on the ground more than on walls and roofs
 const M = (x, y, z, ry, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry || 0, 0)), new THREE.Vector3(sx || 1, sy || sx || 1, sz || sx || 1));
 let seed = 1337;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -6525,7 +6538,7 @@ function buildTile(i, j) {
     for (let q = 0; q < 3; q++) { col[(k + q) * 3] = C_TMP.r; col[(k + q) * 3 + 1] = C_TMP.g; col[(k + q) * 3 + 2] = C_TMP.b; }
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const group = new THREE.Group(); group.add(new THREE.Mesh(g, vc));
+  const group = new THREE.Group(); group.add(new THREE.Mesh(g, groundMat));
   // woods where the land wants them, scattered trees elsewhere
   const pinesT = [], oaksT = [], bushesT = [], tuftsT = [], rocksT = [], solids = [];
   for (let k = 0; k < 300; k++) {
@@ -8181,13 +8194,14 @@ const tmpC = new THREE.Color();
 const SEASON_LOOK = {
   spring: { tint: [1, 1, 1], lift: [0, 0, 0], sky: '#a3b5b1' },
   summer: { tint: [1, 1, 0.9], lift: [0.02, 0.02, 0], sky: '#a9bfc0' },
-  autumn: { tint: [1, 0.84, 0.66], lift: [0.05, 0.025, 0], sky: '#b4ad98' },
-  winter: { tint: [0.62, 0.64, 0.7], lift: [0.5, 0.52, 0.56], sky: '#b7c2c9' }
+  autumn: { tint: [1, 0.9, 0.78], lift: [0.03, 0.015, 0], ground: { tint: [1, 0.8, 0.55], lift: [0.06, 0.03, 0] }, sky: '#b4ad98' },
+  winter: { tint: [0.86, 0.88, 0.94], lift: [0.06, 0.07, 0.09], ground: { tint: [0.42, 0.44, 0.48], lift: [0.6, 0.62, 0.66] }, sky: '#b7c2c9' }
 };
 let snow = null;
 function applySeason(season) {
   const L = SEASON_LOOK[season] || SEASON_LOOK.spring;
   vc.color.setRGB(L.tint[0], L.tint[1], L.tint[2]); vc.emissive = vc.emissive || new THREE.Color(0, 0, 0); vc.emissive.setRGB(L.lift[0], L.lift[1], L.lift[2]); vc.needsUpdate = true;
+  const G_ = L.ground || L; groundMat.color.setRGB(G_.tint[0], G_.tint[1], G_.tint[2]); groundMat.emissive.setRGB(G_.lift[0], G_.lift[1], G_.lift[2]); groundMat.needsUpdate = true;
   SKY.day.set(L.sky);
   if (season === 'winter' && !snow) {
     const n = calm() ? 0 : 700, g = new THREE.BufferGeometry(), pos = new Float32Array(n * 3);
@@ -8720,7 +8734,7 @@ function hallCard(s, walking) {
   const acts = [];
   const g = s.gov, isElder = s.offices.elder === 'player';
   let info = `<h2>The Village Hall</h2><div class="sub">Where Hearthmoor’s council meets, under ${esc(Sim.lordTitle(s, true))}’s banner. ${isElder ? 'You hold the Elder’s chair.' : v.council ? 'You sit on the council.' : ''}</div>${walking}`;
-  const step = Sim.STEPS[v.step];
+  const step = Sim.stepText(s, Sim.STEPS[v.step]);
   if (step && v.step < 6) info += `<div class="why"><b>${esc(Sim.elderTitle(s))}:</b> ${esc(step)}.</div>`;
   if (g) {
     const agenda = s.day === g.nextMoot - 1 ? ' <b>Tomorrow morning.</b>' : '';
@@ -8858,7 +8872,7 @@ function hud(s) {
   const html = chips.map(c => c.startsWith('<span') ? c : `<span class="chip num">${c}</span>`).join('');
   if ($('subhud').innerHTML !== html) $('subhud').innerHTML = html;
   const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
-  const gt = g ? `<em>Next:</em> ${esc(g.text)}` : '<em>Chapter Two complete.</em> The lord knows your name. More in the next chapter.';
+  const gt = g ? `<em>Next:</em> ${esc(Sim.stepText(s, g.text))}` : '<em>Chapter Two complete.</em> The lord knows your name. More in the next chapter.';
   if ($('goal').innerHTML !== gt) $('goal').innerHTML = gt;
   const h = Sim.hourOf(s);
   $('night').hidden = !(h >= 21 || h < 5.5) || !!UI.overlay;
@@ -8965,7 +8979,7 @@ const SEASON_SAY = {
   spring: 'Grain is short until the new crop comes; travellers return.',
   summer: 'The busiest season on the roads: about a quarter more travellers, and good spirits. Wood is cheap.',
   autumn: 'The harvest: grain is plentiful and cheap. The time to lay in stock for winter.',
-  winter: 'The fields are bare: grain dear, wood burned in every hearth, the mines slow, travellers down by 40%, thieves bolder, spirits low.'
+  winter: 'The fields are bare, so grain grows dearer as the harvest stores run down (worst by Snowmelt); wood is burned in every hearth, the mines slow, travellers down by 40%, thieves bolder, spirits low.'
 };
 function seasonBox(s) {
   const c = Sim.calendar(s), L = (s.priceLog || {}).hearthmoor || {};
@@ -9506,7 +9520,7 @@ function oakHallCard(s, walking, id) {
 function taskList(s) {
   const v = s.village, out = [], go = (k, lab) => B_(lab || 'Take me there', ['goto', k]);
   const STEP_ACT = { 0: go('hall', 'Go to the Village Hall'), 1: B_('Shops', ['page', 'shops']), 2: go('granary', 'Go to the granary'), 3: B_('Staff', ['page', 'staff']), 4: go('tower', 'Go to the watchtower'), 5: go('hall', 'Go to the Village Hall'), 6: go('hall', 'Go to the Village Hall'), 7: go('manor', 'Go to the manor gate'), 8: B_('Village', ['page', 'village']) };
-  if (Sim.STEPS[v.step] && v.step < 9) out.push({ who: Sim.elderTitle(s), title: Sim.STEPS[v.step], note: v.step === 8 ? 'Your standing is ' + v.standing + ' of 80.' : '', act: STEP_ACT[v.step] || '' });
+  if (Sim.STEPS[v.step] && v.step < 9) out.push({ who: Sim.elderTitle(s), title: Sim.stepText(s, Sim.STEPS[v.step]), note: v.step === 8 ? 'Your standing is ' + v.standing + ' of 80.' : '', act: STEP_ACT[v.step] || '' });
   if (v.shortage) out.push({ who: 'The village', title: 'Refill the granary: ' + v.granary + ' of ' + v.granaryNeed + ' grain', note: 'Until it is full, villagers buy less at every shop.', act: go('granary', 'Go to the granary') });
   if (v.dispute != null && (v.council || s.offices.elder === 'player')) out.push({ who: 'The council', title: 'Settle the dispute before the council', note: Sim.DISPUTES[v.dispute].text, act: go('hall', 'Go to the Village Hall') });
   if (v.contract) out.push({ who: v.contract.who, title: 'Deliver ' + Sim.goodsName(v.contract.trade, v.contract.qty) + ' to the Trading Post', note: 'By day ' + v.contract.until + ', for ' + v.contract.reward + 'c.', act: go('market', 'Go to the Trading Post') });
@@ -9611,7 +9625,7 @@ function pageVillage(s) {
     <p>Hearthmoor is held by ${esc(Sim.lordTitle(s))} for ${esc(R.king)} in ${esc(R.capital)}. Steward ${esc(Sim.holderName(s, 'steward'))} runs his estate and his tax collector visits each week. Day to day, ${esc(Sim.elderTitle(s))} and the council decide what gets built, set the toll and settle quarrels. Travelers bring news from Ashford, Kellmere and the capital.</p>
     ${govHTML(s)}
     <div class="box"><dl class="kv"><dt>Your standing</dt><dd>${v.standing}/100</dd><dt>Position</dt><dd>${v.council ? 'Councillor since day ' + s.rec.councilSince : v.step > 0 ? 'Known to the elder' : 'A newcomer'}</dd><dt>Granary</dt><dd>${v.shortage ? 'short: ' + v.granary + '/' + v.granaryNeed + ' grain' : 'stocked'}</dd><dt>Watchtower</dt><dd>${v.towerBuilt ? 'rebuilt' : 'in ruins'}</dd><dt>Out of work</dt><dd>${v.jobless.length ? v.jobless.join(' and ') : 'nobody'}</dd><dt>Taxes paid</dt><dd>${s.rec.taxesPaid}c</dd></dl></div>
-    <h4>The elder’s tasks</h4><ul class="goals">${Sim.STEPS.map((t, i) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : i + 1}</span><span>${esc(t)}</span></li>`).join('')}</ul>`;
+    <h4>The elder’s tasks</h4><ul class="goals">${Sim.STEPS.map((t, i) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : i + 1}</span><span>${esc(Sim.stepText(s, t))}</span></li>`).join('')}</ul>`;
   if (v.council || s.offices.elder === 'player') {
     html += `<h4>Your powers</h4><p>Chest: <b class="${v.chest < 0 ? 'neg' : ''}">${v.chest}c</b>. Projects and rulings are made in person at the Village Hall.</p>
       ${s.offices.elder === 'player' ? elderBusiness(s) : ''}
@@ -9752,7 +9766,7 @@ function pageFamily(s) {
   return h;
 }
 function pageGoals(s) {
-  const chapter = c => { const gs = Sim.GOALS.filter(g => g.ch === c.n), first = gs.findIndex(g => !g.done(s)); return `<h3>Chapter ${c.n === 1 ? 'One' : 'Two'}: ${esc(c.name)}</h3><p class="lead">${esc(c.lead)}</p><ul class="goals">${gs.map((g, i) => `<li class="${g.done(s) ? 'done' : i === first ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(g.text)}</span></li>`).join('')}</ul>`; };
+  const chapter = c => { const gs = Sim.GOALS.filter(g => g.ch === c.n), first = gs.findIndex(g => !g.done(s)); return `<h3>Chapter ${c.n === 1 ? 'One' : 'Two'}: ${esc(c.name)}</h3><p class="lead">${esc(c.lead)}</p><ul class="goals">${gs.map((g, i) => `<li class="${g.done(s) ? 'done' : i === first ? 'now' : ''}"><span class="tick">${g.done(s) ? '&#10003;' : i + 1}</span><span>${esc(Sim.stepText(s, g.text))}</span></li>`).join('')}</ul>`; };
   return Sim.CHAPTERS.map(chapter).join('') + `
 <h4>How Hearthmoor works</h4><p>Days run from 06:00 to 21:00, about 18 minutes of real time (Settings can make them 12 or 24). Nights pass quickly. Villagers keep their own routines: work in the fields, woods and iron pit, lunch at the well at noon, an evening in the square, and bed. Each shop draws its own customers, and a better building draws more travelers from the east road.</p>
   <p>The books close at 21:00, when wages and upkeep are paid in full. If your coin runs out you go into debt to the Ashford moneylender, who adds 2% a day. Stay below ${Sim.SEIZE_AT}c for three days and your creditors seize property to cover it.</p>
@@ -10051,7 +10065,7 @@ function pauseMainHTML(s) {
       <div class="ptitle"><span class="drop">${esc(s.name.charAt(0))}</span>${esc(s.name.slice(1))}</div>
       <div class="ppos">${esc(pos)}</div>
       <div class="ptiles">${tiles.map(t => `<div class="ptile">${icon(t[0])}<div><b class="num">${esc(t[1])}</b><span>${esc(t[2])}</span></div></div>`).join('')}</div>
-      ${g ? `<div class="pgoal"><span>Your next aim</span>${esc(g.text)}</div>` : ''}
+      ${g ? `<div class="pgoal"><span>Your next aim</span>${esc(Sim.stepText(s, g.text))}</div>` : ''}
     </div>
     <div class="pleaf pr">
       <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
@@ -11044,7 +11058,7 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.1414';
+const BUILD = '2026.11.05.1702';
 const NOTES = [
   { v: '0.41', date: '5 November', title: 'Fair warning', items: [
     'People now age a year every season (15 days) by default, so a child grows up in about 240 days and you can play your heirs. The slow calendar ageing (a year every 60 days) is still in Settings. When an heir is grown, you can hand everything over and retire from the Family page.',
