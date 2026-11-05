@@ -2758,7 +2758,8 @@
     const spots = {
       ghfields: { x: fields[0].x, z: fields[0].z, rx: 18, rz: 13 }, ghfields2: { x: fields[1].x, z: fields[1].z, rx: 16, rz: 11 },
       shepherd: { x: pastures[0].x, z: pastures[0].z, rx: 20, rz: 14 }, cowherd: { x: pastures[1].x, z: pastures[1].z, rx: 11, rz: 9 },
-      orchard: { x: orchard.x, z: orchard.z, rx: 8, rz: 6 }, hedging: { x: -195, z: -880, rx: 14, rz: 3 }
+      orchard: { x: orchard.x, z: orchard.z, rx: 8, rz: 6 }, hedging: { x: -195, z: -880, rx: 14, rz: 3 },
+      gh_watch: { x: green.x, z: green.z, rx: 7, rz: 7 }
     };
     const plazas = [
       { id: 'green', name: 'the village green', x: green.x, z: green.z, r0: 4, r1: green.r - 2, w: 4 },
@@ -2777,7 +2778,7 @@
   LOCS.ghentry = { x: GH.entry.x + 4, z: GH.entry.z + 1, r: 8, name: 'The road into Greenhaven', town: 'greenhaven' };
   GH.biz.forEach(b0 => { const d = b0.id === 'g_estate' ? 9 : b0.id === 'g_mill' ? 6 : 3.6; LOCS['gb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * d, z: b0.z + Math.cos(b0.face) * d, r: 3.4, name: b0.name, biz: b0.id, town: 'greenhaven' }; });
   GH.biz.forEach(b => { const d = b.id === 'g_estate' ? 7 : b.id === 'g_mill' ? 5 : 1.2, f = d + (b.id === 'g_estate' ? 2 : 2.8); b.spot = { x: b.x + Math.sin(b.face) * d, z: b.z + Math.cos(b.face) * d }; b.front = { x: b.x + Math.sin(b.face) * f, z: b.z + Math.cos(b.face) * f }; BIZ_SITES.push(b); });
-  const GH_JOBS = { ghfields: ['Field hand', 'Working the wheat fields'], ghfields2: ['Field hand', 'Hoeing the barley'], shepherd: ['Shepherd', 'Minding the sheep'], cowherd: ['Cowherd', 'Minding the cattle'], orchard: ['Orchard hand', 'Tending the orchard'], hedging: ['Hedger', 'Laying the hedges'] };
+  const GH_JOBS = { gh_watch: ['Watchman', 'Keeping watch on the green'], ghfields: ['Field hand', 'Working the wheat fields'], ghfields2: ['Field hand', 'Hoeing the barley'], shepherd: ['Shepherd', 'Minding the sheep'], cowherd: ['Cowherd', 'Minding the cattle'], orchard: ['Orchard hand', 'Tending the orchard'], hedging: ['Hedger', 'Laying the hedges'] };
   Object.assign(BIZ_BASE, { dairy: 22, estate: 40 });
   /* ---------- Crownmere: the capital of Alderwyn (Stage IV) ----------
      A walled city of seven wards on the south shore of Crown Lake, beneath the mountains: Castle Hill and the
@@ -3353,9 +3354,32 @@
     if (s.day >= T.nextVote) { T.nextVote = s.day + 7; townVote(s, T); }
   }
   function townLog(s, T, text) { T.log.unshift({ day: s.day, text }); if (T.log.length > 20) T.log.length = 20; event(s, (TOWNS[T.id || 'oakbridge'] || TOWNS.oakbridge).name + ': ' + text, 'info'); }
+  /* every town keeps a watch in proportion to its size: about one for every forty people, never fewer than two,
+     and the capital a little more. They are townsfolk in a watchman's job, paid from the town chest. */
+  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch' };
+  function watchTarget(s, id) { const pop = id === 'hearthmoor' ? villagers(s).length : townFolk(s, id).length; return Math.max(2, Math.round(pop / (id === 'crownmere' ? 35 : 40))); }
+  function townWatch(s, id, T) {
+    const job = TOWN_WATCH_JOB[id]; if (!job) return;
+    const folk = townFolk(s, id), on = folk.filter(p => p.job && p.job.type === 'commons' && p.job.what === job), want = watchTarget(s, id);
+    T.watchN = on.length; T.watchWant = want;
+    // a few changes a day: the town takes on or lets go a watchman or two at a time
+    const steps = T.watchSized ? 1 : 40;
+    for (let k = 0; k < steps; k++) {
+      const n = folk.filter(p => p.job && p.job.type === 'commons' && p.job.what === job).length;
+      if (n < want) {
+        const c = folk.find(p => !p.kid && !p.retired && p.age >= 18 && p.age <= 55 && !p.held && (!p.job || (p.job.type === 'commons' && p.job.what !== job)));
+        if (!c) break; c.job = { type: 'commons', what: job }; plog(s, c, 'Took a place in the ' + (T.title === 'Harbourmaster' ? 'harbour' : 'town') + ' watch.');
+      } else if (n > want) {
+        const c = folk.filter(p => p.job && p.job.type === 'commons' && p.job.what === job).pop(); const others = Object.keys(COMMON_JOBS).filter(k => k !== job && TOWN_WATCH_JOB[id] && (LAYOUT[id] && LAYOUT[id].spots ? LAYOUT[id].spots[k] : k.startsWith(job.split('_')[0])));
+        const nj = others.find(k => k !== job && !k.endsWith('watch')) || null; c.job = nj ? { type: 'commons', what: nj } : null; plog(s, c, 'Let go from the watch: the town has more watchmen than it needs.');
+      } else break;
+    }
+    T.watchSized = true; T.watchN = folk.filter(p => p.job && p.job.type === 'commons' && p.job.what === job).length;
+  }
   function townEvening(s) { for (const id in (s.towns || {})) townEvening1(s, id, s.towns[id]); }
   function townEvening1(s, id, T) {
     T.id = id;
+    townWatch(s, id, T);
     // a full chest gets spent on walls, wells, the watch and the poor
     if (T.chest > 600 && !(T.mayor === 'player')) T.chest -= Math.round((T.chest - 600) * 0.06);
     // a hungry household sends someone out to find day work: on the quay, in the fields, wherever there is some
@@ -3857,8 +3881,8 @@
     const J = s.justice = { watch: [], cells: 2, bunks: 3, condition: 90, cases: [], prisoners: [], closed: [], secrets: [], nextCase: 1, nextSecret: 1, delegate: 'none', fear: 0, deterUntil: 0, log: [], unpaid: 0, wrongful: 0 };
     // the Village Watchman leads; one more villager stands the watch with them
     const cap = s.offices.watch && s.people[s.offices.watch];
-    const cands = guardCandidates(s).filter(p => !cap || p.id !== cap.id);
-    if (cands[0]) enlist(s, cands[0], 'market', true);
+    const cands = guardCandidates(s).filter(p => !cap || p.id !== cap.id), n = watchTarget(s, 'hearthmoor');
+    cands.slice(0, n).forEach((p, i) => enlist(s, p, ['market', 'homes', 'road'][i % 3], true));
     return J;
   }
   const isHeld = p => !!(p && p.held);
@@ -3999,6 +4023,8 @@
     const feed = J.prisoners.length; v.chest -= feed; J.condition = clamp(J.condition - 0.6 - feed * 0.4, 0, 100);
     J.today = { wages, feed };
     crimeDay(s); bribeOffers(s);
+    // an Elder who is not you keeps the watch at the size the village needs
+    if (!youJudge(s) && J.watch.length < Math.min(J.bunks, watchTarget(s, 'hearthmoor')) && v.chest > 60 && rand(s) < 0.3) { const c0 = guardCandidates(s)[0]; if (c0) { enlist(s, c0, ['market', 'homes', 'road'][J.watch.length % 3]); jlog(s, 'The Elder takes ' + c0.name + ' onto the watch.'); } }
     const cov = coverage(s), judge = youJudge(s);
     // investigations: a guard asks questions, and the truth comes out bit by bit
     for (const c of J.cases) {
@@ -5238,7 +5264,7 @@
 
   const api = {
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
