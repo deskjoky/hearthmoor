@@ -3503,7 +3503,7 @@
   const seaLoad = (s, port, g, n, dir) => { let sum = 0; for (let k = 0; k < n; k++) sum += seaPrice(s, port, g, dir * k); return Math.round(sum); };
   function seaMarketDay(s) {
     const M = setupSeaMarket(s);
-    for (const p of SEA_PORTS) for (const g in SEA_GOODS) { const T = seaTarget(p, g); M[p][g] = Math.round(M[p][g] + (T - M[p][g]) * 0.08 + (rand(s) - 0.5) * T * 0.04); }
+    for (const p of SEA_PORTS) for (const g in SEA_GOODS) { const T = seaTarget(p, g); M[p][g] = Math.round(M[p][g] + (T - M[p][g]) * 0.3 + (rand(s) - 0.5) * T * 0.04); }
   }
   // the chance the customs men are waiting when you land cargo quietly: lower at night, lower with a clerk paid to look away,
   // higher when the crowns are at odds
