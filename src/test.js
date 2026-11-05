@@ -853,8 +853,14 @@ console.log('31. Law and order: the watch, cases, cells, and the people who know
   const s = Sim.newGame(31); Sim.applyStart(s, 'elder'); s.village.chest = 400; Sim.advance(s, 1440);
   const J = s.justice, C = (...a) => Sim.cmd(s, ...a);
   check(J && J.watch.length >= 1 && J.cells === 2, 'Hearthmoor starts with a named watch and two cells');
-  let kinds = new Set(); for (let d = 0; d < 80; d++) { Sim.advance(s, 1440); J.cases.concat(J.closed).forEach(c => kinds.add(c.truth)); if (kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie'))) break; }
-  check(kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie')), 'some accusations are true and some are not (' + Array.from(kinds).join(', ') + ')');
+  // a true accusation and a false one, side by side: what investigation can turn up points each way
+  const vv = Sim.villagers(s).filter(p => !p.kid && p.status === 'here');
+  const tc = Sim.newCase(s, 'theft', { accused: vv[1].id, accuser: vv[0].id, victim: vv[0].id, value: 12, where: 'a house', truth: 'guilty', what: 'test', claim: 'test' }), fc = Sim.newCase(s, 'theft', { accused: vv[2].id, accuser: vv[0].id, victim: vv[0].id, value: 12, where: 'a house', truth: 'mistaken', what: 'test', claim: 'test' });
+  const sum = c => Sim.evidencePool(s, c).reduce((a, e) => a + e.w, 0);
+  check(sum(tc) > 0 && sum(fc) < 0, 'a true accusation has evidence for it to find (' + sum(tc) + '), a mistaken one evidence against (' + sum(fc) + ')');
+  J.cases = J.cases.filter(c => c !== tc && c !== fc);
+  let kinds = new Set(); for (let d = 0; d < 40; d++) { Sim.advance(s, 1440); J.cases.concat(J.closed).forEach(c => kinds.add(c.truth)); if (kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie'))) break; }
+  check(kinds.has('guilty'), 'crimes happen on their own in the village (' + Array.from(kinds).join(', ') + ')');
   // cells fill up
   const vil = Sim.villagers(s).filter(p => !p.kid && !p.held && p.status === 'here' && !(p.job && p.job.type === 'office'));
   const mk = p => { const c = { id: J.nextCase++, kind: 'theft', day: s.day, status: 'open', evidence: [{ text: 'x', w: 3 }], hidden: [], witnesses: [], investigating: 0, held: false, accused: p.id, accuser: vil[0].id, victim: vil[0].id, value: 8, where: 'a house', truth: 'guilty', what: 'test', claim: 'test', authority: 'Elder of Hearthmoor' }; J.cases.push(c); return c; };
@@ -1116,6 +1122,11 @@ console.log('37. Your own ship, sea trade, customs, and the Queen of Valdoria');
   check(s.valdoria.duty > d0 && s.valdoria.relation < 50, 'high Alderwyn tariffs make the Queen raise her duty, and relations cool (' + Math.round(s.valdoria.relation) + ')');
   s.valdoria.embargo = s.day + 5; at('eastwatch'); s.ship.port = 'eastwatch'; X('cargoBuy', 'wool', 10); s.ship.port = 'dawnport'; at('dawnport');
   check(!X('cargoSell', 'wool', 10).ok, 'while Dawnport is closed to Alderwyn goods, you cannot sell them openly');
+  s.valdoria.relation = 50; s.customsContact = null; s.t = 12 * 60; const day = Sim.smuggleRisk(s, 'dawnport'); s.t = 23 * 60; const night = Sim.smuggleRisk(s, 'dawnport');
+  check(day >= 0.12 && day <= 0.3 && night < day, 'landing quietly is a gamble you can weigh: about ' + Math.round(day * 100) + '% by day, ' + Math.round(night * 100) + '% at night');
+  { const g = 300, d = 0.2, ev = (1 - day) * g - day * 30 - (1 - d) * g; check(ev > -10, 'at the starting duty, smuggling a 300c cargo is close to a fair bet (' + Math.round(ev) + 'c expected against honest trade)'); }
+  at('dawnport'); s.coins = 500; let paid = null; for (let k = 0; k < 8 && !paid; k++) { s.customsContact = null; const r9 = X('customsContact'); if (r9.ok && r9.msg !== 'exposed') paid = r9; }
+  check(paid && Sim.smuggleRisk(s, 'dawnport') <= 0.04, 'a clerk paid to look away cuts the risk, for ten days');
   check(s.ledger.slice(1).every(e => !e.unexplained), 'ships, cargo, duty and crew all have lines in your books');
 }
 
@@ -1141,12 +1152,27 @@ console.log('38. Valdoria: Goldmeadow, Thornwick, Stonewatch, its roads, and tre
   // a royal marriage
   const kid = Sim.living(s).find(p => !p.kid && !p.spouse && !p.royal && p.age >= 18 && p.age < 40 && p.status === 'here'); kid.parents = [Sim.you(s).pid]; kid.home = 'you';
   V.relation = 65; const kids = Sim.yourKids(s);
-  if (kids.includes(kid)) { check(X('royalMatch', kid.id).ok && kid.spouse && s.people[kid.spouse].royal === 'valdoria' && V.wed, kid.name + ' marries into Valdoria’s royal house'); V.relation = 10; s.day = 5; Sim.valdoriaDay(s); check(V.relation >= 45, 'once the houses are joined, relations never fall below 45'); }
+  if (kids.includes(kid)) { check(X('royalMatch', kid.id).ok && kid.spouse && s.people[kid.spouse].royal === 'valdoria' && V.wed, kid.name + ' marries into Valdoria’s royal house'); const r0 = V.relation; s.day = 5; Sim.valdoriaDay(s); check(V.relation > r0 - 3 && V.wed, 'while the marriage holds, it keeps the crowns close'); const roy = s.people[kid.spouse]; roy.spouse = null; kid.spouse = null; const r1 = V.relation; s.day = 12; Sim.valdoriaDay(s); check(!V.wed && V.relation < r1 - 10, 'cast off the royal spouse and the bond breaks, and Valdoria remembers'); V.relation = 10; s.day = 19; Sim.valdoriaDay(s); check(V.relation < 25, 'with the marriage over, relations can fall as far as any'); }
   // an old save gains the towns
   const old = JSON.parse(Sim.serialize(newGameRaw(41))); old.v = 14; for (const id of ['goldmeadow', 'thornwick', 'stonewatch']) delete old.towns[id];
   for (const id in old.people) if (['goldmeadow', 'thornwick', 'stonewatch'].includes(old.people[id].town) || old.people[id].royal) delete old.people[id];
   old.houses = old.houses.filter(h => !['goldmeadow', 'thornwick', 'stonewatch'].includes(h.town)); for (const id in old.biz) if (['goldmeadow', 'thornwick', 'stonewatch'].includes(old.biz[id].town)) delete old.biz[id]; delete old.valdoria.royals;
   const up = Sim.deserialize(JSON.stringify(old)); check(up.towns.stonewatch && up.valdoria.royals && Sim.living(up).filter(p => p.town === 'thornwick').length >= 60, 'an old save gains Valdoria’s towns and its royal house');
+}
+
+console.log('39. Work in Valdoria: contracts from its towns, and their markets');
+{
+  const s = newGameRaw(42); s.ageRate = 0; const R = s.realm, V = s.valdoria;
+  let vc = null; for (let d = 0; d < 20 && !vc; d++) { Sim.advance(s, 1440); vc = (R.contracts || []).find(c => c.val && !c.taken); }
+  check(vc && ['goldmeadow', 'thornwick', 'stonewatch', 'dawnport'].includes(vc.region), 'Valdoria’s towns ask for work: ' + (vc ? vc.what : 'none'));
+  if (vc) {
+    check(Sim.cmd(s, 'takeContract', vc.n).ok, 'you take it like any other contract');
+    const L = Sim.LOCS[Sim.MARKET_AT[vc.region]]; s.player.inv[vc.good] = vc.qty; s.player.x = L.x; s.player.z = L.z; const st0 = V.standing, c0 = s.coins;
+    check(Sim.cmd(s, 'fulfil', vc.n).ok && s.coins === c0 + vc.reward && V.standing > st0, 'delivering it pays ' + vc.reward + 'c and makes your name in Valdoria');
+  }
+  const L2 = Sim.LOCS[Sim.MARKET_AT.goldmeadow]; s.player.x = L2.x; s.player.z = L2.z;
+  check(Sim.marketHere(s) === 'goldmeadow' && Sim.buyPrice(s, 'goldmeadow', 'grain') <= Sim.buyPrice(s, 'stonewatch', 'grain'), 'Goldmeadow has a market, and its grain is cheaper than the fortress’s');
+  check(s.ledger.slice(1).every(e => !e.unexplained), 'Valdorian contracts have their line in your books');
 }
 
 }
