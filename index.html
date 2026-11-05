@@ -391,6 +391,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .tome-page::before { content: ""; position: absolute; inset: 8px; border: 1px solid rgba(140,46,33,.35); border-radius: 2px 6px 6px 2px; pointer-events: none; }
 .crest { display: block; width: 64px; height: 64px; margin: 0 auto 6px; }
 /* the title's coin: the crown of Alderwyn and the oak of Hearthmoor, turning slowly in the light */
+.tbuild { margin-top: 6px; font-size: 12px; opacity: .7; letter-spacing: .04em; text-align: center; }
 .tcoin { width: 88px; height: 88px; margin: 0 auto 8px; perspective: 500px; }
 .tcoin .spin { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; animation: tcoinSpin 7s linear infinite; }
 .tcoin .face, .tcoin .rim { position: absolute; inset: 0; border-radius: 50%; }
@@ -989,7 +990,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare' };
+  const FLOW_LABEL = { customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare' };
   function closeDay(s) {
     const st = s.stats;
     if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
@@ -2155,7 +2156,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       }
     }
   }
-  const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour' };
+  const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour', dawnport: 'dpharbour', goldmeadow: 'gmgreen', thornwick: 'twyard', stonewatch: 'swparade' };
   function marketHere(s) { setupGoods(s); for (const t in MARKET_AT) { const L = LOCS[MARKET_AT[t]]; if (L && dist(s.player, L) < L.r + (t === 'hearthmoor' ? 0 : 4)) return t; } return null; }
   // the day's demand for a trade in a town, and how much each seller can make
   function sellersOf(s, t, trade) {
@@ -4035,13 +4036,21 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   };
   const SEA_PORTS = ['eastwatch', 'dawnport'];
   const SHIP_PRICE = 800, SHIP_HOLD = 80, SHIP_UPKEEP = 3, SHIP_CREW = 6;
-  const seaTarget = (port, g) => SEA_GOODS[g].made === port ? 300 : 60;
+  const seaTarget = (port, g) => SEA_GOODS[g].made === port ? 450 : 180;
   function setupSeaMarket(s) { if (s.seaMarket) return s.seaMarket; s.seaMarket = {}; for (const p of SEA_PORTS) { s.seaMarket[p] = {}; for (const g in SEA_GOODS) s.seaMarket[p][g] = seaTarget(p, g); } return s.seaMarket; }
-  function seaPrice(s, port, g, shift) { const M = setupSeaMarket(s), G = SEA_GOODS[g], st = Math.max(4, M[port][g] + (shift || 0)), mult = G.made === port ? 0.8 : 1.35; return G.base * mult * clamp(Math.pow(seaTarget(port, g) / st, 0.6), 0.4, 3); }
+  function seaPrice(s, port, g, shift) { const M = setupSeaMarket(s), G = SEA_GOODS[g], st = Math.max(4, M[port][g] + (shift || 0)), mult = G.made === port ? 0.85 : 1.3; return G.base * mult * clamp(Math.pow(seaTarget(port, g) / st, 0.6), 0.4, 3); }
   const seaLoad = (s, port, g, n, dir) => { let sum = 0; for (let k = 0; k < n; k++) sum += seaPrice(s, port, g, dir * k); return Math.round(sum); };
   function seaMarketDay(s) {
     const M = setupSeaMarket(s);
-    for (const p of SEA_PORTS) for (const g in SEA_GOODS) { const T = seaTarget(p, g); M[p][g] = Math.round(M[p][g] + (T - M[p][g]) * 0.08 + (rand(s) - 0.5) * T * 0.04); }
+    for (const p of SEA_PORTS) for (const g in SEA_GOODS) { const T = seaTarget(p, g); M[p][g] = Math.round(M[p][g] + (T - M[p][g]) * 0.3 + (rand(s) - 0.5) * T * 0.04); }
+  }
+  // the chance the customs men are waiting when you land cargo quietly: lower at night, lower with a clerk paid to look away,
+  // higher when the crowns are at odds
+  function smuggleRisk(s, port) {
+    const V = s.valdoria, h = hourOf(s), night = h >= 21 || h < 5, contact = s.customsContact && s.customsContact.port === port && s.day < s.customsContact.until;
+    let r = port === 'dawnport' ? 0.15 + (V && V.relation < 40 ? 0.1 : 0) : 0.12;
+    if (night) r -= 0.05; if (contact) r = Math.min(r, 0.04);
+    return Math.max(0.02, Math.round(r * 100) / 100);
   }
   // the tax each crown takes when goods from the other land are sold in its port: Valdoria's duty at Dawnport, Alderwyn's tariff at Eastwatch
   function landingTax(s, port, g) {
@@ -4066,18 +4075,32 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   // treaties and marriages between the crowns: only the ruler of Alderwyn can make them
   const TREATY = { trade: { name: 'a trade pact', need: 55, duty: 1.05 }, alliance: { name: 'an alliance', need: 70, duty: 1.0 } };
+  // the towns of Valdoria ask for what they lack: timber and iron on the plains, bread in the forest and the fortress,
+  // Thornwick timber for Dawnport's shipwrights
+  const VAL_NEEDS = { goldmeadow: [['wood', 'the Reeve of Goldmeadow', 'for new barns'], ['ore', 'the Reeve of Goldmeadow', 'for ploughshares']], thornwick: [['grain', 'the Warden of Thornwick', 'to feed the woodcutters']], stonewatch: [['grain', 'the Castellan of Stonewatch', 'for the garrison'], ['wood', 'the Castellan of Stonewatch', 'for the garrison’s fires']], dawnport: [['wood', 'the Dawnport shipwrights', 'from Thornwick, for the Queen’s ships']] };
+  function valContractDay(s) {
+    const R = s.realm; if (!R || !s.valdoria) return; R.contracts = R.contracts || [];
+    if (R.contracts.filter(c => c.val && !c.taken).length >= 2 || rand(s) > 0.4) return;
+    const ids = Object.keys(VAL_NEEDS), id = ids[Math.floor(rand(s) * ids.length)], opts = VAL_NEEDS[id], [g, who, why] = opts[Math.floor(rand(s) * opts.length)];
+    const n = 10 + Math.floor(rand(s) * 3) * 5, n0 = R.contractN = (R.contractN || 0) + 1;
+    R.contracts.push({ n: n0, val: true, kind: 'supply', region: id, good: g, qty: n, reward: Math.round(n * goodsPrice(s, id, g) * 1.7), who, what: 'deliver ' + n + ' ' + (g === 'wood' ? 'timber' : g) + ' to ' + TOWNS[id].name + ' ' + why, until: s.day + 7, day: s.day });
+  }
   function valLog(s, text, kind) { const V = s.valdoria; if (!V) return; V.log.unshift({ day: s.day, text }); if (V.log.length > 20) V.log.length = 20; event(s, 'From Valdoria: ' + text, kind || 'info'); }
   // the Queen of Valdoria rules for her own people: she answers Alderwyn's tariffs with her own duty, closes the port when
   // relations sour, and now and then a decree or a bad season changes what Dawnport will pay
   function valdoriaDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
+    valContractDay(s);
     // a treaty binds both crowns: raising Alderwyn's tariff past the pact breaks it
     if (V.treaty && R && R.tariff > 1.1) { valLog(s, 'Alderwyn has raised its tariff in breach of ' + TREATY[V.treaty.kind].name + '. The Queen tears it up.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); }
     if (s.day % 7 !== 5) return;
     const tariff = R ? R.tariff : 1;
     if (V.treaty) V.relation = clamp(V.relation + (V.treaty.kind === 'alliance' ? 3 : 1.5), 0, 100);
-    if (V.wed) V.relation = Math.max(V.relation, 45);
+    // a royal marriage keeps the crowns close while it lasts: if the royal spouse is gone, wronged or cast off, the bond breaks
+    if (V.wed) { const r = s.people[V.wed.royal], spouse = V.wed.to === 'you' ? you(s).pid : V.wed.to;
+      if (!r || r.status !== 'here' || r.spouse !== spouse) { valLog(s, 'The marriage that joined the royal houses is over. Valdoria remembers how it ended.', 'bad'); V.relation = clamp(V.relation - (r && r.status === 'here' ? 20 : 5), 0, 100); V.wed = null; }
+      else V.relation = clamp(V.relation + 2, 0, 100); }
     V.relation = clamp(V.relation + (1.1 - tariff) * 12 + (rand(s) - 0.5) * 4, 0, 100);
     const want = V.treaty ? TREATY[V.treaty.kind].duty : clamp(1.1 + Math.max(0, tariff - 1) * 0.8 + (V.relation < 40 ? 0.15 : 0) - (V.relation > 70 ? 0.05 : 0), 1.05, 1.8);
     if (Math.abs(want - V.duty) >= 0.05) { const old = V.duty; V.duty = Math.round((V.duty + Math.sign(want - V.duty) * 0.05) * 100) / 100; valLog(s, 'Queen Ximena ' + (V.duty > old ? 'raises' : 'lowers') + ' the duty on goods from Alderwyn to ' + Math.round((V.duty - 1) * 100) + '%' + (V.duty > old && tariff > 1 ? ', answering Alderwyn’s tariffs.' : '.'), V.duty > old ? 'bad' : 'good'); }
@@ -4516,12 +4539,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     for (const c of R.contracts) {
       if (c.taken && c.kind === 'clear' && s.bandits && (s.bandits || {})[c.region] < 20) completeContract(s, c);
       else if (s.day > c.until) {
-        if (c.taken) { const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) - 10, -100, 100); realmLog(s, 'You failed to ' + c.what + ' in time. ' + (q ? q.name + ' remembers.' : ''), 'bad'); s.rec.contractsMissed = (s.rec.contractsMissed || 0) + 1; }
+        if (c.taken && c.val) { if (s.valdoria) s.valdoria.standing = clamp(s.valdoria.standing - 3, 0, 100); valLog(s, 'You failed to ' + c.what + ' in time. ' + c.who.charAt(0).toUpperCase() + c.who.slice(1) + ' will not forget it.', 'bad'); }
+        else if (c.taken) { const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) - 10, -100, 100); realmLog(s, 'You failed to ' + c.what + ' in time. ' + (q ? q.name + ' remembers.' : ''), 'bad'); s.rec.contractsMissed = (s.rec.contractsMissed || 0) + 1; }
         c.done = true;
       }
     }
     R.contracts = R.contracts.filter(c => !c.done);
-    if (R.contracts.filter(c => !c.taken).length < 3 && rand(s) < 0.6) {
+    if (R.contracts.filter(c => !c.taken && !c.val).length < 3 && rand(s) < 0.6) {
       const short = (s.shocks || []).filter(x => !x.glut && s.day - x.day <= 10 && R.regions[x.town]).slice(-1)[0], useShort = short && rand(s) < 0.6;
       const ids = Object.keys(R.regions), id = useShort ? short.town : ids[Math.floor(rand(s) * ids.length)], who = regionLord(s, id) === 'player' ? (TOWNS[id] ? TOWNS[id].name + ' council' : 'the village') : lordName(s, id);
       const k = rand(s), n0 = R.contractN = (R.contractN || 0) + 1;
@@ -4534,6 +4558,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function completeContract(s, c) {
     const R = s.realm; c.done = true; earn(s, c.reward); s.stats.contract += c.reward; R.contractsByKind = R.contractsByKind || {}; R.contractsByKind[c.kind] = (R.contractsByKind[c.kind] || 0) + 1;
+    if (c.val) {
+      // work done for Valdoria's towns makes your name there, and a little goodwill between the crowns
+      const V = s.valdoria; if (V) { V.standing = clamp(V.standing + 4, 0, 100); V.relation = clamp(V.relation + 1, 0, 100); }
+      for (const p of living(s)) if (townOf(p) === c.region && !p.kid && rand(s) < 0.35) p.opinion = clamp((p.opinion || 0) + 4, -100, 100);
+      s.rec.contractsDone = (s.rec.contractsDone || 0) + 1;
+      valLog(s, 'You ' + c.what.replace(/^deliver/, 'delivered') + ', as ' + c.who + ' asked. ' + c.reward + 'c' + (c.region === 'stonewatch' ? ', and the Castellan speaks well of you to the Queen\u2019s captains.' : ', and your name is better known in Valdoria.'), 'good');
+      return;
+    }
     const l = regionLord(s, c.region), q = l && l !== 'player' && s.people[l]; if (q) q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
     for (const p of living(s)) if (townOf(p) === c.region && !p.kid && rand(s) < 0.35) p.opinion = clamp((p.opinion || 0) + 4, -100, 100);
     if (s.towns && s.towns[c.region]) s.towns[c.region].approval = clamp(s.towns[c.region].approval + 2, 0, 100);
@@ -5038,6 +5070,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   // what follows a guilty verdict in the newer crimes: cargo seized, the organiser charged, a thieving manager let go
   function guiltyExtras(s, c, A, pen, by, J) {
+    if (A && A.royal && s.valdoria) { s.valdoria.relation = clamp(s.valdoria.relation - 15, 0, 100); valLog(s, 'A prince of Valdoria\u2019s house has been found guilty in an Alderwyn court. The Queen takes it ill.', 'bad'); }
     if (c.kind === 'smuggling' && pen.seize) {
       const v = Math.round(c.value * 1.5);
       if (pen.seize === 'you') { earn(s, v); s.stats.seized = (s.stats.seized || 0) + v; secret(s, 'seized', 'you kept ' + v + 'c of seized ' + (c.good || 'cargo') + ' instead of handing it to ' + J.name, [c.accused, c.guard].concat(s.gov ? s.gov.council.slice(0, 1) : []), 1 + Math.floor(v / 40), J.id, c.id); c.outcome = c.outcome.replace(/\.$/, ', and the cargo is seized (' + v + 'c, to you).'); }
@@ -6307,7 +6340,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         s.ship.hold[a] = have - n;
         if (c) {
           // smuggling: a fair chance the customs men are waiting
-          const caught = rand(s) < (port === 'dawnport' ? 0.3 + (V && V.relation < 40 ? 0.15 : 0) : 0.25);
+          const caught = rand(s) < smuggleRisk(s, port);
           if (caught) { const fine = 30; spend(s, Math.min(fine, Math.max(0, s.coins))); if (port === 'dawnport' && V) { V.standing = clamp(V.standing - 12, 0, 100); V.relation = clamp(V.relation - 2, 0, 100); } valLog(s, 'The customs men seize ' + n + ' ' + a + ' landed without paying the duty, and fine you ' + fine + 'c.', 'bad'); return ok('caught'); }
         }
         earn(s, gross - tax); s.seaMarket[port][a] += n;
@@ -6330,6 +6363,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         s.rec.sailed = (s.rec.sailed || 0) + 1; if (a === 'dawnport' && !s.rec.landedValdoria) s.rec.landedValdoria = s.day;
         event(s, s.ship.name + ' brings you to ' + P1.name + ' in ' + mins + ' minutes.' + lost, lost ? 'bad' : 'info');
         return { ok: true, mins };
+      }
+      case 'customsContact': {
+        // pay a customs clerk to look the other way for ten days; it works, and it is a secret with someone else in it
+        const port = portHere(s); if (!SEA_PORTS.includes(port)) return fail('Find a customs clerk at a port.');
+        if (s.customsContact && s.customsContact.port === port && s.day < s.customsContact.until) return fail('Your clerk is already paid until day ' + s.customsContact.until + '.');
+        if (s.coins < 40) return fail('The clerk wants 40c.'); spend(s, 40); s.customsContact = { port, until: s.day + 10 };
+        if (rand(s) < 0.15) { const V = s.valdoria; if (port === 'dawnport' && V) V.standing = clamp(V.standing - 15, 0, 100); valLog(s, 'The clerk you paid at ' + PORTS[port].name + ' is caught taking bribes, and names you.', 'bad'); s.customsContact = null; return ok('exposed'); }
+        return ok();
       }
       case 'charter': {
         // the Consul grants a merchant's charter to a foreigner who trades honestly: half duty on everything you land
@@ -6659,7 +6700,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   const api = {
     GM, TW, SW, VAL_JOBS, kingdomOf, TREATY, setupRoyals,
-    SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
+    smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
@@ -6753,6 +6794,9 @@ function saveNow() {
 }
 const encodeSave = s => btoa(unescape(encodeURIComponent(Sim.serialize(s))));
 const decodeSave = t => Sim.deserialize(decodeURIComponent(escape(atob(t.trim()))));
+// a save may arrive as a code (base64) or as the raw save itself (JSON)
+const loadText = t => { const x = t.trim(); return x.startsWith('{') ? Sim.deserialize(x) : decodeSave(x); };
+document.addEventListener('change', e => { if (e.target && e.target.id === 'importFile' && e.target.files && e.target.files[0]) { const f = e.target.files[0], rd = new FileReader(); rd.onload = () => { try { const g = loadText(String(rd.result)); enterGame(g, UI.newSlot || 1); } catch (err) { UI.importMsg = 'That file did not load: ' + err.message + '.'; renderTitle(); } }; rd.readAsText(f); } });
 const PACE = { brisk: 1.5, normal: 1, relaxed: 0.75 };
 
 /* ================= three.js world ================= */
@@ -9953,9 +9997,11 @@ function shipPanel(s, id) {
   let h = `<p><b>${esc(S.name)}</b> · your ship · hold ${used} of ${S.cap}${used ? ': ' + Object.keys(S.hold).filter(g => S.hold[g]).map(g => S.hold[g] + ' ' + g).join(', ') : ', empty'}</p>`;
   if (market) {
     h += `<table class="trades"><thead><tr><th>Cargo</th><th>Buy 10</th><th>Sell 10</th><th></th></tr></thead><tbody>${Object.keys(Sim.SEA_GOODS).map(g => { const buy10 = Sim.seaLoad(s, id, g, 10, -1), sell10 = Sim.seaLoad(s, id, g, 10, 1), tax = Sim.landingTax(s, id, g), have = S.hold[g] || 0, made = Sim.SEA_GOODS[g].made === id;
-      return `<tr><td>${g.charAt(0).toUpperCase() + g.slice(1)}${made ? ' <small>made here</small>' : ''}</td><td class="num">${buy10}c</td><td class="num">${sell10}c${tax ? ' <small>less ' + Math.round(tax * 100) + '% duty</small>' : ''}</td><td><div class="acts">${B_('Buy 10', ['cargoBuy', g, 10], 'alt', room < 10 || s.coins < buy10)}${have ? B_('Sell ' + have, ['cargoSell', g, have], 'alt', id === 'dawnport' && !made && V && V.embargo) : ''}${have && tax ? B_('Land it quietly', ['cargoSell', g, have, true], 'warn') : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
+      return `<tr><td>${g.charAt(0).toUpperCase() + g.slice(1)}${made ? ' <small>made here</small>' : ''}</td><td class="num">${buy10}c</td><td class="num">${sell10}c${tax ? ' <small>less ' + Math.round(tax * 100) + '% duty</small>' : ''}</td><td><div class="acts">${B_('Buy 10', ['cargoBuy', g, 10], 'alt', room < 10 || s.coins < buy10)}${have ? B_('Sell ' + have, ['cargoSell', g, have], 'alt', id === 'dawnport' && !made && V && V.embargo) : ''}${have && tax ? B_('Land it quietly<small>about ' + Math.round(Sim.smuggleRisk(s, id) * 100) + '% risk</small>', ['cargoSell', g, have, true], 'warn') : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
     if (id === 'dawnport' && V && V.embargo) h += `<p class="why">Dawnport is closed to Alderwyn\u2019s goods until day ${V.embargo}.</p>`;
-    h += `<p class="why">Prices move as you buy and sell, and recover over the following days. ${id === 'dawnport' ? 'Alderwyn goods sold here pay the Queen\u2019s duty' + (V && V.charter ? ', halved by your charter.' : '; a merchant\u2019s charter from the Consul halves it.') : 'Valdorian goods sold here pay Alderwyn\u2019s tariff to the crown.'} Landing cargo quietly skips the duty, if the customs men are not waiting.</p>`;
+    h += `<p class="why">Prices move as you buy and sell, and recover over the following days. ${id === 'dawnport' ? 'Alderwyn goods sold here pay the Queen\u2019s duty' + (V && V.charter ? ', halved by your charter.' : '; a merchant\u2019s charter from the Consul halves it.') : 'Valdorian goods sold here pay Alderwyn\u2019s tariff to the crown.'} Landing cargo quietly skips the duty, if the customs men are not waiting: they take the cargo and fine you 30c. The risk is lower at night (9pm to 5am) and much lower with a clerk paid to look away.</p>`;
+    const ct = s.customsContact && s.customsContact.port === id && s.day < s.customsContact.until;
+    h += ct ? `<p class="why">A customs clerk here looks the other way for you until day ${s.customsContact.until}.</p>` : `<div class="acts">${B_('Pay a customs clerk to look away · 40c<small>ten days; he may be caught and name you</small>', ['customsContact'], 'warn', s.coins < 40)}</div>`;
   }
   h += `<div class="acts">${Object.keys(Sim.PORTS).filter(k => k !== id).map(k => B_('Sail your ship to ' + esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, '')) + (rough ? ' · in the storm' : '') + '<small>' + Sim.SHIP_CREW + 'c for the crew</small>', ['sailShip', k, rough], rough ? 'warn' : 'alt', s.coins < Sim.SHIP_CREW)).join('')}</div>${rough ? '<p class="why">A storm is up: sail anyway and you may lose a third of the cargo.</p>' : ''}`;
   return h;
@@ -10776,7 +10822,7 @@ function renderTitle() {
   let left, right;
   if (UI.titleView === 'main') {
     const last = meta.lastSlot && slotInfo(meta.lastSlot);
-    left = `${COIN_LOGO}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tfoot">Chapters One and Two<br>A Place in the Village</div><button type="button" class="tnews" data-c='["ui","notes"]'>What\u2019s new in version ${NOTES[0].v}</button>`;
+    left = `${COIN_LOGO}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tfoot">Chapters One and Two<br>A Place in the Village</div><button type="button" class="tnews" data-c='["ui","notes"]'>What\u2019s new in version ${NOTES[0].v}</button><div class="tbuild">Build ${esc(BUILD)}</div>`;
     right = `<div class="tmenu">
       ${last ? `<button type="button" class="tbtn primary" data-c='["ui","continue"]'>Continue<small>${slotLine(last)}</small></button>` : ''}
       <button type="button" class="tbtn ${last ? '' : 'primary'}" data-c='["ui","tview","new"]'>New game<small>Arrive with 5 coins and nothing else</small></button>
@@ -10801,7 +10847,8 @@ function renderTitle() {
       <div class="tmenu" style="margin-top:8px"><button type="button" class="tbtn primary" data-c='["ui","begin"]'>Begin</button></div>`;
     }
   } else if (UI.titleView === 'load') {
-    left = `${back}<h3>Load game</h3><label for="importBox">Or paste a save code</label><textarea id="importBox" placeholder="Paste a save code here"></textarea>
+    if (UI.newSlot == null) { const e0 = [1, 2, 3].find(n => !slotInfo(n)); UI.newSlot = e0 || 3; }   // imports go into an empty slot when there is one
+    left = `${back}<h3>Load game</h3><label for="importFile">Load a save file (.txt or .json)</label><input type="file" id="importFile" accept=".txt,.json,text/plain,application/json"><label for="importBox">Or paste a save code</label><textarea id="importBox" placeholder="Paste a save code here"></textarea>
       <div class="tmenu" style="margin-top:6px"><button type="button" class="tbtn" data-c='["ui","import"]'>Load this code<small>into slot ${UI.newSlot || 1}${slotInfo(UI.newSlot || 1) ? ', replacing it' : ''}</small></button></div>${UI.importMsg ? `<p>${esc(UI.importMsg)}</p>` : ''}`;
     right = `<div class="tmenu">${[1, 2, 3].map(n => { const info = slotInfo(n); return `<div class="slot"><div><b>Slot ${n}</b><span>${slotLine(info)}</span></div>${info ? B_('Load', ['ui', 'load', n]) + (UI.confirm === 'del' + n ? B_('Erase', ['ui', 'erase', n], 'warn') : B_('&times;', ['ui', 'confirm', 'del' + n], 'alt')) : ''}</div>`; }).join('')}</div>
       ${UI.confirm && UI.confirm.startsWith('del') ? `<p class="warnline">Tap Erase to delete slot ${UI.confirm.slice(3)} for good.</p>` : ''}`;
@@ -10913,7 +10960,7 @@ function uiCmd(k, v) {
   if (k === 'erase') { store.del(KEY(v)); store.del(BAK(v)); store.del(KEY(v) + '.when'); if (meta.lastSlot === v) { meta.lastSlot = null; saveMeta(); } UI.confirm = null; renderTitle(); return; }
   if (k === 'import') {
     const t = ($('importBox') || {}).value || '';
-    try { const g = decodeSave(t); enterGame(g, UI.newSlot || 1); }
+    try { const g = loadText(t); enterGame(g, UI.newSlot || 1); }
     catch (e) { UI.importMsg = 'That code did not load: ' + e.message + '. Check that you pasted all of it.'; renderTitle(); }
   }
 }
@@ -11687,8 +11734,15 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.05.2324';
+const BUILD = '2026.11.05.2355';
 const NOTES = [
+  { v: '0.46', date: '5 November', title: 'Fair bets, and work in Valdoria', items: [
+    'Smuggling is a gamble you can weigh: the customs men are waiting about 15% of the time at Dawnport by day (25% when the crowns are at odds), 12% at Eastwatch, 5% less at night, and only 4% with a customs clerk paid 40c to look away for ten days (he may be caught and name you). The risk shows on the button.',
+    'A royal marriage keeps the crowns close while it lasts (relations rise each week), but no longer protects them for ever: if the royal spouse is cast off or gone, the bond breaks and Valdoria remembers. Convicting a royal in an Alderwyn court angers the Queen.',
+    'Work in Valdoria: Goldmeadow, Thornwick, Stonewatch and Dawnport post supply contracts (timber and ore for Goldmeadow, bread for the woodcutters and the garrison, Thornwick timber for the Queen’s ships). They pay coin and make your name in Valdoria. Each of Valdoria’s towns now has a market where you can buy and sell grain, wood and ore.',
+    'Sea markets are deeper and recover faster, so a ship can make a steady living rather than emptying a market in one trip.',
+    'Load a save from a file: the Load screen takes a .txt save code or a .json save, and imports go into an empty slot when there is one. The title screen shows the build number.',
+  ] },
   { v: '0.45', date: '5 November', title: 'All of Valdoria, and the coin of the realm', items: [
     'The coin of Alderwyn: the crown on one face and Hearthmoor’s oak on the other. It turns slowly on the title screen, sits beside your purse on the top bar, and flips over whenever money comes in.',
     'Three more Valdorian towns, each with its own people, businesses, market, watch and head. Goldmeadow (about 85), on the plains south-east of Dawnport: wheat fields, horse paddocks and a windmill, under a Reeve. Thornwick (about 65), a timber town at the forest’s edge to the east, with a saw pit and charcoal clamps, under a Warden. Stonewatch (about 210), the walled fortress guarding the northern pass, with its garrison, armourers, quarry and the Castellan’s keep.',

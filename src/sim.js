@@ -3497,9 +3497,9 @@
   };
   const SEA_PORTS = ['eastwatch', 'dawnport'];
   const SHIP_PRICE = 800, SHIP_HOLD = 80, SHIP_UPKEEP = 3, SHIP_CREW = 6;
-  const seaTarget = (port, g) => SEA_GOODS[g].made === port ? 300 : 60;
+  const seaTarget = (port, g) => SEA_GOODS[g].made === port ? 450 : 180;
   function setupSeaMarket(s) { if (s.seaMarket) return s.seaMarket; s.seaMarket = {}; for (const p of SEA_PORTS) { s.seaMarket[p] = {}; for (const g in SEA_GOODS) s.seaMarket[p][g] = seaTarget(p, g); } return s.seaMarket; }
-  function seaPrice(s, port, g, shift) { const M = setupSeaMarket(s), G = SEA_GOODS[g], st = Math.max(4, M[port][g] + (shift || 0)), mult = G.made === port ? 0.8 : 1.35; return G.base * mult * clamp(Math.pow(seaTarget(port, g) / st, 0.6), 0.4, 3); }
+  function seaPrice(s, port, g, shift) { const M = setupSeaMarket(s), G = SEA_GOODS[g], st = Math.max(4, M[port][g] + (shift || 0)), mult = G.made === port ? 0.85 : 1.3; return G.base * mult * clamp(Math.pow(seaTarget(port, g) / st, 0.6), 0.4, 3); }
   const seaLoad = (s, port, g, n, dir) => { let sum = 0; for (let k = 0; k < n; k++) sum += seaPrice(s, port, g, dir * k); return Math.round(sum); };
   function seaMarketDay(s) {
     const M = setupSeaMarket(s);
