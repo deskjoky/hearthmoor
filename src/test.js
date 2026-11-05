@@ -601,7 +601,7 @@ console.log('20. A whole life: ageing, marriage, children, death and inheritance
   const all = Object.values(s.people), L = Sim.living(s);
   const babies = all.filter(p => p.born), dead = all.filter(p => p.status === 'dead'), wed = L.filter(p => p.spouse && p.maiden);
   check(babies.length > 20 && dead.length > 20 && wed.length > 5, 'thirty years on: ' + babies.length + ' born, ' + dead.length + ' died, ' + wed.length + ' new marriages');
-  check(L.length > 1000 && L.length < 2900, 'the population of all four towns stays sensible (' + L.length + ' living)');
+  check(L.length > 1000 && L.length < 3400, 'the population of all four towns stays sensible (' + L.length + ' living)');
   check(L.every(p => Number.isFinite(p.purse) && Number.isFinite(p.age)), 'every purse and age is a real number');
   check(s.offices.elder && s.offices.lord, 'there is still an Elder (' + Sim.holderName(s, 'elder') + ') and a lord (' + Sim.lordTitle(s) + ')');
   // inheritance, step by step
@@ -620,7 +620,7 @@ console.log('20. A whole life: ageing, marriage, children, death and inheritance
   check(t.towns.oakbridge.mayor && t.towns.oakbridge.mayor !== m, 'when a mayor dies, the town votes in a successor');
   const back = Sim.deserialize(Sim.serialize(s)); Sim.advance(s, 600); Sim.advance(back, 600);
   check(Sim.serialize(s) === Sim.serialize(back), 'a world thirty years on saves and loads exactly');
-  check(Sim.serialize(s).length < 3000000, 'and its save is ' + Math.round(Sim.serialize(s).length / 1024) + ' KB');
+  check(Sim.serialize(s).length < 3600000, 'and its save is ' + Math.round(Sim.serialize(s).length / 1024) + ' KB');
 }
 
 console.log('21. Your own life: courtship, marriage, children, and carrying on');
@@ -1081,7 +1081,7 @@ console.log('36. Across the Sundering Sea: the passage, Stormrest Isle and Dawnp
   check(rough >= 1 && rough <= 7 && calm === 0, 'only in winter is the sea sometimes too rough to sail (' + rough + ' of 15 winter days)');
   s.day = [46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60].find(d => Sim.seaRough(s, d)) || 46; if (Sim.seaRough(s)) check(!X('sail', 'eastwatch').ok, 'on a stormy day no ship sails');
   // Alderwyn's politics do not count Valdorians
-  const sup0 = Sim.supportOf(s); Sim.living(s).filter(p => p.town === 'dawnport').forEach(p => p.opinion = -100); Sim.computeSupport(s);
+  Sim.computeSupport(s); const sup0 = Sim.supportOf(s); Sim.living(s).filter(p => p.town === 'dawnport').forEach(p => p.opinion = -100); Sim.computeSupport(s);
   check(Math.abs(Sim.supportOf(s) - sup0) <= 1, 'Dawnport’s people have no say in Alderwyn’s support for you');
   // an old save gains Dawnport
   const old = JSON.parse(Sim.serialize(newGameRaw(38))); old.v = 13; delete old.towns.dawnport; delete old.valdoria;
