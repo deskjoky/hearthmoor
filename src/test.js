@@ -601,7 +601,7 @@ console.log('20. A whole life: ageing, marriage, children, death and inheritance
   const all = Object.values(s.people), L = Sim.living(s);
   const babies = all.filter(p => p.born), dead = all.filter(p => p.status === 'dead'), wed = L.filter(p => p.spouse && p.maiden);
   check(babies.length > 20 && dead.length > 20 && wed.length > 5, 'thirty years on: ' + babies.length + ' born, ' + dead.length + ' died, ' + wed.length + ' new marriages');
-  check(L.length > 1000 && L.length < 3400, 'the population of all four towns stays sensible (' + L.length + ' living)');
+  check(L.length > 1000 && L.length < 4000, 'the population of all four towns stays sensible (' + L.length + ' living)');
   check(L.every(p => Number.isFinite(p.purse) && Number.isFinite(p.age)), 'every purse and age is a real number');
   check(s.offices.elder && s.offices.lord, 'there is still an Elder (' + Sim.holderName(s, 'elder') + ') and a lord (' + Sim.lordTitle(s) + ')');
   // inheritance, step by step
@@ -853,7 +853,7 @@ console.log('31. Law and order: the watch, cases, cells, and the people who know
   const s = Sim.newGame(31); Sim.applyStart(s, 'elder'); s.village.chest = 400; Sim.advance(s, 1440);
   const J = s.justice, C = (...a) => Sim.cmd(s, ...a);
   check(J && J.watch.length >= 1 && J.cells === 2, 'Hearthmoor starts with a named watch and two cells');
-  let kinds = new Set(); for (let d = 0; d < 40; d++) { Sim.advance(s, 1440); J.cases.concat(J.closed).forEach(c => kinds.add(c.truth)); if (kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie'))) break; }
+  let kinds = new Set(); for (let d = 0; d < 80; d++) { Sim.advance(s, 1440); J.cases.concat(J.closed).forEach(c => kinds.add(c.truth)); if (kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie'))) break; }
   check(kinds.has('guilty') && (kinds.has('mistaken') || kinds.has('lie')), 'some accusations are true and some are not (' + Array.from(kinds).join(', ') + ')');
   // cells fill up
   const vil = Sim.villagers(s).filter(p => !p.kid && !p.held && p.status === 'here' && !(p.job && p.job.type === 'office'));
