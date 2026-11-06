@@ -1806,8 +1806,10 @@
         const h = vacancy(s, Math.max(1, income(s, p) - FOOD), townOf(p)); if (h) { moveOut(s, p, 'Left the family home.'); moveIn(s, p, h); }
       }
       // courtship and marriage
-      if (!p.kid && !p.spouse && p.age >= 18 && p.age <= 45 && rand(s) < 0.2) {
-        const sx = sexOf(p), mate = living(s).find(q => q !== p && !q.kid && !q.spouse && townOf(q) === townOf(p) && sexOf(q) !== sx && Math.abs(q.age - p.age) <= 8 && q.age >= 18 && !sameFamily(p, q) && !isHousehold(q));
+      // someone you are courting is spoken for: others leave them be while your courtship lasts
+      const courting = q => { const Y0 = s.player && you(s); return !!(Y0 && Y0.court && (Y0.court[q.id] || 0) >= 10); };
+      if (!p.kid && !p.spouse && p.age >= 18 && p.age <= 45 && !courting(p) && rand(s) < 0.2) {
+        const sx = sexOf(p), mate = living(s).find(q => q !== p && !q.kid && !q.spouse && townOf(q) === townOf(p) && sexOf(q) !== sx && Math.abs(q.age - p.age) <= 8 && q.age >= 18 && !sameFamily(p, q) && !isHousehold(q) && !courting(q));
         if (mate) marry(s, p, mate);
       }
       // children, spread out over the years
