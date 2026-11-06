@@ -6736,6 +6736,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s.v === 13) { s.v = 14; setupNewTown(s, 'dawnport'); setupValdoria(s); event(s, 'Ships now sail from Eastwatch across the Sundering Sea, by way of Stormrest Isle, to Dawnport in Valdoria. Anyone who can pay the passage may go.', 'story'); }
     if (s.v === 14) { s.v = 15; setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRoyals(s); event(s, 'The roads of Valdoria are open: from Dawnport south-east to Goldmeadow, east to Thornwick, and north to the fortress of Stonewatch. Coaches run between them.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
+    // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
+    for (const C of allCourts(s)) if (Array.isArray(C.closed)) {
+      const O = owingOf(C);
+      for (const e of O) { const k = C.closed.find(x => x.id === e.id); if (k && k.overturned) { e.fine = 0; e.work = 0; k.fineOwed = 0; k.workLeft = 0; } }
+      C.owing = O.filter(e => e.fine > 0 || e.work > 0);
+    }
     return s;
   }
 
@@ -11824,12 +11830,12 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.06.0724';
+const BUILD = '2026.11.06.1241';
 const NOTES = [
   { v: '0.48', date: '6 November', title: 'Loose ends from the review', items: [
     'Your ship\u2019s hold remembers where each load was bought. Only goods brought from another port earn a name in Valdoria; iron or wool bought on Dawnport\u2019s own quay and sold straight back earns nothing, whatever the duty.',
     'Each court keeps its own list of unfinished sentences. A fine or days of work go on being paid and served however many cases are decided after them.',
-    'A conviction that was overturned on appeal in an older save has what was left of its fine and work cancelled when the save is loaded.'
+    'A conviction that was overturned on appeal in an older save has what was left of its fine and work cancelled the moment the save is loaded.'
   ] },
   { v: '0.47', date: '6 November', title: 'Justice that does what it says', items: [
     'A pardon or a warning now frees an accused you had arrested. Before, they stayed in the cells after the hearing, still listed as held on suspicion, and filled the cells.',

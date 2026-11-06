@@ -6197,6 +6197,12 @@
     if (s.v === 13) { s.v = 14; setupNewTown(s, 'dawnport'); setupValdoria(s); event(s, 'Ships now sail from Eastwatch across the Sundering Sea, by way of Stormrest Isle, to Dawnport in Valdoria. Anyone who can pay the passage may go.', 'story'); }
     if (s.v === 14) { s.v = 15; setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRoyals(s); event(s, 'The roads of Valdoria are open: from Dawnport south-east to Goldmeadow, east to Thornwick, and north to the fortress of Stonewatch. Coaches run between them.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
+    // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
+    for (const C of allCourts(s)) if (Array.isArray(C.closed)) {
+      const O = owingOf(C);
+      for (const e of O) { const k = C.closed.find(x => x.id === e.id); if (k && k.overturned) { e.fine = 0; e.work = 0; k.fineOwed = 0; k.workLeft = 0; } }
+      C.owing = O.filter(e => e.fine > 0 || e.work > 0);
+    }
     return s;
   }
 

@@ -1240,7 +1240,9 @@ console.log('41. Where cargo was bought, sentences that keep running, and old ap
   check(!e1 || (e1.fine < e0.fine && e1.work < e0.work), 'and it goes on being paid and worked off (' + e0.fine + 'c, ' + e0.work + ' days → ' + (e1 ? e1.fine + 'c, ' + e1.work + ' days' : 'done') + ')');
   // a conviction overturned under the old rules, in a save from before the list existed
   const k2 = mk(); p.purse = 2; X('jHear', k2.id, { fine: 20, work: 2 }, 'guilty'); k2.overturned = true; k2.fineOwed = 20; k2.workLeft = 2; delete J.owing;
-  const s2 = Sim.deserialize(Sim.serialize(s)); Sim.advance(s2, 1440); const k3 = s2.justice.closed.find(c => c.id === k2.id);
+  const s2 = Sim.deserialize(Sim.serialize(s)), k4 = s2.justice.closed.find(c => c.id === k2.id);
+  check(k4 && !k4.fineOwed && !k4.workLeft && !s2.justice.owing.some(e => e.id === k2.id), 'the repair happens as the save loads, before any time passes');
+  Sim.advance(s2, 1440); const k3 = s2.justice.closed.find(c => c.id === k2.id);
   check(k3 && !k3.fineOwed && !k3.workLeft && !s2.justice.owing.some(e => e.id === k2.id), 'loading an old save cancels what was left of a conviction already overturned');
 }
 
