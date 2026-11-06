@@ -1332,7 +1332,7 @@ console.log('43. War between the crowns (v0.50)');
   check(!s.biz.d_vine.seized && !s.ship.impounded, 'what was seized is returned at the peace');
   V.relation = 5; let warAgain = false; for (let i = 0; i < 20; i++) { V.relation = 5; Sim.advance(s, 1440); if (Sim.atWar(s)) warAgain = true; }
   check(!warAgain, 'and there is no new war for weeks after');
-  check(Sim.peaceTerms(-50).pay === 700 && Sim.peaceTerms(0).pay === 0 && Sim.peaceTerms(25).pay === -250, 'losing, Alderwyn pays tribute; a stalemate is peace with nothing paid');
+  check(Sim.peaceTerms(-30).pay === 300 && Sim.peaceTerms(0).pay === 0 && Sim.peaceTerms(25).pay === -250, 'behind, Alderwyn pays tribute; a stalemate is peace with nothing paid');
 }
 {
   // the Queen goes to war when relations collapse and nothing binds the crowns; a marriage keeps the peace
@@ -1394,6 +1394,42 @@ console.log('45. Rebellion against the King of Alderwyn (v0.51)');
   const c = lord(57), Z = (...a) => Sim.cmd(c, ...a); Z('plotBegin', 'charter'); Z('plotArm', 2000); Z('plotRise'); c.realm.plot.score = 30;
   const tax0 = c.realm.taxRate; Sim.advance(c, 1440);
   check(c.realm.plot && c.realm.plot.offer && Z('rebelTerms').ok && c.realm.laws.fairCourts && c.realm.taxRate < tax0 && Sim.yourSeats(c).length >= 1 && !c.realm.plot, 'the king offers terms; accepted, they bring lower taxes, fair courts and a council seat');
+}
+
+console.log('46. Wars and risings keep their word (v0.52; from an outside review)');
+{
+  const mk = seed => { const s = newGameRaw(seed); s.ageRate = 0; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440); s.valdoria.relation = 20; s.realm.treasury = 99999; return s; };
+  // free trade is free at once, and stays free through the weekly update
+  const s = mk(58), V = s.valdoria; V.duty = 1.2; Sim.startWar(s, 'player', 'trade'); Sim.surrender(s, 'alderwyn');
+  check(V.privilege && V.duty === 1.0, 'free trade won in a war takes the duty to nothing the day of the peace');
+  s.realm.tariff = 2; let worst = 1; for (let i = 0; i < 14; i++) { Sim.advance(s, 1440); worst = Math.max(worst, V.duty); }
+  check(worst === 1.0, 'and no weekly update brings any duty back while it lasts, whatever Alderwyn’s tariff (highest seen ' + worst + ')');
+  // a truce binds the crown: breaking it is explicit and costly
+  check(!Sim.cmd(s, 'declareWar', 'tribute').ok, 'during the truce, declaring war is refused unless you choose to break it');
+  const f0 = s.realm.favour, q0 = V.favour, rb = Sim.cmd(s, 'declareWar', 'tribute', 'breakTruce');
+  check(rb.ok && Sim.atWar(s) && s.realm.favour < f0 && V.favour < q0, 'breaking the truce is possible, and costs the court’s favour and the Queen’s regard (' + Math.round(q0) + ' → ' + Math.round(V.favour) + ')');
+  // losing badly, the Queen sets the terms
+  const L = mk(59); Sim.cmd(L, 'declareWar', 'tribute'); L.valdoria.war.score = -70; for (let i = 0; i < 5; i++) { L.valdoria.war.score = -70; L.valdoria.war.since -= 1; }
+  L.valdoria.war.since = L.day - 6; const tr = L.realm.treasury;
+  check(!Sim.cmd(L, 'makePeace').ok && L.valdoria.war, 'at −70 the Queen will not take gold for peace');
+  check(Sim.cmd(L, 'makePeace', 'herTerms').ok && !L.valdoria.war && L.valdoria.tribute && L.valdoria.tribute.to === 'valdoria', 'accepting her terms imposes her aim: tribute from Alderwyn, day by day');
+}
+{
+  // rewards after a rising: seats given are not taken back
+  const w = newGameRaw(60); w.ageRate = 0; Sim.applyStart(w, 'lord'); Sim.advance(w, 1440); w.coins = 9000; const RW = w.realm, Y = (...a) => Sim.cmd(w, ...a);
+  Y('plotBegin', 'crown'); RW.kingSupport = 20; for (const x of Sim.plotTargets(w).slice(0, 4)) { w.people[x.pid].opinion = 100; RW.plot.lastRecruit = -1; Y('plotRecruit', x.pid, 'promise'); }
+  Y('plotArm', 2400); Y('plotRise'); for (let d = 0; d < 60 && RW.plot; d++) { Sim.advance(w, 1440); if (RW.plot && RW.plot.score >= 50) Y('rebelMarch'); }
+  const owed = RW.after ? RW.after.owed.slice() : [];
+  if (owed.length >= 2) { Y('rewardAlly', owed[0], 'seat'); Y('rewardAlly', owed[1], 'seat'); const seats = Object.keys(RW.council).filter(k => RW.council[k] === owed[0] || RW.council[k] === owed[1]);
+    check(seats.length === 2, 'two allies given seats hold two different seats (' + seats.join(', ') + ')'); }
+  else check(false, 'the rising was won with at least two allies owed (' + owed.length + ')');
+}
+{
+  // a charter follows the council's rules: a councillor's seat is confirmed, not doubled
+  const c = newGameRaw(61); c.ageRate = 0; Sim.applyStart(c, 'lord'); Sim.advance(c, 1440); c.coins = 5000; const R = c.realm;
+  R.council.war = 'player'; c.player.councilPath = 'war';
+  Sim.cmd(c, 'plotBegin', 'charter'); Sim.cmd(c, 'plotArm', 2000); Sim.cmd(c, 'plotRise'); R.plot.score = 30; Sim.advance(c, 1440);
+  check(Sim.cmd(c, 'rebelTerms').ok && Sim.yourSeats(c).length === 1 && R.council.war === 'player', 'a sitting Marshal who wins a charter keeps one seat, confirmed (' + Sim.yourSeats(c).join(', ') + ')');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
