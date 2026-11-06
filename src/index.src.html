@@ -4120,7 +4120,7 @@ function warBox(s, V) {
   const w = V.war, ruler = Sim.isRuler(s), R = s.realm;
   if (!w) return '';
   const T = Sim.peaceTerms(w.score), pct = Math.round((w.score + 100) / 2), days = s.day - w.since;
-  const goal = w.goal && Sim.WAR_GOALS[w.side || 'alderwyn'][w.goal], aim = goal ? (w.side === 'valdoria' ? 'Queen Ximena\u2019s aim: ' : 'Alderwyn\u2019s aim: ') + 'to ' + goal.name.charAt(0).toLowerCase() + goal.name.slice(1) + '. Won outright: ' + goal.terms.charAt(0).toLowerCase() + goal.terms.slice(1) + '.' : '';
+  const goal = w.goal && Sim.WAR_GOALS[w.side || 'alderwyn'][w.goal], aim = goal ? (w.side === 'valdoria' ? 'Queen Ximena\u2019s aim: ' : 'Alderwyn\u2019s aim: ') + 'to ' + goal.name.charAt(0).toLowerCase() + goal.name.slice(1) + '. Won outright: ' + goal.terms + '.' : '';
   const myGoal = Sim.WAR_GOALS.alderwyn[w.side === 'alderwyn' ? w.goal : 'tribute'];
   return `<div class="box" style="border-color:var(--bad,#a8322a)"><h5>At war with Valdoria</h5><p>Since day ${w.since} (${days} ${days === 1 ? 'day' : 'days'}), ${w.by === 'player' ? 'declared by Alderwyn' : 'declared by Queen Ximena'}. The war is <b>${esc(Sim.warWord(w.score))}</b>. ${esc(aim)}</p>
     <div style="display:flex;align-items:center;gap:8px;margin:6px 0"><span class="num">Valdoria</span><div class="bar" style="flex:1"><i style="width:${pct}%"></i></div><span class="num">Alderwyn</span></div>
