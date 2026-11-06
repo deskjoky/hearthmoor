@@ -3566,7 +3566,7 @@
   // dealings with Alderwyn come in the next part of the stage
   function setupValdoria(s) {
     if (!s.valdoria) s.valdoria = { name: 'Valdoria', ruler: 'Queen Ximena II', capital: 'Valdor', duty: 1.2, relation: 50, standing: 0, charter: false, embargo: 0, log: [] };
-    setupRoyals(s); setupQueen(s);
+    setupRoyals(s); setupQueen(s); setupStormrest(s);
     if (s.bandits) for (const [id, n] of Object.entries(VAL_BANDITS)) if (s.bandits[id] == null) s.bandits[id] = n;
   }
   /* ---------- the Queen of Valdoria ----------
@@ -3592,17 +3592,55 @@
      ships are taken at sea or impounded in port, your property in Valdoria is seized, Eastwatch is raided, and the treasury
      pays for every day of it. The war score runs from -100 (Valdoria winning) to 100 (Alderwyn winning); Alderwyn's levies,
      and a Marshal on the council, push it Alderwyn's way. Peace comes on terms that follow the score. */
-  const WAR = { valArmy: 160, cost: 40, capture: 0.3 };
+  const WAR = { valArmy: 160, cost: 25, capture: 0.3 };
+  // what each side fights for. The ruler names Alderwyn's goal on declaring; the Queen names hers. A war won outright
+  // (a high score and then a successful campaign) ends in surrender, and the winner's goal is imposed and lasts.
+  const WAR_GOALS = {
+    alderwyn: {
+      stormrest: { name: 'Take Stormrest Isle', campaign: 'Land on Stormrest Isle', failed: 'The landing on Stormrest Isle is beaten back with heavy losses.', terms: 'Stormrest Isle passes to Alderwyn, with its harbour dues' },
+      trade: { name: 'Win free trade at Dawnport', campaign: 'Blockade Dawnport', failed: 'The blockade of Dawnport is broken, and Alderwyn\u2019s ships scatter.', terms: 'Valdoria takes no duty on Alderwyn goods for 60 days' },
+      tribute: { name: 'Make Valdoria pay', campaign: 'Blockade Dawnport', failed: 'The blockade of Dawnport is broken, and Alderwyn\u2019s ships scatter.', terms: 'Valdoria pays Alderwyn 30c a day for 30 days' }
+    },
+    valdoria: {
+      stormrest: { name: 'Take Stormrest Isle', terms: 'Stormrest Isle passes to Valdoria' },
+      tribute: { name: 'Tribute from Eastwatch', terms: 'Alderwyn pays Valdoria 30c a day for 30 days' },
+      tariff: { name: 'Hold Alderwyn\u2019s tariff down', terms: 'Alderwyn keeps its tariff at 1.0\u00d7 for 60 days' }
+    }
+  };
+  /* ---------- Stormrest Isle: a free harbour that both crowns claim ----------
+     Its keepers answer to no crown until a war gives it to one. The holder takes its harbour dues; the islanders remember
+     how they are treated, and if their mood falls through the floor they throw the garrison out. */
+  function setupStormrest(s) { if (!s.stormrest) s.stormrest = { holder: null, since: 0, mood: 60, dues: 'light', lastWorks: -99 }; return s.stormrest; }
+  function setStormHolder(s, who) { const S = setupStormrest(s); S.holder = who; S.since = s.day; S.mood = who ? 40 : 60; S.dues = who === 'valdoria' ? 'heavy' : 'light'; }
+  function stormrestDay(s) {
+    const S = setupStormrest(s); if (!S.holder) return;
+    const heavy = S.dues === 'heavy', dues = heavy ? 25 : 10;
+    if (S.holder === 'alderwyn' && s.realm) s.realm.treasury += dues;
+    S.mood = clamp(S.mood + (heavy ? -1 : 0.6), 0, 85);
+    if (S.mood < 15) { const was = S.holder; setStormHolder(s, null); valLog(s, 'The islanders of Stormrest rise and put the ' + (was === 'alderwyn' ? 'Alderwyn' : 'Valdorian') + ' garrison on the next ship out. Stormrest is a free harbour again.', was === 'alderwyn' ? 'bad' : 'good'); }
+  }
+  // the lasting terms of a war lost or won: tribute paid day by day, privileges and caps with an end date
+  function termsDay(s) {
+    const V = s.valdoria, R = s.realm; if (!V) return;
+    if (V.tribute) { if (s.day > V.tribute.until) { valLog(s, 'The last of the tribute is paid.', 'info'); V.tribute = null; } else if (R) { R.treasury += V.tribute.to === 'alderwyn' ? V.tribute.perDay : -V.tribute.perDay; } }
+    if (V.privilege && s.day > V.privilege.until) { V.privilege = null; valLog(s, 'Alderwyn\u2019s free trade at Dawnport, won in the war, has run its term.', 'info'); }
+    if (V.privilege) V.duty = 1.0;
+    if (R && R.tariffCap) { if (s.day > R.tariffCap.until) { R.tariffCap = null; realmLog(s, 'The cap on Alderwyn\u2019s tariff, imposed by Valdoria at the peace, has run its term.', 'info'); } else if (R.tariff > R.tariffCap.max) R.tariff = R.tariffCap.max; }
+  }
   const atWar = s => !!(s.valdoria && s.valdoria.war);
   const peaceHolds = V => !!(V.wed || V.treaty);
-  function startWar(s, by) {
+  function startWar(s, by, goal) {
     const V = s.valdoria; if (!V || V.war) return;
-    V.war = { since: s.day, by, score: 0, raids: 0, taken: 0, leaveBy: s.day + 3, lastBattle: s.day };
+    const S = setupStormrest(s);
+    if (by === 'player') goal = WAR_GOALS.alderwyn[goal] && !(goal === 'stormrest' && S.holder === 'alderwyn') ? goal : 'tribute';
+    else goal = S.holder === 'alderwyn' ? 'stormrest' : ['tribute', 'tariff', 'stormrest'][Math.floor(rand(s) * 3)];
+    const side = by === 'player' ? 'alderwyn' : 'valdoria';
+    V.war = { since: s.day, by, side, goal, score: 0, raids: 0, taken: 0, leaveBy: s.day + 3, lastBattle: s.day, lastCampaign: -99 };
     V.treaty = null; V.relation = Math.min(V.relation, 8); V.embargo = 0;
     for (const b of Object.values(s.biz || {})) if (b.owner === 'player' && kingdomOf(b.town) === 'valdoria' && !b.closed) b.seized = 'war';
     const R = s.realm; if (R) R.contracts = (R.contracts || []).filter(c => !c.val || c.done);
     const mine = Object.values(s.biz || {}).filter(b => b.seized === 'war').length;
-    const text = (by === 'player' ? 'Alderwyn declares war on Valdoria.' : 'Queen Ximena declares war on Alderwyn.') + ' No ships sail between the crowns; Dawnport is closed, and Alderwyn subjects in Valdoria have three days to leave.' + (mine ? ' Your ' + (mine === 1 ? 'business' : mine + ' businesses') + ' in Valdoria ' + (mine === 1 ? 'is' : 'are') + ' seized by the Queen\u2019s officers.' : '');
+    const text = (by === 'player' ? 'Alderwyn declares war on Valdoria. Its aim: ' : 'Queen Ximena declares war on Alderwyn. Her aim: ') + 'to ' + WAR_GOALS[side][goal].name.charAt(0).toLowerCase() + WAR_GOALS[side][goal].name.slice(1) + '. No ships sail between the crowns; Dawnport is closed, and Alderwyn subjects in Valdoria have three days to leave.' + (mine ? ' Your ' + (mine === 1 ? 'business' : mine + ' businesses') + ' in Valdoria ' + (mine === 1 ? 'is' : 'are') + ' seized by the Queen\u2019s officers.' : '');
     valLog(s, text, 'bad'); if (R) realmLog(s, by === 'player' ? 'The crown goes to war with Valdoria. The treasury pays ' + WAR.cost + 'c a day for it.' : 'Valdoria is at war with Alderwyn. The levies march to the coast, at ' + WAR.cost + 'c a day to the treasury.', 'bad');
   }
   // the terms follow the war: whoever is winning is paid
@@ -3612,6 +3650,32 @@
     if (score > -15) return { pay: 0, text: 'Peace, with nothing paid on either side' };
     if (score > -40) return { pay: 300, text: 'Alderwyn pays Valdoria 300c in tribute' };
     return { pay: 700, text: 'Alderwyn pays Valdoria 700c in tribute' };
+  }
+  // a war won outright: the winner's goal is imposed, and the loser's crown pays for it in standing
+  function surrender(s, winner) {
+    const V = s.valdoria, R = s.realm, w = V.war; if (!w) return;
+    const goal = winner === w.side ? w.goal : (winner === 'alderwyn' ? 'tribute' : 'tribute'), G = WAR_GOALS[winner][goal];
+    if (goal === 'stormrest') setStormHolder(s, winner);
+    else if (goal === 'trade') V.privilege = { until: s.day + 60 };
+    else if (goal === 'tribute') V.tribute = { to: winner, perDay: 30, until: s.day + 30 };
+    else if (goal === 'tariff' && R) { R.tariffCap = { max: 1.0, until: s.day + 60 }; R.tariff = Math.min(R.tariff, 1.0); }
+    V.war = null; V.peaceUntil = s.day + 45; V.relation = winner === 'alderwyn' ? 25 : 35; V.embargo = 0;
+    for (const b of Object.values(s.biz || {})) if (b.seized === 'war') delete b.seized;
+    if (s.ship && s.ship.impounded) delete s.ship.impounded;
+    if (R) { R.favour = clamp(R.favour + (winner === 'alderwyn' ? 10 : -12), 0, 100); for (const id in s.towns) if (kingdomOf(id) === 'alderwyn') s.towns[id].approval = clamp((s.towns[id].approval || 50) + (winner === 'alderwyn' ? 6 : -4), 0, 100); }
+    if (winner === 'alderwyn') favourBy(s, -10);
+    s.rec.warsWon = (s.rec.warsWon || 0) + (winner === 'alderwyn' ? 1 : 0);
+    valLog(s, (winner === 'alderwyn' ? 'Valdoria surrenders. ' : 'Alderwyn surrenders. ') + G.terms + '. Ships sail again, and what was seized is given back.', winner === 'alderwyn' ? 'good' : 'bad');
+    if (R && winner === 'valdoria' && isRuler(s)) realmLog(s, 'The lords and the court blame the crown for the defeat.', 'bad');
+  }
+  // the decisive campaign: once the war is clearly yours, strike at the goal itself. It can fail.
+  function campaign(s, side) {
+    const V = s.valdoria, w = V.war, sc = side === 'alderwyn' ? w.score : -w.score;
+    w.lastCampaign = s.day;
+    if (rand(s) < clamp(0.35 + (sc - 50) / 80, 0.35, 0.85)) { surrender(s, side); return true; }
+    w.score = clamp(w.score + (side === 'alderwyn' ? -20 : 20), -100, 100);
+    valLog(s, side === 'alderwyn' ? WAR_GOALS.alderwyn[w.side === 'alderwyn' ? w.goal : 'tribute'].failed : 'Valdoria\u2019s great assault fails. Her ships limp home.', side === 'alderwyn' ? 'bad' : 'good');
+    return false;
   }
   function endWar(s) {
     const V = s.valdoria, R = s.realm, w = V.war; if (!w) return;
@@ -3642,7 +3706,7 @@
     // weariness: the towns tire of a long war, and the guilds of a closed sea
     if (R && (s.day - w.since) % 7 === 6) { for (const id in s.towns) if (kingdomOf(id) === 'alderwyn') s.towns[id].approval = clamp((s.towns[id].approval || 50) - 2, 0, 100); R.favour = clamp(R.favour - 1, 0, 100); }
     // Valdorian galleys raid Eastwatch, more often when the war goes their way
-    if (rand(s) < 0.06 + Math.max(0, -w.score) / 500) {
+    if (rand(s) < (0.06 + Math.max(0, -w.score) / 500) * (setupStormrest(s).holder === 'alderwyn' ? 0.5 : 1)) {
       const T = s.towns && s.towns.eastwatch; w.raids++; let what = '';
       if (T) { const took = Math.round(Math.max(0, T.chest) * 0.15); T.chest -= took; T.approval = clamp((T.approval || 50) - 5, 0, 100); what = took + 'c from the town chest'; }
       if (s.ship && s.ship.port === 'eastwatch' && !s.ship.impounded && rand(s) < 0.35) { let lostN = 0; for (const g in s.ship.hold) { const l = Math.ceil((s.ship.hold[g] || 0) / 2); s.ship.hold[g] -= l; lostN += l; } if (lostN) what += (what ? ', and ' : '') + 'half the cargo in your ship\u2019s hold'; }
@@ -3654,6 +3718,9 @@
       s.player.x = P1.x + Math.sin(P1.face) * 3; s.player.z = P1.z + Math.cos(P1.face) * 3; s.player.dest = null; s.player.action = null;
       valLog(s, 'The Queen\u2019s officers find you still in Valdoria. You are fined ' + fine + 'c and put aboard a neutral ship for Eastwatch.', 'bad');
     }
+    // the Queen strikes when the war is hers; the king strikes for you when it is Alderwyn's and the crown is not yours
+    if (w.score <= -50 && rand(s) < 0.12) { if (campaign(s, 'valdoria')) return; }
+    if (!isRuler(s) && w.score >= 50 && s.day - w.lastCampaign >= 3 && rand(s) < 0.15) { if (campaign(s, 'alderwyn')) return; }
     // when the crown is not yours, the king makes peace in his own time; the Queen offers it when the war is a stalemate
     if (!isRuler(s) && s.day - w.since >= 20 && rand(s) < 0.08) endWar(s);
     else if (isRuler(s) && s.day - w.since >= 30 && Math.abs(w.score) < 15 && !w.offered && rand(s) < 0.1) { w.offered = s.day; valLog(s, 'Queen Ximena\u2019s envoy comes to Crownmere: she will make peace with nothing paid on either side, if you will. (Realm page)', 'info'); }
@@ -3700,7 +3767,7 @@
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
     // a royal who married before v0.47 took the spouse's family name in place of their own: give it back
     for (const id of V.royals || []) { const q = s.people[id]; if (q && q.maiden && /^Infant[ae] /.test(q.maiden) && q.name !== q.maiden) q.name = q.maiden; }
-    warDay(s);
+    termsDay(s); stormrestDay(s); warDay(s);
     if (V.war) { valBanditDay(s); return; }
     valContractDay(s);
     // a treaty binds both crowns: raising Alderwyn's tariff past the pact breaks it
@@ -4057,7 +4124,7 @@
   function realmDay(s) {
     const R = s.realm; if (!R) return;
     setupFigures(s);
-    banditDay(s); contractDay(s); promiseDay(s); goodRuleDay(s); treasuryWatch(s); petitionsDay(s);
+    banditDay(s); contractDay(s); promiseDay(s); goodRuleDay(s); treasuryWatch(s); petitionsDay(s); plotDay(s); afterDay(s);
     if (s.day % 7 === 3) figuresWeek(s);
     { const m = (R.figures || []).find(f => f.kind === 'merchant'); if (m && m.ally) { const n = Object.values(s.biz).filter(b => b.owner === m.pid).length; if (n) { earn(s, n * 2); s.stats.partner = (s.stats.partner || 0) + n * 2; } } }
     // the old king's standing drifts; hard times and raids wear it down
@@ -4120,6 +4187,91 @@
     if (K && K.status === 'here') { K.retired = true; plog(s, K, 'Gave up the crown to ' + s.name + '.'); }
     R.crown = 'player'; R.rival = null; R.lowDays = 0; R.debtDays = 0; R.crowned = s.day; R.exile = null; s.rec.crowned = (s.rec.crowned || 0) + 1;
     realmLog(s, why + '. You are crowned ' + (you(s).sex === 'f' ? 'Queen' : 'King') + ' of Alderwyn in the Great Hall of the Realm. The treasury, the laws and the army are yours to command.', 'story');
+  }
+  /* ---------- rebellion: a lord, or an exile, rises against the King of Alderwyn ----------
+     Choose the cause (the crown for yourself, or a charter forced from the king). Win lords and councillors to it in secret,
+     by promises you will owe, or by fear that may turn to betrayal; buy arms. Every step risks discovery: once the king
+     knows, rise within two days or flee into exile. Risen, it is civil war: your men against the king's levies and the
+     lords still loyal. March on Crownmere when the war is yours. Win the crown and you must govern the realm you broke,
+     keep your promises, and decide what becomes of the old king's men. Lose and it is exile, with the road back still open. */
+  const REBEL = { lordMen: 50, allyMen: 45, councilMen: 25, loyalMen: 30, upkeep: 0.15 };
+  const plotOf = s => s.realm && s.realm.plot;
+  const swornMen = (s, P) => P.sworn.reduce((n, x) => n + (x.men || 0), 0);
+  const rebelMen = s => { const P = plotOf(s); if (!P) return 0; return yourLordships(s).length * REBEL.lordMen + Math.floor((P.arms || 0) / 6) + swornMen(s, P); };
+  const loyalLords = s => { const R = s.realm, P = plotOf(s), sw = new Set(P ? P.sworn.map(x => x.pid) : []); return Object.keys(R.regions).map(id => regionLord(s, id)).filter(l => l && l !== 'player' && l !== R.king && s.people[l] && s.people[l].status === 'here' && !sw.has(l)); };
+  const crownMen = s => s.realm.levies + loyalLords(s).length * REBEL.loyalMen;
+  // who might be won over: the lords of the regions and the king's councillors, if they are alive and not already sworn
+  function plotTargets(s) {
+    const R = s.realm, P = plotOf(s), sw = new Set(P ? P.sworn.map(x => x.pid) : []), out = [];
+    for (const id in R.regions) { const l = regionLord(s, id); if (l && l !== 'player' && l !== R.king && s.people[l] && s.people[l].status === 'here' && !sw.has(l) && !out.some(o => o.pid === l)) out.push({ pid: l, what: 'lord of ' + REGIONS[id], men: REBEL.allyMen + (R.regions[id].garrison || 0) * 15 }); }
+    for (const k in R.council) { const c = R.council[k]; if (c && c !== 'player' && s.people[c] && s.people[c].status === 'here' && !sw.has(c) && !out.some(o => o.pid === c)) out.push({ pid: c, what: COUNCIL[k], men: REBEL.councilMen }); }
+    return out;
+  }
+  function exileForTreason(s, why) {
+    const R = s.realm, P = plotOf(s);
+    for (const id of yourLordships(s)) { if (R.regions[id].lord === 'office') { s.offices.lord = null; replaceLord(s, 'the lord was taken for treason'); } else if (R.regions[id].lord === 'player') R.regions[id].lord = null; }
+    for (const k of yourSeats(s)) R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' when the traitor fled.' }).id;
+    if (P) for (const x of P.sworn) { const q = s.people[x.pid]; if (q) q.opinion = clamp((q.opinion || 0) - 15, -100, 100); }
+    const seized = Math.round(Math.max(0, s.coins) * 0.6); spend(s, seized);
+    R.favour = 0; R.plot = null; R.exile = { since: s.day, why, seized, allies: [], fund: 0, treason: true };
+    if (s.player.seat) { s.player.seat = null; bringFamily(s, 'Fled with ' + s.name + '.'); }
+    s.rec.rebellionsLost = (s.rec.rebellionsLost || 0) + 1;
+    realmLog(s, why + '. You are declared a traitor: stripped of your lordships and seats, ' + seized + 'c seized, and driven into exile. The road back is long, but it is open: sworn allies, a war chest, and the king\u2019s failings laid bare, or another rising.', 'bad');
+  }
+  function plotDay(s) {
+    const R = s.realm, P = plotOf(s); if (!P) return;
+    if (isRuler(s)) { R.plot = null; return; }
+    if (!P.risen) {
+      const fear = P.sworn.filter(x => x.how === 'fear').length;
+      P.exposure = clamp(P.exposure + P.sworn.length * 0.6 + fear * 1.0 - 1.2, 0, 100);
+      // a man sworn out of fear may run to the king
+      for (const x of P.sworn) if (x.how === 'fear' && !P.discovered && rand(s) < 0.015) { const q = s.people[x.pid]; P.discovered = s.day; realmLog(s, (q ? q.name : 'One of your sworn men') + ', whom you bound by fear, goes to the king. Your plot is known. Rise within two days, or flee.', 'bad'); }
+      if (!P.discovered && rand(s) < P.exposure / 300) { P.discovered = s.day; realmLog(s, 'An informer brings word of your plot to the king. Rise within two days, or flee.', 'bad'); }
+      if (P.discovered && s.day - P.discovered >= 2) exileForTreason(s, 'The king\u2019s men come for you before you rise');
+      return;
+    }
+    // civil war
+    const reb = rebelMen(s), crown = crownMen(s);
+    P.score = clamp(P.score + (reb - crown) / 100 * 2 + (55 - R.kingSupport) / 30 + (rand(s) - 0.5) * 6, -100, 100);
+    const pay = Math.round(reb * REBEL.upkeep); if (s.coins >= pay) spend(s, pay); else { spend(s, Math.max(0, s.coins)); P.arms = Math.max(0, (P.arms || 0) - 40); for (const x of P.sworn) if (rand(s) < 0.03) { x.men = Math.round(x.men * 0.6); } if (s.day % 3 === 0) realmLog(s, 'Your men go unpaid, and some slip away.', 'bad'); }
+    // when the rising goes well, loyal lords think again
+    if (P.score >= 30) for (const l of loyalLords(s)) if (rand(s) < 0.04) { const q = s.people[l]; P.sworn.push({ pid: l, how: 'turned', men: REBEL.allyMen }); realmLog(s, q.name + ' abandons the king and brings their men to your banner.', 'good'); }
+    if ((P.score >= 25 || s.day - P.rose >= 30) && !P.offer) { P.offer = s.day; realmLog(s, (P.score >= 25 ? 'The king sends heralds' : 'After a month of stalemate, the king sends heralds') + ': he will grant your charter (lower taxes, fair courts, a council seat) and a pardon, if you lay down your arms. (Realm page)', 'info'); }
+    if (P.score <= -50 && rand(s) < 0.15) { exileForTreason(s, 'The king\u2019s army breaks your rising'); return; }
+    if (s.day - (P.lastBattle || P.rose) >= 4) { P.lastBattle = s.day; realmLog(s, 'Fighting ' + ['at the fords of the Alder', 'on the Crown Road', 'below Oakbridge', 'in the hills above Greenhaven'][Math.floor(rand(s) * 4)] + '. ' + (P.score > 15 ? 'Your side has the better of it.' : P.score < -15 ? 'The king\u2019s men have the better of it.' : 'Neither side gains much.') + ' (' + reb + ' of yours against ' + crown + '.)', P.score < -15 ? 'bad' : 'info'); }
+  }
+  // the charter the king grants to end a rising, by terms or by force
+  function grantCharter(s, forced) {
+    const R = s.realm, P = plotOf(s);
+    R.taxRate = Math.max(0.5, R.taxRate - 0.25); R.laws.fairCourts = true;
+    const k = Object.keys(COUNCIL).find(x => R.council[x] !== 'player'); if (k) R.council[k] = 'player';
+    R.kingSupport = clamp(R.kingSupport - (forced ? 20 : 10), 5, 95); R.favour = 30;
+    for (const x of (P ? P.sworn : [])) { const q = s.people[x.pid]; if (q) q.opinion = clamp((q.opinion || 0) + 10, -100, 100); }
+    R.plot = null; s.rec.chartersWon = (s.rec.chartersWon || 0) + 1;
+    realmLog(s, 'The king grants your charter' + (forced ? ' with your army at his gates' : '') + ': lower taxes across the realm, fair courts, and a seat on the royal council for you' + (k ? ' as ' + COUNCIL[k] : '') + '. You and your allies are pardoned.', 'good');
+  }
+  // victory: the crown, and the debts and choices that come with it
+  function rebelCrown(s) {
+    const R = s.realm, P = plotOf(s), K = s.people[R.king], loyal = loyalLords(s);
+    crownYou(s, 'Your army enters Crownmere and ' + (K ? 'King ' + K.name.split(' ')[0] : 'the king') + ' yields the crown');
+    if (K) { K.retired = true; plog(s, K, 'Lost the crown to a rising, and went into exile.'); }
+    R.oldKing = K ? K.id : null;
+    R.after = { day: s.day, owed: P.sworn.filter(x => x.how === 'promise').map(x => x.pid), deadline: s.day + 20, loyal, settled: false };
+    for (const x of P.sworn) if (x.how === 'fear') { const q = s.people[x.pid]; if (q) q.opinion = clamp((q.opinion || 0) - 20, -100, 100); }
+    R.plot = null; s.rec.rebellionsWon = (s.rec.rebellionsWon || 0) + 1;
+    realmLog(s, 'You hold the crown you took. ' + (R.after.owed.length ? R.after.owed.length + ' who joined you on your promise expect a lordship or a council seat within twenty days. ' : '') + (loyal.length ? 'The ' + loyal.length + ' lords who stood by the old king wait to learn their fate.' : ''), 'story');
+  }
+  // the weeks after a rising won: promises fall due
+  function afterDay(s) {
+    const R = s.realm, A = R.after; if (!A || !isRuler(s)) return;
+    if (A.owed.length && s.day > A.deadline) {
+      const cheated = A.owed.map(id => s.people[id]).filter(q => q && q.status === 'here');
+      for (const q of cheated) q.opinion = clamp((q.opinion || 0) - 40, -100, 100);
+      if (cheated.length && !R.rival) { R.rival = { name: cheated[0].name, strength: 70 + cheated.length * 20, since: s.day }; }
+      realmLog(s, (cheated.length ? cheated.map(q => q.name).join(', ') + (cheated.length === 1 ? ' was' : ' were') + ' promised land and got nothing. ' + cheated[0].name + ' gathers men against you.' : 'The promises of the rising are forgotten.'), 'bad');
+      A.owed = [];
+    }
+    if (!A.owed.length && A.settled) R.after = null;
   }
   function fallFromThrone(s, why) {
     const R = s.realm;
@@ -5900,6 +6052,75 @@
         if (s.player.seat === a) { s.player.seat = null; bringFamily(s, 'Left the seat of ' + REGIONS[a] + '.'); }
         realmLog(s, 'You give ' + REGIONS[a] + ' back to the crown.', 'info'); return ok();
       }
+      case 'plotBegin': {
+        // a: 'crown' (take it yourself) | 'charter' (force the king to grant one)
+        const R = s.realm; if (!R) return fail('Not yet.'); if (isRuler(s)) return fail('You are the crown.');
+        if (R.plot) return fail('You are already plotting.'); if (a !== 'crown' && a !== 'charter') return fail('Choose your cause.');
+        if (!yourLordships(s).length && !R.exile) return fail('A rising needs a lord\u2019s lands and men behind it, or an exile\u2019s grievance. Hold a lordship first.');
+        R.plot = { cause: a, since: s.day, sworn: (R.exile ? (R.exile.allies || []) : []).map(pid => ({ pid, how: 'promise', men: REBEL.allyMen })), arms: R.exile ? (R.exile.fund || 0) : 0, exposure: 5, risen: false, score: 0, discovered: null, lastRecruit: -99 };
+        if (R.exile) { R.exile.allies = []; R.exile.fund = 0; }
+        event(s, 'You begin, very quietly, to plot ' + (a === 'crown' ? 'for the crown of Alderwyn' : 'to force a charter from the king') + '. Every man you approach is a risk.', 'story'); return ok();
+      }
+      case 'plotRecruit': {
+        // a: person, b: 'promise' (60c, and a lordship or seat owed after victory) | 'fear' (free; they may betray you)
+        const R = s.realm, P = plotOf(s); if (!P || P.risen) return fail(P ? 'You have already risen: win them on the field.' : 'You are not plotting.');
+        if (P.lastRecruit === s.day) return fail('One approach a day: more would be noticed.');
+        const T = plotTargets(s).find(x => x.pid === a), q = s.people[a]; if (!T || !q) return fail('They cannot be approached.');
+        if (b === 'promise' && s.coins < 60) return fail('Winning a lord costs 60c in gifts, and a promise.');
+        P.lastRecruit = s.day; if (b === 'promise') spend(s, 60);
+        const op = q.opinion || 0, chance = b === 'fear' ? 0.55 : clamp(0.2 + op / 100 + (60 - R.kingSupport) / 100, 0.05, 0.9);
+        if (rand(s) < chance) { P.sworn.push({ pid: a, how: b === 'fear' ? 'fear' : 'promise', men: T.men }); P.exposure = clamp(P.exposure + 4, 0, 100); if (b === 'fear') q.opinion = clamp(op - 20, -100, 100);
+          realmLog(s, q.name + (b === 'fear' ? ' gives way to what you know about them, and swears to your cause.' : ' swears to your cause, on your promise of land or a seat when you win.'), 'good'); return ok('sworn'); }
+        P.exposure = clamp(P.exposure + (b === 'fear' ? 25 : 15), 0, 100); q.opinion = clamp(op - 10, -100, 100);
+        realmLog(s, q.name + ' refuses you' + (b === 'fear' ? ', and will not forget the threat' : '') + '. Will they keep quiet?', 'bad'); return ok('refused');
+      }
+      case 'plotArm': {
+        const P = plotOf(s), n = Math.round(a); if (!P) return fail('You are not plotting.'); if (!(n > 0) || s.coins < n) return fail('You do not have ' + n + 'c.');
+        spend(s, n); P.arms = (P.arms || 0) + n; if (!P.risen) P.exposure = clamp(P.exposure + n / 50, 0, 100); return ok();
+      }
+      case 'plotAbandon': {
+        const R = s.realm, P = plotOf(s); if (!P || P.risen) return fail(P ? 'You have risen: there is no going back now.' : 'You are not plotting.');
+        if (P.discovered) return fail('The king already knows. Rise, or flee.');
+        R.plot = null; event(s, 'You let the plot go. Those you approached keep their silence, for now.', 'info'); return ok();
+      }
+      case 'plotRise': {
+        const R = s.realm, P = plotOf(s); if (!P || P.risen) return fail('You are not plotting.');
+        if (rebelMen(s) < 100) return fail('You have only ' + rebelMen(s) + ' men. Gather at least 100 before you rise.');
+        P.risen = true; P.rose = s.day; P.score = 0; P.discovered = null; R.favour = 0;
+        R.levies = Math.min(600, R.levies + 80);   // the king calls up his levies
+        realmLog(s, 'You raise your banner against the king' + (P.cause === 'crown' ? ', and claim the crown of Alderwyn' : ', and demand a charter for the realm') + '. ' + rebelMen(s) + ' men are with you; the king calls up his levies and has ' + crownMen(s) + '.', 'story'); return ok();
+      }
+      case 'rebelMarch': {
+        const R = s.realm, P = plotOf(s); if (!P || !P.risen) return fail('You have not risen.');
+        if (P.score < 50) return fail('The war is not yet yours to finish (it stands at ' + Math.round(P.score) + '; you need 50).');
+        if (s.day - (P.lastMarch || -99) < 3) return fail('Your men are still recovering from the last assault.');
+        if (s.coins < 100) return fail('A march on Crownmere costs 100c in pay and supplies.'); spend(s, 100); P.lastMarch = s.day;
+        if (rand(s) < clamp(0.35 + (P.score - 50) / 80, 0.35, 0.85)) { if (P.cause === 'crown') rebelCrown(s); else grantCharter(s, true); return ok('won'); }
+        P.score = clamp(P.score - 20, -100, 100); realmLog(s, 'Your assault on Crownmere\u2019s walls fails with heavy losses.', 'bad'); return ok('failed');
+      }
+      case 'rebelTerms': {
+        const P = plotOf(s); if (!P || !P.risen || !P.offer) return fail('The king has offered no terms.');
+        grantCharter(s, false); return ok();
+      }
+      case 'rewardAlly': {
+        // after a rising won: a: the ally, b: 'seat' (a council seat) | 'land' (a lordship taken from a lord who stood by the old king)
+        const R = s.realm, A = R.after, q = s.people[a]; if (!A || !isRuler(s) || !A.owed.includes(a) || !q) return fail('You owe them nothing.');
+        if (b === 'seat') { const k = Object.keys(COUNCIL).find(x => R.council[x] && R.council[x] !== 'player' && !A.owed.includes(R.council[x])); if (!k) return fail('No seat to give.'); const old = s.people[R.council[k]]; if (old) old.opinion = clamp((old.opinion || 0) - 30, -100, 100); R.council[k] = a; realmLog(s, q.name + ' takes the seat of ' + COUNCIL[k] + ', as you promised' + (old ? '. ' + old.name + ' is put out of it' : '') + '.', 'good'); }
+        else if (b === 'land') { const id = Object.keys(R.regions).find(x => { const l = regionLord(s, x); return l && A.loyal.includes(l) && R.regions[x].lord !== 'office' && x !== 'crownmere'; }); if (!id) return fail('No loyalist\u2019s lands are left to give.'); const old = s.people[regionLord(s, id)]; if (old) old.opinion = clamp((old.opinion || 0) - 50, -100, 100); R.regions[id].lord = a; A.loyal = A.loyal.filter(x => x !== (old && old.id)); realmLog(s, q.name + ' is made lord of ' + REGIONS[id] + ', as you promised' + (old ? '. ' + old.name + ', who stood by the old king, loses it' : '') + '.', 'good'); }
+        else return fail('A seat or land?');
+        q.opinion = clamp((q.opinion || 0) + 20, -100, 100); A.owed = A.owed.filter(x => x !== a); return ok();
+      }
+      case 'rebelSettle': {
+        // what becomes of the lords who stood by the old king. a: 'amnesty' | 'purge'
+        const R = s.realm, A = R.after; if (!A || A.settled || !isRuler(s)) return fail('There is nothing to settle.');
+        const loyal = A.loyal.map(id => s.people[id]).filter(q => q && q.status === 'here'); A.settled = true;
+        if (a === 'amnesty') { for (const q of loyal) q.opinion = clamp((q.opinion || 0) + 15, -100, 100); R.favour = clamp(R.favour + 10, 0, 100); realmLog(s, 'You pardon the lords who stood by the old king. They keep their lands, and some begin to trust you.', 'good'); return ok(); }
+        if (a === 'purge') { let took = 0; for (const id of Object.keys(R.regions)) { const l = regionLord(s, id); if (A.loyal.includes(l) && R.regions[id].lord !== 'office' && id !== 'crownmere') { R.regions[id].lord = null; took += 200; } }
+          R.treasury += took; for (const q of living(s).filter(p => p.noble && p.status === 'here')) q.opinion = clamp((q.opinion || 0) - 15, -100, 100);
+          if (loyal.length && !R.rival && rand(s) < 0.5) R.rival = { name: loyal[0].name, strength: 90, since: s.day };
+          realmLog(s, 'You strip the old king\u2019s men of their lands: ' + took + 'c to the treasury. Every noble in Alderwyn takes note.' + (R.rival ? ' ' + R.rival.name + ' flees to raise men against you.' : ''), 'bad'); return ok(); }
+        return fail('Amnesty or purge?');
+      }
       case 'claimCrown': {
         const R = s.realm; if (!R) return fail('Not yet.'); if (isRuler(s)) return fail('The crown is already yours.');
         const sup = computeSupport(s);
@@ -5917,7 +6138,7 @@
         // a: what to set, b: its value
         const R = s.realm; if (!isRuler(s)) return fail('Only the ruler can do that.');
         if (a === 'tax') R.taxRate = clamp(Math.round(b * 4) / 4, 0.5, 2);
-        else if (a === 'tariff') R.tariff = clamp(Math.round(b * 4) / 4, 0, 3);
+        else if (a === 'tariff') { if (R.tariffCap && b > R.tariffCap.max) return fail('By the terms of the peace, Alderwyn\u2019s tariff stays at ' + R.tariffCap.max + '\u00d7 until day ' + R.tariffCap.until + '.'); R.tariff = clamp(Math.round(b * 4) / 4, 0, 3); }
         else if (a === 'levies') R.levies = clamp(Math.round(b / 10) * 10, 0, 600);
         else if (a === 'law' && LAWS[b]) R.laws[b] = !R.laws[b];
         else if (a === 'draw') { const n = Math.min(Math.round(b), Math.max(0, R.treasury)); R.treasury -= n; earn(s, n); R.embezzled = (R.embezzled || 0) + n; R.favour = clamp(R.favour - n / 40, 0, 100); event(s, 'You take ' + n + 'c from the treasury for your own use. The court notices.', 'info'); }
@@ -6047,7 +6268,8 @@
         const mins = Math.round(seaDist(from, a) / (SAIL_MPM * 1.15)), P1 = PORTS[a];
         if (atWar(s) && (a === 'dawnport' || from === 'dawnport')) {
           const V = s.valdoria;
-          if (rand(s) < WAR.capture) { const nm = s.ship.name; V.war.taken++; s.ship = null; const P2 = PORTS.stormrest; s.player.x = P2.x + 3; s.player.z = P2.z; s.player.dest = null; s.player.action = null; p.riding = false;
+          const SR = setupStormrest(s), cap = WAR.capture + (SR.holder === 'valdoria' ? 0.1 : SR.holder === 'alderwyn' ? -0.1 : 0);
+          if (rand(s) < cap) { const nm = s.ship.name; V.war.taken++; s.ship = null; const P2 = PORTS.stormrest; s.player.x = P2.x + 3; s.player.z = P2.z; s.player.dest = null; s.player.action = null; p.riding = false;
             valLog(s, 'Valdorian galleys take ' + nm + ' at sea, with all her cargo. You and the crew are set ashore on Stormrest Isle.', 'bad'); return { ok: true, mins, taken: true }; }
           if (a === 'dawnport' && !V.warrant) { s.ship.port = 'dawnport'; s.ship.impounded = true; const P3 = PORTS.eastwatch; s.player.x = P3.x + Math.sin(P3.face) * 3; s.player.z = P3.z + Math.cos(P3.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
             valLog(s, s.ship.name + ' is impounded the moment she ties up at Dawnport, cargo and all, until there is peace. The harbour guard puts you on a neutral ship back to Eastwatch.', 'bad'); return { ok: true, mins, impounded: true }; }
@@ -6139,8 +6361,26 @@
         if (V.wed) return fail('The royal houses are joined by marriage. You cannot make war on your own kin.');
         if (V.treaty && V.treaty.kind === 'alliance') return fail('You are allied with Valdoria. Break the alliance first, and see what that costs.');
         if (V.relation >= 30) return fail('Relations are ' + Math.round(V.relation) + ': there is no quarrel your lords would fight for. (Below 30.)');
+        if (a && !WAR_GOALS.alderwyn[a]) return fail('Choose what the war is for.');
+        if (a === 'stormrest' && setupStormrest(s).holder === 'alderwyn') return fail('Stormrest is already Alderwyn\u2019s.');
         if (V.treaty) { valLog(s, 'Alderwyn tears up ' + TREATY[V.treaty.kind].name + '.', 'bad'); V.treaty = null; }
-        favourBy(s, -40); startWar(s, 'player'); return ok();
+        favourBy(s, -40); startWar(s, 'player', a || 'tribute'); return ok();
+      }
+      case 'warCampaign': {
+        const V = s.valdoria, w = V && V.war, R = s.realm; if (!w) return fail('There is no war.'); if (!isRuler(s)) return fail('Only the crown orders a campaign.');
+        if (w.score < 50) return fail('The war is not yet yours to finish (it stands at ' + Math.round(w.score) + '; you need 50).');
+        if (s.day - w.lastCampaign < 3) return fail('The army is still recovering from the last campaign.');
+        if (R.treasury < 150) return fail('A campaign costs 150c from the treasury.');
+        R.treasury -= 150; return ok(campaign(s, 'alderwyn') ? 'won' : 'failed');
+      }
+      case 'stormDues': {
+        const S = setupStormrest(s); if (S.holder !== 'alderwyn' || !isRuler(s)) return fail('Stormrest is not the crown\u2019s to tax.');
+        if (a !== 'light' && a !== 'heavy') return fail('Light or heavy?'); S.dues = a; return ok();
+      }
+      case 'stormWorks': {
+        const S = setupStormrest(s), R = s.realm; if (S.holder !== 'alderwyn' || !isRuler(s)) return fail('Stormrest is not the crown\u2019s.');
+        if (s.day - S.lastWorks < 20) return fail('The last works are barely finished.'); if (R.treasury < 300) return fail('A new harbour wall costs 300c from the treasury.');
+        R.treasury -= 300; S.lastWorks = s.day; S.mood = clamp(S.mood + 20, 0, 85); valLog(s, 'The crown builds Stormrest a new harbour wall. The islanders are won round a little.', 'good'); return ok();
       }
       case 'makePeace': {
         const V = s.valdoria, w = V && V.war; if (!w) return fail('There is no war.');
@@ -6477,7 +6717,7 @@
   }
 
   const api = {
-    GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, WAR, atWar, startWar, endWar, peaceTerms, warWord, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
+    GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,

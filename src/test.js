@@ -1315,7 +1315,7 @@ console.log('43. War between the crowns (v0.50)');
   check(!X('sail', 'dawnport').ok, 'no passage ships sail to Valdoria in war');
   check(!X('treaty', 'trade').ok && !X('royalMatch', 'self').ok, 'and there are no treaties or royal matches until the peace');
   const c0 = s.coins; Sim.advance(s, 1440); check(s.biz.d_vine.lastProfit === 0, 'the seized tavern earns you nothing');
-  check(R.treasury < t0 - 30, 'the war costs the treasury each day (' + (t0 - R.treasury) + 'c on the first day)');
+  check(R.treasury < t0 - 15, 'the war costs the treasury each day (' + (t0 - R.treasury) + 'c on the first day)');
   check(!X('makePeace').ok, 'the Queen will not treat before the war has run five days');
   // the levies decide the drift of the war
   const run = lev => { const t = newGameRaw(49); t.ageRate = 0; Sim.applyStart(t, 'ruler'); Sim.advance(t, 1440); t.valdoria.relation = 20; Sim.cmd(t, 'declareWar'); t.realm.levies = lev; t.realm.treasury = 99999; for (let i = 0; i < 20; i++) Sim.advance(t, 1440); return t.valdoria.war ? t.valdoria.war.score : null; };
@@ -1344,6 +1344,56 @@ console.log('43. War between the crowns (v0.50)');
   const s2 = newGameRaw(51); s2.ageRate = 0; Sim.advance(s2, 1440); s2.valdoria.wed = { royal: s2.valdoria.royals[0], to: 'x', day: 1 };
   let w2 = false; for (let i = 0; i < 60; i++) { s2.valdoria.relation = 6; Sim.advance(s2, 1440); if (s2.valdoria.war) w2 = true; if (s2.valdoria.wed == null) s2.valdoria.wed = { royal: s2.valdoria.royals[0], to: 'x', day: 1 }; }
   check(!w2, 'but never while the royal houses are joined');
+}
+
+console.log('44. What wars are for: aims, outright victory, lasting terms, and Stormrest (v0.51)');
+{
+  const mk = seed => { const s = newGameRaw(seed); s.ageRate = 0; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440); s.valdoria.relation = 20; s.realm.treasury = 99999; return s; };
+  const s = mk(52), V = s.valdoria, R = s.realm, X = (...a) => Sim.cmd(s, ...a);
+  check(!Sim.setupStormrest(s).holder, 'Stormrest begins as a free harbour that no crown holds');
+  check(X('declareWar', 'stormrest').ok && V.war.goal === 'stormrest' && V.war.side === 'alderwyn', 'the crown declares war to take Stormrest Isle');
+  check(!X('warCampaign').ok, 'no campaign until the war stands at 50');
+  R.levies = 340; let won = false, tries = 0;
+  for (let d = 0; d < 50 && V.war; d++) { Sim.advance(s, 1440); if (V.war && V.war.score >= 50) { tries++; const r = X('warCampaign'); if (r.ok && r.msg === 'won') won = true; } }
+  check(won && !V.war && s.stormrest.holder === 'alderwyn', 'with strong levies the war reaches 50, and a campaign takes Stormrest outright (' + tries + (tries === 1 ? ' campaign' : ' campaigns') + ')');
+  const tr = R.treasury; Sim.advance(s, 1440); check(R.treasury > tr - 200 && s.stormrest.holder === 'alderwyn', 'the isle stays Alderwyn’s, and pays its dues');
+  X('stormDues', 'heavy'); let freed = 0; for (let d = 0; d < 60 && s.stormrest.holder; d++) { Sim.advance(s, 1440); freed = d; }
+  check(!s.stormrest.holder, 'taxed hard, the islanders throw the garrison out after ' + freed + ' days, and Stormrest is free again');
+  // tribute and the tariff cap, imposed on the loser
+  const t2 = mk(53); t2.valdoria.war = null; Sim.startWar(t2, 'player', 'tribute'); t2.valdoria.war.score = 60; Sim.surrender(t2, 'alderwyn');
+  const tr2 = t2.realm.treasury; Sim.advance(t2, 1440); check(t2.valdoria.tribute && t2.realm.treasury > tr2 - 140 + 25, 'Valdoria, beaten, pays tribute day by day');
+  const t3 = mk(54); t3.realm.tariff = 1.5; Sim.startWar(t3, 'valdoria'); t3.valdoria.war.goal = 'tariff'; t3.valdoria.war.side = 'valdoria'; const f0 = t3.realm.favour; Sim.surrender(t3, 'valdoria');
+  check(t3.realm.tariff <= 1.0 && !Sim.cmd(t3, 'rule', 'tariff', 1.5).ok && t3.realm.favour < f0, 'Alderwyn, beaten, must hold its tariff down, and the court blames the crown');
+}
+
+console.log('45. Rebellion against the King of Alderwyn (v0.51)');
+{
+  const lord = seed => { const s = newGameRaw(seed); s.ageRate = 0; Sim.applyStart(s, 'lord'); Sim.advance(s, 1440); s.coins = 5000; return s; };
+  const s = lord(55), R = s.realm, X = (...a) => Sim.cmd(s, ...a);
+  check(!X('plotRecruit', 'x', 'promise').ok && X('plotBegin', 'crown').ok && R.plot, 'a lord can begin to plot for the crown');
+  const T = Sim.plotTargets(s); check(T.length >= 3, 'there are lords and councillors to approach (' + T.length + ')');
+  const q = s.people[T[0].pid]; q.opinion = 90; R.kingSupport = 30;
+  const r = X('plotRecruit', q.id, 'promise'); check(r.ok && !X('plotRecruit', T[1].pid, 'promise').ok, 'one approach a day (' + r.msg + ')');
+  check(!X('plotRise').ok || Sim.rebelMen(s) >= 100, 'a rising needs at least 100 men');
+  // discovery: rise within two days or be exiled for treason
+  R.plot.discovered = s.day; const c0 = s.coins; Sim.advance(s, 1440 * 3);   // two full days' grace, then the king's men come
+  check(!R.plot && R.exile && R.exile.treason && Sim.yourLordships(s).length === 0 && s.coins < c0, 'found out and not risen in two days: stripped, fined and exiled for treason');
+  check(X('plotBegin', 'crown').ok, 'from exile, a new plot can begin');
+  // a rising that wins the crown
+  const w = lord(56), RW = w.realm, Y = (...a) => Sim.cmd(w, ...a); Y('plotBegin', 'crown'); RW.kingSupport = 25;
+  const tg = Sim.plotTargets(w).slice(0, 3); for (const x of tg) { w.people[x.pid].opinion = 100; w.realm.plot.lastRecruit = -1; Y('plotRecruit', x.pid, 'promise'); }
+  Y('plotArm', 1600); check(Y('plotRise').ok && RW.plot.risen, 'with ' + Sim.rebelMen(w) + ' men against the king’s ' + Sim.crownMen(w) + ', the lord rises');
+  let d = 0; for (; d < 60 && RW.plot && RW.plot.risen; d++) { Sim.advance(w, 1440); if (RW.plot && RW.plot.score >= 50) Y('rebelMarch'); }
+  check(Sim.isRuler(w) && RW.after, 'the rising takes Crownmere and the crown (' + d + ' days)');
+  const owed = RW.after.owed.slice(); check(owed.length >= 1, 'and ' + owed.length + ' allies sworn on a promise are owed land or a seat');
+  check(Y('rewardAlly', owed[0], 'seat').ok && !RW.after.owed.includes(owed[0]), 'a promise kept: a council seat for an ally');
+  check(Y('rebelSettle', 'amnesty').ok && RW.after.settled, 'the old king’s lords are given amnesty');
+  for (let i = 0; i < 22; i++) Sim.advance(w, 1440);
+  check(owed.length < 2 || RW.rival, owed.length < 2 ? 'no promise left unkept' : 'an ally cheated of their promise raises men against the new ruler');
+  // a rising for a charter, ended on the king's terms
+  const c = lord(57), Z = (...a) => Sim.cmd(c, ...a); Z('plotBegin', 'charter'); Z('plotArm', 2000); Z('plotRise'); c.realm.plot.score = 30;
+  const tax0 = c.realm.taxRate; Sim.advance(c, 1440);
+  check(c.realm.plot && c.realm.plot.offer && Z('rebelTerms').ok && c.realm.laws.fairCourts && c.realm.taxRate < tax0 && Sim.yourSeats(c).length >= 1 && !c.realm.plot, 'the king offers terms; accepted, they bring lower taxes, fair courts and a council seat');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');

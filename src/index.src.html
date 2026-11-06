@@ -2003,6 +2003,21 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
     if (k % 3) part(g, new THREE.DodecahedronGeometry(1, 0), STONE2, 0, 0.4, 0, rr(), rr(), rr(), 1 + rr() * 2, 0.6 + rr(), 1 + rr() * 2); else { box(g, '#4a3a2a', 0, 1.6, 0, 0.4, 3.2, 0.4); part(g, new THREE.ConeGeometry(1.6, 4, 7), '#2f4a3a', 0.4, 4.2, 0, 0, 0, -0.25); } }
   flushBuild();
 })();
+// the flag over Stormrest's harbour wall: white for a free harbour, green and white for Alderwyn, red and gold for Valdoria
+const STORM_FLAG = (function () {
+  const I = Sim.ISLE, x = I.x - 22, z = I.z + 7, y = groundH(x, z), g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 7, 6), new THREE.MeshLambertMaterial({ color: '#4a3424' })); pole.position.set(0, 3.5, 0); g.add(pole);
+  const field = new THREE.MeshLambertMaterial({ color: '#efe9d8', side: THREE.DoubleSide }), band = new THREE.MeshLambertMaterial({ color: '#efe9d8', side: THREE.DoubleSide });
+  const f1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.5), field); f1.position.set(1.25, 6.1, 0); g.add(f1);
+  const f2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.4), band); f2.position.set(1.25, 6.1, 0.01); g.add(f2);
+  g.position.set(x, y, z); scene.add(g);
+  return { g, field, band, at: undefined };
+})();
+function syncStormFlag(s) {
+  const h = s && s.stormrest ? s.stormrest.holder : null; if (h === STORM_FLAG.at) return; STORM_FLAG.at = h;
+  const c = h === 'alderwyn' ? ALDERWYN : h === 'valdoria' ? VALDORIA : ['#efe9d8', '#7a8a9a'];
+  STORM_FLAG.field.color.set(c[0]); STORM_FLAG.band.color.set(c[1]);
+}
 /* ----- Valdoria inland: the roads from Dawnport, Goldmeadow on the plains, Thornwick in the forest, and walled Stonewatch ----- */
 const VAL_TREES = [];
 (function buildValdoriaInland() {
@@ -3836,7 +3851,8 @@ function portCard(s, id, walking) {
     return B_(`Sail to ${esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, '').replace('Stormrest', 'Stormrest Isle'))} · ${f}c<small>about ${mins} min${via ? ', calling at Stormrest' : ''}</small>`, ['sail', k], '', !open || rough || s.coins < f || warShut(k)); });
   const note = W ? 'The crowns are at war. ' + (id === 'dawnport' && s.day <= W.leaveBy ? 'The last ships for Alderwyn leave until day ' + W.leaveBy + '.' : 'No passage ships sail between Alderwyn and Valdoria until the peace.') : rough ? 'A storm is up on the Sundering Sea. No ship sails today.' : !open ? 'Ships sail between seven in the morning and five in the afternoon.' : (Sim.calendar(s).season === 'winter' ? 'In winter, about one day in five is too rough to sail.' : '');
   const fc = []; for (let d = 1; d <= 3; d++) if (Sim.seaRough(s, s.day + d)) fc.push(d === 1 ? 'tomorrow' : 'in ' + d + ' days');
-  return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<p><b>Passage on a merchant ship</b></p><div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}${shipPanel(s, id)}`;
+  const SR = id === 'stormrest' ? Sim.setupStormrest(s) : null, heldBy = SR ? `<dl class="kv"><dt>Held by</dt><dd>${SR.holder ? (SR.holder === 'alderwyn' ? 'Alderwyn' : 'Valdoria') + ', since day ' + SR.since : 'no crown: a free harbour that both crowns claim'}</dd>${SR.holder ? `<dt>The islanders</dt><dd>${SR.mood >= 60 ? 'content' : SR.mood >= 35 ? 'sullen' : 'close to revolt'} (${Math.round(SR.mood)})</dd><dt>Harbour dues</dt><dd>${SR.dues === 'heavy' ? 'heavy, 25c a day' : 'light, 10c a day'}${SR.holder === 'alderwyn' ? ' to the treasury' : ''}</dd>` : ''}</dl>${SR.holder === 'alderwyn' && Sim.isRuler(s) ? `<div class="acts">${B_(SR.dues === 'heavy' ? 'Lighten the dues' : 'Raise the dues', ['stormDues', SR.dues === 'heavy' ? 'light' : 'heavy'], 'alt')}${B_('Build a harbour wall · 300c<small>from the treasury; wins the islanders round</small>', ['stormWorks'], 'alt', s.day - SR.lastWorks < 20 || s.realm.treasury < 300)}</div><p class="why">Heavy dues fill the treasury and sour the islanders; if their mood falls too low they throw the garrison out, and Stormrest is free again.</p>` : ''}` : '';
+  return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${heldBy}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<p><b>Passage on a merchant ship</b></p><div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}${shipPanel(s, id)}`;
 }
 // your own ship: the hold, the port's market for sea cargo, and where to sail
 function shipPanel(s, id) {
@@ -4061,14 +4077,55 @@ function pageTasks(s) {
   return `<h3>Tasks</h3><p class="lead">Everything you have been asked to do, and who asked. Tap a button to head there.</p>${t.length ? t.map(x => `<div class="box"><h5>${esc(x.title)}</h5><p><span class="pill">${esc(x.who)}</span> ${esc(x.note || '')}</p><div class="acts">${x.act || ''}</div></div>`).join('') : '<p>Nothing is asked of you just now. Take a contract on the Realm page, or talk to the elder.</p>'}`;
 }
 // what the ruler can offer Valdoria: a trade pact, then an alliance, and a royal marriage
+// rebellion: plotting in secret, rising, the civil war, and the debts of victory
+function rebellionBox(s, R) {
+  const P = R.plot, A = R.after, ruler = Sim.isRuler(s), K = s.people[R.king];
+  if (A && ruler) {
+    const owed = A.owed.map(id => s.people[id]).filter(Boolean), loyal = A.loyal.map(id => s.people[id]).filter(q => q && q.status === 'here');
+    return `<h4>After the rising</h4><div class="box">${owed.length ? `<p>You promised these allies land or a seat. They expect it by day ${A.deadline}; break your word and the first of them will raise men against you.</p>${owed.map(q => `<div class="staffrow"><span><b>${esc(q.name)}</b></span><span class="acts">${B_('Give a council seat', ['rewardAlly', q.id, 'seat'], 'alt')}${B_('Give a loyalist\u2019s lands', ['rewardAlly', q.id, 'land'], 'alt', !A.loyal.length)}</span></div>`).join('')}` : '<p>Your promises are kept.</p>'}
+      ${!A.settled ? `<p>${loyal.length ? loyal.length + ' lords stood by the old king: ' + esc(loyal.map(q => q.name).join(', ')) + '.' : 'Every lord came over to you in the end.'} What becomes of them?</p><div class="acts">${B_('Amnesty<small>they keep their lands; trust grows</small>', ['rebelSettle', 'amnesty'])}${B_('Purge<small>their lands to the treasury; every noble remembers</small>', ['rebelSettle', 'purge'], 'warn')}</div>` : ''}</div>`;
+  }
+  if (ruler) return '';
+  if (!P) {
+    const can = Sim.yourLordships(s).length || R.exile;
+    if (!can) return '';
+    return `<h4>Rebellion</h4><div class="box"><p>${R.exile ? 'From exile, you could raise a rising rather than wait to be called back.' : 'If the crown will not come to you by favour, it can be taken. Or the king can be made to grant a charter.'} A rising needs men: your own lands give ${Sim.REBEL.lordMen} for each lordship, arms can be bought, and other lords and councillors can be won over in secret. ${K ? 'King ' + esc(K.name.split(' ')[0]) + ' has ' + Sim.crownMen(s) + ' men, counting the lords loyal to him.' : ''}</p>
+      ${UI.confirm === 'plot' ? `<div class="acts">${B_('Plot for the crown<small>win, and you rule</small>', ['plotBegin', 'crown'], 'warn')}${B_('Plot for a charter<small>lower taxes, fair courts, a council seat</small>', ['plotBegin', 'charter'], 'warn')}${B_('Not now', ['ui', 'confirm', null], 'alt')}</div>` : `<div class="acts">${B_('Begin to plot&hellip;', ['ui', 'confirm', 'plot'], 'alt')}</div>`}
+      <p class="why">Every lord you approach might talk. If the king learns of it before you rise, you have two days to rise or you are taken for treason: stripped of your lands and seats, most of your coin seized, and sent into exile.</p></div>`;
+  }
+  const men = Sim.rebelMen(s), crown = Sim.crownMen(s), cause = P.cause === 'crown' ? 'the crown' : 'a charter';
+  if (!P.risen) {
+    const targets = Sim.plotTargets(s), sworn = P.sworn.map(x => s.people[x.pid]).filter(Boolean), risk = P.exposure >= 60 ? 'very likely to be found out' : P.exposure >= 30 ? 'talked about in corners' : 'well hidden';
+    return `<h4>Your plot for ${cause}</h4><div class="box">${P.discovered ? `<p><b>The king knows.</b> Rise by day ${P.discovered + 2}, or the king\u2019s men will come for you.</p>` : ''}<dl class="kv"><dt>Your men</dt><dd>${men} against the king\u2019s ${crown} (${crown + 80} once you rise and he calls up his levies)</dd><dt>Sworn to you</dt><dd>${sworn.length ? esc(sworn.map(q => q.name).join(', ')) : 'no one yet'}</dd><dt>Secrecy</dt><dd>${risk} (${Math.round(P.exposure)})</dd></dl>
+      <div class="acts">${B_('Rise now<small>' + (men < 100 ? 'needs 100 men' : men + ' against ' + (crown + 80) + ', once the king calls up his levies') + '</small>', ['plotRise'], 'warn', men < 100)}${B_('Buy arms · 200c<small>about 33 men</small>', ['plotArm', 200], 'alt', s.coins < 200)}${P.discovered ? '' : B_('Let the plot go', ['plotAbandon'], 'alt')}</div>
+      ${!P.discovered ? `<p><b>Win someone over</b> (one approach a day${P.lastRecruit === s.day ? ', and you have made today\u2019s' : ''}):</p>${targets.slice(0, 6).map(x => { const q = s.people[x.pid]; return `<div class="staffrow"><span><b>${esc(q.name)}</b> · ${esc(x.what)} · ${x.men} men · thinks ${(q.opinion || 0) >= 40 ? 'well' : (q.opinion || 0) >= 0 ? 'little' : 'ill'} of you</span><span class="acts">${B_('Promise land · 60c', ['plotRecruit', x.pid, 'promise'], 'alt', P.lastRecruit === s.day || s.coins < 60)}${B_('Use fear', ['plotRecruit', x.pid, 'fear'], 'alt', P.lastRecruit === s.day)}</span></div>`; }).join('')}` : ''}
+      <p class="why">A promise is likelier with someone who thinks well of you and when the king is unpopular, and you will owe them land or a seat if you win. Fear works on anyone, about half the time, but a frightened man may run to the king. A refusal makes your plot more likely to be found out.</p></div>`;
+  }
+  const pct = Math.round((P.score + 100) / 2);
+  return `<h4>Your rising for ${cause}</h4><div class="box" style="border-color:var(--bad,#a8322a)"><p>Since day ${P.rose}. ${P.score > 15 ? 'Your side has the upper hand.' : P.score < -15 ? 'The king\u2019s men have the upper hand.' : 'Neither side has the upper hand.'}</p>
+    <div style="display:flex;align-items:center;gap:8px;margin:6px 0"><span class="num">The king</span><div class="bar" style="flex:1"><i style="width:${pct}%"></i></div><span class="num">You</span></div>
+    <dl class="kv"><dt>Your men</dt><dd>${men} (they cost you ${Math.round(men * Sim.REBEL.upkeep)}c a day)</dd><dt>The king\u2019s</dt><dd>${crown}</dd></dl>
+    <div class="acts">${B_('March on Crownmere · 100c<small>once the war stands at 50; it may fail</small>', ['rebelMarch'], 'warn', P.score < 50 || s.coins < 100 || (P.lastMarch != null && s.day - P.lastMarch < 3))}${B_('Buy arms · 200c', ['plotArm', 200], 'alt', s.coins < 200)}${P.offer ? B_('Accept the king\u2019s terms<small>a charter and a pardon</small>', ['rebelTerms'], 'alt') : ''}</div>
+    <p class="why">More men than the king\u2019s push the war your way, and an unpopular king loses ground; unpaid men desert. If the war sinks to \u221250, the king\u2019s army may break your rising, and it is exile for you.</p></div>`;
+}
+function termsBox(s, V) {
+  const R = s.realm, SR = Sim.setupStormrest(s), out = [];
+  out.push(`<dt>Stormrest Isle</dt><dd>${SR.holder ? 'held by ' + (SR.holder === 'alderwyn' ? 'Alderwyn' : 'Valdoria') + ' since day ' + SR.since + ' · the islanders are ' + (SR.mood >= 60 ? 'content' : SR.mood >= 35 ? 'sullen' : 'close to revolt') : 'a free harbour, claimed by both crowns'}</dd>`);
+  if (V.tribute) out.push(`<dt>Tribute</dt><dd>${V.tribute.to === 'alderwyn' ? 'Valdoria pays Alderwyn' : 'Alderwyn pays Valdoria'} ${V.tribute.perDay}c a day until day ${V.tribute.until}</dd>`);
+  if (V.privilege) out.push(`<dt>Free trade</dt><dd>no duty on Alderwyn goods at Dawnport until day ${V.privilege.until}</dd>`);
+  if (R && R.tariffCap) out.push(`<dt>Tariff cap</dt><dd>Alderwyn\u2019s tariff held at ${R.tariffCap.max}\u00d7 until day ${R.tariffCap.until}</dd>`);
+  return `<dl class="kv">${out.join('')}</dl>`;
+}
 function warBox(s, V) {
   const w = V.war, ruler = Sim.isRuler(s), R = s.realm;
   if (!w) return '';
   const T = Sim.peaceTerms(w.score), pct = Math.round((w.score + 100) / 2), days = s.day - w.since;
-  return `<div class="box" style="border-color:var(--bad,#a8322a)"><h5>At war with Valdoria</h5><p>Since day ${w.since} (${days} ${days === 1 ? 'day' : 'days'}), ${w.by === 'player' ? 'declared by Alderwyn' : 'declared by Queen Ximena'}. The war is <b>${esc(Sim.warWord(w.score))}</b>.</p>
+  const goal = w.goal && Sim.WAR_GOALS[w.side || 'alderwyn'][w.goal], aim = goal ? (w.side === 'valdoria' ? 'Queen Ximena\u2019s aim: ' : 'Alderwyn\u2019s aim: ') + 'to ' + goal.name.charAt(0).toLowerCase() + goal.name.slice(1) + '. Won outright: ' + goal.terms.charAt(0).toLowerCase() + goal.terms.slice(1) + '.' : '';
+  const myGoal = Sim.WAR_GOALS.alderwyn[w.side === 'alderwyn' ? w.goal : 'tribute'];
+  return `<div class="box" style="border-color:var(--bad,#a8322a)"><h5>At war with Valdoria</h5><p>Since day ${w.since} (${days} ${days === 1 ? 'day' : 'days'}), ${w.by === 'player' ? 'declared by Alderwyn' : 'declared by Queen Ximena'}. The war is <b>${esc(Sim.warWord(w.score))}</b>. ${esc(aim)}</p>
     <div style="display:flex;align-items:center;gap:8px;margin:6px 0"><span class="num">Valdoria</span><div class="bar" style="flex:1"><i style="width:${pct}%"></i></div><span class="num">Alderwyn</span></div>
     <dl class="kv"><dt>Alderwyn\u2019s levies</dt><dd>${R ? R.levies : 120} men against Valdoria\u2019s ${Sim.WAR.valArmy}${R && R.council.war === 'player' ? ' · you sit as Marshal' : ''}</dd><dt>Cost to the treasury</dt><dd>${Sim.WAR.cost}c a day</dd><dt>Raids on Eastwatch</dt><dd>${w.raids}</dd>${w.taken ? `<dt>Ships taken at sea</dt><dd>${w.taken}</dd>` : ''}<dt>Peace now would be</dt><dd>${esc(T.text)}</dd></dl>
-    ${ruler ? `<div class="acts">${B_('Make peace<small>' + esc(T.text) + '</small>', ['makePeace'], T.pay > 0 ? 'warn' : '', days < 5 && !w.offered)}</div><p class="why">More levies than Valdoria\u2019s ${Sim.WAR.valArmy} push the war your way, day by day; fewer and it drifts to the Queen. Set them under Ruling above. A long war wears on the towns and the court. ${days < 5 && !w.offered ? 'The Queen will treat once the war has run five days.' : ''}</p>` : `<p class="why">While the crowns are at war, no passage ships sail; Dawnport is closed to Alderwyn goods; Alderwyn ships are taken at sea or impounded at Dawnport, unless the Queen\u2019s warrant protects you; and what you own in Valdoria is seized until the peace. The king makes peace in his own time.</p>`}</div>`;
+    ${ruler ? `<div class="acts">${B_(esc(myGoal.campaign) + ' · 150c<small>once the war stands at 50; it may fail</small>', ['warCampaign'], '', w.score < 50 || (w.lastCampaign != null && s.day - w.lastCampaign < 3) || R.treasury < 150)}${B_('Make peace<small>' + esc(T.text) + '</small>', ['makePeace'], T.pay > 0 ? 'warn' : 'alt', days < 5 && !w.offered)}</div><p class="why">More levies than Valdoria\u2019s ${Sim.WAR.valArmy} push the war your way, day by day; fewer and it drifts to the Queen. Set them under Ruling above. When the war stands at 50 or better, a campaign can win it outright and impose your aim; if the war sinks to \u221250, the Queen will try the same. A long war wears on the towns and the court. ${days < 5 && !w.offered ? 'The Queen will treat once the war has run five days.' : ''}</p>` : `<p class="why">While the crowns are at war, no passage ships sail; Dawnport is closed to Alderwyn goods; Alderwyn ships are taken at sea or impounded at Dawnport, unless the Queen\u2019s warrant protects you; and what you own in Valdoria is seized until the peace. The king makes peace in his own time.</p>`}</div>`;
 }
 function diplomacy(s, V) {
   const R = s.realm, acts = [], Y = Sim.you(s);
@@ -4077,7 +4134,8 @@ function diplomacy(s, V) {
   if (!V.treaty) acts.push(B_('Propose a trade pact<small>needs relations of 55' + pactBlock + '</small>', ['treaty', 'trade'], 'alt', V.relation < 55 || R.tariff > 1.1));
   else if (V.treaty.kind === 'trade') acts.push(B_('Propose an alliance<small>needs relations of 70 and the pact kept 20 days (day ' + (V.treaty.since + 20) + ')</small>', ['treaty', 'alliance'], 'alt', V.relation < 70 || s.day - V.treaty.since < 20 || R.tariff > 1.1));
   if (V.treaty) acts.push(UI.confirm === 'breakTreaty' ? B_('Yes, break it', ['treaty', 'break'], 'warn') + B_('Keep it', ['ui', 'confirm', null], 'alt') : B_('Break the treaty&hellip;', ['ui', 'confirm', 'breakTreaty'], 'alt'));
-  if (!V.wed && !(V.treaty && V.treaty.kind === 'alliance') && V.relation < 30) acts.push(UI.confirm === 'declareWar' ? B_('Yes, declare war on Valdoria', ['declareWar'], 'warn') + B_('Not now', ['ui', 'confirm', null], 'alt') : B_('Declare war&hellip;<small>relations are ' + Math.round(V.relation) + '</small>', ['ui', 'confirm', 'declareWar'], 'alt'));
+  if (!V.wed && !(V.treaty && V.treaty.kind === 'alliance') && V.relation < 30) { const SR = Sim.setupStormrest(s), G = Sim.WAR_GOALS.alderwyn;
+    acts.push(UI.confirm === 'declareWar' ? Object.keys(G).filter(k => !(k === 'stormrest' && SR.holder === 'alderwyn')).map(k => B_('War to ' + esc(G[k].name.charAt(0).toLowerCase() + G[k].name.slice(1)) + '<small>if won outright: ' + esc(G[k].terms) + '</small>', ['declareWar', k], 'warn')).join('') + B_('Not now', ['ui', 'confirm', null], 'alt') : B_('Declare war&hellip;<small>relations are ' + Math.round(V.relation) + '</small>', ['ui', 'confirm', 'declareWar'], 'alt')); }
   if (!V.wed) {
     const kids = Sim.yourKids(s).filter(c => c.status === 'here' && !c.kid && c.age >= 16 && !c.spouse), royals = (V.royals || []).map(id => s.people[id]).filter(r => r && r.status === 'here' && !r.spouse);
     const match = q => royals.find(r => Sim.sexOf(r) !== (q ? Sim.sexOf(q) : Y.sex));
@@ -4092,6 +4150,7 @@ function pageRealm(s) {
   const bar = (n, lab) => `<div class="kvbar"><span>${lab}</span><div class="bar ${n < 35 ? 'low' : ''}"><i style="width:${n}%"></i></div><b class="num">${n}</b></div>`;
   const mineL = Sim.yourLordships(s), mineS = Sim.yourSeats(s), f = (Sim.you(s).sex === 'f');
   let h = `<h3>The Kingdom of Alderwyn</h3><p class="lead">${ruler ? 'You rule Alderwyn from Crownmere castle. Keep the treasury out of debt and the realm behind you, or someone will take the crown from you.' : R.exile ? 'You are in exile, stripped of lands and offices. You can rebuild, and in time claim the crown again.' : 'Six regions under one crown. Win the lords, the guilds, the court and the towns, and the crown can be yours.'}</p>`;
+  const urgent = R.plot || (R.after && ruler); if (urgent) h += rebellionBox(s, R);
   h += `<div class="box"><dl class="kv"><dt>On the throne</dt><dd>${ruler ? esc(s.name) + ' (you)' : esc(K ? K.name : 'no one')}${!ruler && K ? ', aged ' + K.age : ''}</dd>${!ruler ? `<dt>The King’s standing</dt><dd class="num">${Math.round(R.kingSupport)}</dd>` : ''}<dt>Your favour at court</dt><dd class="num">${Math.round(R.favour)}</dd><dt>Your lordships</dt><dd>${mineL.length ? mineL.map(id => esc(Sim.REGIONS[id])).join(', ') : 'none'}</dd><dt>Your council seats</dt><dd>${mineS.length ? mineS.map(k => Sim.COUNCIL[k]).join(', ') : 'none'}</dd></dl></div>`;
   h += `<h4>Your support: ${sup}</h4><div class="box">${bar(S.lords, 'The lords')}${bar(S.guilds, 'The guilds')}${bar(S.court, 'The court')}${bar(S.towns, 'The towns')}<p>${ruler ? 'Below 30 for six days and the realm abandons you; below 42 and a rival may claim the crown.' : 'To claim the crown you need a lordship, a seat on the council, support of 65, and a King whose own standing has fallen below 45.'}</p>
     <div class="acts">${B_('Gifts to the lords<small>120c a lord</small>', ['patronage', 'lords'], 'alt')}${B_('Feast the guilds<small>300c</small>', ['patronage', 'guilds'], 'alt')}${B_('Feast for ' + esc(TOWN_NAMES[townHere()]) + '<small>about ' + Math.max(40, Math.round(Sim.living(s).filter(q => (q.town || 'hearthmoor') === townHere() && !q.kid).length * 0.6)) + 'c</small>', ['patronage', 'town', townHere()], 'alt')}</div></div>`;
@@ -4115,6 +4174,7 @@ function pageRealm(s) {
     const cands = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== 'player' && l !== R.king && s.people[l] && !E.allies.includes(l));
     h += `<h4>The way back</h4><div class="box"><p>${tick(ex.allies)} Three sworn allies (${E.allies.length}) \u00b7 ${tick(ex.fund)} A war chest of 600c (${E.fund || 0}c) \u00b7 ${tick(ex.towns)} The towns behind you (${R.support.towns} of 55) \u00b7 ${tick(ex.exposed)} The new ruler\u2019s failings exposed (standing ${Math.round(R.kingSupport)}, under 50)</p>
       <div class="acts">${cands.slice(0, 4).map(l => B_('Rally ' + esc(s.people[l].name) + ' · 80c', ['rallyAlly', l], 'alt')).join('')}${B_('Add 100c to the war chest', ['warChest', 100], 'alt', s.coins < 100)}${B_('Expose the ruler (in Crownmere)', ['exposeRuler'], 'alt')}</div></div>`; }
+  if (!urgent) h += rebellionBox(s, R);
   { const held = Sim.yourLordships(s).filter(x => x !== 'crownmere'), st = Sim.yourSeat(s);
     if (held.length || Sim.isRuler(s)) h += `<div class="acts">${!st ? B_('Move into your seat', ['moveToSeat']) : ''}${held.map(id => B_('Give up ' + esc(Sim.REGIONS[id]), ['renounceLordship', id], 'alt')).join('')}</div>`; }
   // the regions
@@ -4143,7 +4203,7 @@ function pageRealm(s) {
   if (V) { const rel = V.relation >= 70 ? 'warm' : V.relation >= 45 ? 'cordial' : V.relation >= 25 ? 'cool' : 'hostile';
     h += `<h4>Valdoria, across the sea</h4><div class="box"><dl class="kv"><dt>Its ruler</dt><dd>${esc(V.ruler)}, from ${esc(V.capital)}</dd><dt>Relations with Alderwyn</dt><dd>${rel} (${Math.round(V.relation)})</dd><dt>Duty at Dawnport</dt><dd>${Math.round((V.duty - 1) * 100)}% on Alderwyn goods${V.embargo ? ' · <b>port closed to them until day ' + V.embargo + '</b>' : ''}</dd><dt>Your name there</dt><dd>${Math.round(V.standing || 0)}${V.charter ? ' · merchant\u2019s charter' : ''}${V.warrant ? ' · royal warrant' : ''}</dd>${V.favour != null ? `<dt>The Queen\u2019s regard for you</dt><dd>${esc(Sim.QUEEN_MOOD(V.favour))} (${Math.round(V.favour)}) · audiences at the Alcázar in Valdor</dd>` : ''}${s.bandits && s.bandits.valdor != null ? `<dt>Valdoria\u2019s roads</dt><dd>${Object.keys(Sim.VAL_BANDITS).map(id => esc(Sim.REGIONS[id]) + ' ' + banditWord(s.bandits[id] || 0)).join(' · ')}</dd>` : ''}</dl>
       ${V.treaty ? `<p><b>${V.treaty.kind === 'alliance' ? 'Alliance' : 'Trade pact'}</b> since day ${V.treaty.since}: the duty at Dawnport is ${Math.round((V.duty - 1) * 100)}%, and Alderwyn keeps its tariff at 1.1\u00d7 or below. Raise it and the treaty is broken.</p>` : ''}${V.wed ? `<p>The royal houses are joined: ${esc((s.people[V.wed.royal] || {}).name || 'a Valdorian royal')} married ${V.wed.to === 'you' ? 'you' : esc((s.people[V.wed.to] || {}).name || 'your child')} on day ${V.wed.day}.</p>` : ''}
-      ${warBox(s, V)}<p class="why">The Queen answers Alderwyn\u2019s tariffs with her own duty, and closes Dawnport when relations sour. If they sink very low and nothing binds the crowns (a royal marriage, an alliance or a trade pact), she may go to war. ${Sim.isRuler(s) ? 'Your tariff on trade sets the tone: lower it and she warms to Alderwyn.' : 'Treaties and royal marriages are made by the ruler of Alderwyn.'}</p>${Sim.isRuler(s) ? diplomacy(s, V) : ''}${V.log.length ? V.log.slice(0, 5).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') : ''}</div>`; }
+      ${warBox(s, V)}${termsBox(s, V)}<p class="why">The Queen answers Alderwyn\u2019s tariffs with her own duty, and closes Dawnport when relations sour. If they sink very low and nothing binds the crowns (a royal marriage, an alliance or a trade pact), she may go to war. ${Sim.isRuler(s) ? 'Your tariff on trade sets the tone: lower it and she warms to Alderwyn.' : 'Treaties and royal marriages are made by the ruler of Alderwyn.'}</p>${Sim.isRuler(s) ? diplomacy(s, V) : ''}${V.log.length ? V.log.slice(0, 5).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') : ''}</div>`; }
   return h;
 }
 function bizBox(s, b) {
@@ -5387,7 +5447,7 @@ function frame(now) {
   if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { walkPlayer(G, dt); SignKit.step(G, t); } const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
-  syncMyShip(G && UI.mode !== 'title' ? G : null);
+  syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null);
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
@@ -5651,6 +5711,14 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.51', date: '6 November', title: 'What wars are for, Stormrest, and rebellion', items: [
+    'Every war now has an aim. When you declare war as ruler, you choose it: take Stormrest Isle, win free trade at Dawnport, or make Valdoria pay. The Queen names hers: Stormrest, tribute from Eastwatch, or holding Alderwyn\u2019s tariff down.',
+    'Wars can be won outright. Once the war stands at 50, a campaign (150c from the treasury) can force a surrender, and the winner\u2019s aim is imposed and lasts: the isle changes hands, tribute is paid day by day, or trade terms hold for 60 days. The Queen campaigns too when the war sinks to \u221250. Losing outright costs the crown standing with the court and the towns. War now costs 25c a day, so a winning war is affordable.',
+    'Stormrest Isle is a free harbour that both crowns claim. Whoever holds it takes its harbour dues and makes the crossing safer for its own ships in war. The islanders remember how they are treated: heavy dues sour them, a new harbour wall wins them round, and if their mood falls too low they throw the garrison out.',
+    'Rebellion. A lord, or an exile, can plot against the King of Alderwyn, for the crown or for a charter (lower taxes, fair courts, a council seat). Win lords and councillors in secret, by promises you will owe or by fear that may turn to betrayal; buy arms. Every approach risks discovery: once the king knows, rise within two days or be exiled for treason.',
+    'Risen, it is civil war: your men against the king\u2019s levies and the lords still loyal. Pay your men or they desert. When the war is yours, march on Crownmere. The king may offer a charter and a pardon to end it.',
+    'Win the crown and the realm is yours to govern: keep your promises of land and seats within twenty days, or the man you cheated raises men against you; and decide what becomes of the old king\u2019s lords, amnesty or a purge. Lose, and it is exile, with the road back still open.'
+  ] },
   { v: '0.50', date: '6 November', title: 'War between the crowns', items: [
     'Alderwyn and Valdoria can now go to war. When relations sink very low and nothing binds the crowns, Queen Ximena may declare it, after warning you that her galleys are gathering. As ruler, you can declare it yourself when relations are below 30. A royal marriage or an alliance keeps the peace; so does a trade pact, unless you tear it up.',
     'In war: no passage ships sail between the crowns (except the last ships home in the first three days); Dawnport is closed to Alderwyn goods; Alderwyn subjects still in Valdoria after three days are fined and shipped home; what you own in Valdoria is seized; Valdorian galleys raid Eastwatch; and the treasury pays 40c a day.',
