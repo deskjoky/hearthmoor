@@ -557,7 +557,7 @@
   // what a former employer or neighbour says of them: right more often than not, never certain
   function referenceOf(s, p) {
     const n = parseInt(String(p.id).replace(/\D/g, ''), 10) || 7, noise = (((n * 40503 + 97) >>> 0) % 1000 / 1000 - 0.5) * 0.5, seen = charOf(p) + noise;
-    const fraud = (p.record || 0) && allCourts(s).some(C => C.closed.some(c => c.kind === 'fraud' && c.accused === p.id && c.verdict === 'guilty'));
+    const fraud = (p.record || 0) && allCourts(s).some(C => C.closed.some(c => c.kind === 'fraud' && c.accused === p.id && c.verdict === 'guilty' && !c.overturned));
     return fraud ? 'Convicted of fraud before' : seen > 0.62 ? 'Trusted by those who know them' : seen > 0.38 ? 'A mixed word from past work' : 'Doubtful: people count their change';
   }
   function openFraud(s, m, town, name, guilty, how) {
@@ -1824,7 +1824,7 @@
     const man = sexOf(a) === 'm' ? a : b, wife = man === a ? b : a;
     a.spouse = b.id; b.spouse = a.id;
     if (!wife.maiden) wife.maiden = wife.name;
-    const nn = wife.name.split(' ')[0] + ' ' + surname(man.name); if (!Object.values(s.people).some(q => q.name === nn && q !== wife)) wife.name = nn;
+    const nn = wife.name.split(' ')[0] + ' ' + surname(man.name); if (!wife.royal && !Object.values(s.people).some(q => q.name === nn && q !== wife)) wife.name = nn;
     // they set up house together: in his home, hers, or somewhere new
     const hm = man.home && houseById(s, man.home), hw = wife.home && houseById(s, wife.home);
     const room = h => h && h.tenants.length < (h.cap || 4);
@@ -1934,7 +1934,7 @@
     if (q.home && q.home !== 'you') moveOut(s, q, 'Moved in with ' + s.name + '.');
     { const T = yourTown(s); if (townOf(q) !== (T || 'hearthmoor')) { if (q.job && (q.job.type !== 'biz' || q.job.role !== 'owner')) loseJob(s, q, 'Left their work to move to ' + (T ? TOWNS[T].name : 'Hearthmoor') + '.'); q.town = T; } }
     q.home = 'you'; q.opinion = clamp((q.opinion || 0) + 30, -100, 100);
-    if (Y.sex === 'm' && sexOf(q) === 'f') { q.maiden = q.maiden || q.name; const nn = q.name.split(' ')[0] + ' ' + familyName(s); if (!Object.values(s.people).some(x => x.name === nn)) q.name = nn; }
+    if (Y.sex === 'm' && sexOf(q) === 'f' && !q.royal) { q.maiden = q.maiden || q.name; const nn = q.name.split(' ')[0] + ' ' + familyName(s); if (!Object.values(s.people).some(x => x.name === nn)) q.name = nn; }
     plog(s, q, 'Married ' + s.name + '.'); s.people[Y.pid].log.unshift({ day: s.day, text: 'Married ' + q.name + '.' });
     addStanding(s, 5, 'the village celebrated your wedding.');
   }
@@ -3554,6 +3554,8 @@
   function valdoriaDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
+    // a royal who married before v0.47 took the spouse's family name in place of their own: give it back
+    for (const id of V.royals || []) { const q = s.people[id]; if (q && q.maiden && /^Infant[ae] /.test(q.maiden) && q.name !== q.maiden) q.name = q.maiden; }
     valContractDay(s);
     // a treaty binds both crowns: raising Alderwyn's tariff past the pact breaks it
     if (V.treaty && R && R.tariff > 1.1) { valLog(s, 'Alderwyn has raised its tariff in breach of ' + TREATY[V.treaty.kind].name + '. The Queen tears it up.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); }
@@ -4437,11 +4439,11 @@
     }
     // fines owed are paid off a little at a time, or worked off
     for (const C2 of allCourts(s)) for (const c of C2.closed.slice(0, 20)) if (c.workLeft > 0) { const p = s.people[c.accused]; if (!p || p.status !== 'here' || p.held) continue; c.workLeft--; chestOf(s, C2).chest += 3; p.mood = clamp(p.mood - 2, 0, 100); if (!c.workLeft) plog(s, p, 'Finished their days of work for the ' + (C2.id === 'hearthmoor' ? 'village' : 'town') + '.'); }
-    for (const c of J.closed.slice(0, 20)) if (c.fineOwed > 0) {
+    for (const C3 of allCourts(s)) for (const c of C3.closed.slice(0, 20)) if (c.fineOwed > 0) {
       const p = s.people[c.accused]; if (!p || p.status !== 'here') { c.fineOwed = 0; continue; }
       const pay = Math.min(c.fineOwed, Math.max(0, Math.min(3, p.purse - 4)));
-      if (pay > 0) { p.purse -= pay; c.fineOwed -= pay; if (c.fineTo === 'you') { earn(s, pay); s.stats.fines = (s.stats.fines || 0) + pay; } else v.chest += pay; }
-      else { c.workDays = (c.workDays || 0) + 1; const w = Math.min(c.fineOwed, 3); c.fineOwed -= w; v.chest += 0; plog(s, p, 'Worked a day for the village to pay off a fine.'); }
+      if (pay > 0) { p.purse -= pay; c.fineOwed -= pay; if (c.fineTo === 'you') { earn(s, pay); s.stats.fines = (s.stats.fines || 0) + pay; } else chestOf(s, C3).chest += pay; }
+      else { c.workDays = (c.workDays || 0) + 1; const w = Math.min(c.fineOwed, 3); c.fineOwed -= w; plog(s, p, 'Worked a day for the ' + (C3.id === 'hearthmoor' ? 'village' : 'town') + ' to pay off a fine.'); }
     }
     // poor security makes people demand action
     if (s.day % 5 === 0) { const open = J.cases.length, worry = (1 - (cov.market + cov.homes) / 2) * 3 + open; if (worry > 4 && s.gov) { approve(s, 'elder', -2); jlog(s, 'Villagers grumble at the moot: ' + open + ' cases unheard and too few on the watch.', 'bad'); } }
@@ -4480,10 +4482,13 @@
     const J = courtOf(s, c), A = s.people[c.accused], vic = c.victim && c.victim !== 'chest' && c.victim !== 'player' ? s.people[c.victim] : null;
     const w = caseWeight(c), fam = living(s).filter(q => q.spouse === c.accused || (q.parents || []).includes(c.accused) || (A && (A.parents || []).includes(q.id)));
     c.status = 'closed'; c.decidedBy = by; c.weight = w; c.verdict = verdict; J.cases = J.cases.filter(x => x !== c);
-    if (c.held && verdict === 'dismiss') release(s, c.accused, 'Released: the case was dismissed.');
-    c.held = false;
+    // were they held for this case? (checked before the mark is cleared, so every outcome below can free them)
+    const wasHeld = !!(c.held || (A && A.held && A.held.caseId === c.id));
+    if (wasHeld && verdict === 'dismiss') release(s, c.accused, 'Released: the case was dismissed.');
+    c.held = false; c.court = J.id;
     if (c.kind === 'hoarding' && verdict !== 'dismiss') { const T = s.towns && s.towns[J.id]; if (T && T.hoard && T.hoard.pid === c.accused) { s.goods[J.id][T.hoard.good] += T.hoard.qty; T.hoard = null; } }
     if (verdict === 'negotiate') {
+      if (wasHeld) release(s, c.accused, 'Released: no charge was brought.');
       c.outcome = (A ? A.name : 'They') + ' agree to put the stock back on sale, and no charge is brought.'; if (A) A.opinion = clamp((A.opinion || 0) + 5, -100, 100);
       J.closed.unshift(c); jlog(s, 'Hoarding: ' + c.outcome, 'info', J); return;
     }
@@ -4493,7 +4498,7 @@
       if (why === 'repaid' && ok && A) { const pay = Math.min(c.value, Math.max(0, A.purse)); A.purse -= pay; if (vic) vic.purse += pay; else if (c.victim === 'chest') chestOf(s, J).chest += pay; else if (c.victim === 'crown' && s.realm) s.realm.treasury += pay; else if (c.victim === 'player') { earn(s, pay); s.stats.restitution = (s.stats.restitution || 0) + pay; } }
       c.outcome = 'Found guilty by ' + by + ', and pardoned: ' + MERCY[why].said + '.'; c.mercy = why;
       if (A) A.record = rec + 1;
-      if (c.held) release(s, c.accused, 'Pardoned at the hearing.'); c.held = false;
+      if (wasHeld) release(s, c.accused, 'Pardoned at the hearing.');
       if (A) A.opinion = clamp((A.opinion || 0) + (why === 'favour' ? 25 : 15), -100, 100);
       if (vic) vic.opinion = clamp((vic.opinion || 0) - (why === 'reconciled' && ok ? 0 : why === 'favour' ? 12 : 6), -100, 100);
       // how the town takes it: a true reason for a small wrong is respected; a reason that does not fit, a repeat offender or
@@ -4511,10 +4516,10 @@
     } else {
       const parts = [];
       if (pen.restitution && A && c.value) { const pay = Math.min(c.value, Math.max(0, A.purse)); A.purse -= pay; if (vic) vic.purse += pay; else if (c.victim === 'chest') chestOf(s, J).chest += pay; else if (c.victim === 'crown' && s.realm) s.realm.treasury += pay; else if (c.victim === 'player') { earn(s, pay); s.stats.restitution = (s.stats.restitution || 0) + pay; } parts.push('repay ' + pay + 'c' + (pay < c.value ? ' (all they had)' : '')); }
-      if (pen.fine && A) { const f = Math.round(pen.fine), now = Math.min(f, Math.max(0, A.purse - 2)); A.purse -= now; c.fineTo = pen.fineTo === 'you' ? 'you' : 'chest'; if (c.fineTo === 'you') { earn(s, now); s.stats.fines = (s.stats.fines || 0) + now; } else s.village.chest += now; c.fineOwed = f - now; parts.push('a fine of ' + f + 'c' + (c.fineOwed ? ' (' + c.fineOwed + 'c to be paid off or worked off)' : '')); }
+      if (pen.fine && A) { const f = Math.round(pen.fine), now = Math.min(f, Math.max(0, A.purse - 2)); A.purse -= now; c.fineTo = pen.fineTo === 'you' ? 'you' : 'chest'; if (c.fineTo === 'you') { earn(s, now); s.stats.fines = (s.stats.fines || 0) + now; } else chestOf(s, J).chest += now; c.fineOwed = f - now; parts.push('a fine of ' + f + 'c' + (c.fineOwed ? ' (' + c.fineOwed + 'c to be paid off or worked off)' : '')); }
       if (pen.work && A) { const wd = clamp(Math.round(pen.work), 1, 10); c.workLeft = wd; parts.push(wd + (wd === 1 ? ' day' : ' days') + ' of work for the ' + (J.id === 'hearthmoor' ? 'village' : 'town')); }
       if (pen.days && A) { const d = clamp(Math.round(pen.days), 1, maxDays(J)); if (!isHeld(A) && cellsFree(s, J) <= 0) parts.push('no cell free, so no time inside'); else { if (!isHeld(A)) hold(s, A.id, c, 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(), s.day + d, J); const pr = J.prisoners.find(x => x.pid === A.id); if (pr) { pr.until = s.day + d; pr.sentence = true; pr.reason = 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(); } parts.push(d + (d === 1 ? ' day' : ' days') + ' in the cells'); } }
-      else if (c.held) release(s, c.accused, 'Released after the hearing.');
+      else if (wasHeld) release(s, c.accused, 'Released after the hearing.');
       c.outcome = 'Found guilty by ' + by + (parts.length ? ': ' + parts.join(', ') : ': a warning') + '.';
       if (A) { A.opinion = clamp((A.opinion || 0) - (by === 'you' ? 15 : 5), -100, 100); A.mood = clamp(A.mood - 10, 0, 100); A.rep = Math.max(0, (A.rep || 0) - 10); A.record = (A.record || 0) + 1; }
       fam.forEach(q => q.opinion = clamp((q.opinion || 0) - (by === 'you' ? 6 : 2), -100, 100));
@@ -4753,9 +4758,11 @@
         if (!youHearAppeals(s)) return fail('Only the Lord Justice or the crown hears appeals.');
         let k = null; for (const C of allCourts(s)) { k = C.closed.find(x => x.id === a); if (k) break; } if (!k || k.verdict !== 'guilty' || k.overturned) return fail('No such conviction.');
         k.overturned = true; const A = s.people[k.accused]; if (A && A.held && A.held.caseId === k.id) release(s, A.id, 'Freed on appeal.');
-        const comp = 10; const CO = courtOf(s, k); if (CO.id === 'hearthmoor') s.village.chest -= comp; else if (s.towns && s.towns[CO.id]) s.towns[CO.id].chest -= comp; if (A) { A.purse += comp; A.opinion = clamp((A.opinion || 0) + 20, -100, 100); A.grudge = Math.max(0, (A.grudge || 0) - 1); }
-        if (k.wrongful) J.wrongful = Math.max(0, J.wrongful - 1);
-        jlog(s, 'On appeal, the conviction of ' + (A ? A.name : 'someone') + ' is overturned. The village chest pays them ' + comp + 'c for the wrong.'); return ok();
+        const unpaid = k.fineOwed || 0, work = k.workLeft || 0; k.fineOwed = 0; k.workLeft = 0; if (A) A.record = Math.max(0, (A.record || 0) - 1);
+        const comp = 10; const CO = courtOf(s, k); chestOf(s, CO).chest -= comp; if (A) { A.purse += comp; A.opinion = clamp((A.opinion || 0) + 20, -100, 100); A.grudge = Math.max(0, (A.grudge || 0) - 1); }
+        if (k.wrongful) CO.wrongful = Math.max(0, (CO.wrongful || 0) - 1);
+        k.outcome = (k.outcome || '') + ' Overturned on appeal' + (unpaid || work ? ': ' + [unpaid ? unpaid + 'c of the fine cancelled' : '', work ? work + (work === 1 ? ' day' : ' days') + ' of work cancelled' : ''].filter(Boolean).join(', ') : '') + '.';
+        jlog(s, 'On appeal, the conviction of ' + (A ? A.name : 'someone') + ' is overturned. The ' + (CO.id === 'hearthmoor' ? 'village' : 'town') + ' chest pays them ' + comp + 'c for the wrong.', 'info', CO); return ok();
       }
       case 'jPardon': {
         if (!youHearAppeals(s)) return fail('Only the Lord Justice or the crown can pardon.');
@@ -5808,7 +5815,9 @@
         }
         earn(s, gross - tax); s.seaMarket[port][a] += n;
         if (tax) { if (port === 'dawnport') { if (V) V.paid = (V.paid || 0) + tax; } else if (s.realm) s.realm.treasury += tax; }
-        if (port === 'dawnport' && V && !c) V.standing = clamp(V.standing + Math.min(3, Math.ceil(n / 30)), 0, 100);
+        // honest trade earns a name in Dawnport: goods brought from Alderwyn and landed with the duty paid, up to 3 a day.
+        // Selling back what you bought on the same quay earns nothing.
+        if (port === 'dawnport' && V && !c && foreign) { if (V.nameDay !== s.day) { V.nameDay = s.day; V.nameToday = 0; } const g = Math.min(Math.ceil(n / 30), 3 - V.nameToday); if (g > 0) { V.nameToday += g; V.standing = clamp(V.standing + g, 0, 100); } }
         s.rec.seaTrade = (s.rec.seaTrade || 0) + (gross - tax - share);
         return ok(c ? 'landed' : { gross, tax, profit: gross - tax - share });
       }

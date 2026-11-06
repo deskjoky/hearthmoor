@@ -226,7 +226,7 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   Sim.cmd(s, 'fundTower'); runIdle(s);
   check(v.towerBuilt && v.step === 5, 'the watchtower is rebuilt');
   Sim.cmd(s, 'talk'); runIdle(s);
-  check(v.council && v.landGranted && v.chest >= 0 && v.step === 6, 'seated on the council with a chest and a land grant (the watch draws its wages from the chest, so how much is left varies)' + ` [council ${v.council} land ${v.landGranted} chest ${v.chest} step ${v.step}]`);
+  check(v.council && v.landGranted && Number.isFinite(v.chest) && v.chest > -50 && v.step === 6, 'seated on the council with a chest and a land grant (the watch draws its wages from the chest, which may run a small debt)' + ` [council ${v.council} land ${v.landGranted} chest ${v.chest} step ${v.step}]`);
   check(Sim.cmd(s, 'open', 3, 'joinery').ok === false && (s.trades.joinery = 2) && Sim.cmd(s, 'open', 3, 'joinery').ok, 'the Hall lot can now be built on');
   // council powers change the game
   const pk = Object.keys(Sim.PROJECTS).filter(k => !v.projects[k]).sort((a, b) => Sim.PROJECTS[b].cost - Sim.PROJECTS[a].cost)[0];
@@ -1176,5 +1176,46 @@ console.log('39. Work in Valdoria: contracts from its towns, and their markets')
 }
 
 }
+console.log('40. Justice that does what it says, and a name in Valdoria earned by trade (v0.47; from an outside review)');
+{
+  const s = newGameRaw(41); s.ageRate = 0; Sim.applyStart(s, 'lord'); s.coins = 4000; s.offices.elder = 'player'; Sim.advance(s, 1440);
+  const X = (...a) => Sim.cmd(s, ...a), Cs = s.courts, HM = Sim.allCourts(s).find(c => c.id === 'hearthmoor'), GH = Cs.greenhaven;
+  const free = town => Sim.living(s).filter(p => (p.town || 'hearthmoor') === town && !p.kid && !p.held && p.status === 'here' && !(p.job && p.job.type === 'office'));
+  const used = new Set();
+  const mk = (Cx, town, o) => { const p = free(town).find(q => !used.has(q.id)); used.add(p.id); const c = Object.assign({ id: s.justice.nextCase++, kind: 'theft', day: s.day, status: 'open', evidence: [{ text: 'x', w: 4 }], hidden: [], witnesses: [], investigating: 0, held: false, accused: p.id, accuser: null, victim: 'chest', value: 12, where: 'the chest', truth: 'guilty', what: 'test', claim: 'test', authority: Cx.authority, court: Cx.id }, o || {}); Cx.cases.push(c); return [c, p]; };
+  HM.prisoners.slice().forEach(pr => X('jRelease', pr.pid)); GH.prisoners.slice().forEach(pr => X('jRelease', pr.pid));
+  // a pardon, a warning and a fine without days all free the person you arrested
+  for (const [verdict, pen, what] of [['mercy', { why: 'favour' }, 'a pardon'], ['guilty', {}, 'a warning'], ['guilty', { fine: 5 }, 'a fine with no days']]) {
+    const [c, p] = mk(HM, 'hearthmoor');
+    X('jArrest', c.id); const was = !!p.held;
+    X('jHear', c.id, pen, verdict);
+    check(was && !p.held && !HM.prisoners.some(x => x.pid === p.id), 'after ' + what + ', the arrested accused walks free');
+  }
+  { const [c, p] = mk(HM, 'hearthmoor'); X('jArrest', c.id); X('jHear', c.id, { days: 2 }, 'guilty'); check(p.held && HM.prisoners.some(x => x.pid === p.id && x.sentence), 'a sentence of days still keeps them inside'); X('jRelease', p.id); }
+  // fines go to the chest of the court that set them
+  { const [c, p] = mk(GH, 'greenhaven'); p.purse = 60; const v0 = s.village.chest, g0 = s.towns.greenhaven.chest; X('jHear', c.id, { fine: 20 }, 'guilty');
+    check(s.village.chest === v0 && s.towns.greenhaven.chest === g0 + 20, 'a 20c fine in Greenhaven goes to Greenhaven’s chest, not Hearthmoor’s'); }
+  // unpaid fines are paid down in every court
+  { const [c, p] = mk(GH, 'greenhaven'); p.purse = 2; X('jHear', c.id, { fine: 20 }, 'guilty'); const owed = c.fineOwed; Sim.advance(s, 1440 * 2);
+    check(owed > 0 && c.fineOwed < owed, 'an unpaid fine in Greenhaven is paid or worked down (' + owed + 'c → ' + c.fineOwed + 'c)'); }
+  // overturning a conviction ends its sentence and clears the record
+  { const [c, p] = mk(HM, 'hearthmoor'); p.purse = 2; const r0 = p.record || 0; X('jHear', c.id, { fine: 20, work: 2 }, 'guilty'); s.realm.crown = 'player';
+    check(X('jOverturn', c.id).ok && !c.fineOwed && !c.workLeft && (p.record || 0) === r0, 'overturned on appeal: the fine and work are cancelled and the record cleared');
+    const g0 = s.village.chest; Sim.advance(s, 1440); check(!c.fineOwed && !c.workLeft, 'and nothing more is collected for it'); }
+}
+{
+  const s = newGameRaw(42); s.ageRate = 0; const P = Sim.PORTS, X = (...a) => Sim.cmd(s, ...a), V = s.valdoria, at = k => { s.player.x = P[k].x; s.player.z = P[k].z; };
+  s.coins = 4000; s.t = 10 * 60 + 1440 * 2; s.day = 3; at('eastwatch'); X('buyShip'); X('sailShip', 'dawnport');
+  const st0 = V.standing; for (let i = 0; i < 5; i++) { X('cargoBuy', 'wine', 10); X('cargoSell', 'wine', 10); }
+  check(V.standing === st0, 'buying wine on Dawnport’s quay and selling it straight back earns no name in Valdoria (' + st0 + ' → ' + V.standing + ')');
+  X('sailShip', 'eastwatch'); X('cargoBuy', 'iron', 40); X('cargoBuy', 'wool', 40); X('sailShip', 'dawnport');
+  const st1 = V.standing; X('cargoSell', 'iron', 40); X('cargoSell', 'wool', 40);
+  check(V.standing > st1 && V.standing - st1 <= 3, 'landing Alderwyn goods with the duty paid does (' + st1 + ' → ' + V.standing + ', at most 3 a day)');
+  // a royal who marries keeps their own name
+  s.realm.crown = 'player'; V.relation = 80; s.coins = 4000; const Y = Sim.you(s); if (Y) Y.sex = 'm';
+  const r = X('royalMatch', 'self'), q = s.people[V.royals[0]];
+  check(r.ok && q.name === 'Infanta Leonor', 'Infanta Leonor marries you and keeps her name (' + (q && q.name) + ')');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

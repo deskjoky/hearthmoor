@@ -606,7 +606,16 @@ const PACE = { brisk: 1.5, normal: 1, relaxed: 0.75 };
 
 /* ================= three.js world ================= */
 const canvas = $('world');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixelRatio < 2, powerPreference: 'high-performance' });
+// if the browser cannot give us 3D graphics (WebGL), say so plainly instead of leaving a blank page
+function noWebGL(why) {
+  const d = document.createElement('div');
+  d.setAttribute('style', 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:#1d1a14;color:#efe6d0;font:16px/1.5 Georgia,serif;text-align:center');
+  d.innerHTML = '<div style="max-width:30em"><h2 style="margin:0 0 .5em;font-weight:normal">Hearthmoor needs 3D graphics</h2><p>This browser could not start WebGL, which the game uses to draw its world. Try another browser (Safari, Chrome, Firefox or Edge), turn on hardware acceleration in the browser\u2019s settings, or update your graphics drivers.</p><p style="opacity:.6;font-size:13px">' + String(why || '').replace(/[<>&]/g, '') + '</p></div>';
+  document.body.appendChild(d);
+}
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixelRatio < 2, powerPreference: 'high-performance' }); }
+catch (e) { noWebGL(e && e.message); throw e; }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x9fb1ad, 60, 200);
@@ -2837,7 +2846,7 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
   if (UI.overlay === 'map' && mapPtr.has(e.pointerId)) {
     const prev = mapPtr.get(e.pointerId); mapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (mapPtr.size === 2 && mapPinch) { const [a, b] = [...mapPtr.values()]; mapCam.dist = clamp(mapPinch.dist * mapPinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 18, MAP_C.r === 300 ? 460 : 190); return; }
+    if (mapPtr.size === 2 && mapPinch) { const [a, b] = [...mapPtr.values()]; mapCam.dist = clamp(mapPinch.dist * mapPinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 18, MAP_C.r === 300 ? 460 : 250); return; }
     const k = mapCam.dist / window.innerHeight;
     mapCam.x = clamp(mapCam.x - (e.clientX - prev.x) * k * 0.78, MAP_C.x - (MAP_C.r === 300 ? 240 : 85), MAP_C.x + (MAP_C.r === 300 ? 240 : 85));
     mapCam.z = clamp(mapCam.z - (e.clientY - prev.y) * k * 0.9, MAP_C.z - (MAP_C.r === 300 ? 260 : 90), MAP_C.z + (MAP_C.r === 300 ? 240 : 70));
@@ -2867,7 +2876,7 @@ function endTouch(e) {
 }
 canvas.addEventListener('pointerup', endTouch);
 canvas.addEventListener('pointercancel', endTouch);
-canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, MAP_C.r === 300 ? 460 : 190); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 8, 46); }, { passive: false });
+canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, MAP_C.r === 300 ? 460 : 250); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 8, 46); }, { passive: false });
 // on a computer, drag with the right mouse button to look
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -2920,7 +2929,10 @@ function act(c) {
   else if (['store', 'craft', 'serve'].includes(c[0])) { const sh = Sim.shopById(G, c[1]); if (sh) UI.loc = 'plot' + sh.plot; }
   if (c[0] === 'open') UI.loc = 'plot' + c[1];
   const r = Sim.cmd(G, c[0], c[1], c[2], c[3]);
-  if (r.msg) toast(r.msg, r.ok ? 'info' : 'bad', true);
+  // a message is shown when it is a sentence; short codes ('caught', 'landed') and result objects are for the code, not the player
+  if (typeof r.msg === 'string' && /\s/.test(r.msg)) toast(r.msg, r.ok ? 'info' : 'bad', true);
+  if (c[0] === 'cargoSell' && r.ok && r.msg && typeof r.msg === 'object') toast('Sold ' + c[2] + ' ' + c[1] + ' for ' + r.msg.gross + 'c' + (r.msg.tax ? ', less ' + r.msg.tax + 'c duty' : '') + ': ' + (r.msg.profit >= 0 ? r.msg.profit + 'c profit' : -r.msg.profit + 'c loss') + ' on what it cost.', 'info', true);
+  if (c[0] === 'cargoSell' && r.ok && r.msg === 'landed') toast('Landed ' + c[2] + ' ' + c[1] + ' quietly, past the customs house.', 'info', true);
   if (['carryOn', 'beginAgain', 'handOver'].includes(c[0]) && r.ok) {
     const rec = G.people[Sim.you(G).pid], pl = personLook(rec), hs = String(pl.hair || 'short'), hm = { coif: 'bun' }[hs] || (hs.includes('beard') ? 'beard' : hs);
     G.look = Object.assign({}, G.look || {}, { body: Sim.you(G).sex === 'f' ? 'f' : 'm', hair: c[0] === 'beginAgain' ? (Sim.you(G).sex === 'f' ? 'long' : 'short') : hm, hairColor: Math.max(0, LOOKS.hairColor.indexOf(pl.hairColor)) });
@@ -3136,7 +3148,7 @@ function cardHTML(s) {
   if (here === 'oakkeep') return `<h2>Oakbridge Keep</h2><div class="sub">The old keep on the east bank, the seat of ${esc(s.realm ? Sim.lordName(s, 'oakbridge') : Sim.REALM.lordShort)}, Lady of Oakbridge. Its towers watch the river and the coast road.</div>${walking}`;
   if (here === 'oakbridge') return `<h2>The Oak Bridge</h2><div class="sub">A stone bridge on two great piers over the river Alder, built where an oak ferry once crossed. The town pays for its upkeep out of the market fees.</div>${walking}`;
   if (here === 'lots') return landCard(s, walking);
-  if (here === 'home') return s.player.house ? `<h2>Your old hut</h2><div class="sub">Still yours. You live in ${esc(Sim.yourHouse(s) ? Sim.yourHouse(s).name : 'a house')} now.</div>${walking}<div class="acts">${B_('Move back in', ['moveToHut'], 'alt')}${B_('Open the map', ['ui', 'map'], 'alt')}</div>` : `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
+  if (here === 'home') return s.player.house ? `<h2>Your old hut</h2><div class="sub">Still yours. You live in ${esc(Sim.yourHouse(s) ? Sim.yourHouse(s).name : 'a house')} now.</div>${walking}<div class="acts">${B_('Move back in', ['moveToHut'], 'alt')}${B_('Open the map', ['ui', 'map'], 'alt')}</div>` : `<h2>Your hut</h2><div class="sub">Small, draughty, yours. The game saves itself every few seconds.</div>${walking}<div class="acts">${sleepBtn()}${B_('Open the map', ['ui', 'map'], 'alt')}</div>`;
   if (here === 'myhome' && Sim.yourSeat(s)) { const hm = Sim.homeOfYou(s); return `<h2>${esc(hm.name)}</h2><div class="sub">Your seat as ${Sim.yourSeat(s) === 'crownmere' ? 'ruler of Alderwyn' : 'lord of ' + esc(Sim.REGIONS[Sim.yourSeat(s)])}, and your family\u2019s home.</div>${walking}<div class="acts">${B_('The Realm', ['page', 'realm'], 'alt')}</div>`; }
   if (here === 'myhome') { const h = Sim.yourHouse(s); if (h) { const fam = Object.values(s.people).filter(q => q.home === 'you' && q.status === 'here'); return `<h2>${esc(h.name)}</h2><div class="sub">Your home${fam.length ? ', with ' + esc(fam.map(q => q.name.split(' ')[0]).join(', ')) : ''}.</div>${walking}<div class="acts">${B_('Property', ['page', 'property'], 'alt')}</div>`; } }
   if (here === 'well') return `<h2>The square</h2><div class="sub">The four shops around the square hire hands. The three lots south of the square wait for owners. Villagers lunch at the well at noon, and children play here in the afternoon.</div>${walking}`;
@@ -3840,7 +3852,7 @@ function houseSignCard(s, Lh, walking) {
     return html + (acts.length ? `<div class="acts">${acts.join('')}</div>` : '');
   }
   if (!live && !ts.length) acts.push(B_('Move in', ['moveIn', h.id]));
-  if (live) acts.push(B_('Go inside', ['ui', 'enter', 'myhome']));
+  if (live) acts.push(B_('Go inside', ['ui', 'enter', 'myhome']), sleepBtn());
   if (lv < 3) acts.push(B_('Improve to ' + Sim.COMFORT[lv + 1].name.toLowerCase() + ' · ' + Sim.COMFORT[lv + 1].cost + 'c', ['improveHome', h.id], 'alt', s.coins < Sim.COMFORT[lv + 1].cost));
   if (wear * 0.5 >= 2) acts.push(B_('Repair · ' + Math.round(wear * 0.5) + 'c', ['repairHouse', h.id], 'alt', s.coins < Math.round(wear * 0.5)));
   if (!live) {
@@ -4011,7 +4023,7 @@ function diplomacy(s, V) {
     if (!Y.spouse && match(null)) acts.push(B_('Marry ' + esc(match(null).name) + ' yourself · 300c<small>needs relations of 60</small>', ['royalMatch', 'self'], 'alt', V.relation < 60 || s.coins < 300));
     kids.forEach(q => { const r = match(q); if (r) acts.push(B_('Marry ' + esc(q.name.split(' ')[0]) + ' to ' + esc(r.name) + ' · 300c<small>needs relations of 60</small>', ['royalMatch', q.id], 'alt', V.relation < 60 || s.coins < 300)); });
   }
-  return acts.length ? `<p><b>Diplomacy</b></p><div class="acts">${acts.join('')}</div><p class="why">A trade pact brings Valdoria’s duty down to 5% while you keep Alderwyn’s tariff low; an alliance takes it to nothing and ends the closing of the port. A royal marriage joins the houses: relations never fall below 45 again.</p>` : '';
+  return acts.length ? `<p><b>Diplomacy</b></p><div class="acts">${acts.join('')}</div><p class="why">A trade pact brings Valdoria’s duty down to 5% while you keep Alderwyn’s tariff low; an alliance takes it to nothing and ends the closing of the port. A royal marriage joins the houses and warms relations each week while the marriage lasts; if it ends, the Queen takes it hard.</p>` : '';
 }
 function pageRealm(s) {
   const R = s.realm; if (!R) return '<h3>The Realm</h3><p>Not yet.</p>';
@@ -4259,6 +4271,17 @@ function travel(key) {
   if (mins > 1) toast('You walk to ' + Lk.name + ' (' + mins + ' min).', 'info', true);
   drainEvents(); renderCard(true);
 }
+/* ----- sleeping through the night: wake half an hour before your shift, or at 05:30 ----- */
+function wakeAt() { const s = G; if (s.job) { const e = Sim.empById(s.job.emp); if (e && e.shift) return Math.max(0, e.shift[0] * 60 - 30); } return 330; }
+function sleepMins() { const now = Math.floor(G.t % 1440); return (wakeAt() - now + 1440) % 1440; }
+function sleepBtn() { const m = sleepMins(), w = wakeAt(), now = Math.floor(G.t % 1440); if (G.job && Sim.inShift(G)) return ''; if (m < 60 || (now >= 240 && now < 720)) return ''; return B_('Sleep until ' + String(Math.floor(w / 60)).padStart(2, '0') + ':' + String(w % 60).padStart(2, '0') + '<small>' + Math.round(m / 60) + ' hours</small>', ['ui', 'sleep'], 'alt'); }
+function sleepTill() {
+  if (G.job && Sim.inShift(G)) { toast('You are meant to be at work.', 'warn'); return; }
+  let m = sleepMins(); const now = Math.floor(G.t % 1440); if (m < 60 || (now >= 240 && now < 720)) { toast('It is morning: no time to sleep.', 'info'); return; }
+  const w = wakeAt(); while (m > 0) { const st = Math.min(60, m); Sim.advance(G, st); m -= st; }
+  toast('You sleep, and wake at ' + String(Math.floor(w / 60)).padStart(2, '0') + ':' + String(w % 60).padStart(2, '0') + '.', 'info', true);
+  drainEvents(); renderCard(true);
+}
 /* ----- the 3D map ----- */
 const MAPNAME = { gerd: 'Bakehouse', forge: 'Forge', tankard: 'Tankard', ash: 'Joinery' };
 function pinLabel(k) {
@@ -4290,13 +4313,26 @@ function buildPins() {
   const keys = Object.keys(L).filter(k => !L[k].sign && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']);
   $('pins').innerHTML = keys.map(k => `<button type="button" class="pin ${pinKind(k)} ${UI.mapSel === k ? 'sel' : ''}" data-k="${esc(k)}" ${k === 'you' ? 'tabindex="-1"' : `data-c='${esc(JSON.stringify(['ui', 'mapSel', k]))}'`}><span>${esc(pinLabel(k))}</span></button>`).join('');
 }
+// labels never sit on top of one another: places and halls are placed first, then shops; a label that would overlap one
+// already placed is lifted above it (a few steps at most), so every pin can be tapped
+const PIN_RANK = { you: 0, realm: 1, mine: 2, place: 3, lot: 4, work: 5 };
 function updatePins() {
-  const w = window.innerWidth, h = window.innerHeight;
-  for (const el of $('pins').children) {
+  const w = window.innerWidth, h = window.innerHeight, placed = [];
+  const els = [...$('pins').children].map(el => { if (!el._w) { el._w = el.offsetWidth || 90; el._h = el.offsetHeight || 22; } return el; })
+    .sort((a, b) => (PIN_RANK[a.className.split(' ')[1]] ?? 6) - (PIN_RANK[b.className.split(' ')[1]] ?? 6));
+  for (const el of els) {
     pinV.copy(pinPos(el.dataset.k)).project(camera);
     const off = pinV.z > 1 || Math.abs(pinV.x) > 1.1 || Math.abs(pinV.y) > 1.1;
     el.style.visibility = off ? 'hidden' : 'visible';
-    if (!off) el.style.transform = `translate(${((pinV.x + 1) / 2 * w).toFixed(1)}px, ${((1 - pinV.y) / 2 * h).toFixed(1)}px) translate(-50%, ${el.dataset.k === 'you' ? '6px' : '-100%'})`;
+    if (off) continue;
+    const x = (pinV.x + 1) / 2 * w, you = el.dataset.k === 'you', bw = el._w, bh = el._h;
+    const y = (1 - pinV.y) / 2 * h, base = you ? y + 6 : y - bh;
+    const clash = tp => tp < 0 || tp + bh > h || placed.some(r => Math.abs(r.x - x) < (r.w + bw) / 2 + 2 && tp < r.top + r.h + 2 && tp + bh + 2 > r.top);
+    let top = null; for (const k of [0, -1, 1, -2, 2]) { const tp = base + k * (bh + 3); if (!clash(tp)) { top = tp; break; } }
+    // no room nearby: a shop's label waits until you zoom in; places, halls, your own things and you always show
+    if (top === null) { if ((PIN_RANK[el.className.split(' ')[1]] ?? 6) >= 4) { el.style.visibility = 'hidden'; continue; } top = base; }
+    placed.push({ x, top, w: bw, h: bh });
+    el.style.transform = `translate(${x.toFixed(1)}px, ${top.toFixed(1)}px) translate(-50%, 0)`;
   }
 }
 const PLACE_NOTE = {
@@ -4334,6 +4370,17 @@ function setMapTown(id) {
   if (here) { mapCam.x = MAP_C.x + clamp((G.player.x - MAP_C.x) * 0.5, -40, 40); mapCam.z = MAP_C.z + clamp((G.player.z - MAP_C.z) * 0.5 - 8, -40, 20); }
   else { mapCam.x = MAP_C.x; mapCam.z = MAP_C.z - (id === 'oakbridge' ? 20 : 0); }
   mapCam.dist = id === 'crownmere' ? (here ? 200 : 330) : id === 'oakbridge' && !here ? 170 : 120;
+  // the other towns: frame every place in the town, so no pin (a palace on the rise, a coach house by the gate) starts off the edge
+  if (id !== 'hearthmoor' && id !== 'crownmere' && id !== 'oakbridge') {
+    const pts = Object.keys(L).filter(k => !L[k].sign && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < MAP_C.r).map(k => pinPos(k));
+    if (pts.length) {
+      const xs = pts.map(v => v.x), zs = pts.map(v => v.z), x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+      // a wide, short phone screen in landscape is the tightest fit: size by the north-south spread
+      const asp = Math.max(1, window.innerWidth / Math.max(1, window.innerHeight));
+      mapCam.x = (x0 + x1) / 2; mapCam.z = (z0 + z1) / 2 + 4;
+      mapCam.dist = clamp(Math.max((x1 - x0) * 1.6 / asp, (z1 - z0) * 1.7) + 44, 110, 250);
+    }
+  }
   UI.mapSel = null;
 }
 /* ================= the world map: two kingdoms across the Sundering Sea =================
@@ -4712,6 +4759,7 @@ function uiCmd(k, v) {
   if (k === 'book') { openBook(); return; }
   if (k === 'pause') { openPause(); return; }
   if (k === 'map') { openMap(); return; }
+  if (k === 'sleep') { sleepTill(); return; }
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
   if (k === 'enter') { const d = insideOf(v); if (d) Interior.enter(d); return; }
   if (k === 'leave') { Interior.leave(); return; }
@@ -4781,8 +4829,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.duty) { act(['jDuty', e.target.dataset.duty, e.target.value]); return; } const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); if (id.startsWith('res-')) act(['policy', +e.target.dataset.shop, 'reserve', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
 $('taskBtn').onclick = () => openBook('tasks');
-$('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, MAP_C.r === 300 ? 460 : 190); };
-$('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, MAP_C.r === 300 ? 460 : 190); };
+$('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, MAP_C.r === 300 ? 460 : 250); };
+$('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, MAP_C.r === 300 ? 460 : 250); };
 $('menuBtn').onclick = () => openPause();
 $('goal').onclick = () => openBook('goals');
 function setSpeed(n) { UI.speed = n; document.querySelectorAll('#speeds .fast').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === n))); }
@@ -5187,7 +5235,8 @@ const Interior = (function () {
     cam.yaw = 0.3; cam.pitch = 1.0; cam.dist = Math.max(R.W, R.D) * 1.2 + 3;
     seatPeople();
     UI.inside = d; UI.sel = null; UI.loc = null;
-    toast(d.kind === 'home' ? 'You step inside ' + d.name + '.' : 'You step into ' + d.name + '.', 'info', true);
+    const nm = /^Your /.test(d.title || '') ? 'y' + d.title.slice(1) : (d.title || 'the building');
+    toast((d.kind === 'home' ? 'You step inside ' : 'You step into ') + nm + '.', 'info', true);
     renderCard(true);
   }
   function leave(quiet) {
@@ -5474,10 +5523,10 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) Snd.s
 
 /* ================= work mini-games: something to do on shift ================= */
 const MINI = {
-  bakery: { name: 'Bake the bread', verb: 'Pull it out', hint: 'Pull the loaf out when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'knead', bar: 'Heat of the oven', done: 'loaves', ok: 'Golden crust', bad: 'Burnt' },
-  smithy: { name: 'Strike the iron', verb: 'Strike', hint: 'Strike when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'clang', bar: 'Heat of the iron', done: 'tools', ok: 'Clean strike', bad: 'Cold iron' },
-  tavern: { name: 'Pour the ale', verb: 'Hold to pour', hint: 'Hold to pour and let go when the ale reaches the line. Too much and it spills.', kind: 'pour', sound: 'pour', bar: 'Mug', done: 'mugs', ok: 'A perfect pint', bad: 'Spilled' },
-  joinery: { name: 'Saw the plank', verb: 'Saw', hint: 'Saw when the needle is on your mark, inside the bright band.', kind: 'time', sound: 'saw', bar: 'Blade', done: 'cuts', ok: 'Straight cut', bad: 'Crooked' }
+  bakery: { name: 'Bake the bread', verb: 'Pull it out', hint: 'Pull the loaf out when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'knead', bar: 'Heat of the oven', done: 'loaves', one: 'loaf', ok: 'Golden crust', bad: 'Burnt' },
+  smithy: { name: 'Strike the iron', verb: 'Strike', hint: 'Strike when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'clang', bar: 'Heat of the iron', done: 'tools', one: 'tool', ok: 'Clean strike', bad: 'Cold iron' },
+  tavern: { name: 'Pour the ale', verb: 'Hold to pour', hint: 'Hold to pour and let go when the ale reaches the line. Too much and it spills.', kind: 'pour', sound: 'pour', bar: 'Mug', done: 'mugs', one: 'mug', ok: 'A perfect pint', bad: 'Spilled' },
+  joinery: { name: 'Saw the plank', verb: 'Saw', hint: 'Saw when the needle is on your mark, inside the bright band.', kind: 'time', sound: 'saw', bar: 'Blade', done: 'cuts', one: 'cut', ok: 'Straight cut', bad: 'Crooked' }
 };
 const mini = { on: false };
 function openMini() {
@@ -5507,7 +5556,7 @@ function renderMini(full) {
   $('mzone').style.left = (z[0] * 100) + '%'; $('mzone').style.width = ((z[1] - z[0]) * 100) + '%';
   $('mline').style.left = (M.kind === 'pour' ? 100 : -10) + '%';
   $('mmsg').textContent = mini.msg;
-  $('mscore').textContent = `${mini.made} ${M.done} · tips ${G.job ? (G.job.tips || 0) : 0}/8c`;
+  $('mscore').textContent = `${mini.made} ${mini.made === 1 ? M.one : M.done} · tips ${G.job ? (G.job.tips || 0) : 0}/8c`;
 }
 function stepMini(dt) {
   if (!mini.on) return;
@@ -5541,6 +5590,19 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.47', date: '6 November', title: 'Justice that does what it says', items: [
+    'A pardon or a warning now frees an accused you had arrested. Before, they stayed in the cells after the hearing, still listed as held on suspicion, and filled the cells.',
+    'Fines go to the chest of the court that set them: Greenhaven\u2019s fines to Greenhaven, Oakbridge\u2019s to Oakbridge. Before, every fine went to Hearthmoor\u2019s chest.',
+    'Unpaid fines are collected in every town, a little at a time or worked off, not only in Hearthmoor.',
+    'Overturning a conviction on appeal cancels what is left of its fine and its days of work, and takes it off the person\u2019s record.',
+    'Your name in Valdoria now grows only from honest trade: goods brought from Alderwyn and landed at Dawnport with the duty paid, up to 3 a day. Buying wine on the quay and selling it straight back no longer raises it.',
+    'Sleep until morning: from noon onwards, your hut or home offers to let you sleep until half an hour before your shift (or 05:30).',
+    'Town maps open framed on the whole town, so every place is on screen, including Dawnport\u2019s Consul\u2019s Palace and coach house. You can zoom out a little further.',
+    'Selling cargo now tells you what it fetched, the duty paid and your profit, instead of showing \u201c[object Object]\u201d.',
+    'A Valdorian royal who marries keeps their own name. (Infanta Leonor became \u201cInfanta\u201d plus your family name.)',
+    'Fixed: \u201cYou step inside undefined\u201d when entering a building; \u201c1 loaves\u201d in the minigames; the Realm page still promising relations would never fall below 45 after a royal marriage.',
+    'If your browser cannot start 3D graphics, the game now says so instead of showing a blank page.'
+  ] },
   { v: '0.46', date: '5 November', title: 'Fair bets, and work in Valdoria', items: [
     'Smuggling is a gamble you can weigh: the customs men are waiting about 15% of the time at Dawnport by day (25% when the crowns are at odds), 12% at Eastwatch, 5% less at night, and only 4% with a customs clerk paid 40c to look away for ten days (he may be caught and name you). The risk shows on the button.',
     'A royal marriage keeps the crowns close while it lasts (relations rise each week), but no longer protects them for ever: if the royal spouse is cast off or gone, the bond breaks and Valdoria remembers. Convicting a royal in an Alderwyn court angers the Queen.',
