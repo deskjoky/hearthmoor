@@ -1643,6 +1643,7 @@
     const pop = adults(s), employed = pop.filter(p => p.job).length / Math.max(1, pop.length), dem = {};
     for (const id in s.biz) {
       const b = s.biz[id];
+      if (b.seized) { b.lastProfit = 0; b.lastRevenue = 0; b.lastWages = 0; continue; }   // held by the Queen's officers in time of war
       if (b.closed) {
         b.lastProfit = 0;
         // an empty shop does not stay empty for ever: someone from outside takes it on
@@ -3585,6 +3586,79 @@
   const canAudience = s => { const V = s.valdoria; return !!(V && (isRuler(s) || V.charter || V.standing >= 25)); };
   // the roads of Valdoria and the Holy Brotherhood that rides them
   const VAL_BANDITS = { dawnport: 12, goldmeadow: 18, thornwick: 30, stonewatch: 15, valdor: 10 };
+  /* ---------- war between the crowns ----------
+     When relations fall through the floor, the Queen may declare war; the ruler of Alderwyn may declare it too. A royal
+     marriage, an alliance or a trade pact keeps the peace. In war: no passage ships sail, Dawnport is closed, Alderwyn
+     ships are taken at sea or impounded in port, your property in Valdoria is seized, Eastwatch is raided, and the treasury
+     pays for every day of it. The war score runs from -100 (Valdoria winning) to 100 (Alderwyn winning); Alderwyn's levies,
+     and a Marshal on the council, push it Alderwyn's way. Peace comes on terms that follow the score. */
+  const WAR = { valArmy: 160, cost: 40, capture: 0.3 };
+  const atWar = s => !!(s.valdoria && s.valdoria.war);
+  const peaceHolds = V => !!(V.wed || V.treaty);
+  function startWar(s, by) {
+    const V = s.valdoria; if (!V || V.war) return;
+    V.war = { since: s.day, by, score: 0, raids: 0, taken: 0, leaveBy: s.day + 3, lastBattle: s.day };
+    V.treaty = null; V.relation = Math.min(V.relation, 8); V.embargo = 0;
+    for (const b of Object.values(s.biz || {})) if (b.owner === 'player' && kingdomOf(b.town) === 'valdoria' && !b.closed) b.seized = 'war';
+    const R = s.realm; if (R) R.contracts = (R.contracts || []).filter(c => !c.val || c.done);
+    const mine = Object.values(s.biz || {}).filter(b => b.seized === 'war').length;
+    const text = (by === 'player' ? 'Alderwyn declares war on Valdoria.' : 'Queen Ximena declares war on Alderwyn.') + ' No ships sail between the crowns; Dawnport is closed, and Alderwyn subjects in Valdoria have three days to leave.' + (mine ? ' Your ' + (mine === 1 ? 'business' : mine + ' businesses') + ' in Valdoria ' + (mine === 1 ? 'is' : 'are') + ' seized by the Queen\u2019s officers.' : '');
+    valLog(s, text, 'bad'); if (R) realmLog(s, by === 'player' ? 'The crown goes to war with Valdoria. The treasury pays ' + WAR.cost + 'c a day for it.' : 'Valdoria is at war with Alderwyn. The levies march to the coast, at ' + WAR.cost + 'c a day to the treasury.', 'bad');
+  }
+  // the terms follow the war: whoever is winning is paid
+  function peaceTerms(score) {
+    if (score >= 40) return { pay: -600, text: 'Valdoria sues for peace and pays Alderwyn 600c' };
+    if (score >= 15) return { pay: -250, text: 'Valdoria pays Alderwyn 250c for peace' };
+    if (score > -15) return { pay: 0, text: 'Peace, with nothing paid on either side' };
+    if (score > -40) return { pay: 300, text: 'Alderwyn pays Valdoria 300c in tribute' };
+    return { pay: 700, text: 'Alderwyn pays Valdoria 700c in tribute' };
+  }
+  function endWar(s) {
+    const V = s.valdoria, R = s.realm, w = V.war; if (!w) return;
+    const T = peaceTerms(w.score); if (R) R.treasury -= T.pay;
+    V.war = null; V.peaceUntil = s.day + 45; V.relation = clamp(30 + (T.pay < 0 ? -5 : T.pay > 0 ? 8 : 0), 0, 100); V.duty = Math.max(V.duty, 1.3); V.embargo = 0;
+    for (const b of Object.values(s.biz || {})) if (b.seized === 'war') delete b.seized;
+    if (s.ship && s.ship.impounded) { delete s.ship.impounded; }
+    if (R) { R.favour = clamp(R.favour + (T.pay < 0 ? 6 : T.pay > 0 ? -6 : 0), 0, 100); for (const id in s.towns) if (kingdomOf(id) === 'alderwyn') s.towns[id].approval = clamp((s.towns[id].approval || 50) + 4, 0, 100); }
+    valLog(s, 'Peace between the crowns, after ' + (s.day - w.since) + ' days of war. ' + T.text + '. Ships sail again, and what was seized is given back.', T.pay > 0 ? 'bad' : 'good');
+  }
+  function warDay(s) {
+    const V = s.valdoria, R = s.realm; if (!V) return;
+    if (!V.war) {
+      // the drums: when relations sink this low and nothing binds the crowns, the Queen may go to war
+      if (V.relation < 20 && !peaceHolds(V) && s.day >= (V.peaceUntil || 0)) {
+        if (s.day % 7 === 1) valLog(s, 'Valdorian galleys gather at Dawnport, and the Queen\u2019s council talks of war. Relations with Alderwyn are ' + Math.round(V.relation) + '.', 'bad');
+        if (V.relation < 12 && rand(s) < 0.06) startWar(s, 'valdoria');
+      }
+      return;
+    }
+    const w = V.war;
+    // the fighting: Alderwyn's levies against the Queen's army and galleys, and the luck of the day
+    const levies = R ? R.levies : 120, push = (levies - WAR.valArmy) / 100 * 2 + (R && R.council.war === 'player' ? 0.6 : 0);
+    w.score = clamp(w.score + push + (rand(s) - 0.5) * 6, -100, 100);
+    if (R) R.treasury -= WAR.cost;
+    if (s.day - w.lastBattle >= 5) { w.lastBattle = s.day; const where = ['off Stormrest Isle', 'in the Sundering Sea', 'off the Eastwatch headland', 'before Dawnport'][Math.floor(rand(s) * 4)];
+      valLog(s, 'A battle ' + where + '. ' + (w.score > 15 ? 'Alderwyn has the better of it.' : w.score < -15 ? 'Valdoria has the better of it.' : 'Neither side gains much.') + ' (The war: ' + warWord(w.score) + '.)', w.score < -15 ? 'bad' : 'info'); }
+    // weariness: the towns tire of a long war, and the guilds of a closed sea
+    if (R && (s.day - w.since) % 7 === 6) { for (const id in s.towns) if (kingdomOf(id) === 'alderwyn') s.towns[id].approval = clamp((s.towns[id].approval || 50) - 2, 0, 100); R.favour = clamp(R.favour - 1, 0, 100); }
+    // Valdorian galleys raid Eastwatch, more often when the war goes their way
+    if (rand(s) < 0.06 + Math.max(0, -w.score) / 500) {
+      const T = s.towns && s.towns.eastwatch; w.raids++; let what = '';
+      if (T) { const took = Math.round(Math.max(0, T.chest) * 0.15); T.chest -= took; T.approval = clamp((T.approval || 50) - 5, 0, 100); what = took + 'c from the town chest'; }
+      if (s.ship && s.ship.port === 'eastwatch' && !s.ship.impounded && rand(s) < 0.35) { let lostN = 0; for (const g in s.ship.hold) { const l = Math.ceil((s.ship.hold[g] || 0) / 2); s.ship.hold[g] -= l; lostN += l; } if (lostN) what += (what ? ', and ' : '') + 'half the cargo in your ship\u2019s hold'; }
+      valLog(s, 'Valdorian galleys raid Eastwatch harbour' + (what ? ' and carry off ' + what : '') + '.', 'bad');
+    }
+    // the three days' grace ends: an Alderwyn subject still in Valdoria is fined and put on a ship home, unless the Queen's warrant protects them
+    if (s.day >= w.leaveBy && kingdomOf(townAt(s.player.x, s.player.z)) === 'valdoria' && !V.warrant) {
+      const fine = Math.min(60, Math.max(0, s.coins)); spend(s, fine); const P1 = PORTS.eastwatch;
+      s.player.x = P1.x + Math.sin(P1.face) * 3; s.player.z = P1.z + Math.cos(P1.face) * 3; s.player.dest = null; s.player.action = null;
+      valLog(s, 'The Queen\u2019s officers find you still in Valdoria. You are fined ' + fine + 'c and put aboard a neutral ship for Eastwatch.', 'bad');
+    }
+    // when the crown is not yours, the king makes peace in his own time; the Queen offers it when the war is a stalemate
+    if (!isRuler(s) && s.day - w.since >= 20 && rand(s) < 0.08) endWar(s);
+    else if (isRuler(s) && s.day - w.since >= 30 && Math.abs(w.score) < 15 && !w.offered && rand(s) < 0.1) { w.offered = s.day; valLog(s, 'Queen Ximena\u2019s envoy comes to Crownmere: she will make peace with nothing paid on either side, if you will. (Realm page)', 'info'); }
+  }
+  const warWord = n => n >= 40 ? 'going well for Alderwyn' : n >= 15 ? 'tilting to Alderwyn' : n > -15 ? 'in the balance' : n > -40 ? 'tilting to Valdoria' : 'going badly for Alderwyn';
   function valBanditDay(s) {
     const B = s.bandits, V = s.valdoria; if (!B || !V) return;
     for (const id of Object.keys(VAL_BANDITS)) {
@@ -3626,6 +3700,8 @@
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
     // a royal who married before v0.47 took the spouse's family name in place of their own: give it back
     for (const id of V.royals || []) { const q = s.people[id]; if (q && q.maiden && /^Infant[ae] /.test(q.maiden) && q.name !== q.maiden) q.name = q.maiden; }
+    warDay(s);
+    if (V.war) { valBanditDay(s); return; }
     valContractDay(s);
     // a treaty binds both crowns: raising Alderwyn's tariff past the pact breaks it
     if (V.treaty && R && R.tariff > 1.1) { valLog(s, 'Alderwyn has raised its tariff in breach of ' + TREATY[V.treaty.kind].name + '. The Queen tears it up.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); favourBy(s, -25); }
@@ -5901,6 +5977,7 @@
         // passage by ship between Eastwatch, Stormrest Isle and Dawnport; ships sail by day, and not when a winter storm is up
         const from = portHere(s); if (!from) return fail('Ships leave from the quay: the passage office in Eastwatch, or the quay in Dawnport.');
         if (!PORTS[a] || a === from) return fail('No ship goes there.');
+        if (atWar(s) && !(from === 'dawnport' && a === 'eastwatch' && s.day <= s.valdoria.war.leaveBy) && !(from === 'stormrest' && a === 'eastwatch') && !(from === 'eastwatch' && a === 'stormrest')) return fail('No passage ships sail between the crowns while they are at war.' + (from === 'dawnport' ? ' The last ships for Alderwyn have gone.' : ''));
         const h = hourOf(s); if (h < 7 || h >= 17) return fail('The last ship has sailed. The first leaves at seven in the morning.');
         if (seaRough(s)) return fail('A storm is up on the Sundering Sea. No ship will sail today.');
         const f = passageFare(from, a) + (p.horse ? 10 : 0); if (s.coins < f) return fail('The passage is ' + f + 'c' + (p.horse ? ' with your horse' : '') + '.');
@@ -5934,6 +6011,7 @@
         const port = portHere(s), n = Math.round(b || 0), V = s.valdoria; if (!s.ship || s.ship.port !== port || !SEA_PORTS.includes(port)) return fail('Your ship must be here, in a port with a market.');
         const have = (s.ship.hold[a] || 0); if (!SEA_GOODS[a] || n <= 0 || n > have) return fail('You have ' + have + ' ' + a + ' aboard.');
         const foreign = SEA_GOODS[a].made !== port;
+        if (port === 'dawnport' && foreign && V && V.war && !c) return fail('Valdoria is at war with Alderwyn: no Alderwyn goods are landed openly at Dawnport. You could land them quietly.');
         if (port === 'dawnport' && foreign && V && V.embargo && !c) return fail('Dawnport is closed to Alderwyn’s goods until day ' + V.embargo + '.');
         const gross = seaLoad(s, port, a, n, 1), rate = c ? 0 : landingTax(s, port, a), tax = Math.round(gross * rate);
         const share = Math.round((s.ship.paid && s.ship.paid[a] || 0) * n / have); if (s.ship.paid) s.ship.paid[a] = Math.max(0, (s.ship.paid[a] || 0) - share);
@@ -5960,12 +6038,20 @@
         // your own ship goes when you say, by day or night; in a storm you may sail anyway, at a risk to the cargo
         const from = portHere(s); if (!s.ship || s.ship.port !== from) return fail('Your ship is moored at ' + (s.ship ? PORTS[s.ship.port].name : 'nowhere') + '.');
         if (!PORTS[a] || a === from) return fail('Choose where to sail.');
+        if (s.ship.impounded) return fail(s.ship.name + ' is impounded at Dawnport until there is peace.');
         if (seaRough(s) && !b) return fail('A storm is up. Sail anyway, or wait for calmer water.');
         if (s.coins < SHIP_CREW) return fail('The crew want ' + SHIP_CREW + 'c for the voyage.');
         spend(s, SHIP_CREW);
         let lost = '';
         if (seaRough(s) && rand(s) < 0.35) { for (const g in s.ship.hold) { const l = Math.ceil(s.ship.hold[g] / 3); if (l) { s.ship.hold[g] -= l; if (s.ship.paid) s.ship.paid[g] = Math.round((s.ship.paid[g] || 0) * 2 / 3); } } lost = ' The storm washes a third of the cargo overboard.'; }
         const mins = Math.round(seaDist(from, a) / (SAIL_MPM * 1.15)), P1 = PORTS[a];
+        if (atWar(s) && (a === 'dawnport' || from === 'dawnport')) {
+          const V = s.valdoria;
+          if (rand(s) < WAR.capture) { const nm = s.ship.name; V.war.taken++; s.ship = null; const P2 = PORTS.stormrest; s.player.x = P2.x + 3; s.player.z = P2.z; s.player.dest = null; s.player.action = null; p.riding = false;
+            valLog(s, 'Valdorian galleys take ' + nm + ' at sea, with all her cargo. You and the crew are set ashore on Stormrest Isle.', 'bad'); return { ok: true, mins, taken: true }; }
+          if (a === 'dawnport' && !V.warrant) { s.ship.port = 'dawnport'; s.ship.impounded = true; const P3 = PORTS.eastwatch; s.player.x = P3.x + Math.sin(P3.face) * 3; s.player.z = P3.z + Math.cos(P3.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
+            valLog(s, s.ship.name + ' is impounded the moment she ties up at Dawnport, cargo and all, until there is peace. The harbour guard puts you on a neutral ship back to Eastwatch.', 'bad'); return { ok: true, mins, impounded: true }; }
+        }
         s.ship.port = a; s.player.x = P1.x + Math.sin(P1.face) * 3; s.player.z = P1.z + Math.cos(P1.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
         s.rec.sailed = (s.rec.sailed || 0) + 1; if (a === 'dawnport' && !s.rec.landedValdoria) s.rec.landedValdoria = s.day;
         event(s, s.ship.name + ' brings you to ' + P1.name + ' in ' + mins + ' minutes.' + lost, lost ? 'bad' : 'info');
@@ -6012,6 +6098,7 @@
       case 'audience': {
         // an audience with Queen Ximena at the Alcázar. a: 'talk' | 'gift' | 'warrant' | 'duty'
         const V = s.valdoria, q = queenOf(s); if (!V || !q || q.status !== 'here') return fail('The Queen is not receiving.');
+        if (V.war && !V.warrant) return fail('The crowns are at war. The Queen does not receive subjects of Alderwyn.');
         if (Math.hypot(s.player.x - LOCS.vdalcazar.x, s.player.z - LOCS.vdalcazar.z) > 26) return fail('The Queen receives at the Alcázar in Valdor.');
         if (!canAudience(s)) return fail('The chamberlain does not know your name. Make one in Valdoria first: trade honestly at Dawnport, or carry out a Valdorian contract (your name here is ' + Math.round(V.standing) + ' of 25).');
         const ruler = isRuler(s), mood = QUEEN_MOOD(V.favour);
@@ -6046,11 +6133,26 @@
         }
         return fail('Unknown.');
       }
+      case 'declareWar': {
+        const V = s.valdoria, R = s.realm; if (!V || !isRuler(s)) return fail('Only the ruler of Alderwyn can declare war.');
+        if (V.war) return fail('The crowns are already at war.');
+        if (V.wed) return fail('The royal houses are joined by marriage. You cannot make war on your own kin.');
+        if (V.treaty && V.treaty.kind === 'alliance') return fail('You are allied with Valdoria. Break the alliance first, and see what that costs.');
+        if (V.relation >= 30) return fail('Relations are ' + Math.round(V.relation) + ': there is no quarrel your lords would fight for. (Below 30.)');
+        if (V.treaty) { valLog(s, 'Alderwyn tears up ' + TREATY[V.treaty.kind].name + '.', 'bad'); V.treaty = null; }
+        favourBy(s, -40); startWar(s, 'player'); return ok();
+      }
+      case 'makePeace': {
+        const V = s.valdoria, w = V && V.war; if (!w) return fail('There is no war.');
+        if (!isRuler(s)) return fail('Only the ruler of Alderwyn can make peace.');
+        if (s.day - w.since < 5 && !w.offered) return fail('The war is only ' + (s.day - w.since) + ' days old. The Queen will not treat until it has run five.');
+        endWar(s); return ok();
+      }
       case 'treaty': {
         // a: 'trade' | 'alliance' | 'break'
         const V = s.valdoria, R = s.realm; if (!V || !isRuler(s)) return fail('Only the ruler of Alderwyn treats with Valdoria.');
         if (a === 'break') { if (!V.treaty) return fail('There is no treaty.'); valLog(s, 'Alderwyn breaks ' + TREATY[V.treaty.kind].name + ' with Valdoria.', 'bad'); V.treaty = null; V.relation = clamp(V.relation - 25, 0, 100); favourBy(s, -30); return ok(); }
-        const T0 = TREATY[a]; if (!T0) return fail('Unknown treaty.');
+        const T0 = TREATY[a]; if (!T0) return fail('Unknown treaty.'); if (V.war) return fail('The crowns are at war. Make peace first.');
         if (a === 'alliance' && !(V.treaty && V.treaty.kind === 'trade' && s.day - V.treaty.since >= 20)) return fail('An alliance needs a trade pact kept for twenty days first.');
         if (V.treaty && V.treaty.kind === a) return fail('You already have ' + T0.name + '.');
         if (R.tariff > 1.1) return fail('The Queen will not treat while Alderwyn’s tariff is above 1.1×. Lower it first.');
@@ -6061,7 +6163,7 @@
       case 'royalMatch': {
         // a: the person to marry into Valdoria's royal house: 'self' or one of your grown children
         const V = s.valdoria, Y = you(s); if (!V || !isRuler(s)) return fail('Only the ruler of Alderwyn can make a royal match.');
-        setupRoyals(s); if (V.wed) return fail('The houses are already joined by marriage.');
+        setupRoyals(s); if (V.wed) return fail('The houses are already joined by marriage.'); if (V.war) return fail('The crowns are at war. Make peace first.');
         if (V.relation < 60) return fail('Relations are not warm enough for a royal match (' + Math.round(V.relation) + ' of 60).');
         if (s.coins < 300) return fail('A royal wedding costs 300c.');
         const self = a === 'self', q = self ? null : s.people[a];
@@ -6375,7 +6477,7 @@
   }
 
   const api = {
-    GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
+    GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, WAR, atWar, startWar, endWar, peaceTerms, warWord, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,

@@ -1302,5 +1302,49 @@ console.log('42. Stage VIII: Valdor, the Queen, Valdorian courts and roads (v0.4
   Sim.advance(s2, 1440); check(s2.courts.valdor, 'and Valdor’s court sits from the next day');
 }
 
+console.log('43. War between the crowns (v0.50)');
+{
+  const s = newGameRaw(48); s.ageRate = 0; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440);
+  const V = s.valdoria, R = s.realm, X = (...a) => Sim.cmd(s, ...a), P = Sim.PORTS;
+  V.relation = 45; check(!X('declareWar').ok, 'there is no war while relations are 30 or more');
+  V.relation = 20; V.wed = { royal: V.royals[0], to: 'you', day: 1 }; check(!X('declareWar').ok, 'nor while the royal houses are joined by marriage'); V.wed = null;
+  V.treaty = { kind: 'alliance', since: 1 }; check(!X('declareWar').ok, 'nor while the crowns are allied'); V.treaty = null;
+  // what you own in Valdoria, and a ship in hand
+  s.biz.d_vine.owner = 'player'; s.coins = 3000; s.player.x = P.eastwatch.x; s.player.z = P.eastwatch.z; s.t = Math.floor(s.t / 1440) * 1440 + 10 * 60; X('buyShip');
+  const t0 = R.treasury; check(X('declareWar').ok && Sim.atWar(s) && s.biz.d_vine.seized, 'the crown declares war; your tavern in Dawnport is seized');
+  check(!X('sail', 'dawnport').ok, 'no passage ships sail to Valdoria in war');
+  check(!X('treaty', 'trade').ok && !X('royalMatch', 'self').ok, 'and there are no treaties or royal matches until the peace');
+  const c0 = s.coins; Sim.advance(s, 1440); check(s.biz.d_vine.lastProfit === 0, 'the seized tavern earns you nothing');
+  check(R.treasury < t0 - 30, 'the war costs the treasury each day (' + (t0 - R.treasury) + 'c on the first day)');
+  check(!X('makePeace').ok, 'the Queen will not treat before the war has run five days');
+  // the levies decide the drift of the war
+  const run = lev => { const t = newGameRaw(49); t.ageRate = 0; Sim.applyStart(t, 'ruler'); Sim.advance(t, 1440); t.valdoria.relation = 20; Sim.cmd(t, 'declareWar'); t.realm.levies = lev; t.realm.treasury = 99999; for (let i = 0; i < 20; i++) Sim.advance(t, 1440); return t.valdoria.war ? t.valdoria.war.score : null; };
+  const big = run(320), small = run(40); check(big > small + 30, 'strong levies win the war, weak ones lose it (score ' + Math.round(big) + ' with 320 men, ' + Math.round(small) + ' with 40)');
+  // your ship on the crossing: taken at sea, or impounded at Dawnport without the Queen's warrant
+  let taken = 0, impounded = 0; for (let k = 0; k < 40; k++) { s.ship = { name: 'Test', port: 'eastwatch', hold: {}, cap: 80, origin: {} }; s.player.x = P.eastwatch.x; s.player.z = P.eastwatch.z; s.coins = 100; const r = X('sailShip', 'dawnport'); if (r.taken) taken++; else if (r.impounded) impounded++; }
+  check(taken > 4 && taken < 22 && impounded === 40 - taken, 'on 40 crossings: ' + taken + ' ships taken at sea, the other ' + impounded + ' impounded at Dawnport');
+  check(!X('sailShip', 'eastwatch').ok, 'an impounded ship cannot sail');
+  // an Alderwyn subject who stays in Valdoria past the grace is shipped home
+  s.player.x = Sim.LOCS.dpplaza.x; s.player.z = Sim.LOCS.dpplaza.z; s.coins = 200; for (let i = 0; i < 4; i++) Sim.advance(s, 1440);
+  check(Sim.kingdomOf(Sim.townAt(s.player.x, s.player.z)) === 'alderwyn' && s.coins < 200, 'after the three days’ grace, you are fined and shipped home from Valdoria');
+  // peace on terms that follow the war
+  V.war.score = 50; const tr = R.treasury; check(X('makePeace').ok && !Sim.atWar(s) && R.treasury === tr + 600, 'winning, the crown makes peace and Valdoria pays 600c');
+  check(!s.biz.d_vine.seized && !s.ship.impounded, 'what was seized is returned at the peace');
+  V.relation = 5; let warAgain = false; for (let i = 0; i < 20; i++) { V.relation = 5; Sim.advance(s, 1440); if (Sim.atWar(s)) warAgain = true; }
+  check(!warAgain, 'and there is no new war for weeks after');
+  check(Sim.peaceTerms(-50).pay === 700 && Sim.peaceTerms(0).pay === 0 && Sim.peaceTerms(25).pay === -250, 'losing, Alderwyn pays tribute; a stalemate is peace with nothing paid');
+}
+{
+  // the Queen goes to war when relations collapse and nothing binds the crowns; a marriage keeps the peace
+  const s = newGameRaw(50); s.ageRate = 0; Sim.advance(s, 1440); const V = s.valdoria;
+  let d = 0; for (; d < 80 && !V.war; d++) { V.relation = 6; Sim.advance(s, 1440); }
+  check(V.war && V.war.by === 'valdoria', 'with relations at rock bottom, Queen Ximena declares war (after ' + d + ' days)');
+  let peace = 0; for (; peace < 150 && V.war; peace++) Sim.advance(s, 1440);
+  check(!V.war, 'and when the crown is not yours, the king makes peace in time (' + peace + ' days)');
+  const s2 = newGameRaw(51); s2.ageRate = 0; Sim.advance(s2, 1440); s2.valdoria.wed = { royal: s2.valdoria.royals[0], to: 'x', day: 1 };
+  let w2 = false; for (let i = 0; i < 60; i++) { s2.valdoria.relation = 6; Sim.advance(s2, 1440); if (s2.valdoria.war) w2 = true; if (s2.valdoria.wed == null) s2.valdoria.wed = { royal: s2.valdoria.royals[0], to: 'x', day: 1 }; }
+  check(!w2, 'but never while the royal houses are joined');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
