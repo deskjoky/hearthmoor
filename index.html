@@ -4090,6 +4090,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function valLog(s, text, kind) { const V = s.valdoria; if (!V) return; V.log.unshift({ day: s.day, text }); if (V.log.length > 20) V.log.length = 20; event(s, 'From Valdoria: ' + text, kind || 'info'); }
   // the Queen of Valdoria rules for her own people: she answers Alderwyn's tariffs with her own duty, closes the port when
   // relations sour, and now and then a decree or a bad season changes what Dawnport will pay
+  // where the loads in a ship's hold were bought, by port: { iron: { eastwatch: 20, dawnport: 10 } }
+  function shipOrigin(ship, good) { ship.origin = ship.origin || {}; const h = ship.hold[good] || 0, o = ship.origin[good] = ship.origin[good] || {}; const known = Object.values(o).reduce((x, y) => x + y, 0); if (known > h) { for (const k in o) o[k] = Math.round(o[k] * h / known); } return o; }
   function valdoriaDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
@@ -4976,13 +4978,25 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (pr.until != null && s.day >= pr.until) { release(s, pr.pid, pr.sentence ? 'Served their time in the watch house.' : 'Released.'); continue; }
       if (J.condition < 40 && rand(s) < 0.08 * (1 - cov.cells)) { release(s, pr.pid, 'Slipped out of the rotten cell.'); jlog(s, p.name + ' has escaped from the watch house. The cell needs mending.', 'bad'); }
     }
-    // fines owed are paid off a little at a time, or worked off
-    for (const C2 of allCourts(s)) for (const c of C2.closed.slice(0, 20)) if (c.workLeft > 0) { const p = s.people[c.accused]; if (!p || p.status !== 'here' || p.held) continue; c.workLeft--; chestOf(s, C2).chest += 3; p.mood = clamp(p.mood - 2, 0, 100); if (!c.workLeft) plog(s, p, 'Finished their days of work for the ' + (C2.id === 'hearthmoor' ? 'village' : 'town') + '.'); }
-    for (const C3 of allCourts(s)) for (const c of C3.closed.slice(0, 20)) if (c.fineOwed > 0) {
-      const p = s.people[c.accused]; if (!p || p.status !== 'here') { c.fineOwed = 0; continue; }
-      const pay = Math.min(c.fineOwed, Math.max(0, Math.min(3, p.purse - 4)));
-      if (pay > 0) { p.purse -= pay; c.fineOwed -= pay; if (c.fineTo === 'you') { earn(s, pay); s.stats.fines = (s.stats.fines || 0) + pay; } else chestOf(s, C3).chest += pay; }
-      else { c.workDays = (c.workDays || 0) + 1; const w = Math.min(c.fineOwed, 3); c.fineOwed -= w; plog(s, p, 'Worked a day for the ' + (C3.id === 'hearthmoor' ? 'village' : 'town') + ' to pay off a fine.'); }
+    // fines owed are paid off a little at a time, or worked off. Each court keeps its own list of unfinished sentences,
+    // so a sentence goes on being served however many cases are decided after it
+    for (const C3 of allCourts(s)) {
+      const O = owingOf(C3), kind = C3.id === 'hearthmoor' ? 'village' : 'town';
+      for (const e of O) {
+        const p = s.people[e.pid], k = C3.closed.find(x => x.id === e.id);
+        if (k && k.overturned) { e.fine = 0; e.work = 0; }
+        if (e.work > 0 && p && p.status === 'here' && !p.held) { e.work--; chestOf(s, C3).chest += 3; p.mood = clamp(p.mood - 2, 0, 100); if (!e.work) plog(s, p, 'Finished their days of work for the ' + kind + '.'); }
+        if (e.fine > 0) {
+          if (!p || p.status !== 'here') e.fine = 0;
+          else {
+            const pay = Math.min(e.fine, Math.max(0, Math.min(3, p.purse - 4)));
+            if (pay > 0) { p.purse -= pay; e.fine -= pay; if (e.to === 'you') { earn(s, pay); s.stats.fines = (s.stats.fines || 0) + pay; } else chestOf(s, C3).chest += pay; }
+            else { if (k) k.workDays = (k.workDays || 0) + 1; e.fine -= Math.min(e.fine, 3); plog(s, p, 'Worked a day for the ' + kind + ' to pay off a fine.'); }
+          }
+        }
+        if (k) { k.fineOwed = e.fine; k.workLeft = e.work; }
+      }
+      C3.owing = O.filter(e => e.fine > 0 || e.work > 0);
     }
     // poor security makes people demand action
     if (s.day % 5 === 0) { const open = J.cases.length, worry = (1 - (cov.market + cov.homes) / 2) * 3 + open; if (worry > 4 && s.gov) { approve(s, 'elder', -2); jlog(s, 'Villagers grumble at the moot: ' + open + ' cases unheard and too few on the watch.', 'bad'); } }
@@ -5059,6 +5073,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (pen.work && A) { const wd = clamp(Math.round(pen.work), 1, 10); c.workLeft = wd; parts.push(wd + (wd === 1 ? ' day' : ' days') + ' of work for the ' + (J.id === 'hearthmoor' ? 'village' : 'town')); }
       if (pen.days && A) { const d = clamp(Math.round(pen.days), 1, maxDays(J)); if (!isHeld(A) && cellsFree(s, J) <= 0) parts.push('no cell free, so no time inside'); else { if (!isHeld(A)) hold(s, A.id, c, 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(), s.day + d, J); const pr = J.prisoners.find(x => x.pid === A.id); if (pr) { pr.until = s.day + d; pr.sentence = true; pr.reason = 'serving ' + d + (d === 1 ? ' day' : ' days') + ' for ' + CRIME[c.kind].toLowerCase(); } parts.push(d + (d === 1 ? ' day' : ' days') + ' in the cells'); } }
       else if (wasHeld) release(s, c.accused, 'Released after the hearing.');
+      if (c.fineOwed > 0 || c.workLeft > 0) owingOf(J).push({ id: c.id, pid: c.accused, fine: c.fineOwed || 0, work: c.workLeft || 0, to: c.fineTo });
       c.outcome = 'Found guilty by ' + by + (parts.length ? ': ' + parts.join(', ') : ': a warning') + '.';
       if (A) { A.opinion = clamp((A.opinion || 0) - (by === 'you' ? 15 : 5), -100, 100); A.mood = clamp(A.mood - 10, 0, 100); A.rep = Math.max(0, (A.rep || 0) - 10); A.record = (A.record || 0) + 1; }
       fam.forEach(q => q.opinion = clamp((q.opinion || 0) - (by === 'you' ? 6 : 2), -100, 100));
@@ -5297,8 +5312,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (!youHearAppeals(s)) return fail('Only the Lord Justice or the crown hears appeals.');
         let k = null; for (const C of allCourts(s)) { k = C.closed.find(x => x.id === a); if (k) break; } if (!k || k.verdict !== 'guilty' || k.overturned) return fail('No such conviction.');
         k.overturned = true; const A = s.people[k.accused]; if (A && A.held && A.held.caseId === k.id) release(s, A.id, 'Freed on appeal.');
-        const unpaid = k.fineOwed || 0, work = k.workLeft || 0; k.fineOwed = 0; k.workLeft = 0; if (A) A.record = Math.max(0, (A.record || 0) - 1);
-        const comp = 10; const CO = courtOf(s, k); chestOf(s, CO).chest -= comp; if (A) { A.purse += comp; A.opinion = clamp((A.opinion || 0) + 20, -100, 100); A.grudge = Math.max(0, (A.grudge || 0) - 1); }
+        const CO = courtOf(s, k), O = owingOf(CO), e = O.find(x => x.id === k.id);
+        const unpaid = e ? e.fine : (k.fineOwed || 0), work = e ? e.work : (k.workLeft || 0); k.fineOwed = 0; k.workLeft = 0; CO.owing = O.filter(x => x.id !== k.id); if (A) A.record = Math.max(0, (A.record || 0) - 1);
+        const comp = 10; chestOf(s, CO).chest -= comp; if (A) { A.purse += comp; A.opinion = clamp((A.opinion || 0) + 20, -100, 100); A.grudge = Math.max(0, (A.grudge || 0) - 1); }
         if (k.wrongful) CO.wrongful = Math.max(0, (CO.wrongful || 0) - 1);
         k.outcome = (k.outcome || '') + ' Overturned on appeal' + (unpaid || work ? ': ' + [unpaid ? unpaid + 'c of the fine cancelled' : '', work ? work + (work === 1 ? ' day' : ' days') + ' of work cancelled' : ''].filter(Boolean).join(', ') : '') + '.';
         jlog(s, 'On appeal, the conviction of ' + (A ? A.name : 'someone') + ' is overturned. The ' + (CO.id === 'hearthmoor' ? 'village' : 'town') + ' chest pays them ' + comp + 'c for the wrong.', 'info', CO); return ok();
@@ -5353,6 +5369,15 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const maxDays = C => C.id === 'hearthmoor' ? J_DETAIN_MAX : C.id === 'crownmere' ? 20 : 10;
   const maxFine = C => C.id === 'hearthmoor' ? 40 : C.id === 'crownmere' ? 200 : 100;
   const chestOf = (s, C) => C.id === 'hearthmoor' ? s.village : s.towns[C.id];
+  // a court's unfinished sentences: built once from its recent cases for saves from before v0.48, where a conviction
+  // already overturned on appeal has its fine and work cancelled
+  function owingOf(C) {
+    if (!C.owing) {
+      for (const c of C.closed) if (c.overturned) { c.fineOwed = 0; c.workLeft = 0; }
+      C.owing = C.closed.filter(c => c.fineOwed > 0 || c.workLeft > 0).map(c => ({ id: c.id, pid: c.accused, fine: c.fineOwed || 0, work: c.workLeft || 0, to: c.fineTo }));
+    }
+    return C.owing;
+  }
   // property taken as a penalty: lawfully it goes to the town and is sold; taken for yourself, it is theft
   function confiscate(s, c, A, mode) {
     const C = courtOf(s, c), T = chestOf(s, C), b = A.job && A.job.role === 'owner' && s.biz[A.job.biz], h = s.houses.find(x => x.owner === A.id && !x.tenants.includes(A.id)) || null;
@@ -6336,7 +6361,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (!SEA_GOODS[a] || n <= 0) return fail('Nothing to buy.');
         const used = Object.values(s.ship.hold).reduce((x, y) => x + y, 0); if (used + n > s.ship.cap) return fail('The hold has room for ' + (s.ship.cap - used) + ' more.');
         const cost = seaLoad(s, port, a, n, -1); if (s.coins < cost) return fail(n + ' ' + a + ' cost ' + cost + 'c.');
-        spend(s, cost); s.seaMarket[port][a] -= n; s.ship.hold[a] = (s.ship.hold[a] || 0) + n; s.ship.paid = s.ship.paid || {}; s.ship.paid[a] = (s.ship.paid[a] || 0) + cost; return ok();
+        spend(s, cost); s.seaMarket[port][a] -= n; s.ship.hold[a] = (s.ship.hold[a] || 0) + n; const og = shipOrigin(s.ship, a); og[port] = (og[port] || 0) + n; s.ship.paid = s.ship.paid || {}; s.ship.paid[a] = (s.ship.paid[a] || 0) + cost; return ok();
       }
       case 'cargoSell': {
         // c: true to land it quietly, past the customs house
@@ -6347,6 +6372,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         const gross = seaLoad(s, port, a, n, 1), rate = c ? 0 : landingTax(s, port, a), tax = Math.round(gross * rate);
         const share = Math.round((s.ship.paid && s.ship.paid[a] || 0) * n / have); if (s.ship.paid) s.ship.paid[a] = Math.max(0, (s.ship.paid[a] || 0) - share);
         s.ship.hold[a] = have - n;
+        // which of the sold loads were brought from another port? those bought on this quay are sold last, and earn no name
+        s.ship.origin = s.ship.origin || {}; const og = s.ship.origin[a] = s.ship.origin[a] || {}; let left = n, brought = 0;
+        for (const from of Object.keys(og).filter(k => k !== port)) { const take = Math.min(left, og[from]); og[from] -= take; left -= take; brought += take; if (!og[from]) delete og[from]; }
+        if (left > 0 && og[port]) { const take = Math.min(left, og[port]); og[port] -= take; left -= take; if (!og[port]) delete og[port]; }
+        brought += left;   // loads aboard from before origins were kept (saves before v0.48) count as brought in
         if (c) {
           // smuggling: a fair chance the customs men are waiting
           const caught = rand(s) < smuggleRisk(s, port);
@@ -6356,7 +6386,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (tax) { if (port === 'dawnport') { if (V) V.paid = (V.paid || 0) + tax; } else if (s.realm) s.realm.treasury += tax; }
         // honest trade earns a name in Dawnport: goods brought from Alderwyn and landed with the duty paid, up to 3 a day.
         // Selling back what you bought on the same quay earns nothing.
-        if (port === 'dawnport' && V && !c && foreign) { if (V.nameDay !== s.day) { V.nameDay = s.day; V.nameToday = 0; } const g = Math.min(Math.ceil(n / 30), 3 - V.nameToday); if (g > 0) { V.nameToday += g; V.standing = clamp(V.standing + g, 0, 100); } }
+        if (port === 'dawnport' && V && !c && foreign && brought > 0) { if (V.nameDay !== s.day) { V.nameDay = s.day; V.nameToday = 0; } const g = Math.min(Math.ceil(brought / 30), 3 - V.nameToday); if (g > 0) { V.nameToday += g; V.standing = clamp(V.standing + g, 0, 100); } }
         s.rec.seaTrade = (s.rec.seaTrade || 0) + (gross - tax - share);
         return ok(c ? 'landed' : { gross, tax, profit: gross - tax - share });
       }
@@ -11794,8 +11824,13 @@ function judge() {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.06.0640';
+const BUILD = '2026.11.06.0724';
 const NOTES = [
+  { v: '0.48', date: '6 November', title: 'Loose ends from the review', items: [
+    'Your ship\u2019s hold remembers where each load was bought. Only goods brought from another port earn a name in Valdoria; iron or wool bought on Dawnport\u2019s own quay and sold straight back earns nothing, whatever the duty.',
+    'Each court keeps its own list of unfinished sentences. A fine or days of work go on being paid and served however many cases are decided after them.',
+    'A conviction that was overturned on appeal in an older save has what was left of its fine and work cancelled when the save is loaded.'
+  ] },
   { v: '0.47', date: '6 November', title: 'Justice that does what it says', items: [
     'A pardon or a warning now frees an accused you had arrested. Before, they stayed in the cells after the hearing, still listed as held on suspicion, and filled the cells.',
     'Fines go to the chest of the court that set them: Greenhaven\u2019s fines to Greenhaven, Oakbridge\u2019s to Oakbridge. Before, every fine went to Hearthmoor\u2019s chest.',

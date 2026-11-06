@@ -1217,5 +1217,32 @@ console.log('40. Justice that does what it says, and a name in Valdoria earned b
   check(r.ok && q.name === 'Infanta Leonor', 'Infanta Leonor marries you and keeps her name (' + (q && q.name) + ')');
 }
 
+console.log('41. Where cargo was bought, sentences that keep running, and old appeals repaired (v0.48; from a second outside review)');
+{
+  const s = newGameRaw(43); s.ageRate = 0; const P = Sim.PORTS, X = (...a) => Sim.cmd(s, ...a), V = s.valdoria, at = k => { s.player.x = P[k].x; s.player.z = P[k].z; };
+  s.coins = 4000; s.t = 10 * 60 + 1440 * 2; s.day = 3; at('eastwatch'); X('buyShip'); X('sailShip', 'dawnport'); V.duty = 1.0;
+  const st0 = V.standing; for (let i = 0; i < 3; i++) { X('cargoBuy', 'iron', 10); X('cargoSell', 'iron', 10); }
+  check(V.standing === st0, 'Alderwyn iron bought on Dawnport’s quay and sold straight back earns no name, even with no duty (' + st0 + ' → ' + V.standing + ')');
+  X('sailShip', 'eastwatch'); X('cargoBuy', 'iron', 10); X('sailShip', 'dawnport'); s.day++; X('cargoBuy', 'iron', 10);
+  check(s.ship.origin.iron.eastwatch === 10 && s.ship.origin.iron.dawnport === 10, 'the hold remembers where each load was bought');
+  const st1 = V.standing; X('cargoSell', 'iron', 20);
+  check(V.standing === st1 + 1, 'selling a mixed hold counts only the loads brought from Alderwyn (' + st1 + ' → ' + V.standing + ')');
+}
+{
+  const s = newGameRaw(44); s.ageRate = 0; Sim.applyStart(s, 'lord'); s.coins = 4000; s.offices.elder = 'player'; Sim.advance(s, 1440);
+  const X = (...a) => Sim.cmd(s, ...a), J = s.justice;
+  const p = Sim.living(s).find(q => (q.town || 'hearthmoor') === 'hearthmoor' && !q.kid && !q.held && q.status === 'here' && !(q.job && q.job.type === 'office'));
+  const mk = () => { const c = { id: J.nextCase++, kind: 'theft', day: s.day, status: 'open', evidence: [{ text: 'x', w: 4 }], hidden: [], witnesses: [], investigating: 0, held: false, accused: p.id, accuser: null, victim: 'chest', value: 12, where: 'the chest', truth: 'guilty', what: 'test', claim: 'test', authority: 'Elder of Hearthmoor' }; J.cases.push(c); return c; };
+  p.purse = 2; const k = mk(); X('jHear', k.id, { fine: 20, work: 2 }, 'guilty');
+  for (let i = 0; i < 31; i++) { const d = mk(); X('jHear', d.id, {}, 'dismiss'); }
+  check(!J.closed.some(c => c.id === k.id) && J.owing.some(e => e.id === k.id), 'a sentence stays on the court’s list after 31 newer cases push it out of the record');
+  const e0 = Object.assign({}, J.owing.find(e => e.id === k.id)); Sim.advance(s, 1440 * 2); const e1 = J.owing.find(e => e.id === k.id);
+  check(!e1 || (e1.fine < e0.fine && e1.work < e0.work), 'and it goes on being paid and worked off (' + e0.fine + 'c, ' + e0.work + ' days → ' + (e1 ? e1.fine + 'c, ' + e1.work + ' days' : 'done') + ')');
+  // a conviction overturned under the old rules, in a save from before the list existed
+  const k2 = mk(); p.purse = 2; X('jHear', k2.id, { fine: 20, work: 2 }, 'guilty'); k2.overturned = true; k2.fineOwed = 20; k2.workLeft = 2; delete J.owing;
+  const s2 = Sim.deserialize(Sim.serialize(s)); Sim.advance(s2, 1440); const k3 = s2.justice.closed.find(c => c.id === k2.id);
+  check(k3 && !k3.fineOwed && !k3.workLeft && !s2.justice.owing.some(e => e.id === k2.id), 'loading an old save cancels what was left of a conviction already overturned');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
