@@ -273,6 +273,45 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .mmsg { margin: 2px 0 6px; font-size: 13px; color: var(--ink-soft); min-height: 1.3em; }
 .mgo { width: 100%; min-height: 46px; font-family: var(--f-display); font-size: 19px; touch-action: none; }
 @media (orientation: portrait) { .mini { width: calc(100vw - 24px); bottom: calc(env(safe-area-inset-bottom, 0px) + 170px); } }
+
+/* a scene you have to face: an enemy in the street, an ambush, the throne room */
+.sceneveil { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(10, 7, 5, .62);
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(16px, env(safe-area-inset-left, 0px)); }
+.scenebox { width: min(620px, 100%); max-height: 100%; overflow-y: auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 14px 40px rgba(0,0,0,.6); padding: 14px 18px 16px; color: var(--ink); }
+.scenebox h2 { font-family: var(--f-display); font-weight: 400; font-size: 26px; margin: 2px 0 0; text-wrap: balance; }
+.scenebox .sk { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.scenebox .sub { color: var(--ink-soft); font-size: 14px; margin-bottom: 6px; }
+.scenebox .said { font-family: var(--f-display); font-size: 18px; line-height: 1.35; margin: 8px 0; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 6px; }
+.choices.two { grid-template-columns: 1fr 1fr; }
+@media (max-width: 560px) { .choices { grid-template-columns: 1fr; } }
+.choice { text-align: left; border: 1px solid rgba(42,31,22,.35); background: rgba(255,250,235,.55); border-radius: 6px; padding: 8px 10px; min-height: 52px; color: var(--ink); font: inherit; }
+.choice b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 18px; }
+.choice small { display: block; color: var(--ink-soft); font-size: 12.5px; line-height: 1.3; }
+.choice:disabled { opacity: .5; }
+.choice.warn { border-color: #8a2a14; background: rgba(168, 60, 30, .12); }
+.choice.kind { border-color: #4f7a3a; background: rgba(90, 140, 70, .12); }
+.choice.cold { border-color: #4a4a60; background: rgba(60, 60, 90, .12); }
+.duelbox { width: min(520px, 100%); }
+.dhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.dhead > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .dhead > div:last-child { align-items: flex-end; text-align: right; }
+.dhead b { font-family: var(--f-display); font-weight: 400; font-size: 19px; }
+.dhead .vs { color: var(--ink-soft); font-style: italic; }
+.hearts { display: inline-flex; gap: 4px; } .hearts i { width: 14px; height: 14px; border-radius: 3px; transform: rotate(45deg); background: rgba(42,31,22,.18); } .hearts i.on { background: #a8341e; }
+.dtrack { height: 38px; background: linear-gradient(90deg, #3a3530, #6a6460 50%, #3a3530); }
+.dtrack.parry { background: linear-gradient(90deg, #4a1a12, #8a2a14 50%, #4a1a12); }
+.dtrack.parry .mzone { background: rgba(255, 190, 150, .5); box-shadow: inset 0 0 0 2px rgba(255, 220, 200, .9); }
+.btn.mgo.warn { background: #8a2a14; color: #fff3e6; }
+.moral { position: relative; height: 12px; border-radius: 6px; margin: 8px 0 18px; background: linear-gradient(90deg, #6a1e14, #8a8070 50%, #c9a640); }
+.moral i { position: absolute; top: -4px; width: 4px; height: 20px; margin-left: -2px; background: var(--ink); border-radius: 2px; }
+.moral span { position: absolute; top: 14px; font-size: 11px; color: var(--ink-soft); } .moral span:last-child { right: 0; }
+.grudge { border-left: 3px solid #8a6438; padding-left: 6px; } .grudge.g-enemy, .grudge.g-nemesis, .grudge.g-feud { border-color: #8a2a14; }
+.box.nem.g-nemesis, .box.nem.g-feud { border-color: #8a2a14; }
+.box.warnbox { border-color: #8a2a14; background: rgba(168, 60, 30, .08); }
+.plog .neg { color: #7a2a14; } .plog .pos { color: #3a5a2a; }
+@media (max-height: 520px) { .scenebox { padding: 10px 14px 12px; } .scenebox h2 { font-size: 22px; } .scenebox .said { font-size: 16px; margin: 4px 0; } .choices { gap: 6px; margin: 6px 0 4px; } .choice { min-height: 44px; padding: 5px 9px; } .choice b { font-size: 16px; } }
+.famebar { display: flex; align-items: center; gap: 8px; } .famebar span { font-size: 11px; color: var(--ink-soft); } .famebar .bar { flex: 1; }
+.chip.renown { cursor: pointer; } .chip.foes { background: #7a2414; color: #fff1e0; cursor: pointer; }
 /* patch notes: an old scroll that unrolls */
 .scrollwrap { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(10, 7, 5, .66);
   padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(16px, env(safe-area-inset-left, 0px)); }
@@ -490,6 +529,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 </div>
 <section class="panel" id="panel" hidden><div class="card" id="card"><div id="cardInfo"></div><div id="cardActs"></div></div></section>
 <div class="mini" id="mini" hidden></div>
+<div class="sceneveil" id="scene" hidden role="dialog" aria-modal="true"></div>
 <div class="sheet" id="book" hidden>
   <div class="cover">
     <div class="bookhead"><div class="tabs" role="tablist" id="tabs"></div><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button></div>
@@ -2985,6 +3025,7 @@ function act(c) {
   drainEvents();
   renderCard(true);
   if (UI.overlay === 'book') renderBook();
+  if (UI.overlay === 'scene') { if (sceneNeeded()) renderScene(); else closeScene(); }
   return r;
 }
 function toast(text, kind, force) {
@@ -3231,14 +3272,227 @@ function hallCard(s, walking) {
   return info + `<div class="acts">${acts.join('')}</div>`;
 }
 function opinionText(o) { return o >= 40 ? 'Thinks highly of you' : o >= 10 ? 'Likes you' : o > -10 ? 'Has no strong feelings about you' : o > -40 ? 'Resents you' : 'Hates you'; }
+/* ================= your name, your enemies, and the scenes where you face them ================= */
+function fameBar(f) { return `<div class="famebar"><span>Fame</span>${progressBar(f / 100)}</div>`; }
+function moralBar(m) { const x = (m + 100) / 2; return `<div class="moral" role="img" aria-label="Your name: ${esc(Sim.moralWord(m))}"><i style="left:${x}%"></i><span>Cruel</span><span>Good</span></div>`; }
+function hateLine(s, q) {
+  const h = q.hate || 0; if (h < 15) return '';
+  const st = Sim.hateStep(h), why = q.nem ? q.nem.why : (q.mem || []).find(m => m.w < 0);
+  return `<div class="why grudge g-${st.key}"><b>${esc(st.name)}.</b> ${esc(why ? (typeof why === 'string' ? why : why.text) : '')}</div>`;
+}
+function memLines(s, q) {
+  const m = (q.mem || []).slice(0, 3); if (!m.length) return '';
+  return `<ul class="plog mem">${m.map(x => `<li class="${x.w < 0 ? 'neg' : 'pos'}">Remembers: ${esc(x.text)}</li>`).join('')}</ul>`;
+}
+function enemyActs(s, q, body) {
+  const h = q.hate || 0, F = s.folk || {}; if (h < 15 || q.status !== 'here') return '';
+  const a = [], near = body && Math.hypot(body.x - s.player.x, body.z - s.player.z) < 12;
+  if (near) a.push(B_('Face them', ['fFace', q.id], 'warn'));
+  if (q.nem) {
+    if (!near) a.push(B_('Find them', ['ui', 'seek', q.id], 'alt'));
+    if (!(q.nem.tracked > s.day)) a.push(B_('Set an informant on them' + (Sim.yourGuards(s) >= 1 ? '' : ' · 30c'), ['fInformant', q.id], 'alt'));
+    const by = Sim.authOver(s, q); if (by) a.push(B_('Have them arrested' + (q.nem.ev >= 2 ? '' : '<small>without proof</small>'), ['fSend', q.id, 'arrest'], 'alt'));
+  }
+  if (h >= 35 && Sim.DENS.includes(Sim.townAt ? Sim.townAt(s.player.x, s.player.z) : '')) a.push(B_('Hire a blade&hellip;', ['ui', 'blade', q.id], 'alt'));
+  return a.join('');
+}
+function pageRenown(s) {
+  const F = Sim.setupFolk(s), title = Sim.moralName(F.moral);
+  let h = `<h3>Your Name</h3><p class="lead">What people say about you, who hates you, and what you own.</p>`;
+  h += `<div class="box"><h5>${esc(s.name)}${title ? ' ' + esc(title) : ''}</h5><p>Your name is <b>${esc(Sim.moralWord(F.moral))}</b> (${Math.round(F.moral)}), and you are <b>${esc(Sim.fameName(F.fame).toLowerCase())}</b> (${Math.round(F.fame)} of 100).</p>${moralBar(F.moral)}${fameBar(F.fame)}
+    <p class="why">Kindness, fair pay, cheap prices, alms and mercy make you good. Evictions, firings, rent rises, greed and blood make you cruel. Fame grows with what you own, the offices you hold and what you do. People who think well of you work for you, buy from you and vote for you. With a cruel name, good workers turn you down.</p>
+    <div class="acts">${B_('Give alms · 10c', ['fAlms'], 'alt', s.coins < 10 || F.almsDay === s.day)}${B_('Ask around town · 5c<small>gossip about your enemies</small>', ['fAsk'], 'alt', s.coins < 5 || F.lastAsk === s.day)}</div></div>`;
+  // enemies
+  const N = Sim.nemeses(s);
+  const rivals = Sim.living(s).filter(q => (q.hate || 0) >= 35 && !q.nem).sort((a, b) => b.hate - a.hate).slice(0, 6);
+  h += `<h4>Your enemies</h4>`;
+  if (F.ambush) { const q = s.people[F.ambush.pid]; h += `<div class="box warnbox"><p><b>${F.ambush.kind === 'assassin' ? 'A hired blade is waiting for you.' : 'Hired thugs are waiting for you.'}</b> ${q ? esc(q.name) + ' paid for it.' : ''} They will strike on the roads, or in the streets of ${q ? esc(Sim.townName(Sim.townOf(q))) : 'town'} after dark. Guards help.</p></div>`; }
+  if (!N.length && !rivals.length) h += `<p>No one hates you enough to act. Yet.</p>`;
+  for (const q of N) {
+    const st = Sim.hateStep(q.hate), W = Sim.nemWhere(s, q), body = G.agents.find(a => a.pid === q.id);
+    h += `<div class="box nem g-${st.key}"><h5>${esc(q.name)} <span class="pill bad">${esc(st.name)}</span></h5><p>${esc(q.nem.why)}${/[.!?]$/.test(q.nem.why) ? '' : '.'}</p>
+      <dl class="kv"><dt>Where</dt><dd>${s.day - q.nem.seen <= 10 || q.nem.tracked > s.day ? esc(W.text) : 'Last seen in ' + esc(Sim.townName(W.town)) + ' on day ' + q.nem.seen + '. Ask around to learn more.'}</dd><dt>Hatred</dt><dd>${Math.round(q.hate)}${q.hate >= 110 ? ': they want you dead' : q.hate >= 85 ? ': fire and blades' : ': sabotage and thugs'}</dd><dt>Proof</dt><dd>${q.nem.ev >= 2 ? 'enough to bring them to justice' : q.nem.ev > 0 ? 'some, not enough' : 'none yet'}</dd>${q.nem.tracked > s.day ? `<dt>Informant</dt><dd>following them until day ${q.nem.tracked}</dd>` : ''}${q.nem.quiet > s.day ? `<dt>Quiet</dt><dd>until day ${q.nem.quiet}</dd>` : ''}</dl>
+      ${q.nem.acts.length ? `<ul class="plog">${q.nem.acts.slice(0, 3).map(x => `<li>Day ${x.day}: ${esc(ACT_WORD[x.what] || x.what)}${x.seen ? '' : ' (no one saw)'}</li>`).join('')}</ul>` : ''}
+      <div class="acts">${enemyActs(s, q, body)}</div></div>`;
+  }
+  if (rivals.length) h += `<p><b>Rivals:</b> ${rivals.map(q => esc(q.name) + ' (' + esc((q.mem || []).find(m => m.w < 0) ? q.mem.find(m => m.w < 0).text.replace(/\.$/, '').toLowerCase() : 'an old grudge') + ')').join('; ')}. They bad-mouth you and start price wars. Push them further and they become enemies.</p>`;
+  // owning towns
+  const towns = Object.keys(TOWN_NAMES).map(t => [t, Sim.townOwnership(s, t)]).filter(([t, O]) => O.total >= 2 && TOWN_NAMES[t]);
+  h += `<h4>Own the town</h4><p>Own every business in a town and you are its master: a statue in the square, more fame, and the guilds against you.</p><div class="grid2">${towns.map(([t, O]) => { const W = F.towns[t] || {}; return `<div class="box"><h5>${esc(TOWN_NAMES[t])}${W.all ? ' <span class="pill yes">Master</span>' : W.half ? ' <span class="pill">Merchant prince</span>' : ''}</h5><p>${O.own} of ${O.total} businesses</p>${progressBar(O.own / O.total)}</div>`; }).join('')}</div>`;
+  // deeds
+  if (F.deeds.length) h += `<h4>What people say you did</h4><ul class="plog">${F.deeds.slice(0, 10).map(d => `<li class="${d.dm < 0 ? 'neg' : 'pos'}">Day ${d.day}: ${esc(d.why)}${d.dm ? ' (' + (d.dm > 0 ? '+' : '') + d.dm + ')' : ''}</li>`).join('')}</ul>`;
+  return h;
+}
+const ACT_WORD = { slander: 'spread stories about you', undercut: 'started a price war', sabotage: 'smashed up your property', poach: 'lured away your staff', thugs: 'paid thugs to beat you', assassin: 'hired a blade', intrigue: 'whispered against you at court', pirates: 'had your ship robbed', arson: 'set a fire', poison: 'poisoned your family' };
+
+/* ----- the scene: a moment you have to face, full screen, with the game paused ----- */
+function sceneNeeded() { return G && ((G.folk && G.folk.scene) || UI.throne); }
+function checkScene() {
+  if (UI.mode !== 'play' || !G) return;
+  if (sceneNeeded() && !UI.overlay) openScene();
+  else if (UI.overlay === 'scene' && !sceneNeeded()) closeScene();
+}
+function openScene() { UI.overlay = 'scene'; $('panel').hidden = true; if (mini.on) closeMini(); $('scene').hidden = false; renderScene(); }
+function closeScene() { UI.overlay = null; UI.throne = false; duel.on = false; $('scene').hidden = true; renderCard(true); }
+function renderScene() {
+  const S = G.folk && G.folk.scene;
+  let h = '';
+  if (S && S.kind === 'duel') { if (!duel.on || duel.pid !== S.pid || duel.day !== S.day) startDuel(S); h = duelHTML(); $('scene').innerHTML = `<div class="scenebox duelbox">${h}</div>`; bindDuel(); renderDuel(); return; }
+  if (S) h = encounterHTML(G, S); else if (UI.throne) h = throneHTML(G);
+  $('scene').innerHTML = `<div class="scenebox">${h}</div>`;
+}
+function encounterHTML(s, S) {
+  const q = s.people[S.pid]; if (!q) return `<p>They are gone.</p><div class="acts">${B_('Go on', ['fLeave'])}</div>`;
+  const st = Sim.hateStep(q.hate), who = `${esc(q.name)}, ${esc(Sim.occupation(s, q).toLowerCase())}`;
+  if (S.kind === 'meet') {
+    const O = Sim.confrontOpts(s, q), pct = Math.round(O.threaten.odds * 100);
+    const why = q.nem ? q.nem.why : ((q.mem || []).find(m => m.w < 0) || { text: '' }).text;
+    return `<div class="sk">${S.sought ? 'You find them' : 'Face to face'}</div><h2>${esc(q.name)}</h2><div class="sub">${who} · your ${esc(st.name.toLowerCase())}</div>
+      <p class="said">${esc(Sim.regardOf(s, q))}</p>${why ? `<p>${esc(why)}${/[.!?]$/.test(why) ? '' : '.'}</p>` : ''}
+      <div class="choices">
+        ${choice('Make amends', 'Pay ' + O.amends.cost + 'c, and say you are sorry. Much of the hate goes.', ['fConfront', q.id, 'amends'], !O.amends.ok || s.coins < O.amends.cost, O.amends.ok ? '' : O.amends.why)}
+        ${choice('Make peace', 'Talk it through. It may end the feud for good.', ['fConfront', q.id, 'reconcile'], !O.reconcile.ok, O.reconcile.ok ? '' : O.reconcile.why)}
+        ${choice('Pay them off', O.bribe.cost + 'c to leave you alone for a month.', ['fConfront', q.id, 'bribe'], s.coins < O.bribe.cost)}
+        ${choice('Threaten them', 'About ' + pct + '% they back down. If not, they fight.', ['fConfront', q.id, 'threaten'])}
+        ${choice('Expose them', 'Show the court what they did: a fine, and gaol.', ['fConfront', q.id, 'expose'], !O.expose.ok, O.expose.ok ? '' : O.expose.why)}
+        ${choice('Settle it with steel', 'A duel. Win and their life is in your hands.', ['fConfront', q.id, 'duel'], false, '', 'warn')}
+      </div><div class="acts">${B_('Walk on', ['fLeave'], 'alt')}</div>`;
+  }
+  if (S.kind === 'ambush') {
+    const g = Sim.yourGuards(s) >= 1, k = S.hired === 'assassin';
+    return `<div class="sk">${S.road ? 'On the road' : 'In the dark'}</div><h2>${k ? 'A blade in the dark' : 'Ambush'}</h2>
+      <p class="said">${k ? 'A cloaked figure steps out, steel in hand.' + (S.lethal ? ' This one means to kill you.' : '') : 'Three men block the way, cudgels ready. "' + esc(q.name.split(' ')[0]) + ' sends regards."'}</p>
+      <div class="choices">${choice('Fight', 'Defend yourself. ' + (S.lethal ? 'Lose, and you die.' : 'Lose, and you are beaten and robbed.'), ['fAmbush', null, 'fight'], false, '', 'warn')}${choice('Call your guards', g ? 'Your guards drive them off, and one of them talks.' : 'You have no guards with you.', ['fAmbush', null, 'guards'], !g)}${choice('Pay them', 'Give them ' + (S.lethal ? 'up to 200c' : 'up to 60c') + '.', ['fAmbush', null, 'pay'])}${choice('Run', 'You will get away, but drop coin as you go.', ['fAmbush', null, 'flee'])}</div>`;
+  }
+  if (S.kind === 'won') {
+    return `<div class="sk">The fight is won</div><h2>${esc(q.name)}</h2><p class="said">${esc(q.name.split(' ')[0])} is on the ground, your blade at their throat.</p>
+      <div class="choices">${choice('Spare them', 'They are humbled, and much of the hate goes. Your name grows kinder.', ['fAfter', null, 'spare'])}${choice('Kill them', 'It ends here, for them. Their family will want blood.', ['fAfter', null, 'kill'], false, '', 'warn')}</div>`;
+  }
+  return `<div class="acts">${B_('Go on', ['fLeave'])}</div>`;
+}
+function choice(t, says, c, dis, why, cls) { return `<button type="button" class="choice ${cls || ''}" data-c='${esc(JSON.stringify(c))}' ${dis ? 'disabled' : ''}><b>${t}</b><small>${esc(dis && why ? why : says)}</small></button>`; }
+function throneHTML(s) {
+  const F = Sim.setupFolk(s), A = F.aud[0], R = s.realm;
+  if (!A) return `<div class="sk">The throne room</div><h2>No one waits to be heard</h2><p>Petitioners come most days. The treasury holds ${R.treasury}c.</p><div class="acts">${B_('Leave the throne', ['ui', 'throne', false])}</div>`;
+  const T = Sim.AUDIENCE[A.key], q = s.people[A.who], side = k => T[k];
+  return `<div class="sk">The throne room · ${F.aud.length} waiting</div><h2>${esc(T.title)}</h2><div class="sub">${q ? `${esc(q.name)}, ${esc(Sim.occupation(s, q).toLowerCase())}, of ${esc(Sim.townName(Sim.townOf(q)))} · ` : ''}the treasury holds ${R.treasury}c</div>
+    <p class="said">${esc(A.text)}</p>
+    <div class="choices two">${['kind', 'cold'].map(k => choice(esc(side(k).label), side(k).says, ['fAudience', A.id, k], side(k).cost && R.treasury < side(k).cost, 'The treasury has only ' + R.treasury + 'c.', k === 'cold' ? 'cold' : 'kind')).join('')}</div>
+    <div class="acts">${B_('Hear them later', ['ui', 'throne', false], 'alt')}</div>`;
+}
+
+/* ----- the duel: strike when the needle is in the band, parry when they swing ----- */
+const duel = { on: false };
+function startDuel(S) {
+  const q = G.people[S.pid], foe = S.hired === 'assassin' ? 1.3 : S.hired === 'thugs' ? 0.95 : Sim.fightOf(G, q), me = G.folk.fight || 0;
+  Object.assign(duel, { on: true, pid: S.pid, day: S.day, foe, me, you: 3 + (me >= 0.5 ? 1 : 0), youMax: 3 + (me >= 0.5 ? 1 : 0), them: S.lethal ? 4 : 3, themMax: S.lethal ? 4 : 3, phase: 'strike', pos: 0, dir: 1, speed: 0.5 + foe * 0.3, t: 0, limit: 0, name: S.ambush ? (S.hired === 'assassin' ? 'The killer' : 'The thugs') : q.name, done: null, msg: S.why + ' Strike when the needle is in the bright band.' });
+  duel.zone = dzone('strike');
+}
+function dzone(kind) { const w = kind === 'strike' ? clamp(0.22 - (duel.foe - 0.8) * 0.12 + duel.me * 0.06, 0.1, 0.3) : clamp(0.17 - (duel.foe - 0.8) * 0.12 + duel.me * 0.05, 0.08, 0.26); const a = 0.08 + Math.random() * (0.84 - w); return [a, a + w]; }
+function hearts(n, max) { let h = ''; for (let i = 0; i < max; i++) h += `<i class="${i < n ? 'on' : ''}"></i>`; return `<span class="hearts">${h}</span>`; }
+function duelHTML() {
+  return `<div class="dhead"><div><b>You</b><span id="dyou"></span></div><div class="vs">against</div><div><b>${esc(duel.name)}</b><span id="dthem"></span></div></div>
+    <div class="mtrack dtrack" id="dtrack"><div class="mzone" id="dzone"></div><div class="mneedle" id="dneedle"></div><span class="mlabel" id="dlabel"></span></div>
+    <p class="mmsg" id="dmsg"></p><div id="dgo"></div>`;
+}
+function bindDuel() { /* the big button is redrawn when the phase changes; taps are read on pointerdown so they are instant */ }
+function renderDuel() {
+  if (!$('dtrack')) return;
+  $('dyou').innerHTML = hearts(duel.you, duel.youMax); $('dthem').innerHTML = hearts(duel.them, duel.themMax);
+  $('dtrack').classList.toggle('parry', duel.phase === 'parry');
+  $('dlabel').textContent = duel.done ? '' : duel.phase === 'parry' ? 'They swing: parry!' : 'Your blade';
+  $('dzone').style.left = (duel.zone[0] * 100) + '%'; $('dzone').style.width = ((duel.zone[1] - duel.zone[0]) * 100) + '%';
+  $('dneedle').style.left = (Math.min(1, duel.pos) * 100) + '%';
+  $('dmsg').textContent = duel.msg;
+  const want = duel.done ? 'done' : duel.phase;
+  if ($('dgo').dataset.k !== want) {
+    $('dgo').dataset.k = want;
+    if (duel.done) $('dgo').innerHTML = `<button type="button" class="btn mgo" data-c='${esc(JSON.stringify(['fDuelEnd', null, duel.done === 'won']))}'>${duel.done === 'won' ? 'Stand over them' : 'Darkness&hellip;'}</button>`;
+    else { $('dgo').innerHTML = `<button type="button" class="btn mgo ${duel.phase === 'parry' ? 'warn' : ''}" id="dbtn">${duel.phase === 'parry' ? 'Parry' : 'Strike'}</button>`; $('dbtn').addEventListener('pointerdown', ev => { ev.preventDefault(); duelTap(); }); }
+  }
+}
+function stepDuel(dt) {
+  if (!duel.on || duel.done || UI.overlay !== 'scene') return;
+  duel.pos += duel.dir * duel.speed * dt; if (duel.pos > 1) { duel.pos = 1; duel.dir = -1; } if (duel.pos < 0) { duel.pos = 0; duel.dir = 1; }
+  if (duel.phase === 'parry') { duel.t += dt; if (duel.t > duel.limit) { duel.you--; Snd.play('miss'); duel.msg = 'Too slow: their blade finds you.'; nextPhase('strike'); } }
+  renderDuel();
+}
+function nextPhase(ph) {
+  if (duel.them <= 0) { duel.done = 'won'; duel.msg = duel.name + (duel.name.startsWith('The') ? ' are down.' : ' is down.'); Snd.play('great'); return; }
+  if (duel.you <= 0) { duel.done = 'lost'; duel.msg = 'You fall.'; return; }
+  duel.phase = ph; duel.zone = dzone(ph); duel.t = 0; duel.limit = 2.1 / duel.speed; if (ph === 'parry') { duel.pos = duel.dir > 0 ? 0 : 1; }
+}
+function duelTap() {
+  if (!duel.on || duel.done) return;
+  const [a, b] = duel.zone, mid = (a + b) / 2, half = (b - a) / 2, off = Math.abs(duel.pos - mid), q = off <= half * 0.35 ? 2 : off <= half ? 1 : 0;
+  Snd.play(q ? 'clang' : 'miss');
+  if (duel.phase === 'strike') {
+    if (q) { duel.them--; duel.msg = q === 2 ? 'A perfect cut! They stagger.' : 'A hit!'; nextPhase(q === 2 ? 'strike' : 'parry'); }
+    else { duel.msg = 'You swing wide.'; nextPhase('parry'); }
+  } else {
+    if (q) { if (q === 2) { duel.them--; duel.msg = 'A perfect parry, and a riposte!'; } else duel.msg = 'Parried.'; nextPhase('strike'); }
+    else { duel.you--; duel.msg = 'Your parry misses: you are cut.'; nextPhase('strike'); }
+  }
+  renderDuel();
+}
+
+/* ----- statues: a town you own raises one in its square ----- */
+const STATUES = {}, STATUE_AT = { hearthmoor: { x: -7, z: 13 } };   // a town square with room for it; elsewhere, beside the market
+function syncStatues(s) {
+  const F = s && s.folk; if (!F) return;
+  for (const t in F.towns) {
+    if (!F.towns[t].statue || STATUES[t]) continue;
+    const L0 = Sim.LOCS[Sim.MARKET_AT[t]]; if (!L0) continue;
+    const A0 = STATUE_AT[t], d = Math.min(7, (L0.r || 8) * 0.6), x = A0 ? A0.x : L0.x + d, z = A0 ? A0.z : L0.z + d, y = groundH(x, z), g = new THREE.Group();
+    const stone = new THREE.MeshLambertMaterial({ color: '#c4bcaa' }), dark = new THREE.MeshLambertMaterial({ color: '#8f887a' }), bronze = new THREE.MeshLambertMaterial({ color: F.moral >= 0 ? '#a07c3a' : '#4a4a52' });
+    const add = (geo, m, px, py, pz, rx, rz) => { const me = new THREE.Mesh(geo, m); me.position.set(px || 0, py, pz || 0); me.rotation.set(rx || 0, 0, rz || 0); g.add(me); return me; };
+    add(new THREE.BoxGeometry(3, 0.3, 3), dark, 0, 0.15); add(new THREE.BoxGeometry(2.2, 1.9, 2.2), stone, 0, 1.25); add(new THREE.BoxGeometry(2.5, 0.25, 2.5), dark, 0, 2.3);
+    add(new THREE.ConeGeometry(0.75, 2.1, 10), bronze, 0, 3.45);                      // the cloak
+    add(new THREE.CylinderGeometry(0.3, 0.36, 0.9, 10), bronze, 0, 4.25);              // the chest
+    add(new THREE.SphereGeometry(0.3, 12, 10), bronze, 0, 4.95);                       // the head
+    add(new THREE.CylinderGeometry(0.09, 0.09, 1.1, 6), bronze, 0.42, 5.0, 0, 0, -0.35); // an arm raised
+    add(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 6), bronze, -0.36, 4.0, 0, 0, 0.25); // the other at the side
+    add(new THREE.BoxGeometry(1.2, 0.5, 0.06), new THREE.MeshLambertMaterial({ color: '#6b5a3a' }), 0, 1.4, 1.12);   // a plaque
+    g.position.set(x, y, z); scene.add(g); STATUES[t] = g;
+  }
+}
+
+
+/* ----- running a business the simple way: three dials, and people who remember ----- */
+function bizDials(s, b, short) {
+  const mode = b.prices || 'fair', fw = Sim.fairWage(b.town), st = b.staff;
+  const payMode = !st.length ? null : st.every(x => x.wage <= fw - 2) ? 'low' : st.every(x => x.wage >= fw + 1) ? 'good' : st.every(x => x.wage === fw) ? 'fair' : null;
+  const seg = (cmd, cur, opts) => `<div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${cur === v}" data-c='${esc(JSON.stringify([cmd, b.id, v]))}'>${esc(n)}</button>`).join('')}</div>`;
+  let h = `<div class="setting"><span>Prices</span>${seg('fPrices', mode, [['cheap', 'Cheap'], ['fair', 'Fair'], ['greedy', 'Greedy']])}${short ? '' : `<p>${esc(Sim.PRICE_MODES[mode].says)}.</p>`}</div>`;
+  if (st.length) h += `<div class="setting"><span>Pay</span>${seg('fPay', payMode, [['low', 'Low · ' + (fw - 2) + 'c'], ['fair', 'Fair · ' + fw + 'c'], ['good', 'Generous · ' + (fw + 1) + 'c']])}${short ? '' : `<p>Fair pay in ${esc(TOWN_NAMES[b.town || 'hearthmoor'])} is about ${fw}c a day. Pay less and workers sour and walk out; pay more and they are loyal.</p>`}</div>`;
+  return h;
+}
+function staffNote(s, b, st, p) {
+  const fw = Sim.fairWage(b.town), h = p.home && Sim.houseById(s, p.home), mine = h && h.owner === 'player';
+  const bits = [];
+  if (st.wage <= fw - 2) bits.push('underpaid');
+  if (mine) bits.push('rents ' + h.name + ' from you at ' + h.rent + 'c' + (st.wage - 3 - h.rent < 0 ? ': <b>cannot afford it</b>' : ''));
+  if ((p.hate || 0) >= 15) bits.push(Sim.hateStep(p.hate).name.toLowerCase());
+  return bits.length ? `<small> · ${bits.join(' · ')}</small>` : '';
+}
+function rentSeg(h) {
+  const base = Math.max(1, h.rent0 == null ? h.rent : h.rent0), cur = h.rent === Math.max(1, base - 1) && h.rent < base ? 'low' : h.rent === base ? 'fair' : h.rent === base + 2 ? 'high' : null;
+  return `<div class="seg" role="group">${[['low', 'Low · ' + Math.max(1, base - 1) + 'c'], ['fair', 'Fair · ' + base + 'c'], ['high', 'High · ' + (base + 2) + 'c']].map(([v, n]) => `<button type="button" aria-pressed="${cur === v}" data-c='${esc(JSON.stringify(['fRent', h.id, v]))}'>${esc(n)}</button>`).join('')}</div>`;
+}
+function budgetNote(s, t, h) {
+  const left = Sim.income(s, t) - 3 - h.rent, j = t.job, works = j && ((j.type === 'biz' && s.biz[j.biz] && s.biz[j.biz].owner === 'player') || j.type === 'shop');
+  return (works ? ' <b>Works for you</b>, so if they leave you lose a worker too.' : '') + (left < 0 ? ` <b>Cannot afford the rent:</b> ${-left}c short each day after food. They will fall behind and may leave town.` : left <= 1 ? ' Only just gets by.' : '');
+}
+
 function personCard(s, pr, body) {
   const doing = body && (body.why || body.doing);
   const log = pr.log.slice(0, 3).map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('');
   return `<h2>${esc(pr.name)}<span class="age">, ${pr.age}</span></h2><div class="sub">${esc(Sim.occupation(s, pr))} · ${esc(Sim.homeText(s, pr))}</div>
     <div class="why num"><b>Purse:</b> <span class="${pr.purse < 0 ? 'neg' : ''}">${pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c'}</span> · <b>Respect:</b> ${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ' · <b>On the council</b>' : ''} · <b>Mood:</b> ${Math.round(pr.mood)}/100 · ${opinionText(pr.opinion)}${doing ? `<br><b>Doing:</b> ${esc(doing)}` : ''}</div>
+    ${pr.status === 'here' && !pr.kid && G.folk ? `<div class="why">${esc(Sim.regardOf(s, pr))}</div>` : ''}${hateLine(s, pr)}${memLines(s, pr)}
     ${log ? `<ul class="plog">${log}</ul>` : ''}
     ${relationLine(s, pr)}
-    <div class="acts">${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+    <div class="acts">${enemyActs(s, pr, body)}${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
 }
 function relationLine(s, pr) {
   const Y = Sim.you(s), f = Y.court[pr.id];
@@ -3331,6 +3585,7 @@ function hud(s) {
   const inv = s.player.inv, chips = [];
   rankWatch(s);
   { const r = rankOf(s); chips.push(`<span class="chip num rank r-${r.key}">${esc(r.title)}</span>`); }
+  if (s.folk) { const F = s.folk, mn = Sim.moralName(F.moral); if (mn || F.fame >= 10) chips.push(`<span class="chip num btn renown" data-c='["page","renown"]' role="button" tabindex="0">${mn ? esc(mn.replace(/^the /, '')) + ' · ' : ''}${esc(Sim.fameName(F.fame))}</span>`); const n = F.nem.length; if (n) chips.push(`<span class="chip num btn foes" data-c='["page","renown"]' role="button" tabindex="0">${n === 1 ? '1 enemy' : n + ' enemies'}${F.ambush ? ' · watch your back' : ''}</span>`); if (Sim.isRuler(s) && F.aud.length) chips.push(`<span class="chip num btn" data-c='["ui","throne"]' role="button" tabindex="0">Petitioners <b>${F.aud.length}</b></span>`); }
   const carry = Sim.GOODS.filter(g => inv[g]).map(g => `<b>${inv[g]}</b> ${g}`);
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
   if (s.player.horse) chips.push(`<span class="chip num btn" data-c='["ride"]' role="button" tabindex="0">${s.player.riding ? 'Riding ' + esc(s.player.horse.name) + ' · get down' : 'Mount ' + esc(s.player.horse.name)}</span>`);
@@ -3354,12 +3609,12 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['justice', 'Justice'], ['realm', 'Realm'], ['goals', 'Goals']];
+const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['renown', 'Renown'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['justice', 'Justice'], ['realm', 'Realm'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
   UI.overlay = null; UI.confirm = null; UI.mapSel = null;
-  ['book', 'pause', 'mapui'].forEach(id => $(id).hidden = true);
+  ['book', 'pause', 'mapui', 'scene'].forEach(id => $(id).hidden = true); UI.throne = false;
   $('toasts').hidden = false;
   if (UI.mode === 'play') ['hud', 'sticks'].forEach(id => $(id).hidden = false);
   saveNow(); renderCard(true);
@@ -3368,7 +3623,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -3802,7 +4057,8 @@ function pageProperty(s) {
     const live = s.player.house === h.id;
     const val = Sim.houseValue(s, h), lv = h.comfort || 0;
     const extra = `<p>Worth about <b>${val}c</b> \u00b7 ${Sim.COMFORT[lv].name}${(h.wear || 0) > 10 ? ' \u00b7 needs repairs' : ''}.</p><div class="acts">${lv < 3 ? B_('Improve to ' + Sim.COMFORT[lv + 1].name.toLowerCase() + '<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', h.id], 'alt', s.coins < Sim.COMFORT[lv + 1].cost) : ''}${(h.wear || 0) > 4 ? B_('Repair · ' + Math.round(h.wear * 0.5) + 'c', ['repairHouse', h.id], 'alt') : ''}${live ? '' : h.forSale ? B_('Take off the market (asking ' + h.forSale + 'c)', ['listForSale', 'house', h.id, 0], 'alt') : B_('Put up for sale at ' + Math.round(val * 1.1) + 'c', ['listForSale', 'house', h.id, Math.round(val * 1.1)], 'alt')}</div>`;
-    html += `<div class="box"><h5>${esc(h.name)}${live ? ' \u00b7 your home' : ''}</h5>${extra}${live ? `<p>You live here${Object.values(s.people).some(q => q.home === 'you' && q.status === 'here') ? ' with your family' : ''}.</p><div class="acts">${B_('Go home', ['goto', 'myhome'])}${B_('Move back to the hut', ['moveToHut'], 'alt')}</div>` : !ts.length ? `<div class="acts">${B_('Move in<small>make it your home; your family comes too</small>', ['moveIn', h.id])}</div>` : ''}${ts.length ? ts.map(t => `<p>${esc(t.name)} lives here: ${esc(Sim.occupation(s, t))}, earns about ${Sim.income(s, t)}c a day, ${t.purse}c saved${t.arrears ? `, <b>${t.arrears} days behind</b>` : ''}. ${opinionText(t.opinion)}.</p>`).join('') : '<p>Empty. Someone looking for a home may move in.</p>'}
+    html += `<div class="box"><h5>${esc(h.name)}${live ? ' \u00b7 your home' : ''}</h5>${extra}${live ? `<p>You live here${Object.values(s.people).some(q => q.home === 'you' && q.status === 'here') ? ' with your family' : ''}.</p><div class="acts">${B_('Go home', ['goto', 'myhome'])}${B_('Move back to the hut', ['moveToHut'], 'alt')}</div>` : !ts.length ? `<div class="acts">${B_('Move in<small>make it your home; your family comes too</small>', ['moveIn', h.id])}</div>` : ''}${ts.length ? ts.map(t => `<p>${esc(t.name)} lives here: ${esc(Sim.occupation(s, t))}, earns about ${Sim.income(s, t)}c a day, ${t.purse}c saved${t.arrears ? `, <b>${t.arrears} days behind</b>` : ''}. ${opinionText(t.opinion)}.${t.kid ? '' : budgetNote(s, t, h)}</p>${hateLine(s, t)}`).join('') : '<p>Empty. Someone looking for a home may move in.</p>'}
+      <div class="setting"><span>Rent</span>${rentSeg(h)}</div>
       <div class="stepper"><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent - 1])}' aria-label="Lower rent">&minus;</button><output class="num">${h.rent}c</output><button type="button" data-c='${JSON.stringify(['setRent', h.id, h.rent + 1])}' aria-label="Raise rent">+</button></div>
       <p>Rent per day. Tenants who cannot pay fall behind; after ${3} days they are evicted. Raising rent makes tenants think less of you.</p>
       <div class="acts">${ts.map(t => UI.confirm === 'evict' + t.id ? B_(`Yes, evict ${esc(t.name)}`, ['evict', h.id, t.id], 'warn') + B_('Cancel', ['ui', 'confirm', null], 'alt') : B_(`Evict ${esc(t.name)}&hellip;`, ['ui', 'confirm', 'evict' + t.id], 'alt')).join('')}</div></div>`;
@@ -3991,6 +4247,8 @@ function ownedBizCard(s, b, walking) {
   const staff = b.staff.map(st => s.people[st.pid]).filter(Boolean);
   let html = `<h2>${esc(e.name)} <span class="pill yes">yours</span>${b.closed ? ' <span class="pill bad">closed</span>' : ''}${b.seized ? ' <span class="pill bad">seized in the war</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${esc(TOWN_NAMES[town])}${ar ? ', ' + ar : ''} · ${b.lease ? 'let to ' + esc((s.people[b.lease.pid] || {}).name || 'a tenant') + ' for ' + b.lease.rent + 'c a day' : (m ? 'run by your manager ' + esc(m.name) : 'no manager') + ' · ' + (staff.length ? staff.length + ' staff: ' + esc(staff.map(q => q.name.split(' ')[0]).join(', ')) : 'no staff')} ${b.lease ? '' : `· last day ${b.lastSold ? 'sold ' + esc(TR[b.trade] ? Sim.goodsName(b.trade, b.lastSold) : b.lastSold + ' lots') + ', ' : ''}${b.lastRevenue || 0}c in, ${money(b.lastProfit || 0)} profit${b.slump ? ' (a bad spell: ' + esc(b.slump.why) + ')' : ''}`} · worth about ${Sim.bizPrice(s, b.id)}c.</div>${walking}`;
   if (b.disrepair) html += `<div class="why">Needs mending: takings are down by a third.</div>`;
+  if (b.burnt && b.burnt > s.day) html += `<div class="why"><b>Burned.</b> Shut until day ${b.burnt}.</div>`;
+  if (!b.lease && !b.seized) html += bizDials(s, b, true);
   const acts = [B_('Manage', ['ui', 'manage', ['biz', b.id]])];
   if (b.disrepair) acts.push(B_('Mend it · ' + (b.repairCost || 30) + 'c', ['repairBiz', b.id], 'alt', s.coins < (b.repairCost || 30)));
   acts.push(B_('All businesses', ['ui', 'btown', town], 'alt'));
@@ -4046,6 +4304,11 @@ function taskList(s) {
   if (Sim.STEPS[v.step] && v.step < 9) out.push({ who: Sim.elderTitle(s), title: Sim.stepText(s, Sim.STEPS[v.step]), note: v.step === 8 ? 'Your standing is ' + v.standing + ' of 80.' : '', act: STEP_ACT[v.step] || '' });
   if (s.realm && Sim.isRuler(s)) for (const q of s.realm.petitions || []) out.push({ who: 'A petition to the crown', title: { relief: 'A hungry town asks for grain', defiance: 'A lord defies the crown\u2019s court', guilds: 'The guilds ask for lower tariffs' }[q.kind] || 'A petition', note: 'Answer by day ' + q.until + '.', act: B_('The Realm', ['page', 'realm']) });
   { const nob = s.courts ? Object.values(s.courts).flatMap(C => C.cases.filter(c => c.requested && c.status === 'open' && s.people[c.accused] && s.people[c.accused].noble && Sim.canJudge(s, C))) : []; for (const c of nob) out.push({ who: 'The crown\u2019s court', title: 'A noble is accused: ' + s.people[c.accused].name, note: c.what + '.', act: B_('Justice', ['page', 'justice']) }); }
+  if (s.folk) {
+    const F = s.folk;
+    if (Sim.isRuler(s) && F.aud.length) out.push({ who: 'The throne room', title: F.aud.length === 1 ? 'A petitioner waits to be heard' : F.aud.length + ' petitioners wait to be heard', note: 'Each brings a choice, kind or cold. Left a week, they go away bitter.', act: B_('Hold court', ['ui', 'throne']) });
+    if (F.ambush) { const q = s.people[F.ambush.pid]; out.push({ who: 'A warning', title: F.ambush.kind === 'assassin' ? 'Someone has hired a blade against you' : 'Someone has paid thugs to beat you', note: (q ? q.name + ' paid for it. ' : '') + 'Face them first, keep guards close, or stay off the roads and out of the streets at night.', act: B_('Your enemies', ['page', 'renown']) }); }
+  }
   if (v.shortage) out.push({ who: 'The village', title: 'Refill the granary: ' + v.granary + ' of ' + v.granaryNeed + ' grain', note: 'Until it is full, villagers buy less at every shop.', act: go('granary', 'Go to the granary') });
   if (v.dispute != null && (v.council || s.offices.elder === 'player')) out.push({ who: 'The council', title: 'Settle the dispute before the council', note: Sim.DISPUTES[v.dispute].text, act: go('hall', 'Go to the Village Hall') });
   if (v.contract) out.push({ who: v.contract.who, title: 'Deliver ' + Sim.goodsName(v.contract.trade, v.contract.qty) + ' to the Trading Post', note: 'By day ' + v.contract.until + ', for ' + v.contract.reward + 'c.', act: go('market', 'Go to the Trading Post') });
@@ -4153,6 +4416,7 @@ function pageRealm(s) {
   const mineL = Sim.yourLordships(s), mineS = Sim.yourSeats(s), f = (Sim.you(s).sex === 'f');
   let h = `<h3>The Kingdom of Alderwyn</h3><p class="lead">${ruler ? 'You rule Alderwyn from Crownmere castle. Keep the treasury out of debt and the realm behind you, or someone will take the crown from you.' : R.exile ? 'You are in exile, stripped of lands and offices. You can rebuild, and in time claim the crown again.' : 'Six regions under one crown. Win the lords, the guilds, the court and the towns, and the crown can be yours.'}</p>`;
   const urgent = R.plot || (R.after && ruler); if (urgent) h += rebellionBox(s, R);
+  if (ruler) { const n = (s.folk && s.folk.aud.length) || 0; h += `<div class="box"><h5>The throne room</h5><p>${n ? n + (n === 1 ? ' petitioner waits' : ' petitioners wait') + ' to be heard. Each brings a choice: kind, or cold.' : 'No one waits to be heard today.'}</p><div class="acts">${B_('Hold court', ['ui', 'throne'], n ? '' : 'alt')}</div></div>`; }
   h += `<div class="box"><dl class="kv"><dt>On the throne</dt><dd>${ruler ? esc(s.name) + ' (you)' : esc(K ? K.name : 'no one')}${!ruler && K ? ', aged ' + K.age : ''}</dd>${!ruler ? `<dt>The King’s standing</dt><dd class="num">${Math.round(R.kingSupport)}</dd>` : ''}<dt>Your favour at court</dt><dd class="num">${Math.round(R.favour)}</dd><dt>Your lordships</dt><dd>${mineL.length ? mineL.map(id => esc(Sim.REGIONS[id])).join(', ') : 'none'}</dd><dt>Your council seats</dt><dd>${mineS.length ? mineS.map(k => Sim.COUNCIL[k]).join(', ') : 'none'}</dd></dl></div>`;
   h += `<h4>Your support: ${sup}</h4><div class="box">${bar(S.lords, 'The lords')}${bar(S.guilds, 'The guilds')}${bar(S.court, 'The court')}${bar(S.towns, 'The towns')}<p>${ruler ? 'Below 30 for six days and the realm abandons you; below 42 and a rival may claim the crown.' : 'To claim the crown you need a lordship, a seat on the council, support of 65, and a King whose own standing has fallen below 45.'}</p>
     <div class="acts">${B_('Gifts to the lords<small>120c a lord</small>', ['patronage', 'lords'], 'alt')}${B_('Feast the guilds<small>300c</small>', ['patronage', 'guilds'], 'alt')}${B_('Feast for ' + esc(TOWN_NAMES[townHere()]) + '<small>about ' + Math.max(40, Math.round(Sim.living(s).filter(q => (q.town || 'hearthmoor') === townHere() && !q.kid).length * 0.6)) + 'c</small>', ['patronage', 'town', townHere()], 'alt')}</div></div>`;
@@ -4218,9 +4482,10 @@ function bizBox(s, b) {
     if (b.lease) { const q = s.people[b.lease.pid], L0 = b.lease, can = Sim.leaseBreakable(s, b); html += `<p>Leased to <b>${esc(q ? q.name : 'someone')}</b> for ${L0.rent}c a day${L0.until ? `, until day ${L0.until} (${L0.term}-day lease)` : ''}${L0.behind ? `, <b>${L0.behind} days behind</b>` : ''}. They run it, choose its staff, and keep what it earns above the rent.</p><p><label><input type="checkbox" data-c='${JSON.stringify(['leaseRenew', b.id, null, !L0.renew])}' ${L0.renew ? 'checked' : ''}> Renew when the term is up</label></p><div class="acts">${can ? B_('End the lease', ['endLease', b.id], 'alt') : ''}</div>${can ? '' : '<p class="why">Neither of you can break it before then, unless the rent falls 2 days behind.</p>'}`; }
     else { const lc = Sim.leaseCandidates(s, b.id); html += `<p>Worth about <b>${val}c</b>.${lc.length ? ' Or let it to someone who will run it and pay you rent:' : ''}</p><div class="acts">${(lc.length ? `<div class="seg" role="group" aria-label="Lease term">${[14, 30, 60].map(d => `<button type="button" aria-pressed="${(UI.leaseTerm || 30) === d}" data-c='${JSON.stringify(['ui', 'leaseTerm', d])}'>${d} days</button>`).join('')}</div>` : '') + lc.slice(0, 2).map(c => B_('Lease to ' + esc(c.name) + ' · ' + Sim.leaseRent(c.offer, UI.leaseTerm || 30) + 'c a day', ['leaseBiz', b.id, UI.leaseTerm || 30, c.pid], 'alt')).join('')}${b.forSale ? B_('Take off the market (asking ' + b.forSale + 'c)', ['listForSale', 'biz', b.id, 0], 'alt') : B_('Put up for sale at ' + Math.round(val * 1.1) + 'c', ['listForSale', 'biz', b.id, Math.round(val * 1.1)], 'alt')}</div>`; }
     if (b.lease) return html + `</div>`;
-    html += staff.map(({ st, p }) => `<div class="staffrow"><span>${esc(p.name)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${st.wage}c</output><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'fs' + p.id ? B_('Yes, let go', ['fireStaff', b.id, p.id], 'warn') : B_('Let go&hellip;', ['ui', 'confirm', 'fs' + p.id], 'alt')}</div>`).join('');
+    html += bizDials(s, b);
+    html += staff.map(({ st, p }) => `<div class="staffrow"><span>${esc(p.name)}${staffNote(s, b, st, p)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${st.wage}c</output><button type="button" data-c='${JSON.stringify(['setStaffWage', b.id, p.id, st.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'fs' + p.id ? B_('Yes, let go', ['fireStaff', b.id, p.id], 'warn') : B_('Let go&hellip;', ['ui', 'confirm', 'fs' + p.id], 'alt')}</div>`).join('');
     const seekers = Sim.living(s).filter(p => !p.job && !p.retired && !p.kid && (p.town || 'hearthmoor') === (b.town || 'hearthmoor'));
-    if (b.staff.length < 3 && seekers.length) html += `<p>Looking for work:</p><div class="acts">${seekers.slice(0, 4).map(p => B_('Hire ' + esc(p.name) + ' · 7c', ['hireStaff', b.id, p.id, 7], 'alt')).join('')}</div>`;
+    if (b.staff.length < 3 && seekers.length) { const fw = Sim.fairWage(b.town); html += `<p>Looking for work:</p><div class="acts">${B_('Hire the best who will work for you · ' + fw + 'c', ['fHireBest', b.id])}${seekers.slice(0, 4).map(p => Sim.willWork(s, p) ? B_('Hire ' + esc(p.name) + ' · ' + fw + 'c', ['hireStaff', b.id, p.id, fw], 'alt') : B_(esc(p.name) + '<small>will not work for you</small>', ['hireStaff', b.id, p.id, fw], 'alt', true)).join('')}</div>`; }
   }
   return html + `</div>`;
 }
@@ -4894,6 +5159,9 @@ function uiCmd(k, v) {
   if (k === 'worldSel') { UI.worldSel = UI.worldSel === v ? null : v; renderWorld(); return; }
   if (k === 'travel') { travel(v); return; }
   if (k === 'journey') { const r = Sim.cmd(G, 'journey', v); if (!r.ok) { toast(r.msg, 'warn'); return; } if (r.mins > 0) Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); if (UI.overlay) closeOverlay(); toast((r.how === 'ride' ? 'You ride to ' : 'You walk to ') + TOWN_NAMES[v] + ' (' + r.mins + ' min).', 'info', true); drainEvents(); renderCard(true); return; }
+  if (k === 'seek') { const q = G.people[v]; if (!q) return; UI.waypoint = v; const t = Sim.townOf(q), here = Sim.townAt(G.player.x, G.player.z) || 'hearthmoor'; if (t !== here) { if (Sim.kingdomOf(t) !== Sim.kingdomOf(here)) { toast(q.name + ' is across the sea in ' + TOWN_NAMES[t] + '. Take a ship.', 'warn', true); return; } uiCmd('journey', t); } else { if (UI.overlay) closeOverlay(); toast('You go looking for ' + q.name + '. Follow the marker.', 'info', true); } return; }
+  if (k === 'throne') { if (v === false) { UI.throne = false; closeScene(); return; } if (UI.overlay) closeOverlay(); UI.throne = true; openScene(); return; }
+  if (k === 'blade') { const q = G.people[v]; if (!q) return; if (UI.confirm === 'blade' + v) { UI.confirm = null; act(['fBlade', v, null, true]); } else { UI.confirm = 'blade' + v; toast('Pay to have ' + q.name + ' killed? Tap again to pay. It will darken your name, and if it is traced to you, worse.', 'warn', true); } return; }
   if (k === 'mini') { openMini(); return; }
   if (k === 'miniClose') { closeMini(); return; }
   if (k === 'notes') { showNotes(); return; }
@@ -5447,9 +5715,10 @@ function frame(now) {
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
   if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { walkPlayer(G, dt); SignKit.step(G, t); } const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  if (UI.mode === 'play' && G && !G.pendingDeath) { checkScene(); stepDuel(dt); }
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
-  syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null);
+  syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') syncStatues(G);
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
@@ -5713,6 +5982,19 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.53', date: '6 November', title: 'Your name, and your enemies', items: [
+    'Your name. Everything you do to people is remembered, and it adds up to how good or cruel you are, and how far your name is known. People greet you by it, work for you by it, and buy from you by it. See the new Renown page.',
+    'People remember. Everyone you hire, pay well, evict, sack, overcharge or convict remembers it, and so does their family. Tap anyone to see what they hold against you, or thank you for.',
+    'Run a business the simple way: three dials for each one. Prices are cheap, fair or greedy, and pay is low, fair or generous. Hire the best in one tap. Rent on every house you own is low, fair or high. The detailed management is still there under Manage.',
+    'Wages and rent pull against each other. Pay below what is fair in a town and workers walk out. Charge a worker more rent than their wage can cover and they pack up and leave town, and you lose a tenant and a worker. Treat people badly enough and nobody will work for you.',
+    'Loyal staff work harder, and a good name brings more customers. Greed pays faster, and makes enemies.',
+    'Enemies. Wrong someone enough and they become your rival, then your enemy, then your nemesis, and at worst a blood feud. Rivals bad-mouth you and start price wars. Enemies smash your property, lure away your staff and pay thugs to beat you. Nemeses set fires and hire killers, and a blood feud can poison your family. You can have several at once, in Valdoria too: a merchant whose trade you took, a courtier jealous of the Queen\u2019s favour, a mother whose son died in your war.',
+    'They are real people. Run into one in the street, or track them down: ask around town, set an informant on them, and follow the marker. Face them and choose: make amends, make peace, pay them off, threaten them, expose them with proof, or settle it with steel. As a lord or ruler you can have them arrested or banished. In the big towns you can hire a blade.',
+    'Duels. A fight is a quick duel: strike when the needle is in the bright band, and parry when they swing. Win, and you choose whether they live. Lose to a hired killer in a blood feud, and you die, and your heir carries on.',
+    'A grudge outlives the one who held it: kill someone, and their children grow up wanting your blood.',
+    'The throne room. As ruler, petitioners come before you: a family whose roof fell in, a quarrel over a field with a bribe on the table, a mother begging mercy for her son, a fever in a town. Each choice is kind or cold, with a real cost either way. Hold court from the Realm page.',
+    'Own the town. Buy every business in a town and you become its master: a statue in the square, more fame, and the guilds against you. Pay below fair and they strike.'
+  ] },
   { v: '0.52', date: '6 November', title: 'Wars and risings keep their word', items: [
     'Free trade won in a war is free from the day of the peace, and nothing changes the duty while it lasts. Before, the old duty stayed in force until the weekly update, and then crept back.',
     'When the war is going badly (\u221240 or worse), the Queen will not take gold for peace: she makes it only on her own terms, the aim she went to war for. The king gives in on her terms too when he makes peace for you.',

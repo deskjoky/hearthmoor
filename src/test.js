@@ -1432,5 +1432,89 @@ console.log('46. Wars and risings keep their word (v0.52; from an outside review
   check(Sim.cmd(c, 'rebelTerms').ok && Sim.yourSeats(c).length === 1 && R.council.war === 'player', 'a sitting Marshal who wins a charter keeps one seat, confirmed (' + Sim.yourSeats(c).join(', ') + ')');
 }
 
+console.log('47. Your name, your enemies, and the people you employ and house (v0.53)');
+{
+  const mk = (seed, start) => { const s = newGameRaw(seed); s.ageRate = 0; s.bandits = null; if (start) Sim.applyStart(s, start); Sim.advance(s, 1440); s.coins = 9000; Sim.setupFolk(s); return s; };
+  const s = mk(70), F = s.folk, Y = (...a) => Sim.cmd(s, ...a);
+  // an eviction is remembered, by the family too, and darkens your name
+  const h = s.houses.find(x => (x.town || 'hearthmoor') === 'hearthmoor' && x.tenants.some(id => !s.people[id].kid)); Y('buyHouse', h.id);
+  const t = s.people[h.tenants.find(id => !s.people[id].kid)], kin = Sim.living(s).filter(q => q !== t && (q.spouse === t.id || (q.parents || []).includes(t.id) || (t.parents || []).includes(q.id)));
+  const m0 = F.moral; Y('evict', h.id, t.id);
+  check(t.hate >= 20 && t.mem && t.mem[0].w < 0 && /threw them out/.test(t.mem[0].text), 'an evicted tenant hates you and remembers why (' + Math.round(t.hate) + ')');
+  check(F.moral < m0, 'and your name grows crueler (' + m0 + ' → ' + F.moral + ')');
+  check(!kin.length || kin.every(q => (q.hate || 0) > 0), 'their family holds it against you too (' + kin.length + ' kin)');
+  // someone who hates you will not work for you
+  check(!Sim.willWork(s, t) && !Y('hireStaff', Object.keys(s.biz).find(id => s.biz[id].owner !== 'player'), t.id, 7).ok, 'they will not work for you');
+  // enough hatred makes an enemy, with a reason; kindness can undo it
+  Sim.wrong(s, t, 60, 'You ruined them.'); check(t.nem && F.nem.includes(t.id) && t.nem.why, 'past 60 they become your enemy, with a reason (' + Math.round(t.hate) + ')');
+  for (let i = 0; i < 4; i++) Sim.kindness(s, t, 20, 'A kindness.'); check(!t.nem && !F.nem.includes(t.id), 'enough kindness ends the enmity (' + Math.round(t.hate) + ')');
+}
+{
+  // workers paid below fair walk out; tenants who cannot pay the rent leave town, and their work
+  const s = newGameRaw(71); s.ageRate = 0; s.bandits = null; Sim.advance(s, 1440); s.coins = 9000; Sim.setupFolk(s); const Y = (...a) => Sim.cmd(s, ...a);
+  const bid = Object.keys(s.biz).find(id => s.biz[id].owner !== 'player' && !s.biz[id].closed && (s.biz[id].town || 'hearthmoor') === 'hearthmoor' && ['bakery', 'tavern'].includes(s.biz[id].trade)); Y('buyBiz', bid); const b = s.biz[bid]; b.staff.slice(1).forEach(x => { s.people[x.pid].job = null; }); b.staff = b.staff.slice(0, 1);
+  const idle = Sim.living(s).filter(q => !q.kid && !q.retired && Sim.townOf(q) === 'hearthmoor' && !(q.job && q.job.type === 'office') && !b.staff.some(x => x.pid === q.id)).slice(0, 2); idle.forEach(q => { if (q.job) { q.job = null; } Y('hireStaff', bid, q.id, 7); });
+  const w = s.people[b.staff[b.staff.length - 1].pid]; check(w.mem && w.mem[0].w > 0, 'a hand you hire remembers it kindly');
+  for (const st of b.staff) st.wage = 1; let walked = false; for (let d = 0; d < 80 && !walked; d++) { Sim.folkDay(s); walked = !b.staff.some(x => x.pid === w.id); }
+  check(walked && w.hate > 0, 'paid 1c a day where fair is ' + Sim.fairWage('hearthmoor') + 'c, a worker walks out, and holds a grudge');
+  // the squeeze: works for you and rents from you, and cannot pay
+  const q = Sim.living(s).find(x => !x.kid && x.home && Sim.houseById(s, x.home) && Sim.townOf(x) === 'hearthmoor' && Sim.houseById(s, x.home).owner !== x.id), hh = Sim.houseById(s, q.home);
+  Y('buyHouse', hh.id); if (q.job) Sim.living(s); q.job = { type: 'biz', biz: bid, role: 'hand' }; b.staff.push({ pid: q.id, wage: 2 }); hh.rent = 20; q.arrears = 3; q.purse = 0;
+  for (let d = 0; d < 30 && Sim.townOf(q) === 'hearthmoor'; d++) { q.arrears = 3; Sim.folkDay(s); }
+  check(Sim.townOf(q) !== 'hearthmoor' && !hh.tenants.includes(q.id) && !b.staff.some(x => x.pid === q.id), 'a worker squeezed by your rent leaves for ' + Sim.townName(Sim.townOf(q)) + ', and you lose a tenant and a worker');
+  check(q.hate > 15, 'and they leave hating you for it (' + Math.round(q.hate) + ')');
+  // prices: greedy sells less, cheap sells more
+  Sim.living(s).filter(x => !x.kid && !x.retired && Sim.townOf(x) === 'hearthmoor' && !x.job).slice(0, 2).forEach(x => { x.job = { type: 'biz', biz: bid, role: 'hand' }; b.staff.push({ pid: x.id, wage: 7 }); });
+  const A = Sim.deserialize(Sim.serialize(s)), B = Sim.deserialize(Sim.serialize(s)); A.biz[bid].prices = 'greedy'; B.biz[bid].prices = 'cheap'; A.biz[bid].burnt = 0; B.biz[bid].burnt = 0; A.biz[bid].slump = null; B.biz[bid].slump = null;
+  Sim.advance(A, 1440); Sim.advance(B, 1440);
+  check(B.biz[bid].lastSold > 0 && A.biz[bid].lastSold <= B.biz[bid].lastSold && A.biz[bid].lastRevenue / Math.max(1, A.biz[bid].lastSold) > B.biz[bid].lastRevenue / Math.max(1, B.biz[bid].lastSold), 'greedy prices sell no more than cheap ones, for more each (' + A.biz[bid].lastSold + ' for ' + A.biz[bid].lastRevenue + 'c vs ' + B.biz[bid].lastSold + ' for ' + B.biz[bid].lastRevenue + 'c)');
+  check(A.folk.moral < B.folk.moral, 'and greed darkens your name while cheap prices lighten it');
+}
+{
+  // an enemy acts against you, and you can face them
+  const s = newGameRaw(72); s.ageRate = 0; s.bandits = null; Sim.advance(s, 1440); s.coins = 9000; const F = Sim.setupFolk(s), Y = (...a) => Sim.cmd(s, ...a);
+  const bid = Object.keys(s.biz).find(id => s.biz[id].owner !== 'player' && !s.biz[id].closed && (s.biz[id].town || 'hearthmoor') === 'hearthmoor'); Y('buyBiz', bid);
+  const q = Sim.living(s).find(x => !x.kid && Sim.townOf(x) === 'hearthmoor' && !(x.job && x.job.type === 'office')); Sim.wrong(s, q, 95, 'You ruined their family.', { raw: true });
+  for (let d = 0; d < 80 && q.nem.acts.length < 2; d++) { q.nem.last = -10; q.nem.quiet = 0; Sim.folkDay(s); }
+  check(q.nem.acts.length >= 2, 'a nemesis acts against you (' + q.nem.acts.map(a => a.what).join(', ') + ')');
+  q.nem.ev = 3; const O = Sim.confrontOpts(s, q); check(O.expose.ok && !O.reconcile.ok, 'with proof you can expose them; with a name that is not fair you cannot ask for peace');
+  const h0 = q.hate; check(Y('fConfront', q.id, 'amends').ok && q.hate < h0, 'making amends costs coin and takes much of the hate away (' + Math.round(h0) + ' → ' + Math.round(q.hate) + ')');
+  Sim.wrong(s, q, 40, 'Again.', { raw: true }); check(Y('fConfront', q.id, 'bribe').ok && q.nem.quiet > s.day, 'paying them off keeps them quiet for a month');
+  // a duel: win, and spare or kill
+  F.scene = { kind: 'duel', pid: q.id, day: s.day }; check(Y('fDuelEnd', null, true).ok && F.scene.kind === 'won', 'winning a duel puts their life in your hands');
+  const kin = Sim.living(s).filter(x => x !== q && (x.spouse === q.id || (x.parents || []).includes(q.id) || (q.parents || []).includes(x.id)) && !x.kid);
+  const m0 = F.moral; Y('fAfter', null, 'kill');
+  check(q.status === 'dead' && F.moral < m0, 'killing them is a dark deed (' + m0 + ' → ' + F.moral + ')');
+  check(!kin.length || kin.every(x => x.hate >= 60), 'and their grown kin inherit the feud (' + kin.length + ')');
+  // a lethal ambush lost: you die and your heir carries on
+  const r = Sim.living(s).find(x => !x.kid && x.status === 'here' && !x.nem && x.id !== Sim.you(s).pid && !kin.includes(x)); Sim.wrong(s, r, 120, 'Blood.', { raw: true });
+  F.scene = { kind: 'duel', pid: r.id, day: s.day, ambush: true, lethal: true, hired: 'assassin' }; Y('fDuelEnd', null, false);
+  check(s.pendingDeath && /blade/.test(s.pendingDeath.how), 'losing to a hired killer in a blood feud is death');
+}
+{
+  // blades, arrests, the throne, and owning a town
+  const s = newGameRaw(73); s.ageRate = 0; s.bandits = null; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440); s.coins = 9000; s.realm.treasury = 9000; const F = Sim.setupFolk(s), Y = (...a) => Sim.cmd(s, ...a);
+  const q = Sim.living(s).find(x => !x.kid && Sim.townOf(x) === 'oakbridge' && !x.noble); Sim.wrong(s, q, 70, 'An old wrong.', { raw: true });
+  s.player.x = 0; s.player.z = 4; check(!Y('fBlade', q.id).ok, 'no blade is for hire outside the big towns');
+  check(Sim.authOver(s, q) && Y('fSend', q.id, 'arrest').ok && q.held && F.moral < 0, 'the crown can gaol an enemy without proof, at a cost to its name');
+  const z = Sim.living(s).find(x => !x.kid && Sim.townOf(x) === 'crownmere' && !x.noble && !x.royal && x.status === 'here'); Sim.wrong(s, z, 70, 'Another.', { raw: true });
+  s.player.x = Sim.TOWNS.crownmere.x; s.player.z = Sim.TOWNS.crownmere.z;
+  check(Y('fBlade', z.id).ok && F.blades.length === 1, 'in Crownmere, a blade can be hired');
+  F.blades[0].day = s.day - 1; Sim.folkDay(s); check(z.status === 'dead' || z.hate >= 95, 'by morning they are dead, or know who paid and want blood (' + z.status + ', ' + Math.round(z.hate) + ')');
+  // the throne
+  for (let i = 0; i < 12 && F.aud.length < 2; i++) Sim.folkDay(s);
+  check(F.aud.length >= 1, 'petitioners come to the throne (' + F.aud.map(a => a.key).join(', ') + ')');
+  const A = F.aud[0], who = s.people[A.who], m1 = F.moral; check(Y('fAudience', A.id, 'kind').ok && F.moral > m1 && !F.aud.includes(A), 'a kind answer lightens your name');
+  if (F.aud.length) { const B = F.aud[0], p2 = s.people[B.who], h2 = p2.hate || 0; Y('fAudience', B.id, 'cold'); check(F.moral < m1 + 10 && ((p2.hate || 0) >= h2), 'a cold one is remembered'); }
+  // own every business in Hearthmoor
+  for (const id in s.biz) if ((s.biz[id].town || 'hearthmoor') === 'hearthmoor' && s.biz[id].trade !== 'estate') s.biz[id].owner = 'player';
+  Sim.folkDay(s); const W = F.towns.hearthmoor;
+  check(W && W.all && W.statue, 'owning every business in Hearthmoor makes you its master, with a statue');
+  check(Sim.living(s).some(x => x.guild === 'hearthmoor' && x.hate >= 60), 'and the guilds find a champion against you');
+  // foreign enemies: your war costs a Valdorian their son
+  Sim.warGrief(s, 1); check(Sim.nemeses(s).some(x => Sim.isForeign(x)), 'a war you lead makes enemies in Valdoria');
+  const back = Sim.deserialize(Sim.serialize(s)); check(back.folk && back.folk.nem.length === F.nem.length && back.folk.towns.hearthmoor.all, 'all of it is kept in the save');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
