@@ -255,6 +255,22 @@
   const MONTH_DAYS = 5, YEAR_DAYS = 60;
   const MONTHS = ['Thawmonth', 'Seedmonth', 'Blossom', 'Highsun', 'Haymonth', 'Goldmonth', 'Reaping', 'Applefall', 'Leaffall', 'Frostmonth', 'Deepwinter', 'Snowmelt'];
   const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+  /* ---------- holidays: the year's festivals, on fixed days. Each brings folk out to spend and to make merry, and dresses
+     the squares for the day. Days are counted within the 60-day year (1-60). ---------- */
+  const HOLIDAYS = [
+    { id: 'firstlight', name: 'Firstlight', yd: 1, where: 'all', says: 'The new year. Every window holds a candle, lanterns hang across the square, and neighbours trade small gifts.', trade: 1.2, mood: 3, cost: 40 },
+    { id: 'plough', name: 'Plough Blessing', yd: 8, where: 'all', says: 'The fields are blessed before sowing. Ploughs are hung with green and paraded round the village.', trade: 1.1, mood: 2, cost: 30 },
+    { id: 'maying', name: 'Maying', yd: 13, where: 'all', says: 'A maypole goes up in the square, ribboned in every colour, and the village dances round it. Flowers on every door.', trade: 1.25, mood: 4, cost: 50 },
+    { id: 'midsummer', name: 'Midsummer Fires', yd: 18, where: 'all', says: 'The longest day. A great bonfire burns in the square all night, and the taverns never close.', trade: 1.35, mood: 4, cost: 60, tavern: 1.6 },
+    { id: 'queensday', name: 'The Queen\u2019s Feast', yd: 28, where: 'valdoria', says: 'Valdoria feasts its Queen. Red and gold banners on every street, and the Alc\u00e1zar opens its gates to the city.', trade: 1.3, mood: 4, cost: 80 },
+    { id: 'harvest', name: 'Harvest Home', yd: 35, where: 'all', says: 'The last sheaf is brought in. Sheaves stand in the square and the whole village feasts on what it grew.', trade: 1.35, mood: 5, cost: 70, food: 1.5 },
+    { id: 'applefair', name: 'Applefall Fair', yd: 38, where: 'all', says: 'Traders come from every town. Stalls of apples and cider, jugglers, and the best prices of the year.', trade: 1.4, mood: 3, cost: 60 },
+    { id: 'soulsnight', name: 'Souls\u2019 Night', yd: 45, where: 'all', says: 'The night the dead walk close. Carved turnip lanterns glow on every step, mist rolls in, and no one walks alone.', trade: 1.05, mood: 1, cost: 40 },
+    { id: 'longnight', name: 'Longnight', yd: 53, where: 'all', says: 'Midwinter. Evergreen boughs and red ribbons on every door, a yule log in every hearth, and gifts for the children.', trade: 1.3, mood: 5, cost: 70 }
+  ];
+  const yearDay = d => ((d - 1) % YEAR_DAYS) + 1;
+  // the holiday on a given day (in a given kingdom), or null
+  function holidayOn(day, kingdom) { const yd = yearDay(day); return HOLIDAYS.find(h => h.yd === yd && (h.where === 'all' || h.where === (kingdom || 'alderwyn'))) || null; }
   function calendar(s) { const d = (s.day || 1) - 1, m = Math.floor(d / MONTH_DAYS) % 12; const si = Math.floor(m / 3); return { year: Math.floor(d / YEAR_DAYS) + 1, month: m, monthName: MONTHS[m], dom: d % MONTH_DAYS + 1, season: SEASONS[si], next: SEASONS[(si + 1) % 4], daysLeft: 15 - (d % 15) }; }
   const seasonOf = s => calendar(s).season;
   // what each season does to the land and the roads
@@ -283,8 +299,20 @@
     if (s) s.rec.walked += step;
     return false;
   }
+  // what the chronicle keeps: what touches you, and the big news; not every eviction in a town you have never seen
+  function chronicleWorthy(s, text, kind) {
+    if (/^Day \d+ begins/.test(text)) return false;
+    if (/\byou(r)?\b/i.test(text)) return true;
+    if (kind === 'story') return true;
+    if (kind !== 'good' && kind !== 'bad') return false;
+    const here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    for (const t in TOWNS) if (t !== 'hearthmoor' && t !== here && TOWNS[t].name && text.includes(TOWNS[t].name)) return false;
+    return true;
+  }
   function event(s, text, kind) {
     s.events.push({ t: s.t, text, kind: kind || 'info' });
+    // the chronicle: everything worth remembering, by the day it happened, for the calendar (sales are left out)
+    if (kind !== 'coin' && s.people && chronicleWorthy(s, text, kind)) { const C = s.chronicle = s.chronicle || []; const last = C[C.length - 1]; if (!(last && last.d === s.day && last.x === text)) { C.push({ d: s.day, m: Math.round(s.t % 1440), k: kind || 'info', x: text }); if (C.length > 900) C.splice(0, C.length - 900); } }
     if (s.events.length > 40) s.events.splice(0, s.events.length - 40);
   }
   const carried = s => GOODS.reduce((a, g) => a + s.player.inv[g], 0);
@@ -412,7 +440,7 @@
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
-    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. The four shops across the square are hiring.', 'story');
+    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. Walk into any of the four shops across the square and choose Work here to earn your first coins.', 'story');
     return s;
   }
 
@@ -427,9 +455,15 @@
   }
 
   /* ---------- day cycle ---------- */
+  function holidayDawn(s) {
+    const H = holidayOn(s.day, 'alderwyn') || holidayOn(s.day, 'valdoria'); if (!H || !s.people || s.holidaySaid === s.day) return; s.holidaySaid = s.day;
+    event(s, 'Today is ' + H.name + '. ' + H.says, 'story');
+    for (const p of living(s)) { const k = kingdomOf(townOf(p)); if (H.where === 'all' || H.where === k) p.mood = clamp((p.mood || 50) + H.mood * 2, 0, 100); }
+  }
   function openDay(s) {
     s.day = Math.floor((s.t - 360) / DAY) + 1;
     s.stats = freshStats(s);
+    holidayDawn(s);
     if (s.people) peopleMorning(s);
     for (const shop of s.shops) if (shop.worker && shop.worker.pid) { const wp = person(s, shop.worker.pid); shop.worker.home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 }; }
     const base = s.t - minuteOfDay(s.t);
@@ -493,7 +527,7 @@
 
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  const FLOW_LABEL = { fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
   // money that leaves your purse without a command of yours: named in the books all the same
   function flow(s, key, n) { if (!s.stats || !n) return; const f = s.stats.flows = s.stats.flows || {}; f[key] = (f[key] || 0) + n; }
   function closeDay(s) {
@@ -1724,8 +1758,8 @@
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
-      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day;
-      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * PM.share * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
+      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day, HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
+      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
       const Wt = WEALTH[t0] || 1, revenue0 = shut ? 0 : E.flat ? E.flat * Wt : Math.round(Wt * sold * PM.price * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
       // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
@@ -2246,6 +2280,14 @@
     return ringSpot(home.x, home.z, 0.3, 1.8, id, 1, 85);
   }
   /* people walk through their own day */
+  // somewhere in town to buy something: the door of one of its businesses
+  function shopStop(s, town, id, slot) {
+    const L = Object.keys(s.biz || {}).filter(k => { const b = s.biz[k]; return (b.town || 'hearthmoor') === town && !b.closed && !b.seized && b.trade !== 'estate' && b.trade !== 'mill'; });
+    if (!L.length) return null;
+    const k = L[Math.floor(h01(id, slot, 87) * L.length)], e = empById(k); if (!e) return null;
+    const f = e.front || (e.x != null ? { x: e.x, z: e.z + 2.2 } : null); if (!f) return null;
+    const at = ringSpot(f.x, f.z, 0.5, 1.9, id, slot, 89); at.look = { x: e.x != null ? e.x : f.x, z: e.z != null ? e.z : f.z - 1 }; return { at, name: e.name };
+  }
   function personRoutine(s, a, dt) {
     const p = s.people[a.pid];
     if (!p || p.status !== 'here') { a.gone = true; return; }
@@ -2276,6 +2318,11 @@
       else if (p.age >= 10 && h < 12) { tgt = home ? { x: home.x + 2.2, z: home.z + 2.4 } : P.plaza; doing = 'Helping with chores at home'; working = true; }
       else if (ts) { const q = pickPlaza(LAYOUT[town], a.id, s.day, 61); tgt = plazaSpot(q, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in ' + q.name; }
       else { const pz = P.plaza; tgt = ringSpot(pz.x, pz.z + 1, 0.5, 4.5, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in the square'; }
+    }
+    // errands: folk who live here go shopping at the town's own businesses, by day if they have no work to be at, and after work
+    if (!tgt && !p.kid && !p.held && h >= 9 && h < 19.5) {
+      const slot = s.day * 24 + Math.floor(h), free = !j || p.retired;
+      if ((free && h01(a.id, slot, 83) < 0.32) || (h >= 17 && h01(a.id, slot, 84) < 0.4)) { const sp = shopStop(s, town, a.id, slot); if (sp) { tgt = sp.at; doing = 'Shopping at ' + sp.name; } }
     }
     if (!tgt) {
       if (h >= 17 && ts && home && h01(a.id, s.day, 51) < 0.4) { tgt = homeYard(s, p, a.id); doing = 'Home for the evening'; }
@@ -7295,6 +7342,18 @@
         if (s.valdoria && kingdomOf(t) !== 'alderwyn') { favourBy(s, 3); said = ' Grandees of Valdoria come, and the Queen hears of it.'; }
         return ok('You host a feast at ' + empById(id).name + ' for ' + cost + 'c. ' + townName(t) + ' talks of nothing else.' + said);
       }
+      case 'fFestival': {
+        // as Elder, lord or ruler: pay for the day's festivities, and the town remembers who gave them their feast
+        const H = holidayOn(s.day, kingdomOf(townAt(s.player.x, s.player.z) || 'hearthmoor')); if (!H) return fail('There is no festival today.');
+        const t = townAt(s.player.x, s.player.z) || 'hearthmoor', R = s.realm;
+        const may = isRuler(s) || (t === 'hearthmoor' && (s.offices.elder === 'player' || s.offices.lord === 'player')) || (R && yourLordships(s).includes(t)) || (kingdomOf(t) === 'valdoria' && s.valdoria && s.valdoria.favour >= 50);
+        if (!may) return fail('Only the Elder, the lord of these lands or the crown pays for the festivities.');
+        F.fests = F.fests || {}; if (F.fests[t] === s.day) return fail('You have already paid for ' + H.name + ' here.');
+        const cost = H.cost * (t === 'hearthmoor' ? 1 : 2); if (s.coins < cost) return fail('The festivities cost ' + cost + 'c.');
+        spend(s, cost); F.fests[t] = s.day; townApprove(s, t, 5); deed(s, 2, 3, H.name + ' in ' + townName(t));
+        for (const q of folkIn(s, t)) if (!q.kid && rand(s) < 0.5) q.opinion = clamp((q.opinion || 0) + 3, -100, 100);
+        return ok('You pay ' + cost + 'c for ' + H.name + ' in ' + townName(t) + ': music, food and drink for everyone. They will drink your health all night.');
+      }
       case 'fLeave': { F.scene = null; return ok(); }
       case 'fAmbush': {
         // b: 'fight' | 'pay' | 'guards' | 'flee'
@@ -7455,7 +7514,7 @@
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
-    calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
+    HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,

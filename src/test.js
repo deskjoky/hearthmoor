@@ -1566,5 +1566,28 @@ console.log('48. Money, property and the climb (v0.54)');
   check(Sim.seatNeeds(s, 'war').length <= 2 && Sim.seatNeeds(s, 'law').length <= 3, 'and the other roads ask one proof of competence each');
 }
 
+console.log('49. Holidays and the chronicle (v0.56)');
+{
+  check(Sim.HOLIDAYS.length >= 8 && Sim.holidayOn(18).id === 'midsummer' && Sim.holidayOn(18 + Sim.YEAR_DAYS).id === 'midsummer', 'the festivals come round every year (Midsummer Fires on day 18, and again on day 78)');
+  check(!Sim.holidayOn(28, 'alderwyn') && Sim.holidayOn(28, 'valdoria').id === 'queensday', 'the Queen’s Feast is kept only in Valdoria');
+  const s = newGameRaw(90); s.ageRate = 0; s.bandits = null; Sim.advance(s, 1440 * 11 + 600);
+  const said = (s.chronicle || []).filter(c => /^Today is Maying/.test(c.x)); check(!said.length, 'Maying has not come yet on day 12');
+  Sim.advance(s, 1440); check((s.chronicle || []).filter(c => c.d === 13 && /^Today is Maying/.test(c.x)).length === 1, 'on its day, the festival is announced once, and written in the chronicle');
+  // folk spend more on a festival
+  const day = s.day, A = Sim.deserialize(Sim.serialize(s)), B = Sim.deserialize(Sim.serialize(s)); B.day = day + 2;   // B: an ordinary day
+  const sold = g => Object.values(g.biz).reduce((a, b) => a + (b.lastSold || 0), 0);
+  Sim.advance(A, 1440 - (A.t % 1440) + 60); Sim.advance(B, 1440 - (B.t % 1440) + 60);
+  check(sold(A) >= sold(B), 'businesses sell at least as much on a festival as on an ordinary day (' + Math.round(sold(A)) + ' vs ' + Math.round(sold(B)) + ')');
+  // paying for the festivities
+  const t = newGameRaw(91); t.ageRate = 0; t.bandits = null; Sim.advance(t, 1440 * 17 + 300); t.coins = 5000; Sim.setupFolk(t);
+  check(Sim.holidayOn(t.day).id === 'midsummer' && !Sim.cmd(t, 'fFestival').ok, 'only the Elder, a lord or the crown pays for a festival');
+  t.offices.elder = 'player'; const c0 = t.coins, m0 = t.folk.moral; check(Sim.cmd(t, 'fFestival').ok && t.coins < c0 && t.folk.moral > m0, 'as Elder you can pay for Midsummer, and the village thinks better of you');
+  check(!Sim.cmd(t, 'fFestival').ok, 'once a festival');
+  // the chronicle keeps what matters, and is saved
+  const n0 = t.chronicle.length; Sim.cmd(t, 'fAlms'); t.events.push(); check(t.chronicle.length >= n0, 'what you do is written down');
+  check(!t.chronicle.some(c => c.k === 'coin') && !t.chronicle.some(c => /^Day \d+ begins/.test(c.x)), 'sales and daybreaks are left out');
+  const back = Sim.deserialize(Sim.serialize(t)); check(back.chronicle.length === t.chronicle.length, 'the chronicle is kept in the save');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

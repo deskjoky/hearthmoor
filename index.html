@@ -252,6 +252,22 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .ptile div { min-width: 0; }
 .ic { width: 22px; height: 22px; flex: none; stroke: var(--seal); stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .ic path[d^="M8 5 L19"] { fill: currentColor; }
+.ptile { font: inherit; color: inherit; text-align: left; cursor: pointer; position: relative; } .ptile:active, .pgoal:active { transform: translateY(1px); } .ptile:hover { background: rgba(255,255,255,.5); }
+.ptile .pchev { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-style: normal; font-size: 16px; }
+.pgoal { display: block; width: 100%; text-align: left; color: inherit; cursor: pointer; border-top: 0; border-right: 0; border-bottom: 0; }
+.calnav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 8px; } .calnav b { font-family: var(--f-display); font-weight: 400; font-size: 20px; }
+.calwrap { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.calgrid { display: grid; gap: 3px; flex: 0 0 auto; }
+.calrow { display: grid; grid-template-columns: 82px repeat(5, 34px); gap: 3px; align-items: center; }
+.calm { font-size: 12px; color: var(--ink-soft); padding-left: 6px; border-left: 3px solid transparent; } .calm.s0 { border-color: #7fae5a; } .calm.s1 { border-color: #e0a83a; } .calm.s2 { border-color: #b8602a; } .calm.s3 { border-color: #8aa8c8; }
+.calday { position: relative; height: 30px; border: 1px solid var(--line); border-radius: 4px; background: rgba(255,255,255,.35); font: inherit; font-size: 12px; color: var(--ink); padding: 0; cursor: pointer; }
+.calday.future { background: rgba(255,255,255,.12); color: var(--ink-soft); } .calday.today { box-shadow: inset 0 0 0 2px var(--seal); font-weight: 700; } .calday.sel { background: var(--ink); color: #f6efe0; }
+.calday.hol { background-image: linear-gradient(135deg, rgba(214,160,40,.25), transparent 60%); }
+.calday .star, .legend .star { position: absolute; top: 0; right: 2px; font-style: normal; font-size: 10px; color: #b8860b; }
+.calday .dot, .legend .dot { position: absolute; bottom: 3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #6a8a4a; } .dot.bad { background: #a8341e; } .dot.story { background: #b8860b; }
+.legend { position: relative; display: inline-block; padding-left: 14px; margin-right: 12px; } .legend .star { left: 0; right: auto; top: 1px; } .legend .dot { left: 4px; bottom: 5px; }
+.calday-detail { flex: 1 1 260px; min-width: 0; }
+.calnotes { margin: 6px 0; padding-left: 18px; } .calnotes li { margin: 3px 0; } .calnotes li.hol { color: #8a6410; } .calnotes li.bad { color: #7a2a14; } .calnotes li.you { font-weight: 600; } .calnotes.past li { font-size: 13.5px; }
 .pgoal { margin-top: 10px; font-family: var(--f-display); font-size: 15px; line-height: 1.3; padding: 7px 10px; border-left: 3px solid var(--seal); background: rgba(140,46,33,.06); }
 .pgoal span { display: block; font-family: var(--f-body); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
 .pmenu-h { text-align: center; font-family: var(--f-caps); font-size: 18px; color: var(--ink-soft); margin-bottom: 8px; letter-spacing: .04em; }
@@ -336,7 +352,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .plog .neg { color: #7a2a14; } .plog .pos { color: #3a5a2a; }
 @media (max-height: 520px) { .scenebox { padding: 10px 14px 12px; } .scenebox h2 { font-size: 22px; } .scenebox .said { font-size: 16px; margin: 4px 0; } .choices { gap: 6px; margin: 6px 0 4px; } .choice { min-height: 44px; padding: 5px 9px; } .choice b { font-size: 16px; } }
 .famebar { display: flex; align-items: center; gap: 8px; } .famebar span { font-size: 11px; color: var(--ink-soft); } .famebar .bar { flex: 1; }
-.chip.renown { cursor: pointer; } .chip.foes { background: #7a2414; color: #fff1e0; cursor: pointer; }
+.chip.renown { cursor: pointer; } .chip.hol { background: #b8860b; color: #fff8e6; cursor: pointer; } .chip.foes { background: #7a2414; color: #fff1e0; cursor: pointer; }
 /* patch notes: an old scroll that unrolls */
 .scrollwrap { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(10, 7, 5, .66);
   padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(16px, env(safe-area-inset-left, 0px)); }
@@ -516,6 +532,29 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .card .acts { gap: 5px; margin-top: 6px; }
 .card .plog { font-size: 12px; margin-top: 4px; }
 .card .plog li:nth-child(n+3) { display: none; }
+/* a phone held sideways: the card sits small in the bottom-right corner, out of the way of the view */
+@media (max-height: 520px) {
+  .panel .card { margin: 0 max(10px, env(safe-area-inset-right, 0px)) 6px auto; max-width: 372px; padding: 6px 9px 7px; max-height: 50vh; }
+  .card h2 { font-size: 17px; }
+  .card .sub { font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .why { font-size: 12px; padding: 3px 6px; margin-top: 4px; }
+  .card .acts { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-top: 5px; padding-bottom: 1px; }
+  .card .acts::-webkit-scrollbar { display: none; }
+  .card .btn { flex: 0 0 auto; min-height: 32px; padding: 3px 9px; font-size: 13.5px; white-space: nowrap; }
+  .card .btn small { display: inline; margin-left: 5px; font-size: 11px; }
+  /* spoken lines: a smaller box in the corner */
+  .dialog { left: auto; right: max(10px, env(safe-area-inset-right, 0px)); transform: none; width: min(400px, calc(100% - 32px)); padding: 7px 10px 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
+  .dialog p { font-size: 14.5px; line-height: 1.35; margin-bottom: 5px; }
+  .dialog .btn { min-height: 32px; padding: 3px 12px; font-size: 13.5px; }
+  /* the work bench: small around the edges, big buttons for the thumbs */
+  .mini { width: min(390px, calc(100vw - 300px)); padding: 5px 9px 7px !important; bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); }
+  .mini .mhead b { font-size: 15px; } .mini .mslow { display: none; }
+  .mchain { min-width: 52px; padding: 1px 6px; } .mchain b { font-size: 22px; }
+  .mstats { font-size: 11.5px; gap: 2px 9px; }
+  .mini .mtrack { height: 30px; margin: 4px 0 3px; } .mini .mmsg { font-size: 12px; margin: 1px 0 4px; min-height: 0; }
+  .mbtns .mc { min-height: 44px; font-size: 15px; }
+  .toasts { top: 104px; } .toast { font-size: 12.5px; max-width: 320px; }
+}
 @media (orientation: portrait) {
   .panel { padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 170px); }
   .card { max-height: 34vh; }
@@ -845,6 +884,22 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const MONTH_DAYS = 5, YEAR_DAYS = 60;
   const MONTHS = ['Thawmonth', 'Seedmonth', 'Blossom', 'Highsun', 'Haymonth', 'Goldmonth', 'Reaping', 'Applefall', 'Leaffall', 'Frostmonth', 'Deepwinter', 'Snowmelt'];
   const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+  /* ---------- holidays: the year's festivals, on fixed days. Each brings folk out to spend and to make merry, and dresses
+     the squares for the day. Days are counted within the 60-day year (1-60). ---------- */
+  const HOLIDAYS = [
+    { id: 'firstlight', name: 'Firstlight', yd: 1, where: 'all', says: 'The new year. Every window holds a candle, lanterns hang across the square, and neighbours trade small gifts.', trade: 1.2, mood: 3, cost: 40 },
+    { id: 'plough', name: 'Plough Blessing', yd: 8, where: 'all', says: 'The fields are blessed before sowing. Ploughs are hung with green and paraded round the village.', trade: 1.1, mood: 2, cost: 30 },
+    { id: 'maying', name: 'Maying', yd: 13, where: 'all', says: 'A maypole goes up in the square, ribboned in every colour, and the village dances round it. Flowers on every door.', trade: 1.25, mood: 4, cost: 50 },
+    { id: 'midsummer', name: 'Midsummer Fires', yd: 18, where: 'all', says: 'The longest day. A great bonfire burns in the square all night, and the taverns never close.', trade: 1.35, mood: 4, cost: 60, tavern: 1.6 },
+    { id: 'queensday', name: 'The Queen\u2019s Feast', yd: 28, where: 'valdoria', says: 'Valdoria feasts its Queen. Red and gold banners on every street, and the Alc\u00e1zar opens its gates to the city.', trade: 1.3, mood: 4, cost: 80 },
+    { id: 'harvest', name: 'Harvest Home', yd: 35, where: 'all', says: 'The last sheaf is brought in. Sheaves stand in the square and the whole village feasts on what it grew.', trade: 1.35, mood: 5, cost: 70, food: 1.5 },
+    { id: 'applefair', name: 'Applefall Fair', yd: 38, where: 'all', says: 'Traders come from every town. Stalls of apples and cider, jugglers, and the best prices of the year.', trade: 1.4, mood: 3, cost: 60 },
+    { id: 'soulsnight', name: 'Souls\u2019 Night', yd: 45, where: 'all', says: 'The night the dead walk close. Carved turnip lanterns glow on every step, mist rolls in, and no one walks alone.', trade: 1.05, mood: 1, cost: 40 },
+    { id: 'longnight', name: 'Longnight', yd: 53, where: 'all', says: 'Midwinter. Evergreen boughs and red ribbons on every door, a yule log in every hearth, and gifts for the children.', trade: 1.3, mood: 5, cost: 70 }
+  ];
+  const yearDay = d => ((d - 1) % YEAR_DAYS) + 1;
+  // the holiday on a given day (in a given kingdom), or null
+  function holidayOn(day, kingdom) { const yd = yearDay(day); return HOLIDAYS.find(h => h.yd === yd && (h.where === 'all' || h.where === (kingdom || 'alderwyn'))) || null; }
   function calendar(s) { const d = (s.day || 1) - 1, m = Math.floor(d / MONTH_DAYS) % 12; const si = Math.floor(m / 3); return { year: Math.floor(d / YEAR_DAYS) + 1, month: m, monthName: MONTHS[m], dom: d % MONTH_DAYS + 1, season: SEASONS[si], next: SEASONS[(si + 1) % 4], daysLeft: 15 - (d % 15) }; }
   const seasonOf = s => calendar(s).season;
   // what each season does to the land and the roads
@@ -873,8 +928,20 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (s) s.rec.walked += step;
     return false;
   }
+  // what the chronicle keeps: what touches you, and the big news; not every eviction in a town you have never seen
+  function chronicleWorthy(s, text, kind) {
+    if (/^Day \d+ begins/.test(text)) return false;
+    if (/\byou(r)?\b/i.test(text)) return true;
+    if (kind === 'story') return true;
+    if (kind !== 'good' && kind !== 'bad') return false;
+    const here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    for (const t in TOWNS) if (t !== 'hearthmoor' && t !== here && TOWNS[t].name && text.includes(TOWNS[t].name)) return false;
+    return true;
+  }
   function event(s, text, kind) {
     s.events.push({ t: s.t, text, kind: kind || 'info' });
+    // the chronicle: everything worth remembering, by the day it happened, for the calendar (sales are left out)
+    if (kind !== 'coin' && s.people && chronicleWorthy(s, text, kind)) { const C = s.chronicle = s.chronicle || []; const last = C[C.length - 1]; if (!(last && last.d === s.day && last.x === text)) { C.push({ d: s.day, m: Math.round(s.t % 1440), k: kind || 'info', x: text }); if (C.length > 900) C.splice(0, C.length - 900); } }
     if (s.events.length > 40) s.events.splice(0, s.events.length - 40);
   }
   const carried = s => GOODS.reduce((a, g) => a + s.player.inv[g], 0);
@@ -1002,7 +1069,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
-    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. The four shops across the square are hiring.', 'story');
+    event(s, 'Day 1. You arrive in Hearthmoor, a village of ' + lordTitle(s) + ', with 5 coins. Walk into any of the four shops across the square and choose Work here to earn your first coins.', 'story');
     return s;
   }
 
@@ -1017,9 +1084,15 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
 
   /* ---------- day cycle ---------- */
+  function holidayDawn(s) {
+    const H = holidayOn(s.day, 'alderwyn') || holidayOn(s.day, 'valdoria'); if (!H || !s.people || s.holidaySaid === s.day) return; s.holidaySaid = s.day;
+    event(s, 'Today is ' + H.name + '. ' + H.says, 'story');
+    for (const p of living(s)) { const k = kingdomOf(townOf(p)); if (H.where === 'all' || H.where === k) p.mood = clamp((p.mood || 50) + H.mood * 2, 0, 100); }
+  }
   function openDay(s) {
     s.day = Math.floor((s.t - 360) / DAY) + 1;
     s.stats = freshStats(s);
+    holidayDawn(s);
     if (s.people) peopleMorning(s);
     for (const shop of s.shops) if (shop.worker && shop.worker.pid) { const wp = person(s, shop.worker.pid); shop.worker.home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 }; }
     const base = s.t - minuteOfDay(s.t);
@@ -1083,7 +1156,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  const FLOW_LABEL = { fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
   // money that leaves your purse without a command of yours: named in the books all the same
   function flow(s, key, n) { if (!s.stats || !n) return; const f = s.stats.flows = s.stats.flows || {}; f[key] = (f[key] || 0) + n; }
   function closeDay(s) {
@@ -2314,8 +2387,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
-      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day;
-      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * PM.share * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
+      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day, HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
+      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
       const Wt = WEALTH[t0] || 1, revenue0 = shut ? 0 : E.flat ? E.flat * Wt : Math.round(Wt * sold * PM.price * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
       // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
@@ -2836,6 +2909,14 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return ringSpot(home.x, home.z, 0.3, 1.8, id, 1, 85);
   }
   /* people walk through their own day */
+  // somewhere in town to buy something: the door of one of its businesses
+  function shopStop(s, town, id, slot) {
+    const L = Object.keys(s.biz || {}).filter(k => { const b = s.biz[k]; return (b.town || 'hearthmoor') === town && !b.closed && !b.seized && b.trade !== 'estate' && b.trade !== 'mill'; });
+    if (!L.length) return null;
+    const k = L[Math.floor(h01(id, slot, 87) * L.length)], e = empById(k); if (!e) return null;
+    const f = e.front || (e.x != null ? { x: e.x, z: e.z + 2.2 } : null); if (!f) return null;
+    const at = ringSpot(f.x, f.z, 0.5, 1.9, id, slot, 89); at.look = { x: e.x != null ? e.x : f.x, z: e.z != null ? e.z : f.z - 1 }; return { at, name: e.name };
+  }
   function personRoutine(s, a, dt) {
     const p = s.people[a.pid];
     if (!p || p.status !== 'here') { a.gone = true; return; }
@@ -2866,6 +2947,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       else if (p.age >= 10 && h < 12) { tgt = home ? { x: home.x + 2.2, z: home.z + 2.4 } : P.plaza; doing = 'Helping with chores at home'; working = true; }
       else if (ts) { const q = pickPlaza(LAYOUT[town], a.id, s.day, 61); tgt = plazaSpot(q, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in ' + q.name; }
       else { const pz = P.plaza; tgt = ringSpot(pz.x, pz.z + 1, 0.5, 4.5, a.id, s.day * 24 + Math.floor(h * 2), 13); tgt.look = null; doing = 'Playing in the square'; }
+    }
+    // errands: folk who live here go shopping at the town's own businesses, by day if they have no work to be at, and after work
+    if (!tgt && !p.kid && !p.held && h >= 9 && h < 19.5) {
+      const slot = s.day * 24 + Math.floor(h), free = !j || p.retired;
+      if ((free && h01(a.id, slot, 83) < 0.32) || (h >= 17 && h01(a.id, slot, 84) < 0.4)) { const sp = shopStop(s, town, a.id, slot); if (sp) { tgt = sp.at; doing = 'Shopping at ' + sp.name; } }
     }
     if (!tgt) {
       if (h >= 17 && ts && home && h01(a.id, s.day, 51) < 0.4) { tgt = homeYard(s, p, a.id); doing = 'Home for the evening'; }
@@ -7885,6 +7971,18 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (s.valdoria && kingdomOf(t) !== 'alderwyn') { favourBy(s, 3); said = ' Grandees of Valdoria come, and the Queen hears of it.'; }
         return ok('You host a feast at ' + empById(id).name + ' for ' + cost + 'c. ' + townName(t) + ' talks of nothing else.' + said);
       }
+      case 'fFestival': {
+        // as Elder, lord or ruler: pay for the day's festivities, and the town remembers who gave them their feast
+        const H = holidayOn(s.day, kingdomOf(townAt(s.player.x, s.player.z) || 'hearthmoor')); if (!H) return fail('There is no festival today.');
+        const t = townAt(s.player.x, s.player.z) || 'hearthmoor', R = s.realm;
+        const may = isRuler(s) || (t === 'hearthmoor' && (s.offices.elder === 'player' || s.offices.lord === 'player')) || (R && yourLordships(s).includes(t)) || (kingdomOf(t) === 'valdoria' && s.valdoria && s.valdoria.favour >= 50);
+        if (!may) return fail('Only the Elder, the lord of these lands or the crown pays for the festivities.');
+        F.fests = F.fests || {}; if (F.fests[t] === s.day) return fail('You have already paid for ' + H.name + ' here.');
+        const cost = H.cost * (t === 'hearthmoor' ? 1 : 2); if (s.coins < cost) return fail('The festivities cost ' + cost + 'c.');
+        spend(s, cost); F.fests[t] = s.day; townApprove(s, t, 5); deed(s, 2, 3, H.name + ' in ' + townName(t));
+        for (const q of folkIn(s, t)) if (!q.kid && rand(s) < 0.5) q.opinion = clamp((q.opinion || 0) + 3, -100, 100);
+        return ok('You pay ' + cost + 'c for ' + H.name + ' in ' + townName(t) + ': music, food and drink for everyone. They will drink your health all night.');
+      }
       case 'fLeave': { F.scene = null; return ok(); }
       case 'fAmbush': {
         // b: 'fight' | 'pay' | 'guards' | 'flee'
@@ -8045,7 +8143,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
-    calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
+    HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
@@ -10206,17 +10304,19 @@ function stepSnow(dt) {
   for (let i = 0; i < arr.length; i += 3) { arr[i + 1] -= dt * 2.2; arr[i] += Math.sin(arr[i + 1] * 0.7 + i) * dt * 0.3; if (arr[i + 1] < 0) arr[i + 1] += 30; }
   a.needsUpdate = true; snow.position.set(focus.x, 0, focus.z);
 }
+const holC = new THREE.Color();
 function syncLight(h) {
   let k; if (h < 5) k = 0; else if (h < 7) k = (h - 5) / 2; else if (h < 18) k = 1; else if (h < 21) k = 1 - (h - 18) / 3; else k = 0;
   const dusk = Math.max(0, 1 - Math.abs(h - 19) / 1.6) + Math.max(0, 1 - Math.abs(h - 6) / 1.2) * 0.6;
   tmpC.copy(SKY.night).lerp(SKY.day, k).lerp(SKY.dusk, Math.min(0.55, dusk * 0.55));
+  const HL = HOL.id && HOL_LOOK[HOL.id]; if (HL) tmpC.lerp(holC.set(HL.tint), HL.amt);
   scene.fog.color.copy(tmpC); renderer.setClearColor(tmpC);
   hemi.intensity = 0.25 + k * 0.6; sun.intensity = 0.1 + k * 0.85;
   sun.color.set(dusk > 0.3 ? '#ffb36b' : '#ffe2b0');
   const ang = ((h - 6) / 15) * Math.PI;
   sun.position.set(Math.cos(ang) * -30, 10 + Math.sin(Math.max(0.1, ang)) * 25, 14);
-  windowMat.emissiveIntensity = Math.max(0, 1 - k * 1.4) * 1.1;
-  scene.fog.near = 55 - (1 - k) * 22; scene.fog.far = 200 - (1 - k) * 70;
+  windowMat.emissiveIntensity = Math.max(0, 1 - k * 1.4) * 1.1 * (HL && HL.glow ? HL.glow : 1);
+  scene.fog.near = 55 - (1 - k) * 22; scene.fog.far = 200 - (1 - k) * 70; if (HL && HL.fog) { scene.fog.near *= HL.fog; scene.fog.far *= HL.fog + 0.2; }
 }
 
 /* ----- camera and input: twin thumbsticks ----- */
@@ -10990,13 +11090,115 @@ function workBtn(s, at) {
   const W = Sim.workPlace(s, at); if (!W) return '';
   const no = Sim.workRefusal(s, W); if (no) return B_('Work here<small>the owner will not have you</small>', ['ui', 'mini', at], 'alt', true);
   const lv = Sim.tradeLevel(s, W.trade), pay = Sim.roundPay(s, W.trade, false, 1, W.own), top = Sim.roundPay(s, W.trade, false, Sim.CHAIN_MAX, W.own);
-  return B_('Work here<small>' + esc(Sim.tradeName(W.trade).toLowerCase()) + ' level ' + lv + ' · ' + pay + 'c an item, ' + top + 'c at \u00d7' + Sim.CHAIN_MAX + (W.own ? ', your own bench' : '') + '</small>', ['ui', 'mini', at], '');
+  return B_('Work here<small>lv ' + lv + ' · ' + pay + '\u2013' + top + 'c</small>', ['ui', 'mini', at], '');
 }
 function workLine(s, at) {
   const W = Sim.workPlace(s, at); if (!W) return '';
   const no = Sim.workRefusal(s, W); if (no) return `<div class="why">${esc(no)}</div>`;
   return `<div class="why">Walk in and work the bench whenever you like, for as long as you like. Every good item is paid at once and adds to your chain, up to \u00d7${Sim.CHAIN_MAX}; one mistake and the chain starts again.${W.own ? ' At your own bench you keep the tenth the owner would take.' : ''}</div>`;
 }
+/* ----- the calendar: a year on one page. Past days show what happened, future days what is coming ----- */
+const SEASON_NAME = ['Spring', 'Summer', 'Autumn', 'Winter'];
+function dayDate(d) { const yd = (d - 1) % Sim.YEAR_DAYS, m = Math.floor(yd / Sim.MONTH_DAYS); return { year: Math.floor((d - 1) / Sim.YEAR_DAYS) + 1, month: m, dom: yd % Sim.MONTH_DAYS + 1, yd: yd + 1, season: Math.floor(m / 3) }; }
+// what the realm already knows is coming on a day
+function comingOn(s, d) {
+  const out = [], D = dayDate(d), v = s.village, V = s.valdoria, R = s.realm, F = s.folk;
+  for (const k of ['alderwyn', 'valdoria']) { const H = Sim.holidayOn(d, k); if (H && !out.some(x => x.hol === H.id)) out.push({ k: 'hol', hol: H.id, t: H.name + (H.where === 'valdoria' ? ' (in Valdoria)' : '') + '. ' + H.says }); }
+  if (D.dom === 1 && D.month % 3 === 0) out.push({ k: 'season', t: SEASON_NAME[D.season] + ' begins' + (D.month === 0 ? ', and a new year' : '') + '.' });
+  if (d % 7 === 0) out.push({ k: 'week', t: 'Tax day: the lord’s collector goes round the businesses.' });
+  if (d % 7 === 1) out.push({ k: 'week', t: 'The lord gives his weekly word on the village’s business.' });
+  if (R && d % 7 === 3) out.push({ k: 'week', t: 'The court’s week turns: the great figures of the realm make their moves.' });
+  if (v && v.disputeDay === d) out.push({ k: 'you', t: 'A dispute comes before the village council.' });
+  if (V && V.peaceUntil === d) out.push({ k: 'you', t: 'The truce with Valdoria ends.' });
+  const rate = s.ageRate; if (rate && s.you) {
+    const Y = s.you, r0 = Y.bday % rate; if (d % rate === r0) { const n = Math.floor((d - r0) / rate) - Math.floor((s.day - r0) / rate); out.push({ k: 'you', t: d > s.day ? 'Your birthday: you turn ' + (Y.age + n) + '.' : 'Your birthday.' }); }
+    for (const q of Sim.living(s)) if (q.id !== Y.pid && (q.id === Y.spouse || (q.parents || []).includes(Y.pid)) && d % rate === Sim.bdayOf(s, q)) out.push({ k: 'you', t: q.name + '’s birthday.' });
+  }
+  if (F) for (const q of Sim.nemeses(s)) { if (q.nem.quiet === d) out.push({ k: 'bad', t: q.name + ' is no longer bound to keep quiet.' }); if (q.nem.tracked === d) out.push({ k: 'info', t: 'Your informant stops following ' + q.name + '.' }); }
+  return out;
+}
+function pageCalendar(s) {
+  const today = s.day, T = dayDate(today), y = UI.calYear || T.year, sel = UI.calDay || today, C = s.chronicle || [];
+  const byDay = {}; for (const c of C) (byDay[c.d] = byDay[c.d] || []).push(c);
+  const kindOf = L => !L ? '' : L.some(c => c.k === 'bad') ? 'bad' : L.some(c => c.k === 'story') ? 'story' : 'good';
+  let h = `<h3>The Calendar</h3><p class="lead">A year on one page: twelve months of five days. Tap a day to see what happened, or what is coming.</p>`;
+  h += `<div class="calnav">${(y > 1 ? B_('&lsaquo; Year ' + (y - 1), ['ui', 'calYear', y - 1], 'alt') : '<span></span>')}<b>Year ${y}</b>${B_('Year ' + (y + 1) + ' &rsaquo;', ['ui', 'calYear', y + 1], 'alt', y > T.year)}</div>`;
+  h += `<div class="calwrap"><div class="calgrid" role="grid">`;
+  for (let m = 0; m < 12; m++) {
+    h += `<div class="calrow"><span class="calm s${Math.floor(m / 3)}">${esc(Sim.MONTHS[m])}</span>`;
+    for (let dm = 1; dm <= Sim.MONTH_DAYS; dm++) {
+      const d = (y - 1) * Sim.YEAR_DAYS + m * Sim.MONTH_DAYS + dm, H = Sim.holidayOn(d, 'alderwyn') || Sim.holidayOn(d, 'valdoria'), past = byDay[d], k = kindOf(past);
+      h += `<button type="button" class="calday ${d === today ? 'today' : ''} ${d === sel ? 'sel' : ''} ${d > today ? 'future' : ''} ${H ? 'hol' : ''}" data-c='${esc(JSON.stringify(['ui', 'calDay', d]))}' aria-label="${esc(dm + ' ' + Sim.MONTHS[m] + (H ? ', ' + H.name : ''))}"><span>${dm}</span>${H ? '<i class="star">✦</i>' : ''}${past ? `<i class="dot ${k}"></i>` : ''}</button>`;
+    }
+    h += `</div>`;
+  }
+  h += `</div><div class="calday-detail">${dayDetail(s, sel, byDay[sel] || [])}</div></div>`;
+  h += `<p class="why"><span class="legend"><i class="star">✦</i> a holiday</span> <span class="legend"><i class="dot story"></i> something big happened</span> <span class="legend"><i class="dot good"></i> good news</span> <span class="legend"><i class="dot bad"></i> trouble</span></p>`;
+  return h;
+}
+function dayDetail(s, d, past) {
+  const D = dayDate(d), when = d === s.day ? 'Today' : d < s.day ? (s.day - d === 1 ? 'Yesterday' : (s.day - d) + ' days ago') : (d - s.day === 1 ? 'Tomorrow' : 'In ' + (d - s.day) + ' days');
+  let h = `<h4>${D.dom} ${esc(Sim.MONTHS[D.month])}, year ${D.year}</h4><div class="sub">${esc(SEASON_NAME[D.season])} · day ${d} · ${when}</div>`;
+  const coming = comingOn(s, d);
+  if (coming.length) h += `<ul class="calnotes">${coming.map(c => `<li class="${c.k}">${esc(c.t)}</li>`).join('')}</ul>`;
+  const H = Sim.holidayOn(d, Sim.kingdomOf(Sim.townAt(s.player.x, s.player.z) || 'hearthmoor'));
+  if (d === s.day && H) h += `<div class="acts">${B_('Pay for the festivities · ' + H.cost * ((Sim.townAt(s.player.x, s.player.z) || 'hearthmoor') === 'hearthmoor' ? 1 : 2) + 'c<small>as Elder, lord or ruler: the town remembers who gave them their feast</small>', ['fFestival'], 'alt')}</div>`;
+  if (d <= s.day) {
+    const L = (s.ledger || []).find(e => e.day === d);
+    if (L && L.coinsEnd != null && L.coinsStart != null) { const n = Math.round((L.coinsEnd - L.coinsStart) * 100) / 100; h += `<p class="num">Your purse ${n >= 0 ? 'grew by ' + n : 'shrank by ' + (-n)}c that day.</p>`; }
+    h += past.length ? `<ul class="calnotes past">${past.slice().reverse().map(c => `<li class="${c.k}"><span class="num">${Sim.clock(c.m)}</span> ${esc(c.x)}</li>`).join('')}</ul>` : (d < s.day ? `<p>Nothing the chronicle thought worth writing down.</p>` : d === s.day ? '<p>The day is still young.</p>' : '');
+  } else if (!coming.length) h += `<p>Nothing is known yet about this day.</p>`;
+  return h;
+}
+
+/* ----- holidays in the world: the light, the fog, and the square dressed for the day ----- */
+const HOL_LOOK = {
+  firstlight: { tint: '#ffd9a0', amt: 0.12, glow: 1.6 }, plough: { tint: '#cfe8b0', amt: 0.08 }, maying: { tint: '#ffd6ec', amt: 0.14 },
+  midsummer: { tint: '#ffb060', amt: 0.18, glow: 1.4 }, queensday: { tint: '#ffcf80', amt: 0.12 }, harvest: { tint: '#ffd27a', amt: 0.18 },
+  applefair: { tint: '#ffcfa0', amt: 0.1 }, soulsnight: { tint: '#7a6a9a', amt: 0.3, fog: 0.55, glow: 1.5 }, longnight: { tint: '#cfe0ff', amt: 0.16, glow: 1.7 }
+};
+const HOL = { id: null, town: null, group: null, flames: [] };
+function holidayNow(s) { const t = Sim.townAt(s.player.x, s.player.z) || 'hearthmoor'; return { H: Sim.holidayOn(s.day, Sim.kingdomOf(t)), t }; }
+function syncHoliday(s) {
+  if (!s) return; const { H, t } = holidayNow(s), id = H ? H.id : null;
+  if (id === HOL.id && t === HOL.town) return;
+  if (HOL.group) { scene.remove(HOL.group); HOL.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  HOL.id = id; HOL.town = t; HOL.group = null; HOL.flames = [];
+  if (!H) return;
+  const C = t === 'hearthmoor' ? { x: 0, z: 9, r: 8 } : (() => { const L0 = Sim.LOCS[Sim.MARKET_AT[t]]; return L0 ? { x: L0.x, z: L0.z, r: Math.max(7, (L0.r || 8) * 0.8) } : null; })(); if (!C) return;
+  const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c }), E = (c, i) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: i || 0.8 });
+  const put = (geo, mat, x, y, z, ry, rz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz; g.add(m); return m; };
+  const gy = (x, z) => groundH(x, z);
+  const ringPts = n => Array.from({ length: n }, (_, i) => { const a = i / n * Math.PI * 2; return { x: C.x + Math.cos(a) * C.r, z: C.z + Math.sin(a) * C.r, a }; });
+  // bunting on poles round the square, in the day's colours
+  const cols = { firstlight: ['#f2d27a', '#fff1c0'], plough: ['#5f9a3a', '#e8e0b0'], maying: ['#f28cb8', '#ffffff', '#8cc8f2', '#f2e07a'], midsummer: ['#e8742a', '#f2c23a'], queensday: ['#a8231c', '#e0b030'], harvest: ['#d9a033', '#8a5a2a'], applefair: ['#b8302a', '#6aa83a'], soulsnight: ['#5a3a6a', '#2a2a2a'], longnight: ['#2f6a3a', '#b8302a'] }[H.id] || ['#ffffff'];
+  const poles = ringPts(8), poleM = M('#6b4a2e');
+  for (const p of poles) put(new THREE.CylinderGeometry(0.08, 0.1, 3.4, 6), poleM, p.x, gy(p.x, p.z) + 1.7, p.z);
+  for (let i = 0; i < poles.length; i++) {
+    const a = poles[i], b = poles[(i + 1) % poles.length], n = 7;
+    for (let j = 1; j < n; j++) { const f = j / n, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f, sag = Math.sin(f * Math.PI) * 0.5; const fl = put(new THREE.ConeGeometry(0.16, 0.38, 3), M(cols[j % cols.length]), x, gy(x, z) + 3.1 - sag, z, Math.atan2(b.x - a.x, b.z - a.z), Math.PI); fl.scale.z = 0.25; }
+  }
+  // lanterns for the night festivals
+  if (['firstlight', 'soulsnight', 'longnight', 'midsummer'].includes(H.id)) for (const p of poles) put(new THREE.BoxGeometry(0.26, 0.32, 0.26), E(H.id === 'soulsnight' ? '#ff8a20' : '#ffd070', 1.1), p.x, gy(p.x, p.z) + 3.55, p.z);
+  if (H.id === 'maying') {   // the maypole, ribboned
+    put(new THREE.CylinderGeometry(0.12, 0.16, 7, 8), M('#e8dcc0'), C.x, gy(C.x, C.z) + 3.5, C.z);
+    put(new THREE.TorusGeometry(0.5, 0.12, 6, 12), M('#f28cb8'), C.x, gy(C.x, C.z) + 6.6, C.z).rotation.x = Math.PI / 2;
+    ['#f28cb8', '#8cc8f2', '#f2e07a', '#9ad27a', '#ffffff', '#c89af2'].forEach((c, i) => { const a = i / 6 * Math.PI * 2, rx = C.x + Math.cos(a) * 2.2, rz = C.z + Math.sin(a) * 2.2, r = put(new THREE.CylinderGeometry(0.03, 0.03, 6, 4), M(c), (C.x + rx) / 2, gy(C.x, C.z) + 3.6, (C.z + rz) / 2); r.lookAt(rx, gy(rx, rz) + 0.8, rz); r.rotateX(Math.PI / 2); });
+  }
+  if (H.id === 'midsummer' || H.id === 'longnight') {   // a bonfire, or a yule fire
+    const y0 = gy(C.x, C.z); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, l = put(new THREE.CylinderGeometry(0.12, 0.14, 1.8, 5), M('#5a3a22'), C.x + Math.cos(a) * 0.35, y0 + 0.7, C.z + Math.sin(a) * 0.35); l.rotation.z = Math.cos(a) * 0.5; l.rotation.x = Math.sin(a) * 0.5; }
+    const f1 = put(new THREE.ConeGeometry(0.7, H.id === 'midsummer' ? 2.4 : 1.4, 7), E('#ff8a20', 1.2), C.x, y0 + 1.6, C.z), f2 = put(new THREE.ConeGeometry(0.4, 1.6, 6), E('#ffd050', 1.4), C.x, y0 + 1.6, C.z); HOL.flames = [f1, f2];
+  }
+  if (H.id === 'harvest' || H.id === 'plough' || H.id === 'applefair') {   // sheaves, or apple barrels
+    for (const p of ringPts(6)) { const x = C.x + (p.x - C.x) * 0.6, z = C.z + (p.z - C.z) * 0.6, y0 = gy(x, z); if (H.id === 'applefair') { put(new THREE.CylinderGeometry(0.4, 0.4, 0.8, 8), M('#7a5230'), x, y0 + 0.4, z); put(new THREE.SphereGeometry(0.36, 8, 6), M('#b8302a'), x, y0 + 0.85, z); } else { put(new THREE.CylinderGeometry(0.22, 0.38, 1.3, 7), M('#d9b04a'), x, y0 + 0.65, z); put(new THREE.ConeGeometry(0.3, 0.5, 7), M('#e8c45a'), x, y0 + 1.5, z); } }
+  }
+  if (H.id === 'soulsnight') for (const p of ringPts(10)) { const x = C.x + (p.x - C.x) * 0.75, z = C.z + (p.z - C.z) * 0.75; put(new THREE.SphereGeometry(0.22, 7, 6), E('#ff7a10', 1.3), x, gy(x, z) + 0.22, z); }
+  if (H.id === 'longnight' || H.id === 'firstlight') for (const p of ringPts(6)) { const x = C.x + (p.x - C.x) * 0.55, z = C.z + (p.z - C.z) * 0.55, y0 = gy(x, z); put(new THREE.ConeGeometry(0.6, 1.8, 7), M('#2f5a34'), x, y0 + 0.9, z); put(new THREE.SphereGeometry(0.12, 6, 5), E('#d83a2a', 0.6), x + 0.3, y0 + 1.1, z); }
+  if (H.id === 'queensday') for (const p of poles) { const b = put(new THREE.PlaneGeometry(0.7, 1.4), new THREE.MeshLambertMaterial({ color: '#a8231c', side: THREE.DoubleSide }), p.x, gy(p.x, p.z) + 2.4, p.z, Math.atan2(C.x - p.x, C.z - p.z)); b.translateZ(0.12); }
+  scene.add(g); HOL.group = g;
+}
+function stepHoliday(dt, t) { for (let i = 0; i < HOL.flames.length; i++) { const f = HOL.flames[i], k = 1 + Math.sin(t * (6 + i * 3)) * 0.12 + Math.sin(t * 17 + i) * 0.06; f.scale.set(1 / k, k, 1 / k); } }
+
 function personCard(s, pr, body) {
   const doing = body && (body.why || body.doing);
   const log = pr.log.slice(0, 3).map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('');
@@ -11102,6 +11304,7 @@ function hud(s) {
   const carry = Sim.GOODS.filter(g => inv[g]).map(g => `<b>${inv[g]}</b> ${g}`);
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
   if (s.player.horse) chips.push(`<span class="chip num btn" data-c='["ride"]' role="button" tabindex="0">${s.player.riding ? 'Riding ' + esc(s.player.horse.name) + ' · get down' : 'Mount ' + esc(s.player.horse.name)}</span>`);
+  { const H = Sim.holidayOn(s.day, Sim.kingdomOf(Sim.townAt(s.player.x, s.player.z) || 'hearthmoor')); if (H) chips.push(`<span class="chip num btn hol" data-c='["page","calendar"]' role="button" tabindex="0">\u2726 ${esc(H.name)}</span>`); }
   if (s.work) chips.push(`<span class="chip num on">Working · \u00d7${s.work.chain || 1} · ${s.work.earned}c</span>`);
   { const w = waypointPos(); if (w) chips.push(`<span class="chip num btn" data-c='["ui","clearWaypoint"]' role="button" tabindex="0">Finding ${esc(w.name.split(' ')[0])}${w.near ? ' \u00b7 ' + Math.round(Math.hypot(s.player.x - w.x, s.player.z - w.z)) + ' m' : ' \u00b7 in ' + esc(TOWN_NAMES[w.town])} \u00d7</span>`); }
   if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
@@ -11122,7 +11325,7 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['renown', 'Renown'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['justice', 'Justice'], ['realm', 'Realm'], ['goals', 'Goals']];
+const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['renown', 'Renown'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['justice', 'Justice'], ['realm', 'Realm'], ['calendar', 'Calendar'], ['goals', 'Goals']];
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
@@ -11136,7 +11339,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -12467,11 +12670,11 @@ function pauseMainHTML(s) {
   const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
   const here = s.people ? Sim.living(s).length : 0;
   const tiles = [
-    (() => { const c = Sim.calendar(s); return ['sun', c.dom + ' ' + c.monthName, c.season.charAt(0).toUpperCase() + c.season.slice(1) + ', year ' + c.year + ' \u00b7 ' + c.next + ' in ' + c.daysLeft + 'd \u00b7 ' + sm.clock]; })(),
-    ['coin', sm.coins + 'c', 'worth ' + sm.netWorth + 'c'],
-    ['house', s.shops.length + (s.biz ? Object.values(s.biz).filter(b => b.owner === 'player').length : 0) + ' businesses', (s.houses ? s.houses.filter(h => h.owner === 'player').length : 0) + ' houses'],
-    ['crown', 'Standing ' + v.standing, v.council ? 'on the council' : v.step > 0 ? 'known to the elder' : 'unknown'],
-    ['people', here + ' villagers', s.people ? Sim.living(s).filter(p => p.opinion >= 10).length + ' like you' : '']
+    (() => { const c = Sim.calendar(s), H = Sim.holidayOn(s.day, 'alderwyn'); return ['sun', c.dom + ' ' + c.monthName + (H ? ' \u00b7 ' + H.name : ''), c.season.charAt(0).toUpperCase() + c.season.slice(1) + ', year ' + c.year + ' \u00b7 ' + c.next + ' in ' + c.daysLeft + 'd \u00b7 ' + sm.clock]; })(),
+    ['coin', sm.coins + 'c', 'worth ' + sm.netWorth + 'c', 'ledger'],
+    ['house', s.shops.length + (s.biz ? Object.values(s.biz).filter(b => b.owner === 'player').length : 0) + ' businesses', (s.houses ? s.houses.filter(h => h.owner === 'player').length : 0) + ' houses', 'property'],
+    ['crown', 'Standing ' + v.standing, v.council ? 'on the council' : v.step > 0 ? 'known to the elder' : 'unknown', 'village'],
+    ['people', (s.people ? Sim.living(s).filter(p => Sim.townOf(p) === 'hearthmoor').length : here) + ' villagers', s.people ? Sim.living(s).filter(p => p.opinion >= 10 && Sim.townOf(p) === 'hearthmoor').length + ' like you' : '', 'people']
   ];
   const item = (ic, label, sub, c, primary) => `<button type="button" class="mi ${primary ? 'primary' : ''}" data-c='${esc(JSON.stringify(c))}'>${icon(ic)}<span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`;
   return `<div class="pspread">
@@ -12480,8 +12683,8 @@ function pauseMainHTML(s) {
       <div class="pcrest">${CREST}</div>
       <div class="ptitle"><span class="drop">${esc(s.name.charAt(0))}</span>${esc(s.name.slice(1))}</div>
       <div class="ppos">${esc(pos)}</div>
-      <div class="ptiles">${tiles.map(t => `<div class="ptile">${icon(t[0])}<div><b class="num">${esc(t[1])}</b><span>${esc(t[2])}</span></div></div>`).join('')}</div>
-      ${g ? `<div class="pgoal"><span>Your next aim</span>${esc(Sim.stepText(s, g.text))}</div>` : ''}
+      <div class="ptiles">${tiles.map((t, i) => `<button type="button" class="ptile" data-c='${esc(JSON.stringify(['page', t[3] || 'calendar']))}'>${icon(t[0])}<div><b class="num">${esc(t[1])}</b><span>${esc(t[2])}</span></div><i class="pchev">&rsaquo;</i></button>`).join('')}</div>
+      ${g ? `<button type="button" class="pgoal" data-c='["page","goals"]'><span>Your next aim</span>${esc(Sim.stepText(s, g.text))}</button>` : ''}
     </div>
     <div class="pleaf pr">
       <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
@@ -12670,6 +12873,8 @@ function uiCmd(k, v) {
   if (k === 'travel') { travel(v); return; }
   if (k === 'journey') { const r = Sim.cmd(G, 'journey', v); if (!r.ok) { toast(r.msg, 'warn'); return; } if (r.mins > 0) Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); if (UI.overlay) closeOverlay(); toast((r.how === 'ride' ? 'You ride to ' : 'You walk to ') + TOWN_NAMES[v] + ' (' + r.mins + ' min).', 'info', true); drainEvents(); renderCard(true); return; }
   if (k === 'seek') { const q = G.people[v]; if (!q) return; UI.waypoint = v; const t = Sim.townOf(q), here = Sim.townAt(G.player.x, G.player.z) || 'hearthmoor'; if (t !== here) { if (Sim.kingdomOf(t) !== Sim.kingdomOf(here)) { toast(q.name + ' is across the sea in ' + TOWN_NAMES[t] + '. Take a ship.', 'warn', true); return; } uiCmd('journey', t); } else { if (UI.overlay) closeOverlay(); toast('You go looking for ' + q.name + '. Follow the marker.', 'info', true); } return; }
+  if (k === 'calYear') { UI.calYear = v; renderBook(); return; }
+  if (k === 'calDay') { UI.calDay = v; renderBook(); return; }
   if (k === 'throne') { if (v === false) { UI.throne = false; closeScene(); return; } if (UI.overlay) closeOverlay(); UI.throne = true; openScene(); return; }
   if (k === 'blade') { const q = G.people[v]; if (!q) return; if (UI.confirm === 'blade' + v) { UI.confirm = null; act(['fBlade', v, null, true]); } else { UI.confirm = 'blade' + v; toast('Pay to have ' + q.name + ' killed? Tap again to pay. It will darken your name, and if it is traced to you, worse.', 'warn', true); } return; }
   if (k === 'mini') { if (UI.overlay) closeOverlay(); openMini(v); return; }
@@ -13226,9 +13431,10 @@ function frame(now) {
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
   if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { walkPlayer(G, dt); SignKit.step(G, t); } const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (UI.mode === 'play' && G && !G.pendingDeath) { checkScene(); stepDuel(dt); }
+  if (HOL.flames.length) stepHoliday(dt, now / 1000);
   if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t);
-  syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') syncStatues(G);
+  syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); }
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
@@ -13523,8 +13729,17 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.07.2052';
+const BUILD = '2026.11.07.2124';
 const NOTES = [
+  { v: '0.56', date: '7 November', title: 'Holidays, and the calendar', items: [
+    'Holidays. The year has its festivals: Firstlight (new year), the Plough Blessing, Maying, Midsummer Fires, Harvest Home, the Applefall Fair, Souls\u2019 Night and Longnight, and the Queen\u2019s Feast in Valdoria. On the day, the square is dressed for it: bunting in the festival\u2019s colours, lanterns, a ribboned maypole, a midsummer bonfire, harvest sheaves, apple barrels, glowing turnip lanterns in the mist, evergreens and red ribbons. The light changes with the festival too.',
+    'Folk spend more on a festival day (the taverns most of all at midsummer, the bakers and butchers at Harvest Home), and everyone is in a better mood. As Elder, a lord or the ruler you can pay for the festivities, and the town remembers who gave them their feast.',
+    'The calendar. A whole year on one page, twelve months of five days, with the holidays marked. Tap any past day to read what happened, and when; tap a future day to see what is coming: festivals, the start of each season, tax days, the court\u2019s week, disputes, a truce running out, birthdays in your family.',
+    'The chronicle. The game now writes down everything that touches you, and the big news, so the calendar can show it. Sales and the doings of far-off towns are left out.',
+    'Townsfolk go shopping. The people who live in each town now walk to its businesses: by day if they have no work to be at, and in crowds after work. The streets of Oakbridge and Crownmere are busy at dusk.',
+    'Smaller pop-ups on a phone held sideways: the card for a shop, a business or a place now sits small in the bottom-right corner with its buttons in one row, and spoken lines, the work bench and notices take up less of the screen.',
+    'Everything on the left page of the Book of Days now opens something: the date opens the calendar, your coins the ledger, your businesses your property, your standing the village, the villagers the people, and your next aim your goals.'
+  ] },
   { v: '0.55', date: '7 November', title: 'The chain', items: [
     'Working a bench is rebuilt after Fable 3. A slider runs across a few coloured bars: press the matching button as it crosses each one. Hit them all and the item is good.',
     'Every good item adds one to your chain, up to \u00d710, and pays the level\u2019s rate times the chain. Press the wrong button or let a bar slip past, and the chain is gone. The slider speeds up as the chain grows.',
