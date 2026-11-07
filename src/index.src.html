@@ -4019,9 +4019,9 @@ function pageManage(s) {
 }
 function handsBox(s, shop) {
   const T = TR[shop.trade], room = Sim.handRoom(shop), hs = shop.hands || [], Ti = Sim.tierOf(shop), q = Sim.roundQuota(shop), over = Sim.crowdOver(shop);
-  let h = `<div class="box"><h5>Employees at your ${esc(T.name.toLowerCase())} · ${hs.length} <span class="sub">(a ${esc(Ti.name.toLowerCase())} fits ${room})</span></h5>`;
+  let h = `<div class="box"><h5>Your ${esc(T.name.toLowerCase())} · ${hs.length + (shop.worker ? 1 : 0)} working <span class="sub">(a ${esc(Ti.name.toLowerCase())} has room for ${room + 1})</span></h5>`;
   h += `<p>Full-time staff beside ${shop.worker ? esc(shop.worker.name.split(' ')[0]) : 'your worker'}. Give each a job: the bench (makes ${T.many} faster), the counter (serves so the bench never stops), selling round town (about ${q} a day for the first, fewer after), or fetching supplies.</p>`;
-  if (over) h += `<p class="why"><b>Crowded.</b> ${hs.length} employees where ${room} fit: everyone works about ${Math.round((1 - Sim.crowdMul(shop)) * 100)}% slower, moods sink each day and quarrels break out. Upgrade the building or let someone go.</p>`;
+  if (over) h += `<p class="why"><b>Crowded.</b> ${hs.length + 1} working where ${room + 1} fit: everyone works about ${Math.round((1 - Sim.crowdMul(shop)) * 100)}% slower, moods sink each day and quarrels break out. Upgrade the building or let someone go.</p>`;
   const st = G && G.ledger.length ? G.ledger[G.ledger.length - 1].shops.find(x => x.id === shop.id) : null;
   if (st && Sim.staffOn(shop, 'round').length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c.</p>`;
   hs.forEach((x, i) => {
@@ -4049,7 +4049,7 @@ function staffOverview(s) {
     h += `<div class="staffgrid">`;
     if (shop.worker) h += who(shop.worker.name, 'Worker · ' + (shop.counterBy ? 'at the bench' : 'bench and counter') + ' · mood ' + Math.round(shop.worker.mood), { kind: 'worker', shop: shop.id }, shop.worker.mood < 30);
     hs.forEach((x, i) => { h += who(x.name, Sim.ROLE_NAME[x.role || 'make'] + ' · ' + x.wage + 'c · mood ' + Math.round(x.mood), { kind: 'hand', shop: shop.id, i }, x.mood < 30); });
-    h += `</div><p class="why">${shop.worker ? hs.length + ' employee' + (hs.length === 1 ? '' : 's') + ' (fits ' + room + ')' + (hs.length > room ? ': crowded' : '') : 'No worker yet.'}</p><div class="acts">${B_(shop.worker ? 'Hire someone' : 'Hire a worker', ['ui', 'staffSel', { kind: 'hire', shop: shop.id }], 'alt')}</div></div>`;
+    h += `</div><p class="why">${shop.worker ? (hs.length + 1) + ' working here, room for ' + (room + 1) + (hs.length > room ? ': crowded' : '') + (m ? ' (the manager is extra)' : '') : 'No worker yet.'}</p><div class="acts">${B_(shop.worker ? 'Hire someone' : 'Hire a worker', ['ui', 'staffSel', { kind: 'hire', shop: shop.id }], 'alt')}</div></div>`;
   }
   for (const b of owned) {
     const m = b.manager, st = b.staff || [];
@@ -6360,6 +6360,9 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.64', date: '7 November', title: 'Counting staff plainly', items: [
+    'Staff counts now include everyone who works in a shop, the worker too: a stall has room for 2, a timber building 3, a stone one 4. The manager is counted separately.'
+  ] },
   { v: '0.63', date: '7 November', title: 'The ladder to the throne', items: [
     'Every office is a rung, and you climb in order: a seat on the village council, then Elder of Hearthmoor, then a lordship, then a seat on the royal council, then the crown.',
     'The village council is elected too, more gently: a seat comes up every ten days at the Village Hall, for a small fee, and anyone with a business or standing 20 can stand. Ending the grain shortage earns you a place on the ballot instead of a seat.',

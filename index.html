@@ -1215,7 +1215,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (over && shop.hands.length > 1 && rand(s) < 0.15 * over) {
           const a = shop.hands[Math.floor(rand(s) * shop.hands.length)], b = [shop.worker].concat(shop.hands).filter(x => x && x !== a)[Math.floor(rand(s) * shop.hands.length)];
           a.mood = clamp(a.mood - 14, 0, 100); if (b) b.mood = clamp(b.mood - 8, 0, 100);
-          event(s, 'Too many people behind the counter at your ' + TRADES[shop.trade].name.toLowerCase() + ': ' + a.name + (b ? ' and ' + b.name : '') + ' came to words. (' + shop.hands.length + ' employees where ' + handRoom(shop) + ' fit.)', 'bad');
+          event(s, 'Too many people behind the counter at your ' + TRADES[shop.trade].name.toLowerCase() + ': ' + a.name + (b ? ' and ' + b.name : '') + ' came to words. (' + (shop.hands.length + 1) + ' working where ' + (handRoom(shop) + 1) + ' fit.)', 'bad');
         }
         for (const h of shop.hands.slice()) {
           spend(s, h.wage); ss.wages += h.wage; s.rec.wagesPaid += h.wage; const hp = h.pid && s.people && s.people[h.pid]; if (hp) hp.purse += h.wage;
@@ -1390,7 +1390,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const notes = [], T = TRADES[shop.trade], Ti = tierOf(shop);
     if (shop.hands && shop.hands.length) {
       const hw = shop.hands.reduce((a, h) => a + h.wage, 0);
-      if (e.crowd) notes.push({ text: 'Your ' + Ti.name.toLowerCase() + ' is crowded: ' + shop.hands.length + ' employees where ' + handRoom(shop) + ' fit. Everyone works about ' + Math.round((1 - crowdMul(shop)) * 100) + '% slower and tempers fray. Upgrade the building or let someone go.', fix: { label: 'Staff', cmd: ['page', 'staff'] } });
+      if (e.crowd) notes.push({ text: 'Your ' + Ti.name.toLowerCase() + ' is crowded: ' + (shop.hands.length + 1) + ' working where ' + (handRoom(shop) + 1) + ' fit. Everyone works about ' + Math.round((1 - crowdMul(shop)) * 100) + '% slower and tempers fray. Upgrade the building or let someone go.', fix: { label: 'Staff', cmd: ['page', 'staff'] } });
       if (!staffOn(shop, 'round').length) {} else if ((e.rounds || 0) < (e.roundsWanted || 0) * 0.6) notes.push({ text: 'Your sellers could have sold ' + e.roundsWanted + ' ' + T.product + ' round the village but sold ' + (e.rounds || 0) + (e.roundsRefused ? ' (' + e.roundsRefused + ' turned them down at ' + Math.max(1, Math.round(shop.price * 0.85)) + 'c)' : '') + ': they cost ' + hw + 'c and brought in ' + (e.roundsCoin || 0) + 'c. ' + (shop.goods < Ti.out ? 'Keep more on the shelf, or let one go.' : 'Most people had already bought: one fewer hand would do.') });
       else notes.push({ text: 'Your sellers sold ' + e.rounds + ' ' + T.product + ' beyond the counter for ' + (e.roundsCoin || 0) + 'c, against ' + hw + 'c in wages.' });
     } else if (shop.worker && e.soldOut === 0 && shop.goods >= Ti.out) notes.push({ text: 'Your shelf ended the day with goods to spare. An employee could take some round the town.', fix: { label: 'Hire an employee', cmd: ['page', 'staff'] } });
@@ -1696,7 +1696,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     s.decisions = s.decisions || [];
     if ((losing || crowded) && hs.length && !s.decisions.some(d => d.kind === 'fire' && d.shop === shop.id)) {
       const h = hs.slice().sort((a, b) => (a.skill || 1) * (a.mood + 20) / a.wage - (b.skill || 1) * (b.mood + 20) / b.wage)[0];
-      const why = crowded ? 'there are ' + hs.length + ' of them where ' + handRoom(shop) + ' fit, and they get in each other\u2019s way' : 'the shop has lost money three days running, and ' + h.name.split(' ')[0] + '\u2019s ' + h.wage + 'c a day would close the gap';
+      const why = crowded ? 'there are ' + (hs.length + 1) + ' of us working where ' + (handRoom(shop) + 1) + ' fit, and we get in each other\u2019s way' : 'the shop has lost money three days running, and ' + h.name.split(' ')[0] + '\u2019s ' + h.wage + 'c a day would close the gap';
       s.decisions.push({ id: (s.nextDecision = (s.nextDecision || 0) + 1), day: s.day, kind: 'fire', shop: shop.id, name: h.name, from: m.name, text: m.name + ' (your ' + T + '): \u201cI would like to let ' + h.name + ' go, because ' + why + '.\u201d' });
     }
     // hire up to what the place holds comfortably, while the coin is there
@@ -12062,9 +12062,9 @@ function pageManage(s) {
 }
 function handsBox(s, shop) {
   const T = TR[shop.trade], room = Sim.handRoom(shop), hs = shop.hands || [], Ti = Sim.tierOf(shop), q = Sim.roundQuota(shop), over = Sim.crowdOver(shop);
-  let h = `<div class="box"><h5>Employees at your ${esc(T.name.toLowerCase())} · ${hs.length} <span class="sub">(a ${esc(Ti.name.toLowerCase())} fits ${room})</span></h5>`;
+  let h = `<div class="box"><h5>Your ${esc(T.name.toLowerCase())} · ${hs.length + (shop.worker ? 1 : 0)} working <span class="sub">(a ${esc(Ti.name.toLowerCase())} has room for ${room + 1})</span></h5>`;
   h += `<p>Full-time staff beside ${shop.worker ? esc(shop.worker.name.split(' ')[0]) : 'your worker'}. Give each a job: the bench (makes ${T.many} faster), the counter (serves so the bench never stops), selling round town (about ${q} a day for the first, fewer after), or fetching supplies.</p>`;
-  if (over) h += `<p class="why"><b>Crowded.</b> ${hs.length} employees where ${room} fit: everyone works about ${Math.round((1 - Sim.crowdMul(shop)) * 100)}% slower, moods sink each day and quarrels break out. Upgrade the building or let someone go.</p>`;
+  if (over) h += `<p class="why"><b>Crowded.</b> ${hs.length + 1} working where ${room + 1} fit: everyone works about ${Math.round((1 - Sim.crowdMul(shop)) * 100)}% slower, moods sink each day and quarrels break out. Upgrade the building or let someone go.</p>`;
   const st = G && G.ledger.length ? G.ledger[G.ledger.length - 1].shops.find(x => x.id === shop.id) : null;
   if (st && Sim.staffOn(shop, 'round').length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c.</p>`;
   hs.forEach((x, i) => {
@@ -12092,7 +12092,7 @@ function staffOverview(s) {
     h += `<div class="staffgrid">`;
     if (shop.worker) h += who(shop.worker.name, 'Worker · ' + (shop.counterBy ? 'at the bench' : 'bench and counter') + ' · mood ' + Math.round(shop.worker.mood), { kind: 'worker', shop: shop.id }, shop.worker.mood < 30);
     hs.forEach((x, i) => { h += who(x.name, Sim.ROLE_NAME[x.role || 'make'] + ' · ' + x.wage + 'c · mood ' + Math.round(x.mood), { kind: 'hand', shop: shop.id, i }, x.mood < 30); });
-    h += `</div><p class="why">${shop.worker ? hs.length + ' employee' + (hs.length === 1 ? '' : 's') + ' (fits ' + room + ')' + (hs.length > room ? ': crowded' : '') : 'No worker yet.'}</p><div class="acts">${B_(shop.worker ? 'Hire someone' : 'Hire a worker', ['ui', 'staffSel', { kind: 'hire', shop: shop.id }], 'alt')}</div></div>`;
+    h += `</div><p class="why">${shop.worker ? (hs.length + 1) + ' working here, room for ' + (room + 1) + (hs.length > room ? ': crowded' : '') + (m ? ' (the manager is extra)' : '') : 'No worker yet.'}</p><div class="acts">${B_(shop.worker ? 'Hire someone' : 'Hire a worker', ['ui', 'staffSel', { kind: 'hire', shop: shop.id }], 'alt')}</div></div>`;
   }
   for (const b of owned) {
     const m = b.manager, st = b.staff || [];
@@ -14401,8 +14401,11 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.07.2242';
+const BUILD = '2026.11.07.2247';
 const NOTES = [
+  { v: '0.64', date: '7 November', title: 'Counting staff plainly', items: [
+    'Staff counts now include everyone who works in a shop, the worker too: a stall has room for 2, a timber building 3, a stone one 4. The manager is counted separately.'
+  ] },
   { v: '0.63', date: '7 November', title: 'The ladder to the throne', items: [
     'Every office is a rung, and you climb in order: a seat on the village council, then Elder of Hearthmoor, then a lordship, then a seat on the royal council, then the crown.',
     'The village council is elected too, more gently: a seat comes up every ten days at the Village Hall, for a small fee, and anyone with a business or standing 20 can stand. Ending the grain shortage earns you a place on the ballot instead of a seat.',

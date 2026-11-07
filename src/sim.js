@@ -566,7 +566,7 @@
         if (over && shop.hands.length > 1 && rand(s) < 0.15 * over) {
           const a = shop.hands[Math.floor(rand(s) * shop.hands.length)], b = [shop.worker].concat(shop.hands).filter(x => x && x !== a)[Math.floor(rand(s) * shop.hands.length)];
           a.mood = clamp(a.mood - 14, 0, 100); if (b) b.mood = clamp(b.mood - 8, 0, 100);
-          event(s, 'Too many people behind the counter at your ' + TRADES[shop.trade].name.toLowerCase() + ': ' + a.name + (b ? ' and ' + b.name : '') + ' came to words. (' + shop.hands.length + ' employees where ' + handRoom(shop) + ' fit.)', 'bad');
+          event(s, 'Too many people behind the counter at your ' + TRADES[shop.trade].name.toLowerCase() + ': ' + a.name + (b ? ' and ' + b.name : '') + ' came to words. (' + (shop.hands.length + 1) + ' working where ' + (handRoom(shop) + 1) + ' fit.)', 'bad');
         }
         for (const h of shop.hands.slice()) {
           spend(s, h.wage); ss.wages += h.wage; s.rec.wagesPaid += h.wage; const hp = h.pid && s.people && s.people[h.pid]; if (hp) hp.purse += h.wage;
@@ -741,7 +741,7 @@
     const notes = [], T = TRADES[shop.trade], Ti = tierOf(shop);
     if (shop.hands && shop.hands.length) {
       const hw = shop.hands.reduce((a, h) => a + h.wage, 0);
-      if (e.crowd) notes.push({ text: 'Your ' + Ti.name.toLowerCase() + ' is crowded: ' + shop.hands.length + ' employees where ' + handRoom(shop) + ' fit. Everyone works about ' + Math.round((1 - crowdMul(shop)) * 100) + '% slower and tempers fray. Upgrade the building or let someone go.', fix: { label: 'Staff', cmd: ['page', 'staff'] } });
+      if (e.crowd) notes.push({ text: 'Your ' + Ti.name.toLowerCase() + ' is crowded: ' + (shop.hands.length + 1) + ' working where ' + (handRoom(shop) + 1) + ' fit. Everyone works about ' + Math.round((1 - crowdMul(shop)) * 100) + '% slower and tempers fray. Upgrade the building or let someone go.', fix: { label: 'Staff', cmd: ['page', 'staff'] } });
       if (!staffOn(shop, 'round').length) {} else if ((e.rounds || 0) < (e.roundsWanted || 0) * 0.6) notes.push({ text: 'Your sellers could have sold ' + e.roundsWanted + ' ' + T.product + ' round the village but sold ' + (e.rounds || 0) + (e.roundsRefused ? ' (' + e.roundsRefused + ' turned them down at ' + Math.max(1, Math.round(shop.price * 0.85)) + 'c)' : '') + ': they cost ' + hw + 'c and brought in ' + (e.roundsCoin || 0) + 'c. ' + (shop.goods < Ti.out ? 'Keep more on the shelf, or let one go.' : 'Most people had already bought: one fewer hand would do.') });
       else notes.push({ text: 'Your sellers sold ' + e.rounds + ' ' + T.product + ' beyond the counter for ' + (e.roundsCoin || 0) + 'c, against ' + hw + 'c in wages.' });
     } else if (shop.worker && e.soldOut === 0 && shop.goods >= Ti.out) notes.push({ text: 'Your shelf ended the day with goods to spare. An employee could take some round the town.', fix: { label: 'Hire an employee', cmd: ['page', 'staff'] } });
@@ -1047,7 +1047,7 @@
     s.decisions = s.decisions || [];
     if ((losing || crowded) && hs.length && !s.decisions.some(d => d.kind === 'fire' && d.shop === shop.id)) {
       const h = hs.slice().sort((a, b) => (a.skill || 1) * (a.mood + 20) / a.wage - (b.skill || 1) * (b.mood + 20) / b.wage)[0];
-      const why = crowded ? 'there are ' + hs.length + ' of them where ' + handRoom(shop) + ' fit, and they get in each other\u2019s way' : 'the shop has lost money three days running, and ' + h.name.split(' ')[0] + '\u2019s ' + h.wage + 'c a day would close the gap';
+      const why = crowded ? 'there are ' + (hs.length + 1) + ' of us working where ' + (handRoom(shop) + 1) + ' fit, and we get in each other\u2019s way' : 'the shop has lost money three days running, and ' + h.name.split(' ')[0] + '\u2019s ' + h.wage + 'c a day would close the gap';
       s.decisions.push({ id: (s.nextDecision = (s.nextDecision || 0) + 1), day: s.day, kind: 'fire', shop: shop.id, name: h.name, from: m.name, text: m.name + ' (your ' + T + '): \u201cI would like to let ' + h.name + ' go, because ' + why + '.\u201d' });
     }
     // hire up to what the place holds comfortably, while the coin is there
