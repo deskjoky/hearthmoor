@@ -29,3 +29,10 @@ test = src.replace('/*BUILD*/', 'test').replace('<script>/*SIM*/</script>', '<sc
 open('dist/test.html', 'w').write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + test + '</body></html>')
 json.dump({'build': BUILD}, open('version.json', 'w'))
 print('built', BUILD)
+# refuse a build whose scripts do not parse: a syntax error means a blank title screen for the player
+import re as _re, subprocess as _sp, tempfile as _tf, sys as _sys
+for _i, _s in enumerate(_re.findall(r'<script>([\s\S]*?)</script>', open('index.html').read())):
+    with _tf.NamedTemporaryFile('w', suffix='.js', delete=False) as _f: _f.write(_s)
+    _r = _sp.run(['node', '--check', _f.name], capture_output=True, text=True)
+    if _r.returncode: print('SYNTAX ERROR in script', _i, _r.stderr[:600]); _sys.exit(1)
+print('scripts parse')
