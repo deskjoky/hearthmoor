@@ -4595,19 +4595,19 @@ function electionsBox(s) {
   const races = Sim.upcomingRaces(s), E = Sim.electState(s), mine = Sim.yourOffice(s);
   let h = `<h4>Elections</h4><p class="lead">${mine ? 'You hold the office of ' + esc(Sim.raceLabel(Object.assign({ region: mine.region }, mine))) + '. ' : ''}Offices are won at the vote. A season opens ${Sim.ELECT_SEASON} days before polling: pay for a campaign to stand, then speak and make promises. You hold one office at a time.</p>${mine ? `<div class="acts">${B_('Read your charge', ['ui', 'handbook'], 'alt')}</div>` : ''}`;
   const pend = E.pledges.map((pl, i) => [pl, i]).filter(([pl]) => pl.state === 'given');
-  pend.forEach(([pl, i]) => { h += `<div class="why"><b>Your promise:</b> ${esc(pl.text)}, by day ${pl.due}.<div class="acts">${B_('Keep it · ' + pl.cost + 'c', ['keepPledge', i], '', s.coins < pl.cost)}</div></div>`; });
+  pend.forEach(([pl]) => { h += `<div class="why"><b>Your promise:</b> ${esc(pl.text)}, by day ${pl.due}. ${esc(pl.how || '')}</div>`; });
   const open = races.filter(r => r.open), soon = races.filter(r => !r.open).slice(0, 4);
   for (const r of open) {
     const bar = Sim.standBar(s, r), fee = Sim.standFee(s, r), poll = Sim.pollNow(s, r);
     h += `<div class="box"><h5>${esc(Sim.raceLabel(r))} · polling day ${r.poll}</h5>`;
     h += poll.length ? `<p class="num">${poll.map(x => (x.id === 'player' ? '<b>You</b>' : esc(x.name)) + ' ' + x.share + '%').join(' · ')}</p>` : `<p>No one stands yet.</p>`;
     if (r.you) {
-      h += `<div class="acts">${B_('Speak to the crowds<small>+' + Sim.speechGain(s) + ' · once a day</small>', ['speech', r.key], '', r.speech === s.day)}${r.pledge == null ? Sim.PLEDGES[r.office].map((P, i) => B_('Promise: ' + esc(P[0]) + '<small>keep it if you win</small>', ['pledge', r.key, i], 'alt')).join('') : ''}${B_('Withdraw', ['withdraw', r.key], 'alt')}</div>`;
-      if (r.pledge != null) h += `<p>You promised to ${esc(Sim.PLEDGES[r.office][r.pledge][0].toLowerCase())}.</p>`;
+      h += `<div class="acts">${B_('Speak to the crowds<small>+' + Sim.speechGain(s) + ' · once a day</small>', ['speech', r.key], '', r.speech === s.day)}${r.pledge == null ? Sim.pledgesFor(s, r).map(P => B_('Promise: ' + esc(P.text) + '<small>' + esc(P.how) + '</small>', ['pledge', r.key, P.id], 'alt')).join('') : ''}${B_('Withdraw', ['withdraw', r.key], 'alt')}</div>`;
+      if (r.pledge != null && Sim.PLEDGES[r.pledge]) h += `<p>You promised to ${esc(Sim.PLEDGES[r.pledge].text.toLowerCase())}. If you win, do it within 15 days.</p>`;
     } else h += bar ? `<p class="why">${esc(bar)}</p>` : `<div class="acts">${B_('Stand for election · ' + fee + 'c', ['stand', r.key], '', s.coins < fee)}</div>`;
     h += `</div>`;
   }
-  if (soon.length) h += `<div class="box"><dl class="kv">${soon.map(r => `<dt>${esc(Sim.raceLabel(r))}</dt><dd>season opens day ${r.poll - Sim.ELECT_SEASON}, polling day ${r.poll} · to stand ${Sim.standFee(s, r)}c</dd>`).join('')}</dl></div>`;
+  if (soon.length) h += `<div class="box"><dl class="kv">${soon.map(r => `<dt>${esc(Sim.raceLabel(r))}</dt><dd>season opens day ${r.poll - Sim.ELECT_SEASON}, polling day ${r.poll} · to stand ${Sim.standFee(s, r)}c${!Sim.challengeBar(s, r) ? ' ' + B_('Force an early vote · ' + Sim.standFee(s, r) * 2 + 'c<small>the holder is faltering</small>', ['challenge', r.key], 'alt', s.coins < Sim.standFee(s, r) * 2) : ''}</dd>`).join('')}</dl></div>`;
   if (E.history.length) h += `<details><summary>Past results</summary><ul>${E.history.slice(0, 10).map(x => `<li>Day ${x.d}: ${esc(x.label)}. ${esc(x.text)}</li>`).join('')}</ul></details>`;
   return h;
 }
@@ -6222,6 +6222,16 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.59', date: '7 November', title: 'Repairs, after review', items: [
+    'Work rounds are always paid, however quickly you finish them and whatever the speed of the world. Before, a fast round at a high level could be refused as too quick.',
+    'Trade mastery comes from work alone. Levels 4 and 5 no longer need a council seat or office, and losing a seat never lowers your level.',
+    'Campaign promises are real now: each one names something to do once in office (lower the toll, cut a tax, raise the patrols, pay for a festival). Do it within 15 days and it counts as kept; paying coin alone does not. Only promises you could actually keep are offered.',
+    'Promises made while standing for re-election are held to as well.',
+    'The moot can no longer make you Elder while you hold a lordship, and the King no longer offers lordships. Every office comes through the vote.',
+    'A manager setting jobs no longer changes who fetches supplies.',
+    'Between elections, if the holder falters (low standing, or bandits on the roads), you can force an early vote, for twice the campaign fee. The button appears in the Elections box.',
+    'An elected lord keeps running their business, and the Elder is chosen from the council before any shopkeeper, so elections no longer empty the town\u2019s shops. Elections also roll their own dice, so they never change the luck of anything else in the world.'
+  ] },
   { v: '0.58', date: '7 November', title: 'Elections', items: [
     'Offices are won at the vote now. The Elder every 15 days (Hearthmoor\u2019s villagers vote), each region\u2019s lord every 30 (that region\u2019s townsfolk), and the crown every 60 (the lords, the business owners and the towns). Lordships and the crown can no longer be bought or granted.',
     'A season opens three days before polling day. To stand you pay for a campaign: dearer for a higher office and a bigger town. Then speak to the crowds once a day and make one promise. Keep the promise within 15 days of winning, or people remember.',

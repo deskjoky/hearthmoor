@@ -6,6 +6,11 @@ let failures = 0;
 function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + msg); } else console.log('  ok: ' + msg); }
 function runIdle(s, max = 3000) { let m = 0; while ((s.player.dest || s.player.action) && m < max) { Sim.step(s, 1); m++; } return m; }
 function untilHour(s, h) { let g = 0; while (Math.abs(Sim.hourOf(s) - h) > 0.01 && g < 1500) { Sim.step(s, 1); g++; } }
+function winElection(s, key) {   // put the player through an election and make sure they win
+  const r = Sim.ensureRaces(s).races[key]; r.poll = s.day + 3; r.open = false; Sim.advance(s, 1440); if (!r.open) Sim.advance(s, 1440);
+  const c0 = s.coins; s.coins = Math.max(s.coins, 99999); Sim.cmd(s, 'stand', key); s.coins = c0; r.boost = 400;
+  let k = 0; while (r.open && k < 8) { Sim.advance(s, 1440); k++; }
+}
 function invariants(s) {
   const nums = [s.coins, s.player.x, s.player.z].concat(s.shops.flatMap(x => [x.goods, x.stock.grain, x.stock.wood, x.stock.ore]));
   if (nums.some(n => !Number.isFinite(n))) return 'non-finite number';
@@ -249,8 +254,8 @@ console.log('10. Chapter Two: four milestones to the Elder\u2019s chair (v0.54)'
   check(v.dispute == null && s.rec.disputesSettled === 1, 'settled the dispute' + (rs.ok ? '' : ': ' + rs.msg));
   Sim.step(s, 1); Sim.step(s, 1);
   check(v.step >= 8 && v.letter, 'leading the council brings the steward\u2019s letter, with no trip to the gate');
-  v.standing = 61; Sim.step(s, 1);
-  check(s.offices.elder === 'player' || v.step === 9, 'at standing 60 the elder names you his successor');
+  v.standing = 61; winElection(s, 'elder');
+  check(s.offices.elder === 'player' || v.step === 9, 'stand for Elder and win the vote');
   Sim.cmd(s, 'toll', 'high');
   const before = s.agents.length; Sim.advance(s, 1440 * 7);
   check(s.rec.taxesPaid > 0, 'the tax collector came (' + s.rec.taxesPaid + 'c paid)');
@@ -344,8 +349,8 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
 
   // the elder names you his successor
   const e = Sim.newGame(80); e.village.step = 8; e.village.standing = 85; e.village.council = true;
-  Sim.step(e, 1);
-  check(e.offices.elder === 'player' && e.village.step === 9, 'the elder steps down and the moot names you Elder');
+  winElection(e, 'elder');
+  check(e.offices.elder === 'player' && e.village.step === 9, 'you win the Elder election');
   const br = Object.values(e.people).find(x => x.name.split(' ')[0] === 'Brannoch');
   check(br.retired && !br.job && br.home, 'Brannoch is a retired villager in his own house now');
   const back = Sim.deserialize(Sim.serialize(b)); Sim.advance(b, 1500); Sim.advance(back, 1500);
@@ -1548,19 +1553,16 @@ console.log('48. Money, property and the climb (v0.54)');
   s.player.inv.grain = 20; Sim.cmd(s, 'donate'); runIdle(s); check(v.council && v.step === 6, 'solved, and straight onto the council');
   v.step = 7; Sim.step(s, 1); check(v.step === 8, 'leading the council needs no trip to the manor gate');
   v.standing = 59; Sim.step(s, 1); check(s.offices.elder !== 'player', 'at 59 the chair is not yet yours');
-  v.standing = 60; Sim.step(s, 1); check(s.offices.elder === 'player', 'at 60 the elder names you');
+  v.standing = 60; Sim.step(s, 1); check(s.offices.elder !== 'player' && !Sim.standBar(s, Sim.ensureRaces(s).races.elder), 'the chair is not given: you may stand for it at the vote');
 }
 {
-  // a lordship by wealth: a real crown grant
+  // a lordship cannot be bought: you stand at the vote, with a stake in the region
   const s = newGameRaw(82); s.ageRate = 0; s.bandits = null; Sim.advance(s, 1440); const R = s.realm; s.coins = 50000; Sim.setupFolk(s);
-  check(!Sim.cmd(s, 'buyLordship', 'greenhaven').ok, 'the King grants land only to those with a stake in it');
-  const gid = Object.keys(s.biz).find(id => s.biz[id].town === 'greenhaven' && s.biz[id].trade !== 'estate'); Sim.cmd(s, 'buyBiz', gid);
-  R.favour = 10; check(!Sim.cmd(s, 'buyLordship', 'greenhaven').ok, 'and to those the King is willing to see');
-  R.favour = 30; const old = Sim.regionLord(s, 'greenhaven'), others = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== old && s.people[l]), op0 = others.map(l => s.people[l].opinion || 0), m0 = s.folk.moral, t0 = R.treasury;
-  check(Sim.cmd(s, 'buyLordship', 'greenhaven').ok && Sim.regionLord(s, 'greenhaven') === 'player', 'with property there and the King willing, gold buys the lordship');
-  check(R.treasury > t0 && s.folk.moral === m0, 'the crown takes the money, and buying a title is not a wicked deed');
-  check(!others.length || others.some((l, i) => (s.people[l].opinion || 0) < op0[i]), 'the old nobility think less of you for it');
-  check(!old || !s.people[old] || s.people[old].hate >= 20, 'and the lord who was bought out holds a grudge');
+  check(!Sim.cmd(s, 'buyLordship', 'greenhaven').ok, 'gold no longer buys a lordship');
+  const race = Sim.ensureRaces(s).races['lord:greenhaven'];
+  check(!!Sim.standBar(s, race), 'without a stake in Greenhaven you cannot stand there');
+  const gid = Object.keys(s.biz).find(id => s.biz[id].town === 'greenhaven' && s.biz[id].trade !== 'estate'); Sim.cmd(s, 'buyBiz', gid); s.folk.fame = 20;
+  check(!/stake|Own a business/.test(Sim.standBar(s, race) || ''), 'owning a business there gives you the stake to stand');
   // the council asks one proof per road
   check(!Sim.seatNeeds(s, 'trade').some(x => /supply/.test(x)), 'Master of Trade needs businesses, not errands');
   check(Sim.seatNeeds(s, 'war').length <= 2 && Sim.seatNeeds(s, 'law').length <= 3, 'and the other roads ask one proof of competence each');
@@ -1587,6 +1589,49 @@ console.log('49. Holidays and the chronicle (v0.56)');
   const n0 = t.chronicle.length; Sim.cmd(t, 'fAlms'); t.events.push(); check(t.chronicle.length >= n0, 'what you do is written down');
   check(!t.chronicle.some(c => c.k === 'coin') && !t.chronicle.some(c => /^Day \d+ begins/.test(c.x)), 'sales and daybreaks are left out');
   const back = Sim.deserialize(Sim.serialize(t)); check(back.chronicle.length === t.chronicle.length, 'the chronicle is kept in the save');
+}
+
+console.log('50. Staff, elections and promises (v0.57-v0.59)');
+{
+  // work pays however quick the minigame is on screen, whatever the world speed
+  const w = Sim.newGame(5901); w.starterUsed = true; w.coins = 500; Sim.cmd(w, 'open', 1, 'bakery');
+  const st = Sim.workStart ? null : null;
+  // managers set jobs, never the owner's supply choice
+  const m = Sim.newGame(5902); m.coins = 9000; m.starterUsed = true; (m.tradeXp = m.tradeXp || {}).bakery = 20; m.village.step = 9;
+  Sim.cmd(m, 'open', 1, 'bakery'); const sh = m.shops[m.shops.length - 1]; sh.tier = 1;
+  if (!m.applicants.length) m.applicants.push({ name: 'Ada Test', skill: 1, ask: 8 }); Sim.cmd(m, 'hire', sh.id, 0, 10);
+  for (let i = 0; i < 2; i++) { m.applicants.push({ name: 'Extra ' + i, skill: 0.9 + i * 0.3, ask: 8 }); Sim.cmd(m, 'hireHand', sh.id, m.applicants.length - 1); }
+  check(sh.hands.length === 2 && sh.hands.some(h => h.role === 'counter'), 'the first employee takes the counter');
+  sh.manager = { pid: null, name: 'Test Manager', skill: 1, wage: 10, budget: 10 }; sh.policy.mgrRoles = true;
+  Sim.cmd(m, 'policy', sh.id, 'supplyBy', 'none'); Sim.assignRoles(m, sh);
+  check(sh.policy.supplyBy === 'none' && Sim.supplier(sh) === null, 'a manager setting jobs leaves "nobody fetches supplies" alone');
+  check(sh.hands.filter(h => h.role === 'counter').length === 1, 'the manager keeps one employee on the counter');
+  // trade levels never depend on office
+  const t = Sim.newGame(5903); (t.tradeXp = t.tradeXp || {}).bakery = 500;
+  check(Sim.tradeLevel(t, 'bakery') === 5, 'trade level 5 from work alone, with no office');
+  // elections: the moot never seats a lord as Elder
+  const e = Sim.newGame(5904); Sim.applyStart(e, 'lord'); Sim.advance(e, 60);
+  const lord = Sim.yourOffice(e); e.village.council = true; e.village.step = 8; e.village.standing = 90;
+  if (e.offices.elder && e.offices.elder !== 'player') { const id = e.offices.elder; e.gov.approval.elder = 5; }
+  for (let i = 0; i < 10; i++) Sim.advance(e, 1440);
+  check(!(e.offices.elder === 'player' && Sim.yourLordships(e).some(x => x !== 'crownmere')), 'no one holds Elder and a lordship together');
+  // promises are checked against what you do, not paid off
+  const c = Sim.newGame(5905); Sim.applyStart(c, 'ruler'); Sim.advance(c, 60); c.coins = 99999;
+  const r = Sim.ensureRaces(c).races.crown; r.poll = c.day + 3; r.open = false; Sim.advance(c, 1440);
+  check(r.open && r.you, 'the ruler is on the ballot for re-election');
+  check(Sim.cmd(c, 'pledge', 'crown', 'ctax').ok !== false, 'promise to lower the realm’s taxes');
+  r.boost = 400; const tax0 = c.realm.taxRate; let k = 0; while (r.open && k < 6) { Sim.advance(c, 1440); k++; }
+  const E = Sim.electState(c), pl = E.pledges.find(x => x.id === 'ctax');
+  check(Sim.isRuler(c) && pl && pl.state === 'given', 're-elected, and the promise is now owed');
+  check(Sim.cmd(c, 'keepPledge', 0).ok === false, 'a promise cannot be paid off with coin');
+  Sim.cmd(c, 'rule', 'tax', tax0 - 0.25); Sim.advance(c, 1440);
+  check(pl.state === 'kept' && c.realm.taxRate < tax0, 'lowering the taxes keeps the promise');
+  // a challenge between elections, only when the holder falters
+  const h = Sim.newGame(5906); Sim.applyStart(h, 'lord'); Sim.advance(h, 60); h.coins = 99999; if (h.folk) h.folk.fame = 40;
+  const cr = Sim.ensureRaces(h).races.crown; cr.poll = h.day + 40; h.realm.kingSupport = 70;
+  check(!!Sim.challengeBar(h, cr), 'a popular king cannot be challenged early');
+  h.realm.kingSupport = 30; const bar = Sim.challengeBar(h, cr);
+  check(!bar && Sim.cmd(h, 'challenge', 'crown').ok !== false && cr.poll <= h.day + 4, 'a faltering king can be forced to an early vote' + (bar ? ': ' + bar : ''));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
