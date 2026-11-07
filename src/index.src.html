@@ -180,6 +180,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .subtabs button[aria-pressed="true"] { background: var(--leather); border-color: var(--leather); color: var(--parch); }
 .subtabs .paused { margin-left: auto; font-size: 11px; }
 .subtabs + h3 { font-size: 22px; }
+.staffgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; margin: 6px 0; }
+.staffpick { display: flex; flex-direction: column; align-items: flex-start; text-align: left; width: 100%; border: 1px solid var(--line); background: rgba(255,255,255,.35); border-radius: 6px; padding: 6px 10px; min-height: 44px; cursor: pointer; font: inherit; color: var(--ink); }
+.staffpick small { color: var(--ink-soft); font-size: 12.5px; }
+.staffpick.warn { border-color: #a8322a; }
+.box > .staffpick { margin: 4px 0; }
+.ladder span { color: var(--ink-soft); }
+.ladder span.done { text-decoration: line-through; }
+.ladder span.on { color: var(--ink); font-weight: 700; }
 @media (max-height: 520px) { .subtabs + h3 { display: none; } .page .lead { font-size: 14px; margin: 2px 0 6px; } .page h4 { font-size: 17px; margin: 12px 0 4px; } .page { padding-top: 12px; } .subtabs { top: -12px; margin-top: -12px; padding-top: 8px; } }
 table.acct { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 15px; }
 table.acct td { padding: 3px 0; border-bottom: 1px dotted var(--line); }
@@ -3745,7 +3753,7 @@ function rankOf(s) {
   const ls = Sim.yourLordships(s).filter(id => id !== 'crownmere');
   if (ls.length) return { key: 'lord', title: (f ? 'Lady of ' : 'Lord of ') + (Sim.REGIONS[ls[0]] || ls[0]) };
   if (s.offices && s.offices.elder === 'player') return { key: 'elder', title: 'Elder of Hearthmoor' };
-  if (v && v.council) return { key: 'councillor', title: 'Councillor' };
+  if (v && v.council) return { key: 'councillor', title: 'Village councillor' };
   if (s.shops.length || Object.values(s.biz || {}).some(b => b.owner === 'player')) return { key: 'merchant', title: 'Merchant' };
   if ((s.rec.workRounds || 0) > 0) return { key: 'hand', title: 'Journeyman' };
   return { key: 'newcomer', title: 'Newcomer' };
@@ -3790,7 +3798,7 @@ function hud(s) {
   { const H = Sim.holidayOn(s.day, Sim.kingdomOf(Sim.townAt(s.player.x, s.player.z) || 'hearthmoor')); if (H) chips.push(`<span class="chip num btn hol" data-c='["page","calendar"]' role="button" tabindex="0">\u2726 ${esc(H.name)}</span>`); }
   if (s.work) chips.push(`<span class="chip num on">Working · \u00d7${s.work.chain || 1} · ${s.work.earned}c</span>`);
   { const w = waypointPos(); if (w) chips.push(`<span class="chip num btn" data-c='["ui","clearWaypoint"]' role="button" tabindex="0">Finding ${esc(w.name.split(' ')[0])}${w.near ? ' \u00b7 ' + Math.round(Math.hypot(s.player.x - w.x, s.player.z - w.z)) + ' m' : ' \u00b7 in ' + esc(TOWN_NAMES[w.town])} \u00d7</span>`); }
-  if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
+  if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>`);
   const mine = myBusinesses(s);
   if (mine.length) chips.push(`<span class="chip num btn" data-c='["ui","bizMenu"]' role="button" tabindex="0" aria-expanded="${!!UI.bizMenu}">${mine.length === 1 ? 'Your business' : 'Businesses <b>' + mine.length + '</b>'} ${UI.bizMenu ? '\u25b4' : '\u25be'}</span>`);
   const bm = UI.bizMenu && mine.length && !UI.overlay ? mine.map(x => `<div class="bizrow"><div class="bi"><span class="nm">${esc(x.name)}</span>${x.line}</div>${x.go && x.go !== UI.loc ? `<button type="button" data-c='${esc(JSON.stringify(['goto', x.go]))}'>Go</button>` : ''}<button type="button" class="go" data-c='${esc(JSON.stringify(['ui', 'manage', x.ref]))}'>Manage</button></div>`).join('') : '';
@@ -4028,18 +4036,63 @@ function handsBox(s, shop) {
   else if (hs.length < Sim.HAND_MAX) h += s.applicants.length ? `<p>Take someone on${hs.length >= room ? ' <span class="why">(it will be crowded)</span>' : ''}:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Hire ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
   return h + `</div>`;
 }
+/* the staff overview: each business, who manages it and who works there, one line each; tap anyone for the details */
+function staffOverview(s) {
+  const owned = Object.values(s.biz || {}).filter(b => b.owner === 'player' && !b.lease);
+  if (!s.shops.length && !owned.length) return `<h3>Staff</h3><p>Once you own a shop you can hire someone to run it while you do other things.</p>`;
+  const who = (label, sub, sel, warn) => `<button type="button" class="staffpick${warn ? ' warn' : ''}" data-c='${esc(JSON.stringify(['ui', 'staffSel', sel]))}'><b>${esc(label)}</b><small>${esc(sub)}</small></button>`;
+  let h = `<h3>Staff</h3><p class="lead">Tap anyone to see how they are doing, change their pay, or let them go.</p>`;
+  for (const shop of s.shops) {
+    const T = TR[shop.trade], m = shop.manager, hs = shop.hands || [], room = Sim.handRoom(shop);
+    h += `<div class="box"><h5>Your ${esc(T.name.toLowerCase())} <span class="sub">· ${esc(Sim.tierOf(shop).name)}</span></h5>`;
+    h += m ? who('Manager: ' + m.name, m.wage + 'c a day · runs the place' + (shop.policy.mgrHire !== false ? ', hires' : ''), { kind: 'mgr', shop: shop.id }) : who('No manager', Sim.tierOf(shop).name === 'Stall' || !(shop.tier > 0) ? 'a stall is too small for one' : 'tap to hire one', { kind: 'mgr', shop: shop.id }, false);
+    h += `<div class="staffgrid">`;
+    if (shop.worker) h += who(shop.worker.name, 'Worker · ' + (shop.counterBy ? 'at the bench' : 'bench and counter') + ' · mood ' + Math.round(shop.worker.mood), { kind: 'worker', shop: shop.id }, shop.worker.mood < 30);
+    hs.forEach((x, i) => { h += who(x.name, Sim.ROLE_NAME[x.role || 'make'] + ' · ' + x.wage + 'c · mood ' + Math.round(x.mood), { kind: 'hand', shop: shop.id, i }, x.mood < 30); });
+    h += `</div><p class="why">${shop.worker ? hs.length + ' employee' + (hs.length === 1 ? '' : 's') + ' (fits ' + room + ')' + (hs.length > room ? ': crowded' : '') : 'No worker yet.'}</p><div class="acts">${B_(shop.worker ? 'Hire someone' : 'Hire a worker', ['ui', 'staffSel', { kind: 'hire', shop: shop.id }], 'alt')}</div></div>`;
+  }
+  for (const b of owned) {
+    const m = b.manager, st = b.staff || [];
+    h += `<div class="box"><h5>${esc(Sim.empById(b.id).name)}</h5>${who(m ? 'Manager: ' + m.name : 'No manager', m ? m.wage + 'c a day' : 'tap to hire one', { kind: 'bmgr', biz: b.id })}<p class="why">${st.length} on the staff: ${esc(st.map(x => (s.people[x.pid] || {}).name || x.name || '').filter(Boolean).join(', ') || 'nobody')}</p></div>`;
+  }
+  return h;
+}
+function staffDetail(s, sel) {
+  const back = `<div class="acts">${B_('← All staff', ['ui', 'staffSel', null], 'alt')}</div>`;
+  const shop = sel.shop != null ? Sim.shopById(s, sel.shop) : null;
+  if (sel.kind === 'bmgr') return back + managerBox(s, 'biz', sel.biz, Sim.empById(sel.biz).name);
+  if (!shop) return back + '<p>They have gone.</p>';
+  const T = TR[shop.trade];
+  if (sel.kind === 'mgr') return back + managerBox(s, 'shop', shop.id, 'Your ' + T.name.toLowerCase());
+  if (sel.kind === 'hand') { const x = (shop.hands || [])[sel.i]; if (!x) return back + '<p>They have gone.</p>'; return back + empDetail(s, shop, sel.i); }
+  if (sel.kind === 'hire') return back + pageStaffFull(s, shop.id, true);
+  return back + pageStaffFull(s, shop.id, false);
+}
+function empDetail(s, shop, i) {
+  const x = shop.hands[i], T = TR[shop.trade], mgr = shop.manager && shop.policy.mgrRoles !== false;
+  let h = `<div class="box"><h5>${esc(x.name)} · your ${esc(T.name.toLowerCase())}</h5><dl class="kv"><dt>Job</dt><dd>${esc(Sim.ROLE_NAME[x.role || 'make'])}${mgr ? ' (set by ' + esc(shop.manager.name.split(' ')[0]) + ')' : ''}</dd><dt>Skill</dt><dd>${Sim.skillLabel(x.skill)} (${Math.round((x.skill || 1) * 100)}%)</dd><dt>Asked for</dt><dd>${x.ask}c a day</dd><dt>Mood</dt><dd>${Math.round(x.mood)}/100</dd><dt>Since</dt><dd>day ${x.since || 1}</dd></dl>
+    <div class="bar mood ${x.mood < 30 ? 'low' : ''}"><i style="width:${Math.round(x.mood)}%"></i></div>
+    <p><b>Pay</b></p><div class="stepper"><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${x.wage}c</output><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage + 1])}' aria-label="Raise wage">+</button></div>
+    <p>${x.wage < x.ask ? 'Below what they asked: their mood falls each day.' : x.wage > x.ask ? 'Above what they asked: their mood rises faster.' : 'What they asked for.'}</p>`;
+  h += `<p><b>Job</b></p><div class="seg" role="group">${Sim.ROLES.map(r => `<button type="button" aria-pressed="${(x.role || 'make') === r}" data-c='${esc(JSON.stringify(['setHandRole', shop.id, i, r]))}'>${esc({ make: 'Bench', counter: 'Counter', round: 'Sell round', supply: 'Supplies' }[r])}</button>`).join('')}</div>${mgr ? '<p class="why">Choosing a job yourself takes job-setting back from your manager.</p>' : ''}`;
+  h += `<div class="acts">${UI.confirm === 'hand' + shop.id + ':' + i ? B_('Yes, let go', ['fireHand', shop.id, i], 'warn') + B_('Keep', ['ui', 'confirm', null], 'alt') : B_('Let go…', ['ui', 'confirm', 'hand' + shop.id + ':' + i], 'alt')}</div></div>`;
+  return h;
+}
 function pageStaff(s, only) {
-  let html = only ? '' : `<h3>Staff</h3><p class="lead">Hire help, set pay, and see what they are doing.</p>`;
+  if (!only) { const sel = UI.staffSel; return sel ? staffDetail(s, sel) : staffOverview(s); }
+  return pageStaffFull(s, only, false);
+}
+function pageStaffFull(s, only, hiring) {
+  let html = '';
   const owned = Object.values(s.biz || {}).filter(b => b.owner === 'player');
-  if (only) { const x = Sim.shopById(s, only); if (x) html += managerBox(s, 'shop', x.id, 'Your ' + TR[x.trade].name.toLowerCase()); }
-  else if (s.shops.length || owned.length) {
+  if (false) {
     html += `<h4>Managers</h4><p>Put someone you trust in charge, set a daily budget, and they run the place while you are elsewhere. Their reports and anything they need you for appear in the ledger.</p><div class="grid2">`;
     s.shops.forEach(x => { html += managerBox(s, 'shop', x.id, 'Your ' + TR[x.trade].name.toLowerCase()); });
     owned.filter(b => !b.lease).forEach(b => { html += managerBox(s, 'biz', b.id, Sim.empById(b.id).name); });
     html += `</div>`;
   }
   if (!s.shops.length) return html + (owned.length ? '' : `<p>Once you own a shop you can hire someone to run it while you do other things.</p>`);
-  for (const shop of s.shops.filter(x => x.worker && (!only || x.id === only))) {
+  for (const shop of s.shops.filter(x => x.worker && (!only || x.id === only) && !hiring)) {
     const w = shop.worker, st = s.stats.shops[shop.id] || { workerMin: 0, batchesBy: { worker: 0 }, servedBy: { worker: 0 } }, H = Sim.workerHours(shop);
     html += `<div class="box"><h5>${esc(w.name)} · your ${TR[shop.trade].name.toLowerCase()}</h5><dl class="kv"><dt>Skill</dt><dd>${Sim.skillLabel(w.skill)} (${Math.round(w.skill * 100)}% speed)</dd><dt>Asked for</dt><dd>${w.ask}c a day</dd><dt>Mood</dt><dd>${Math.round(w.mood)}/100</dd><dt>Hours today</dt><dd>${Sim.hm(st.workerMin)}</dd><dt>Batches today</dt><dd>${st.batchesBy.worker}</dd><dt>Served today</dt><dd>${st.servedBy.worker}</dd></dl>
       <div class="bar mood ${w.mood < 30 ? 'low' : ''}"><i style="width:${Math.round(w.mood)}%"></i></div>
@@ -4048,7 +4101,7 @@ function pageStaff(s, only) {
       <p>${w.wage < w.ask ? 'Below what they asked. Mood drops each day.' : w.wage > w.ask ? 'Above the asking wage. Mood rises faster.' : 'Matches the asking wage.'} Paid at 21:00. Below 30 mood they work slower, and a miserable worker quits after a warning.</p>
       <div class="acts">${UI.confirm === 'fire' + shop.id ? `<div class="confirm">Let ${esc(w.name)} go? ${B_('Yes, let them go', ['fire', shop.id], 'warn')} ${B_('Keep them', ['ui', 'confirm', null], 'alt')}</div>` : B_('Let go&hellip;', ['ui', 'confirm', 'fire' + shop.id], 'alt')}</div></div>`;
   }
-  for (const shop of s.shops.filter(x => x.worker && (!only || x.id === only))) html += handsBox(s, shop);
+  for (const shop of s.shops.filter(x => x.worker && (!only || x.id === only) && hiring)) html += handsBox(s, shop);
   const open = s.shops.filter(x => !x.worker && (!only || x.id === only));
   if (open.length) {
     html += `<h4>Looking for work today</h4><p>Pick someone and set a daily wage. Paying below what they ask saves coin but makes them unhappy. New faces come each morning.</p><div class="grid2">`;
@@ -4668,10 +4721,13 @@ function pageElections(s) {
 }
 function electionsBox(s) {
   const races = Sim.upcomingRaces(s), E = Sim.electState(s), mine = Sim.yourOffice(s);
-  let h = `<h4>Elections</h4><p class="lead">${mine ? 'You hold the office of ' + esc(Sim.raceLabel(Object.assign({ region: mine.region }, mine))) + '. ' : ''}Offices are won at the vote. A season opens ${Sim.ELECT_SEASON} days before polling: put your name forward in person at the town\u2019s hall or square, speak in the town, make a promise, and be there at noon on polling day. You hold one office at a time.</p>${mine ? `<div class="acts">${B_('Read your charge', ['ui', 'handbook'], 'alt')}</div>` : ''}`;
+  let h = `<p class="lead">${mine ? 'You are ' + esc(Sim.raceLabel(Object.assign({ region: mine.region }, mine))) + '. ' : ''}Stand in person at the town\u2019s hall or square, speak, promise, and be there at noon on polling day.</p>${mine ? `<div class="acts">${B_('Read your charge', ['ui', 'handbook'], 'alt')}</div>` : ''}`;
   const pend = E.pledges.map((pl, i) => [pl, i]).filter(([pl]) => pl.state === 'given');
   pend.forEach(([pl]) => { h += `<div class="why"><b>Your promise:</b> ${esc(pl.text)}, by day ${pl.due}. ${esc(pl.how || '')}</div>`; });
-  const open = races.filter(r => r.open), soon = races.filter(r => !r.open).slice(0, 4);
+  { const rung = mine ? { elder: 1, lord: 2, seat: 3, crown: 4 }[mine.office] : s.village.council ? 0 : -1, steps = ['Village council', 'Elder', 'Lord', 'Royal council', 'Crown'];
+    const held = Sim.heldDays(s), need = mine ? Sim.TENURE[mine.office] : 0;
+    h += `<div class="box"><h5>Your path</h5><p class="ladder">${steps.map((x, i) => `<span class="${i === rung ? 'on' : i < rung ? 'done' : ''}">${x}</span>`).join(' → ')}</p><p>${!mine ? (s.village.council ? 'You sit on the village council. Next: Elder of Hearthmoor, once you have sat on the council 5 days.' : 'You hold no office. The first step is a seat on the village council: own a business or earn standing 20 in Hearthmoor, then stand at the Village Hall when the seat comes up (every 10 days).') : mine.office === 'crown' ? 'You wear the crown. Hold it at every vote.' : (Sim.electState(s).since == null ? 'You held this office before the elections began. ' : 'You have held this office ' + held + ' day' + (held === 1 ? '' : 's') + '. ') + (need && held < need ? 'You can stand for a higher office in ' + (need - held) + ' day' + (need - held === 1 ? '' : 's') + '.' : 'You may stand for a higher office.')}</p></div>`; }
+  const open = races.filter(r => r.open), up = races.filter(r => !r.open), soon = up.filter(r => { const b = Sim.standBar(s, r); return !b || /Hold your office|Own a business|another race/.test(b); }).slice(0, 8), later = up.filter(r => !soon.includes(r));
   for (const r of open) {
     const bar = Sim.standBar(s, r), fee = Sim.standFee(s, r), poll = Sim.pollNow(s, r);
     h += `<div class="box"><h5>${esc(Sim.raceLabel(r))} · the vote at noon, day ${r.poll}</h5><p>At ${esc(Sim.venueName(r))}.${r.you ? ' Be there at noon on the day: a candidate who is not there loses votes.' : ''}</p>`;
@@ -4682,7 +4738,8 @@ function electionsBox(s) {
     } else h += bar ? `<p class="why">${esc(bar)}</p>` : Sim.atVenue(s, r) ? `<div class="acts">${B_('Stand for election · ' + fee + 'c', ['stand', r.key], '', s.coins < fee)}</div>` : `<p>To run, put your name forward at ${esc(Sim.venueName(r))} (${fee}c).</p><div class="acts">${B_('Go to ' + esc(Sim.venueName(r)), ['goto', Sim.raceVenue(r).loc], 'alt')}</div>`;
     h += `</div>`;
   }
-  if (soon.length) h += `<div class="box"><dl class="kv">${soon.map(r => `<dt>${esc(Sim.raceLabel(r))}</dt><dd>season opens day ${r.poll - Sim.ELECT_SEASON}, polling day ${r.poll} · to stand ${Sim.standFee(s, r)}c, at ${esc(Sim.venueName(r))}${!Sim.challengeBar(s, r) ? ' · the holder is faltering: you can force an early vote there (' + Sim.standFee(s, r) * 2 + 'c) ' + B_('Go there', ['goto', Sim.raceVenue(r).loc], 'alt') : ''}</dd>`).join('')}</dl></div>`;
+  if (soon.length) h += `<h4>Open to you</h4><div class="box"><dl class="kv">${soon.map(r => `<dt>${esc(Sim.raceLabel(r))}</dt><dd>season opens day ${r.poll - Sim.ELECT_SEASON}, polling day ${r.poll} · to stand ${Sim.standFee(s, r)}c, at ${esc(Sim.venueName(r))}${!Sim.challengeBar(s, r) ? ' · the holder is faltering: you can force an early vote there (' + Sim.standFee(s, r) * 2 + 'c) ' + B_('Go there', ['goto', Sim.raceVenue(r).loc], 'alt') : ''}</dd>`).join('')}</dl></div>`;
+  if (later.length) h += `<details><summary>Out of reach for now (${later.length})</summary><ul>${later.map(r => `<li><b>${esc(Sim.raceLabel(r))}</b>, day ${r.poll}: ${esc(Sim.standBar(s, r) || '')}</li>`).join('')}</ul></details>`;
   if (E.history.length) h += `<details><summary>Past results</summary><ul>${E.history.slice(0, 10).map(x => `<li>Day ${x.d}: ${esc(x.label)}. ${esc(x.text)}</li>`).join('')}</ul></details>`;
   return h;
 }
@@ -4729,8 +4786,7 @@ function pageRealm(s) {
       ${mine && id !== 'hearthmoor' && id !== 'crownmere' ? step('patrol', 'Patrols, 4c a day each', 3) + step('garrison', 'Garrison, 6c a day each', 3) + step('roads', 'Road mending, 3c a day each', 3) + step('tax', 'Taxes', 2) : ''}
       <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${(() => { const r = Sim.electState(s).races['lord:' + id]; return r && !mine ? '<span class="pill">Election day ' + r.poll + '</span>' : ''; })()}</div></div>`;
   }).join('')}</div>`;
-  h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k]; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${(() => { const pth = Sim.COUNCIL_PATH[k], held0 = Object.keys(Sim.COUNCIL).find(x => R.council[x] === 'player'), shut = held0 && Sim.COUNCIL_PATH[held0] !== pth, need = shut ? [] : Sim.seatNeeds(s, k), mine = held0 && Sim.COUNCIL_PATH[held0];
-      return `<p class="why">${esc(Sim.PATH_NAME[pth].replace(/^the /, 'The '))}${k === 'treasury' ? ', after Master of Trade' : ''}.${shut ? ' You sit on ' + esc(Sim.PATH_NAME[mine]) + ': resign that seat first to change roads.' : c === 'player' ? '' : need.length ? ' You must first ' + esc(need.join('; ')) + '.' : ' You have walked this road.'}</p>${c !== 'player' && !ruler && !R.exile && !shut ? `<div class="acts">${B_('Seek this seat', ['seekSeat', k], 'alt', need.length > 0)}</div>` : ''}${c === 'player' && !ruler ? (UI.confirm === 'resign' ? `<div class="acts">${B_('Yes, resign', ['resignSeat'], 'warn')}${B_('Keep it', ['ui', 'confirm', null], 'alt')}</div><p class="why">Another takes the seat, you lose a little favour, and you wait ten days before seeking any seat.</p>` : `<div class="acts">${B_('Resign this seat&hellip;', ['ui', 'confirm', 'resign'], 'alt')}</div>`) : ''}`; })()}</div>`; }).join('')}</div><p>The council is three roads: coin (Master of Trade, then Lord Treasurer), arms (Marshal) or law (Lord Justice). You hold one seat at a time; to change roads, resign and earn the new seat. Each seat is earned by results (deliveries made, roads made safe, fair verdicts) and also needs a region, two allies, a record of good rule and favour of 65.</p>`;
+  h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k], r = Sim.electState(s).races['seat:' + k], bar = r ? Sim.standBar(s, r) : null; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${r ? `<p class="why">Elected by the lords and the capital. Next vote: day ${r.poll}${c !== 'player' && bar ? '. ' + esc(bar) : ''}.</p>` : ''}</div>`; }).join('')}</div><p>Seats on the royal council are won at the vote in Crownmere. Only a lord can stand, and only a councillor can stand for the crown.</p>`;
   if (ruler) {
     const st = (k, v, d, lab, fmt) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['rule', k, v - d])}' aria-label="Less">&minus;</button><output class="num">${fmt(v)}</output><button type="button" data-c='${JSON.stringify(['rule', k, v + d])}' aria-label="More">+</button></div></div>`;
     const pets = R.petitions || [];
@@ -5278,10 +5334,16 @@ function statsHTML(s) {
     ${group('Property', [['Businesses owned', s.shops.length]].concat(byTrade.map(([n, c]) => ['&nbsp;&nbsp;' + n, c]), [['Shops opened', r.shopsOpened], ['Upgrades built', r.upgrades], ['Spent on buildings', r.invested + 'c'], ['Houses owned', s.houses.filter(h => h.owner === 'player').length + (s.village.cottage !== 'forsale' ? 1 : 0)], ['Houses rented out', s.houses.filter(h => h.owner === 'player' && h.tenants.length).length + (s.village.cottage === 'let' ? 1 : 0)], ['Village businesses bought', r.bizBought], ['Rent collected', r.rentCollected + 'c'], ['Shops sold', r.shopsSold]]))}
     ${group('Trade', [['Goods made', sum(r.made)]].concat(P.filter(k => r.made[k]).map(k => ['&nbsp;&nbsp;' + nice[k], r.made[k]]), [['Goods sold', r.goodsSold], ['Sales revenue', r.salesRevenue + 'c'], ['Customers served', r.served], ['Customers lost', r.lost], ['&nbsp;&nbsp;over the price', r.lostPrice], ['Raw goods sold', r.rawSales + 'c']]))}
     ${group('People', [['Workers on staff', staff + Object.values(s.biz).filter(b => b.owner === 'player').reduce((a, b) => a + b.staff.length, 0)], ['Workers hired', r.workersHired], ['Workers let go', r.staffFired], ['Workers who quit', r.workersQuit], ['Wages paid', r.wagesPaid + 'c'], ['Evictions', r.evictions], ['Rent raises', r.rentRaises], ['People who left the village', r.peopleLeft], ['Villagers who like you', Sim.living(s).filter(p => p.opinion >= 10).length], ['Villagers who resent you', Sim.living(s).filter(p => p.opinion <= -10).length]])}
-    ${group('Work', [['Jobs held', r.jobsHeld], ['Shifts worked', r.shiftsWorked], ['Shifts missed', r.shiftsMissed], ['Times let go', r.timesFired], ['Jobs quit', r.jobsQuit], ['Wages earned', r.wagesEarned + 'c']].concat(Sim.TRADE_KEYS.map(k => [TR[k].name, Sim.learned(s, k) ? 'learned (' + s.trades[k] + ' shifts)' : s.trades[k] + '/' + Sim.LEARN_SHIFTS + ' shifts'])))}
+    ${group('Work', [['Good items made at work', r.workRounds || 0], ['Wages earned', r.wagesEarned + 'c'], ['Times let go', r.timesFired], ['Jobs quit', r.jobsQuit]].concat(Object.keys(MINI).filter(k => Sim.tradeXp(s, k) > 0).map(k => [Sim.tradeName(k), 'level ' + Sim.tradeLevel(s, k) + ' (' + Sim.tradeXp(s, k) + ' items)'])))}
     ${group('Village', [['Standing', s.village.standing + '/100'], ['Position', s.village.council ? 'Councillor since day ' + r.councilSince : s.village.step > 0 ? 'Known to the elder' : 'Newcomer'], ['Elder\u2019s tasks done', r.elderTasks], ['Grain given', r.grainDonated], ['Coin given to the village', r.chestGiven + 'c'], ['Projects funded', r.projectsFunded], ['Disputes settled', r.disputesSettled], ['Merchant orders filled', r.contractsDone], ['Taxes paid to the lord', r.taxesPaid + 'c'], ['Times elected', r.timesElected || 0], ['Votes survived', r.votesWon || 0], ['Votes lost', r.votesLost || 0]])}
     ${group('Life', [['Days in Hearthmoor', r.days], ['Distance walked', (r.walked / 1000).toFixed(2) + ' km'], ['Grain gathered', r.gathered.grain], ['Wood chopped', r.gathered.wood], ['Ore dug', r.gathered.ore]])}
-  </div><p class="lead">Lordship, battles and your dynasty will add their own records in later chapters.</p>`;
+    ${(() => { const E = Sim.electState(s), mine = Sim.yourOffice(s), rk = rankOf(s);
+      return group('Office', [['Now', esc(rk.title)], ['Highest office won', esc(r.highestTitle || (r.everElder ? 'Elder of Hearthmoor' : s.village.council ? 'a seat on the village council' : '\u2014'))], ['Days in this office', mine ? Math.min(Sim.heldDays(s), s.day) : '\u2014'], ['Elections stood in', r.racesRun || 0], ['Elections won', r.racesWon || 0], ['Elections lost', r.racesLost || 0], ['Voted out of office', r.votedOut || 0], ['Promises kept', E.kept || 0], ['Promises broken', E.broken || 0], ['Lordships held now', Sim.yourLordships(s).filter(x => x !== 'crownmere').map(x => Sim.REGIONS[x]).join(', ') || 'none'], ['Times crowned', r.crowned || 0], ['Cases judged fairly', r.fairVerdicts || 0]]); })()}
+    ${(() => { const F = s.folk || {}, V = s.valdoria;
+      return group('Battles', [['Duels and fights won', F.wins || 0], ['Fights lost', F.losses || 0], ['Enemies you have now', Sim.nemeses ? Sim.nemeses(s).length : 0], ['Coin spent on patrols', (r.patrolCoin || 0) + 'c'], ['Wars won', r.warsWon || 0], ['At war with Valdoria', V && V.war ? 'yes, day ' + (V.war.since || '?') + ' on' : 'no'], ['Risings won', r.rebellionsWon || 0], ['Risings lost', r.rebellionsLost || 0]]); })()}
+    ${(() => { const Y = s.you || {}, kids = Sim.yourKids ? Sim.yourKids(s) : [], sp = Y.spouse && s.people[Y.spouse];
+      return group('Dynasty', [['Generation', Y.generation || 1], ['Age', Y.age != null ? Y.age : '\u2014'], ['Spouse', sp ? esc(sp.name) : 'none'], ['Children', kids.length], ['Grown heirs', Sim.yourHeirs ? Sim.yourHeirs(s).length : 0], ['Generations played', r.generations || 1]]); })()}
+  </div>`;
 }
 function saveHTML() {
   const ago = lastSave ? Math.round((Date.now() - lastSave) / 1000) : null;
@@ -5402,7 +5464,8 @@ const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 function fullNewName() { const f = cap1((UI.newFirst || '').replace(/\s+/g, '')) || 'Wren', l = cap1((UI.newLast || '').replace(/\s+/g, '')); return l ? f + ' ' + l : f; }
 function uiCmd(k, v) {
   if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
-  if (k === 'tab') { UI.tab = v; UI.confirm = null; UI.focus = null; renderBook(true); return; }
+  if (k === 'tab') { UI.tab = v; UI.confirm = null; UI.focus = null; UI.staffSel = null; renderBook(true); return; }
+  if (k === 'staffSel') { UI.staffSel = v; UI.confirm = null; renderBook(true); return; }
   if (k === 'bizMenu') { UI.bizMenu = !UI.bizMenu; if (G) hud(G); return; }
   if (k === 'manage') {
     UI.confirm = null; UI.bizMenu = false;
@@ -6297,6 +6360,16 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.63', date: '7 November', title: 'The ladder to the throne', items: [
+    'Every office is a rung, and you climb in order: a seat on the village council, then Elder of Hearthmoor, then a lordship, then a seat on the royal council, then the crown.',
+    'The village council is elected too, more gently: a seat comes up every ten days at the Village Hall, for a small fee, and anyone with a business or standing 20 can stand. Ending the grain shortage earns you a place on the ballot instead of a seat.',
+    'As Elder you can stand for the lordship of Hearthmoor or a small town. A lord can only move up to a bigger town, or stand for the royal council. Only a councillor of the realm can stand for the crown.',
+    'You must hold each office a while before standing for the next: 5 days on the village council, 8 as Elder, 12 as a lord or councillor of the realm.',
+    'The four seats of the royal council are now won at the vote in Crownmere, where the lords and the capital choose.',
+    'The Elections page shows your path up the ladder, the races open to you (bigger towns first when you are a lord), and those still out of reach and why.',
+    'The Staff page is now a list: each business, its manager and its people, one line each. Tap anyone for their details, pay, job, or to let them go. Hiring has its own button.',
+    'The badge at the top left shows the office you hold. Your records now include your offices and elections, your fights and wars, and your family.'
+  ] },
   { v: '0.62', date: '7 November', title: 'A tidier book, and managers who hire', items: [
     'The book has five sections instead of fourteen tabs: Today (tasks, goals, calendar), Money (ledger, work), Business (shops, staff, requests, property), People (townsfolk, family, your name) and Power (elections, village, realm, justice). Each section has its pages along the top and remembers the one you last read.',
     'A manager now hires for you, up to what the building holds comfortably, from people willing to work for you. Turn it off on the Staff page to hire yourself.',
@@ -6755,30 +6828,46 @@ const NOTES = [
   ] }
 ];
 const HANDBOOK = {
+  council: { title: 'The Councillor’s Charge', can: [
+    'Hold a key to the village chest, and spend it on projects at the Village Hall.',
+    'Set the travellers’ toll with the council, and settle disputes brought before it.',
+    'Grant land: the Hall lot is yours to build on.',
+    'Stand for Elder of Hearthmoor, once you have sat on the council 5 days.'], must: [
+    'Disputes come before the council: settle them fairly or lose standing.',
+    'What you spend from the chest is the village’s money, and the village watches.'] },
   elder: { title: 'The Elder’s Charge', can: [
     'Draw the Elder’s pay each day, and hold the key to the village chest.',
     'Set the travellers’ toll, and spend the chest on village projects and works.',
     'Appoint and dismiss the village officers: the granary keeper and the watchmen.',
     'Decide on help for the poor, and what becomes of the common land.',
     'Order investigations, and judge the village’s cases and disputes.',
-    'Pay for the festivities when a holiday comes round.'], must: [
+    'Pay for the festivities when a holiday comes round.',
+    'Stand for the lordship of Hearthmoor or a small town, once you have held the chair 8 days.'], must: [
     'The moot meets each week. If your approval sinks, it can vote you out.',
     'The chair goes back to the vote every 15 days. Lose and you are out of office.',
     'An empty chest, a hungry winter or a harsh verdict is laid at your door.',
     'Keep any promise you made to win, within 15 days, or people remember.',
     'You hold one office at a time: win a lordship and the chair passes to another.'] },
   lord: { title: 'The Lord’s Charge', can: [
+    'Stand for the lordship of a bigger town, or for a seat on the royal council, once you have held your lands 12 days.',
     'Govern your lands: set patrols, a garrison, road mending and taxes on the Realm page.',
     'Collect your region’s taxes each day, less what you spend keeping it.',
     'Hear the serious cases brought before your courts.',
     'In Hearthmoor, live in the manor, appoint the captain of the guard and pay for it.',
     'Pay for the festivities when a holiday comes round.',
-    'Stand for the crown when its election comes.'], must: [
+    'Win a seat on the royal council first: only councillors can stand for the crown.'], must: [
     'Bandits on your roads are your problem. Every raid costs you goodwill.',
     'High taxes fill your purse and empty your support. Patrols and garrisons cost coin every day.',
     'The region votes again every 30 days. Lose and you are out of office.',
     'Keep any promise you made to win, within 15 days, or people remember.',
     'Win the crown and your lordship passes to another.'] },
+  seat: { title: 'The Councillor’s Charge', can: [
+    'Sit on the royal council and draw its pay each day.',
+    'Do your office’s work: the Treasurer audits the town chests, the Master of Trade watches the grain and ore, the Marshal sends soldiers against bandits, the Lord Justice hears appeals and reviews the courts.',
+    'Stand for the crown when its election comes, once you have held your seat 12 days.'], must: [
+    'The lords and the capital vote on your seat every 30 days. Lose and you are out of office.',
+    'A councillor who neglects the office, or is caught at something, loses the court’s favour.',
+    'Win the crown and your seat passes to another.'] },
   crown: { title: 'The Crown’s Charge', can: [
     'Rule the treasury: set the taxes on the regions and the tariffs on trade.',
     'Raise or stand down the army, and make or unmake the laws.',
@@ -6793,7 +6882,7 @@ const HANDBOOK = {
 };
 function showHandbook(o) {
   const B = HANDBOOK[o.office]; if (!B) return;
-  const where = o.office === 'lord' ? Sim.REGIONS[o.region] : o.office === 'elder' ? 'Hearthmoor' : 'Alderwyn';
+  const where = o.office === 'council' ? 'Hearthmoor' : o.office === 'lord' ? Sim.REGIONS[o.region] : o.office === 'elder' ? 'Hearthmoor' : o.office === 'seat' ? Sim.COUNCIL[o.region] : 'Alderwyn';
   $('vellum').innerHTML = `<div class="wax" aria-hidden="true">H</div><h2 id="scrollTitle">${esc(B.title)}</h2><p class="sv">${esc(where)} &middot; day ${o.day}</p><div class="fleur" aria-hidden="true">&#10086; &#10086; &#10086;</div>
     <h3>What you can do</h3><ul>${B.can.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
     <h3>What is asked of you</h3><ul>${B.must.map(i => `<li>${esc(i)}</li>`).join('')}</ul>

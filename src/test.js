@@ -12,6 +12,7 @@ function holdElections(s) {   // for tests of other things: keep the vote far of
 function winElection(s, key) {   // put the player through an election and make sure they win
   const r = Sim.ensureRaces(s).races[key]; r.poll = s.day + 3; r.open = false; Sim.advance(s, 1440); if (!r.open) Sim.advance(s, 1440);
   const at = Sim.LOCS[Sim.raceVenue(r).loc]; s.player.x = at.x; s.player.z = at.z; s.player.dest = null;
+  Sim.electState(s).since = s.day - 99;   // long enough in the last office to move up
   const c0 = s.coins; s.coins = Math.max(s.coins, 99999); Sim.cmd(s, 'stand', key); s.coins = c0; r.boost = 400;
   let k = 0; while (r.open && k < 8) { Sim.advance(s, 1440); k++; }
 }
@@ -223,7 +224,8 @@ console.log('10. Chapter Two: four milestones to the Elder\u2019s chair (v0.54)'
   check(s.player.inv.grain >= 20, 'gathered grain for the village');
   Sim.cmd(s, 'donate'); runIdle(s);
   check(!v.shortage && v.standing >= 20, 'the shortage ends and standing rises (' + v.standing + ')');
-  check(v.council && v.landGranted && v.step === 6, 'solving the village\u2019s problem puts you on the council at once');
+  check(v.councilInvite && v.step === 5, 'solving the village\u2019s problem earns you a place on the ballot for the council');
+  winElection(s, 'council'); check(v.council && v.landGranted && v.step === 6, 'and the moot elects you to it');
   check(v.jobless.length >= 0 && v.joblessSet, 'the idle villagers are named, as a good deed you may do (' + v.jobless.join(', ') + ')');
   Sim.advance(s, 1440 * 4);
   const fed = s.ledger.slice(-3).reduce((a, d) => a + d.shops[0].served, 0) / 3;
@@ -782,20 +784,21 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   check(Sim.cmd(s, 'takeContract', 999).ok, 'you take a contract to supply Eastwatch');
   s.player.inv.grain = 10; atMarket('eastwatch');
   check(Sim.cmd(s, 'fulfil', 999).ok && Sim.deedsIn(s, 'eastwatch') === 1, 'you deliver the grain: a deed done for Eastwatch');
-  winElection(s, 'lord:eastwatch'); holdElections(s); check(Sim.yourLordships(s).includes('eastwatch'), 'now Eastwatch elects you its lord');
-  s.people[R.regions.ironcrest.lord].rep = 20; R.deeds.ironcrest = 1;
-  check(/already hold a lordship/.test(Sim.standBar(s, Sim.ensureRaces(s).races['lord:ironcrest']) || ''), 'a lord holds one region at a time');
+  check(/lower office/.test(Sim.standBar(s, Sim.ensureRaces(s).races['lord:eastwatch']) || ''), 'with no office, you start at the bottom of the ladder');
+  s.village.council = true; winElection(s, 'elder'); check(s.offices.elder === 'player', 'first, Elder of Hearthmoor');
+  R.deeds.ironcrest = 1; winElection(s, 'lord:ironcrest'); check(Sim.yourLordships(s).includes('ironcrest') && s.offices.elder !== 'player', 'then lord of a small town, Ironcrest, and the Elder\u2019s chair passes on');
+  winElection(s, 'lord:eastwatch'); holdElections(s); check(Sim.yourLordships(s).includes('eastwatch') && !Sim.yourLordships(s).includes('ironcrest'), 'now Eastwatch, a bigger town, elects you its lord');
+  check(/bigger town/.test(Sim.standBar(s, Sim.ensureRaces(s).races['lord:ironcrest']) || ''), 'a lord only moves up to a bigger town');
   check(Sim.cmd(s, 'moveToSeat').ok && /Castle/.test(Sim.homeOfYou(s).name), 'you move into your seat: ' + Sim.homeOfYou(s).name);
-  check(!Sim.cmd(s, 'seekSeat', 'trade').ok, 'a council seat needs allies and a name for good government');
+  { const E = Sim.electState(s); E.since = s.day; check(/Hold your office/.test(Sim.standBar(s, Sim.ensureRaces(s).races['seat:trade']) || ''), 'a new lord must hold the lands a while before standing for the council'); E.since = s.day - 99; }
   // allies: back the reformer and the lord of Ironcrest; good government
   Sim.cmd(s, 'backFigure', 'reformer'); Sim.cmd(s, 'backFigure', 'lord');
   s.bandits.eastwatch = 5; for (let d = 0; d < 10; d++) { away(); Sim.advance(s, 1440); s.bandits.eastwatch = 5; }
   R.favour = 70; court();
-  check(!Sim.cmd(s, 'seekSeat', 'trade').ok && Sim.seatNeeds(s, 'trade').length > 0, 'Master of Trade wants proof of the road of coin: ' + Sim.seatNeeds(s, 'trade').join('; '));
+
   R.contractsByKind = Object.assign(R.contractsByKind || {}, { supply: 3 }); s.coins += 30000;
   Object.values(s.biz).filter(b => b.town === 'eastwatch' && b.owner !== 'player' && s.people[b.owner]).slice(0, 3).forEach(b => Sim.cmd(s, 'buyBiz', b.id));
-  check(Sim.cmd(s, 'seekSeat', 'trade').ok, 'with ' + Sim.alliesOf(s).length + ' allies, ten days of good rule, three businesses and three contracts, you are named Master of Trade');
-  check(!Sim.cmd(s, 'seekSeat', 'war').ok && s.player.councilPath === 'coin', 'on the road of coin, the Marshal\u2019s seat is shut to you');
+  winElection(s, 'seat:trade'); holdElections(s); check(R.council.trade === 'player' && !Sim.yourLordships(s).includes('eastwatch'), 'the lords and the capital elect you Master of Trade, and Eastwatch passes on');
   // a promise kept
   R.promises = [{ region: 'oakbridge', pid: R.regions.oakbridge.lord, day: s.day, state: 'asked' }];
   check(Sim.cmd(s, 'givePromise').ok, 'a lord asks for your word, and you give it');
@@ -805,7 +808,7 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   const rally = () => { Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'guilds'); for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t); };
   for (let round = 0; round < 3; round++) { rally(); for (let d = 0; d < 15; d++) { court(); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); s.bandits.eastwatch = 5; } }
   rally(); R.kingSupport = Math.min(R.kingSupport, 40); court(); const sup = Sim.computeSupport(s);
-  winElection(s, 'crown'); holdElections(s); check(Sim.isRuler(s) && !Sim.yourLordships(s).includes('eastwatch'), 'with ' + Sim.alliesOf(s).length + ' allies and support of ' + sup + ', the realm votes you to the throne, and Eastwatch passes to another');
+  winElection(s, 'crown'); holdElections(s); check(Sim.isRuler(s) && R.council.trade !== 'player', 'with ' + Sim.alliesOf(s).length + ' allies and support of ' + sup + ', the realm votes you to the throne, and your council seat passes to another');
   R.treasury = Math.max(R.treasury, 1000); Sim.cmd(s, 'rule', 'draw', 700); check(R.embezzled === 700, 'taking 700c from the treasury is remembered');
   R.figures.find(f => f.kind === 'reformer').ally = false; s.coins = 0; for (let d = 0; d < 30 && Sim.isRuler(s); d++) { away(); Sim.advance(s, 1440); s.coins = Math.min(s.coins, 0); }   // a ruler with nothing to repay it from
   check(!Sim.isRuler(s) && R.exile, 'an inquiry finds the theft, you cannot repay, and the council removes you: exile');
@@ -1555,10 +1558,11 @@ console.log('48. Money, property and the climb (v0.54)');
   const s = Sim.newGame(81); s.coins = 2000; s.tradeXp = { bakery: 20 }; const v = s.village;
   Sim.step(s, 1); check(v.step === 1, 'first ask: make a living');
   Sim.cmd(s, 'open', 1, 'bakery'); Sim.step(s, 1); check(v.step === 2 && v.shortage, 'second: the grain shortage');
-  s.player.inv.grain = 20; Sim.cmd(s, 'donate'); runIdle(s); check(v.council && v.step === 6, 'solved, and straight onto the council');
+  s.player.inv.grain = 20; Sim.cmd(s, 'donate'); runIdle(s); check(!v.council && v.councilInvite && v.step === 5, 'solved, and invited to stand for the council'); winElection(s, 'council'); check(v.council && v.step === 6, 'the moot elects you to the council');
   v.step = 7; Sim.step(s, 1); check(v.step === 8, 'leading the council needs no trip to the manor gate');
   v.standing = 59; Sim.step(s, 1); check(s.offices.elder !== 'player', 'at 59 the chair is not yet yours');
-  v.standing = 60; Sim.step(s, 1); check(s.offices.elder !== 'player' && !Sim.standBar(s, Sim.ensureRaces(s).races.elder), 'the chair is not given: you may stand for it at the vote');
+  check(/more day/.test(Sim.standBar(s, Sim.ensureRaces(s).races.elder) || ''), 'a new councillor sits a few days before standing for Elder');
+  s.rec.councilSince = s.day - 9; v.standing = 60; Sim.step(s, 1); check(s.offices.elder !== 'player' && !Sim.standBar(s, Sim.ensureRaces(s).races.elder), 'the chair is not given: you may stand for it at the vote');
 }
 {
   // a lordship cannot be bought: you stand at the vote, with a stake in the region
@@ -1635,7 +1639,7 @@ console.log('50. Staff, elections and promises (v0.57-v0.59)');
   const h = Sim.newGame(5906); Sim.applyStart(h, 'lord'); Sim.advance(h, 60); h.coins = 99999; if (h.folk) h.folk.fame = 40;
   const cr = Sim.ensureRaces(h).races.crown; cr.poll = h.day + 40; h.realm.kingSupport = 70;
   check(!!Sim.challengeBar(h, cr), 'a popular king cannot be challenged early');
-  h.realm.kingSupport = 30; const bar = Sim.challengeBar(h, cr); { const at = Sim.LOCS[Sim.raceVenue(cr).loc]; h.player.x = at.x; h.player.z = at.z; }
+  h.realm.council.trade = 'player'; Sim.electState(h).since = h.day - 99; h.realm.kingSupport = 30; const bar = Sim.challengeBar(h, cr); { const at = Sim.LOCS[Sim.raceVenue(cr).loc]; h.player.x = at.x; h.player.z = at.z; }
   check(!bar && Sim.cmd(h, 'challenge', 'crown').ok !== false && cr.poll <= h.day + 4, 'a faltering king can be forced to an early vote' + (bar ? ': ' + bar : ''));
 }
 

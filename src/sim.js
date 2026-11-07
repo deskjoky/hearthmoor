@@ -175,7 +175,7 @@
     'Solve a village problem: end the grain shortage by bringing 20 grain to the granary',
     'Give work to Hilda and Bram, who sit idle in the square',
     'Rebuild the old watchtower on the east road (80c and 20 wood)',
-    'Answer the elder’s summons to the Village Hall',
+    'Win a seat on the village council: stand at the next vote, at the Village Hall',
     'Lead: as councillor, fund a village project and settle a dispute',
     'Answer Lord Varrow’s letter at the manor gate',
     'Win the Elder’s chair: stand at the next election for Elder and win the vote'
@@ -1365,6 +1365,14 @@
     event(s, elderTitle(s) + ': "The harvest was thin and the granary is near empty. Folk are skipping meals and spending less. Bring 20 grain to the granary and they will remember it."', 'story');
   }
   // solving the village's problem puts you on the council at once
+  // solving the village's problem earns you the moot's ear: stand for the council at the next vote
+  function inviteCouncil(s) {
+    const v = s.village; if (v.council) { if (v.step < 6) v.step = 6; return; }
+    if (v.step < 5) v.step = 5; if (v.councilInvite) return; v.councilInvite = true;
+    const r = s.people ? ensureRaces(s).races.council : null;
+    if (r && !r.open && r.poll - s.day > ELECT_SEASON + 2) r.poll = s.day + ELECT_SEASON + 1;
+    event(s, elderTitle(s) + ': "You have done the village a real service. A seat on the council comes up at the moot' + (r ? ' on day ' + r.poll : '') + '. Stand for it at the Village Hall, and the village will remember what you did."', 'story');
+  }
   function councilSeat(s) {
     const v = s.village; if (v.council) { if (v.step < 6) v.step = 6; return; }
     v.step = 6; v.council = true; v.chest += 30; v.landGranted = true; v.disputeDay = s.day + 1; s.rec.elderTasks++; s.rec.councilSince = s.day;
@@ -1386,7 +1394,7 @@
     const v = s.village;
     if (v.step === 0) { v.step = 1; event(s, elderTitle(s) + ': "Hearthmoor belongs to ' + REALM.lord + ', who holds it for ' + REALM.king + ' in ' + REALM.capital + '. A hired hand has no say here. A shopkeeper might. Make a living here, and we will talk."', 'story'); }
     if (v.step === 1 && ownsAny(s)) startShortage(s);
-    if (v.step === 3 || v.step === 4 || v.step === 5) councilSeat(s);
+    if (v.step === 3 || v.step === 4 || (v.step === 5 && !v.councilInvite)) inviteCouncil(s);
     if (v.step === 7) { v.step = 8; v.letter = true; v.metSteward = true; event(s, 'Steward ' + holderName(s, 'steward') + ' writes: "His lordship hears Hearthmoor has a councillor worth knowing." The village watches to see whether you are its next Elder.', 'story'); }
     if (v.jobless && v.jobless.length && s.people && !v.joblessDone) v.jobless = v.jobless.filter(n => { const p = Object.values(s.people).find(q => q.name === n); return p && p.status === 'here' && !p.job; });
     if (v.jobless && !v.jobless.length && v.joblessSet && !v.joblessDone) {
@@ -1444,7 +1452,7 @@
     event(s, 'You give ' + n + ' grain to the granary (' + v.granary + '/' + v.granaryNeed + ').', 'good');
     if (v.granary >= v.granaryNeed) {
       v.shortage = false;
-      if (v.step === 2) { s.rec.elderTasks++; addStanding(s, 20, 'the granary is full and the village eats again.'); startJobs(s); councilSeat(s); }
+      if (v.step === 2) { s.rec.elderTasks++; addStanding(s, 20, 'the granary is full and the village eats again.'); startJobs(s); inviteCouncil(s); }
       else addStanding(s, 8, 'you refilled the granary in a lean week.');
     }
   }
@@ -4427,7 +4435,7 @@
     const R = s.realm, K = s.people[R.king];
     if (K && K.status === 'here') { K.retired = true; plog(s, K, 'Gave up the crown to ' + s.name + '.'); }
     vacateYours(s, { office: 'crown' });   // one office at a time
-    electState(s).handbook = { office: 'crown', day: s.day };
+    electState(s).handbook = { office: 'crown', day: s.day }; electState(s).since = s.day;
     R.crown = 'player'; R.rival = null; R.lowDays = 0; R.debtDays = 0; R.crowned = s.day; R.exile = null; s.rec.crowned = (s.rec.crowned || 0) + 1;
     realmLog(s, why + '. You are crowned ' + (you(s).sex === 'f' ? 'Queen' : 'King') + ' of Alderwyn in the Great Hall of the Realm. The treasury, the laws and the army are yours to command.', 'story');
   }
@@ -4440,7 +4448,7 @@
      best of the rest; lose your own re-election and you are out of office, with your coin, property and name intact. */
   // the vote has its own dice, seeded from the day: counting ballots never changes the luck of the rest of the world
   function erand(s) { const E = electState(s); if (E.rd !== s.day) { E.rd = s.day; E.rs = (Math.imul(s.day + 1, 2654435761) ^ (s.seed || 0)) | 0; } E.rs = (E.rs + 0x6D2B79F5) | 0; let x = E.rs; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
-  const ELECT_EVERY = { elder: 15, lord: 30, crown: 60 }, ELECT_SEASON = 3;
+  const ELECT_EVERY = { council: 10, elder: 15, lord: 30, seat: 30, crown: 60 }, ELECT_SEASON = 3;
   /* campaign promises: each one names something you must actually do once in office, within 15 days. The game
      checks it each day; paying coin alone never counts. Only promises you could keep are offered. */
   const PLEDGES = {
@@ -4465,44 +4473,57 @@
 
   function electState(s) { if (!s.elect) s.elect = { races: {}, history: [], pledges: [], kept: 0, broken: 0 }; return s.elect; }
   function lordRegions(s) { const R = s.realm; return R ? Object.keys(R.regions).filter(id => R.regions[id].lord !== 'crown' && id !== 'crownmere' && !(TOWNS[id] && TOWNS[id].foreign)) : []; }
-  function raceLabel(r) { return r.office === 'elder' ? 'Elder of Hearthmoor' : r.office === 'crown' ? 'the crown of Alderwyn' : 'Lord of ' + REGIONS[r.region]; }
-  function holderOf(s, office, region) { return office === 'elder' ? s.offices.elder : office === 'crown' ? (isRuler(s) ? 'player' : s.realm && s.realm.king) : regionLord(s, region); }
+  function raceLabel(r) { return r.office === 'council' ? 'a seat on the village council' : r.office === 'elder' ? 'Elder of Hearthmoor' : r.office === 'crown' ? 'the crown of Alderwyn' : r.office === 'seat' ? COUNCIL[r.region] + ' of Alderwyn' : 'Lord of ' + REGIONS[r.region]; }
+  /* the ladder: Elder, then a lordship (Hearthmoor or a small town first, then ever bigger towns), then a seat on the
+     royal council, then the crown. Each step must be held a while before you can stand for the next. */
+  const TENURE = { elder: 8, lord: 12, seat: 12 };
+  function townSize(s, town) { const E = electState(s); if (E.szDay !== s.day) { E.szDay = s.day; E.sz = {}; for (const p of living(s)) if (!p.kid) { const tw = townOf(p); E.sz[tw] = (E.sz[tw] || 0) + 1; } } return E.sz[town] || 0; }
+  function smallTowns(s) { return lordRegions(s).slice().sort((a, b) => townSize(s, a) - townSize(s, b)).slice(0, 3); }
+  function heldDays(s) { const E = electState(s); return E.since == null ? 999 : s.day - E.since; }
+  function holderOf(s, office, region) { if (office === 'council') { const c = (s.gov ? s.gov.council : []).map(id => s.people[id]).filter(p => p && p.status === 'here').sort((a, b) => (a.rep || 0) - (b.rep || 0))[0]; return c ? c.id : null; }
+    return office === 'elder' ? s.offices.elder : office === 'crown' ? (isRuler(s) ? 'player' : s.realm && s.realm.king) : office === 'seat' ? (s.realm && s.realm.council[region]) : regionLord(s, region); }
   // the one office you hold, the highest if an old save left you with more
   function yourOffice(s) {
     if (isRuler(s)) return { office: 'crown' };
+    const k = s.realm && Object.keys(COUNCIL).find(x => s.realm.council[x] === 'player'); if (k) return { office: 'seat', region: k };
     const l = yourLordships(s).filter(x => x !== 'crownmere')[0]; if (l) return { office: 'lord', region: l };
     if (s.offices.elder === 'player') return { office: 'elder' };
     return null;
   }
-  const RANK = { elder: 1, lord: 2, crown: 3 };
+  const RANK = { elder: 1, lord: 2, seat: 3, crown: 4 };
   function ensureRaces(s) {
     const E = electState(s), add = (key, office, region, first) => { if (!E.races[key]) E.races[key] = { key, office, region, poll: s.day + first, cands: [], you: false, open: false, boost: 0, bought: [], buys: 0, speech: -1, pledge: null }; };
-    add('elder', 'elder', null, 6);
-    if (s.realm) { lordRegions(s).forEach((id, i) => add('lord:' + id, 'lord', id, 9 + i * 3)); add('crown', 'crown', null, 30); }
+    add('council', 'council', null, 4); add('elder', 'elder', null, 6);
+    if (s.realm) { lordRegions(s).forEach((id, i) => add('lord:' + id, 'lord', id, 9 + i * 3)); Object.keys(COUNCIL).forEach((k, i) => add('seat:' + k, 'seat', k, 20 + i * 7)); add('crown', 'crown', null, 30); }
     for (const k in E.races) if (E.races[k].office === 'lord' && !lordRegions(s).includes(E.races[k].region)) delete E.races[k];
     return E;
   }
   // can you put your name forward? returns null if you can, or the reason you cannot
   function standBar(s, r) {
-    const R = s.realm, F = s.folk, fame = F ? F.fame : 0, mine = yourOffice(s);
+    const R = s.realm, mine = yourOffice(s), E = electState(s);
     if (R && R.exile) return 'An exile cannot stand for office.';
-    if (mine && RANK[mine.office] > RANK[r.office]) return 'You already hold a higher office.';
-    if (mine && mine.office === r.office && (r.office !== 'lord' || mine.region === r.region)) return null;   // re-election
-    if (mine && mine.office === 'lord' && r.office === 'lord') return 'You already hold a lordship.';
-    const E = electState(s); if (Object.values(E.races).some(x => x !== r && x.you && x.open)) return 'You are already standing in another race.';
-    if (r.office === 'elder') return s.village.council || s.village.standing >= 40 ? null : 'Sit on the village council, or reach standing 40 in Hearthmoor, to stand for Elder.';
+    if (r.office !== 'council' && mine && RANK[mine.office] > RANK[r.office]) return 'You already hold a higher office.';
+    if (mine && mine.office === r.office && (mine.region || null) === (r.region || null)) return null;   // re-election
+    if (Object.values(E.races).some(x => x !== r && x.you && x.open)) return 'You are already standing in another race.';
+    const wait = mine ? (TENURE[mine.office] || 0) - heldDays(s) : 0, waitMsg = () => 'Hold your office ' + wait + ' more day' + (wait === 1 ? '' : 's') + ' before standing for a higher one.';
+    if (r.office === 'council') { if (s.village.council || mine) return 'You already sit on the council.'; return s.village.councilInvite || s.village.standing >= 20 || ownsAny(s) ? null : 'Make a name in Hearthmoor first: own a business, or earn standing 20.'; }
+    if (r.office === 'elder') { if (!s.village.council) return 'Win a seat on the village council first.'; const cw = 5 - (s.day - (s.rec.councilSince != null ? s.rec.councilSince : -99)); return cw > 0 ? 'Sit on the council ' + cw + ' more day' + (cw === 1 ? '' : 's') + ' before standing for Elder.' : null; }
     if (r.office === 'lord') {
       const a = r.region, stake = Object.values(s.biz || {}).some(b => b.owner === 'player' && (b.town || 'hearthmoor') === a) || (s.houses || []).some(h => h.owner === 'player' && (h.town || 'hearthmoor') === a) || (a === 'hearthmoor' && s.shops.length) || deedsIn(s, a) > 0;
+      if (!mine) return 'First win a lower office: stand for Elder of Hearthmoor.';
+      if (mine.office === 'elder' && !smallTowns(s).concat('hearthmoor').includes(a)) return 'As Elder you can stand for the lordship of Hearthmoor or a small town (' + smallTowns(s).filter(x => x !== 'hearthmoor').map(x => REGIONS[x]).join(', ') + '). ' + REGIONS[a] + ' wants someone who is already a lord.';
+      if (mine.office === 'lord' && townSize(s, a) <= townSize(s, mine.region)) return 'A lord moves up to a bigger town. ' + REGIONS[a] + ' is no bigger than ' + REGIONS[mine.region] + '.';
       if (!stake) return 'Own a business or a house in ' + REGIONS[a] + ', or do it a service (a contract, a kept promise), to stand there.';
-      if (!(mine || s.village.council || fame >= 15)) return 'Stand first for Elder, sit on the village council, or make a name for yourself (fame 15), to stand for a lordship.';
-      return null;
+      return wait > 0 ? waitMsg() : null;
     }
-    if (r.office === 'crown') return (mine && mine.office === 'lord') || fame >= 60 ? null : 'Only a lord, or someone famous across the realm (fame 60), can stand for the crown.';
+    if (r.office === 'seat') { if (!mine || mine.office !== 'lord') return 'Only a lord can stand for the royal council.'; if (mine.office === 'seat') return 'You already sit on the council.'; return wait > 0 ? waitMsg() : null; }
+    if (r.office === 'crown') { if (!mine || mine.office !== 'seat') return 'Only a member of the royal council can stand for the crown.'; return wait > 0 ? waitMsg() : null; }
     return null;
   }
   function voterPool(s, r) {
     const adult = p => p && !p.kid && p.age >= 16 && p.status === 'here' && !isHousehold(p);
-    if (r.office === 'elder') return villagers(s).filter(adult).map(p => ({ p, w: 1 }));
+    if (r.office === 'elder' || r.office === 'council') return villagers(s).filter(adult).map(p => ({ p, w: 1 }));
+    if (r.office === 'seat') { const out = [], R = s.realm; for (const id of Object.keys(R.regions)) { const l = regionLord(s, id); if (l && l !== 'player' && s.people[l]) out.push({ p: s.people[l], w: 12 }); } const cm = living(s).filter(p => adult(p) && townOf(p) === 'crownmere'); return out.concat(sample(s, cm, 200).map(p => ({ p, w: Math.max(1, cm.length / 200) * 0.5 }))); }
     if (r.office === 'lord') { const all = living(s).filter(p => adult(p) && townOf(p) === r.region); return sample(s, all, 320).map(p => ({ p, w: Math.max(1, all.length / 320) })); }
     const R = s.realm, out = [], seen = new Set();
     for (const id of Object.keys(R.regions)) { const l = regionLord(s, id); if (l && l !== 'player' && s.people[l] && !seen.has(l)) { seen.add(l); out.push({ p: s.people[l], w: 12 }); } }
@@ -4516,9 +4537,11 @@
     const hold = holderOf(s, r.office, r.region), ok = p => p && p.status === 'here' && !p.kid && p.age < 75, out = [];
     if (hold && hold !== 'player' && ok(s.people[hold])) out.push(hold);
     let pool = [];
-    if (r.office === 'elder') { const council = (s.gov ? s.gov.council : []).map(id => s.people[id]).filter(p => p && !(p.job && p.job.role === 'owner')); pool = council.length ? council : villagers(s).filter(p => p.job && p.job.role === 'owner'); }
+    if (r.office === 'council') pool = villagers(s).filter(p => p.job && p.job.role === 'owner' && !(s.gov && s.gov.council.includes(p.id)));
+    else if (r.office === 'elder') { const council = (s.gov ? s.gov.council : []).map(id => s.people[id]).filter(p => p && !(p.job && p.job.role === 'owner')); pool = council.length ? council : villagers(s).filter(p => p.job && p.job.role === 'owner'); }
     else if (r.office === 'lord') pool = living(s).filter(p => townOf(p) === r.region && ((p.job && p.job.role === 'owner') || (p.job && p.job.type === 'office') || p.noble));
-    else pool = Object.keys(s.realm.regions).map(id => regionLord(s, id)).filter(l => l && l !== 'player').map(l => s.people[l]);
+    else if (r.office === 'seat') pool = living(s).filter(p => townOf(p) === 'crownmere' && ((p.job && p.job.role === 'owner') || (p.noble && !Object.keys(s.realm.regions).some(id => regionLord(s, id) === p.id))));
+    else pool = Object.keys(COUNCIL).map(k => s.realm.council[k]).filter(c => c && c !== 'player').map(c => s.people[c]);
     pool = pool.filter(p => ok(p) && !isHousehold(p) && !out.includes(p.id)).sort((a, b) => (b.rep || 0) - (a.rep || 0));
     const seen = new Set(); pool = pool.filter(p => !seen.has(p.id) && seen.add(p.id));
     pool.slice(0, 3).forEach((p, i) => { if (out.length < 3 && erand(s) < [0.75, 0.45, 0.25][i]) out.push(p.id); });
@@ -4528,9 +4551,10 @@
   function yourPull(s, r) {
     const F = s.folk, fame = F ? F.fame : 0, moral = F ? F.moral : 0, E = electState(s), mine = yourOffice(s);
     let b = 40 + Math.min(25, fame * 0.3) + moral * 0.08 + r.boost + E.kept * 4 - E.broken * 8;
-    if (r.office === 'elder' || r.region === 'hearthmoor') b += (s.village.standing - 30) * 0.5 + (s.village.council ? 5 : 0);
+    if (r.office === 'elder' || r.office === 'council' || r.region === 'hearthmoor') b += (s.village.standing - 30) * 0.5 + (s.village.council ? 5 : 0);
     if (r.office === 'lord') b += Math.min(20, deedsIn(s, r.region) * 4) + (s.realm ? (s.realm.favour - 40) * 0.1 : 0);
     if (r.office === 'crown') b += (computeSupport(s) - 50) * 0.5;
+    if (r.office === 'seat') b += (s.realm.favour - 40) * 0.25 + Math.min(15, totalDeeds(s) * 2);
     if (mine && mine.office === r.office) b += 5;
     if (r.present === true) b += 4; else if (r.present === false) b -= 12;   // the crowd sees who turned up
     return b;
@@ -4563,7 +4587,14 @@
   // put someone in an office, and empty whatever they held before
   function seat(s, office, region, who) {
     const R = s.realm;
-    if (who === 'player' && office !== 'crown') electState(s).handbook = { office, region, day: s.day };
+    if (office === 'council') {
+      const g = s.gov, hold = holderOf(s, 'council');
+      if (who === 'player') { if (g && hold) { g.council = g.council.filter(id => id !== hold); if (s.people[hold]) plog(s, s.people[hold], 'Lost a council seat to ' + s.name + ' at the moot.'); } councilSeat(s); electState(s).handbook = { office: 'council', day: s.day }; }
+      else if (g && who !== hold) { g.council = g.council.filter(id => id !== hold).concat(who); plog(s, s.people[who], 'Elected to the village council.'); }
+      return;
+    }
+    if (who === 'player') { const E = electState(s); E.since = s.day; if (office !== 'crown') E.handbook = { office, region, day: s.day }; }
+    if (office === 'seat') { const old = R.council[region], q0 = old && old !== 'player' && s.people[old]; if (q0) { q0.retired = true; plog(s, q0, 'Voted out as ' + COUNCIL[region] + '.'); } R.council[region] = who; if (who !== 'player' && s.people[who]) plog(s, s.people[who], 'Elected ' + COUNCIL[region] + '.'); return; }
     if (office === 'elder') { appoint(s, 'elder', who); if (s.gov) { s.gov.council = s.gov.council.filter(id => id !== who); s.gov.approval.elder = 60; } if (who === 'player') { s.rec.everElder = true; if (s.village.step === 8) s.village.step = 9; } return; }
     if (office === 'lord') {
       const g = R.regions[region], cur = regionLord(s, region), L0 = cur && cur !== 'player' && s.people[cur];
@@ -4574,6 +4605,7 @@
     if (office === 'crown') {
       if (who === 'player') { crownYou(s, 'The lords, the guilds and the towns vote you to the throne'); return; }
       const q = s.people[who]; R.crown = 'king'; R.king = who; R.kingSupport = 55; R.lowDays = 0;
+      for (const k of Object.keys(COUNCIL)) if (R.council[k] === who) R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id;
       for (const id of Object.keys(R.regions)) if (R.regions[id].lord === who) { R.regions[id].lord = null; vacantSeat(s, id); }
       if (q) plog(s, q, 'Elected to the crown of Alderwyn.');
     }
@@ -4581,6 +4613,7 @@
   // you take a new office: the old one passes to the best of the rest
   function vacateYours(s, keep) {
     const m = yourOffice(s); if (!m || (m.office === keep.office && m.region === keep.region)) return null;
+    if (m.office === 'seat') { s.realm.council[m.region] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[m.region] + ' in place of ' + s.name + '.' }).id; return m.region; }
     if (m.office === 'elder') { s.offices.elder = null; const w = electElder(s, 'player', 'With you gone to higher office, the moot chooses a new Elder. '); return w; }
     if (m.office === 'lord') { const g = s.realm.regions[m.region]; if (g.lord === 'office') { s.offices.lord = null; replaceLord(s, s.name + ' was called to higher office'); } else { g.lord = null; vacantSeat(s, m.region); } return m.region; }
     return null;
@@ -4601,7 +4634,7 @@
     for (const r of Object.values(E.races)) {
       if (!r.open && s.day >= r.poll - ELECT_SEASON) {
         r.open = true; r.cands = npcCandidates(s, r); r.boost = 0; r.bought = []; r.buys = 0; r.speech = -1; r.pledge = null;
-        const m = yourOffice(s); r.you = !!(m && m.office === r.office && (r.office !== 'lord' || m.region === r.region)) || !!r.challenger; r.challenger = false;
+        const m = yourOffice(s); r.you = !!(m && m.office === r.office && (m.region || null) === (r.region || null)) || !!r.challenger; r.challenger = false;
         const names = r.cands.map(id => s.people[id].name);
         if (r.you) alertRace(s, r, 'open');
         event(s, 'Election season: ' + raceLabel(r) + '. The vote is at noon on day ' + r.poll + ', at ' + venueName(r) + '. ' + (names.length ? 'Standing: ' + names.join(', ') + (r.you ? ', and you' : '') + '.' : 'No one has stood yet.') + (r.you ? '' : standBar(s, r) ? '' : ' You could stand.'), r.you || !standBar(s, r) ? 'story' : 'info');
@@ -4618,6 +4651,8 @@
     const nm = c => c === 'player' ? 'you' : s.people[c].name, line = rank.map(([c]) => nm(c) + ' ' + pct(c) + '%').join(', ');
     E.history.unshift({ d: s.day, key: r.key, label, win: win === 'player' ? s.name : s.people[win].name, you: r.you ? pct('player') : null, text: line, cands: rank.map(([c, v]) => ({ name: c === 'player' ? s.name : s.people[c].name, you: c === 'player', votes: Math.round(v), pct: pct(c) })), total: Math.round(res.total), towns: Object.keys(res.byTown).length, yourVote: ballot && s.people[ballot] ? s.people[ballot].name : null }); if (E.history.length > 40) E.history.length = 40;
     const youRan = r.you; r.you = false;
+    if (youRan) { s.rec.racesRun = (s.rec.racesRun || 0) + 1; if (win === 'player') s.rec.racesWon = (s.rec.racesWon || 0) + 1; else { s.rec.racesLost = (s.rec.racesLost || 0) + 1; if (hold === 'player') s.rec.votedOut = (s.rec.votedOut || 0) + 1; } }
+    if (win === 'player') { const rk = { council: 0, elder: 1, lord: 2, seat: 3, crown: 4 }[r.office]; if (rk > (s.rec.highestRank == null ? -1 : s.rec.highestRank)) { s.rec.highestRank = rk; s.rec.highestTitle = raceLabel(r).replace(/^a seat on the /, 'a seat on the ').replace(/^the /, ''); } }
     if (absent) event(s, 'You were not at ' + venueName(r) + ' when the votes were counted. People noticed.', 'bad');
     if (win === hold && win === 'player') recordPledge(s, r);
     if (win === hold) { event(s, win === 'player' ? 'Re-elected ' + label + ' (' + line + ').' + (r.pledge ? ' Now keep your promise, within 15 days.' : '') : nm(win) + ' keeps ' + label.replace(/^the /, 'the ') + ' (' + line + ').' + (youRan ? ' You lost.' : ''), win === 'player' ? 'good' : youRan ? 'bad' : 'info'); if (win === 'player') s.rec.timesElected++; return; }
@@ -4638,26 +4673,27 @@
   }
   // between elections you can force an early vote if the holder is weak, at twice the campaign fee
   function challengeBar(s, r) {
+    if (r.office === 'council') return 'The council seat comes up every ten days.';
     if (r.open) return 'The season is already open.';
     if (r.challenged && s.day - r.challenged < 10) return 'An early vote was called on day ' + r.challenged + '. Wait a while before calling another.';
     if (r.poll - s.day <= ELECT_SEASON + 2) return 'The election is close anyway.';
     const hold = holderOf(s, r.office, r.region); if (!hold || hold === 'player') return 'There is no one to challenge.';
     const bar = standBar(s, r); if (bar) return bar;
     const q = s.people[hold], R = s.realm;
-    const weak = r.office === 'elder' ? !!(s.gov && s.gov.approval.elder < 45) : r.office === 'crown' ? R.kingSupport < 45 : r.region === 'hearthmoor' ? !!(s.gov && s.gov.approval.lord < 45) || ((s.bandits && s.bandits.hearthmoor) || 0) > 40 : (q && (q.rep || 0) < 45) || ((s.bandits && s.bandits[r.region]) || 0) > 40;
+    const weak = r.office === 'seat' ? !!(q && (q.rep || 0) < 45) : r.office === 'elder' ? !!(s.gov && s.gov.approval.elder < 45) : r.office === 'crown' ? R.kingSupport < 45 : r.region === 'hearthmoor' ? !!(s.gov && s.gov.approval.lord < 45) || ((s.bandits && s.bandits.hearthmoor) || 0) > 40 : (q && (q.rep || 0) < 45) || ((s.bandits && s.bandits[r.region]) || 0) > 40;
     return weak ? null : (q ? q.name : 'The holder') + ' is too well thought of to be challenged early. Wait until they falter (low standing, or bandits on the roads).';
   }
   /* where each election is held, in person: the Village Hall for Hearthmoor, a town's square elsewhere, the Great
      Market of Crownmere for the crown. You put your name forward there, you speak in that town, and at noon on polling
      day the candidates stand before the crowd there. A candidate who is not there loses votes. */
-  function raceVenue(r) { const town = r.office === 'elder' ? 'hearthmoor' : r.office === 'crown' ? 'crownmere' : r.region; return { town, loc: town === 'hearthmoor' ? 'hall' : MARKET_AT[town] }; }
+  function raceVenue(r) { const town = r.office === 'elder' || r.office === 'council' ? 'hearthmoor' : r.office === 'crown' || r.office === 'seat' ? 'crownmere' : r.region; return { town, loc: town === 'hearthmoor' ? 'hall' : MARKET_AT[town] }; }
   function venueName(r) { const v = raceVenue(r), L = LOCS[v.loc]; return (L && L.name ? L.name : 'the square') + (v.town === 'hearthmoor' || !L || (L.name || '').includes(TOWNS[v.town] ? TOWNS[v.town].name : '~') ? '' : ' in ' + (TOWNS[v.town] ? TOWNS[v.town].name : v.town)); }
   function atVenue(s, r) { const L = LOCS[raceVenue(r).loc]; return !!L && Math.hypot(s.player.x - L.x, s.player.z - L.z) < Math.max(10, (L.r || 0) + 8); }
   function inTown(s, r) { return (townAt(s.player.x, s.player.z) || 'hearthmoor') === raceVenue(r).town; }
   // where people vote: every voter at their own town's hall or square. For the crown that is every town of Alderwyn,
   // and riders carry each town's tally to Crownmere for the count at noon.
   const venueOf = town => town === 'hearthmoor' ? 'hall' : MARKET_AT[town];
-  function voteTowns(r) { return r.office === 'elder' ? ['hearthmoor'] : r.office === 'lord' ? [r.region] : Object.keys(MARKET_AT).filter(t => !(TOWNS[t] && TOWNS[t].foreign)); }
+  function voteTowns(r) { return r.office === 'elder' || r.office === 'council' ? ['hearthmoor'] : r.office === 'lord' ? [r.region] : r.office === 'seat' ? ['crownmere'] : Object.keys(MARKET_AT).filter(t => !(TOWNS[t] && TOWNS[t].foreign)); }
   function pollingToday(s) {   // town -> the race its people vote in this morning
     const E = s.elect; if (!E) return {};
     if (E.vday !== s.day) { E.vday = s.day; E.vmap = {}; for (const r of Object.values(E.races)) if (r.open && r.poll === s.day) for (const tw of voteTowns(r)) if (!E.vmap[tw]) E.vmap[tw] = r.key; }
@@ -4668,7 +4704,7 @@
   function nextVote(s) {
     const E = s.elect; if (!E) return null;
     const all = Object.values(E.races), here = townAt(s.player.x, s.player.z) || 'hearthmoor', m = yourOffice(s);
-    const pick = all.filter(r => r.you && r.open)[0] || (m && all.find(r => r.office === m.office && (m.office !== 'lord' || r.region === m.region))) || all.filter(r => voteTowns(r).includes(here)).sort((a, b) => a.poll - b.poll)[0];
+    const pick = all.filter(r => r.you && r.open)[0] || (m && all.find(r => r.office === m.office && (r.region || null) === (m.region || null))) || all.filter(r => voteTowns(r).includes(here)).sort((a, b) => a.poll - b.poll)[0];
     return pick ? { key: pick.key, label: raceLabel(pick), days: pick.poll - s.day, you: !!pick.you, open: pick.open } : null;
   }
   // you vote too, if you are not standing: in person, on polling day morning, at your town's place. Those who think well of you follow your lead.
@@ -4701,7 +4737,9 @@
   function electionsOn(s, d) { if (!s.elect) return []; return Object.values(s.elect.races).filter(r => d >= r.poll && (d - r.poll) % ELECT_EVERY[r.office] === 0); }
   // the cost of standing: dearer for a higher office and a bigger town. You cannot buy the office itself; only the chance to ask for it
   function standFee(s, r) {
+    if (r.office === 'council') return 30;
     if (r.office === 'crown') return 4000;
+    if (r.office === 'seat') return 2000;
     const town = r.office === 'elder' ? 'hearthmoor' : r.region, pop = living(s).filter(p => townOf(p) === town && !p.kid).length;
     return Math.round((r.office === 'elder' ? 120 : 400) * Math.pow(Math.max(40, pop) / 80, 0.6) / 10) * 10;
   }
@@ -6526,7 +6564,8 @@
         for (const q of living(s)) if (townOf(q) === a && rand(s) < 0.2) q.opinion = clamp((q.opinion || 0) + 2, -100, 100);
         event(s, 'You pay for armed men to ride the roads around ' + REGIONS[a] + '. The bandits pull back.', 'good'); return ok();
       }
-      case 'seekSeat': {
+      case 'seekSeat': { const r = ensureRaces(s).races['seat:' + a]; return fail('The royal council is chosen by the vote now' + (r ? ': the next election for ' + raceLabel(r) + ' is on day ' + r.poll + '.' : '.')); }
+      case 'oldSeekSeat': {
         const R = s.realm; if (!R || R.exile) return fail('Not now.');
         if (!COUNCIL[a]) return fail('No such office.'); if (R.council[a] === 'player') return fail('You already hold it.');
         // one seat at a time: to change roads you resign first, wait, and earn the new seat on its own terms
@@ -7972,7 +8011,7 @@
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
