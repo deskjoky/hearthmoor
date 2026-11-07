@@ -671,6 +671,7 @@
     for (const p of living(s)) if (p.job && p.job.type === 'manage' && !managerOf(s, p.job.kind, p.job.ref)) { p.job = null; plog(s, p, 'The business they managed changed hands.'); }
     for (const shop of s.shops) {
       const m = shop.manager; if (!m) continue;
+      managerStaffing(s, shop);
       assignRoles(s, shop);
       const mp = s.people[m.pid]; if (!mp || mp.status !== 'here') { shop.manager = null; report(s, 'Your ' + TRADES[shop.trade].name.toLowerCase() + ' has lost its manager.'); continue; }
       spend(s, m.wage); mp.purse += m.wage; s.rec.wagesPaid += m.wage;
@@ -1024,6 +1025,38 @@
     rest.forEach(h => { h.role = 'make'; }); counter.role = 'counter';
     if (surplus && rest.length >= 2) rest[rest.length - 1].role = 'round';
     return before !== hs.map(h => h.role).join();
+  }
+  /* a manager also does the hiring: they fill the shop up to what it holds comfortably, from those willing to work
+     for you. They let someone go on their own only for a really bad job (slow, sour and getting worse for days). To cut
+     costs they must ask you first, with their reason, on the request board. */
+  function managerStaffing(s, shop) {
+    const m = shop.manager; if (!m || !shop.worker || shop.policy.mgrHire === false) return;
+    const hs = shop.hands = shop.hands || [], T = TRADES[shop.trade].name.toLowerCase();
+    // a really bad job: let go without asking
+    for (const h of hs.slice()) {
+      h.bad = (h.skill || 1) < 0.85 && h.mood < 30 ? (h.bad || 0) + 1 : 0;
+      if (h.bad >= 3) {
+        hs.splice(hs.indexOf(h), 1); s.rec.staffFired++;
+        const hp = h.pid && s.people[h.pid]; if (hp) { hp.job = null; plog(s, hp, 'Let go by ' + m.name + ' for poor work.'); }
+        report(s, 'Your ' + T + ': ' + m.name + ' let ' + h.name + ' go. Slow and sullen for days, and getting no better.');
+      }
+    }
+    // cutting costs needs your word
+    const e = s.ledger && s.ledger.slice(-3).map(x => (x.shops || []).find(y => y.id === shop.id)).filter(Boolean);
+    const losing = e && e.length >= 3 && e.every(x => x.profit < 0), crowded = hs.length > handRoom(shop);
+    s.decisions = s.decisions || [];
+    if ((losing || crowded) && hs.length && !s.decisions.some(d => d.kind === 'fire' && d.shop === shop.id)) {
+      const h = hs.slice().sort((a, b) => (a.skill || 1) * (a.mood + 20) / a.wage - (b.skill || 1) * (b.mood + 20) / b.wage)[0];
+      const why = crowded ? 'there are ' + hs.length + ' of them where ' + handRoom(shop) + ' fit, and they get in each other\u2019s way' : 'the shop has lost money three days running, and ' + h.name.split(' ')[0] + '\u2019s ' + h.wage + 'c a day would close the gap';
+      s.decisions.push({ id: (s.nextDecision = (s.nextDecision || 0) + 1), day: s.day, kind: 'fire', shop: shop.id, name: h.name, from: m.name, text: m.name + ' (your ' + T + '): \u201cI would like to let ' + h.name + ' go, because ' + why + '.\u201d' });
+    }
+    // hire up to what the place holds comfortably, while the coin is there
+    const room = handRoom(shop);
+    if (hs.length < room && s.coins > 60 && !losing) {
+      const pool = s.applicants.map((a, i) => ({ a, i })).filter(({ a }) => !refuses(s, a.pid && s.people[a.pid])).sort((x, y) => y.a.skill / y.a.ask - x.a.skill / x.a.ask);
+      const pick = pool[0];
+      if (pick) { const r = cmd(s, 'hireHand', shop.id, pick.i, pick.a.ask); if (r && r.ok !== false) report(s, 'Your ' + T + ': ' + m.name + ' took on ' + pick.a.name + ' at ' + pick.a.ask + 'c a day.'); }
+    }
   }
   function counterSpeed(shop) { const c = staffOn(shop, 'counter')[0]; return c ? Math.min(1.3, c.skill || 1) * (c.mood < 30 ? 0.7 : 1) * mgrBoost(shop) * crowdMul(shop) : 0; }
   // who fetches supplies: the manager unless you choose otherwise, else an employee set to it, else the worker if allowed
@@ -6061,6 +6094,7 @@
       case 'setPrice': if (shop) shop.price = clamp(Math.round(b), 1, TRADES[shop.trade].wtp * 3); return ok();
       case 'policy': if (shop) shop.policy[b] = typeof c === 'string' ? c : !!c; if (shop && b === 'supplyBy' && c === 'worker') shop.policy.supplyRuns = true; return ok();
       case 'setHandRole': { if (!shop || !shop.hands || !shop.hands[b] || !ROLES.includes(c)) return fail('No such employee.'); if (shop.manager) shop.policy.mgrRoles = false; shop.hands[b].role = c; return ok(); }
+      case 'mgrHire': { if (!shop || !shop.manager) return fail('No manager there.'); shop.policy.mgrHire = !!b; return ok(); }
       case 'mgrRoles': { if (!shop || !shop.manager) return fail('No manager there.'); shop.policy.mgrRoles = !!b; if (b) assignRoles(s, shop); return ok(); }
       case 'hire': {
         if (!shop) return fail('Pick a shop to hire for.');
@@ -7095,6 +7129,12 @@
       case 'decide': {
         const i = (s.decisions || []).findIndex(d => d.id === a); if (i < 0) return fail('That has been settled.');
         const d = s.decisions[i], o = s.biz[d.biz];
+        if (d.kind === 'fire') {
+          const sh = shopById(s, d.shop), j = sh && sh.hands ? sh.hands.findIndex(h => h.name === d.name) : -1;
+          if (b === 'yes' && j >= 0) { cmd(s, 'fireHand', sh.id, j); report(s, d.from + ' lets ' + d.name + ' go, on your word.'); }
+          else report(s, d.from + ': ' + d.name + ' stays, on your word.');
+          s.decisions.splice(i, 1); return ok();
+        }
         if (b === 'pay') { if (s.coins < d.cost) return fail('Mending it costs ' + d.cost + 'c.'); spend(s, d.cost); if (o) o.disrepair = false; report(s, empById(d.biz).name + ': mended for ' + d.cost + 'c, on your word.'); }
         else report(s, empById(d.biz).name + ': left unmended for now. Takings stay down until it is fixed.');
         s.decisions.splice(i, 1); return ok();

@@ -163,7 +163,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .bookhead .tabs { flex: 1; min-width: 0; }
 .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 0 2px; align-items: flex-end; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab { flex: none; border: 0; background: #5a4130; color: #e8d6b0; padding: 8px 7px 10px; border-radius: 6px 6px 0 0; font-family: var(--f-display); font-size: 15px; min-height: 40px; }
+.tab { flex: 1 1 0; min-width: 0; border: 0; background: #5a4130; color: #e8d6b0; padding: 8px 10px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 6px 6px 0 0; font-family: var(--f-display); font-size: 15px; min-height: 40px; }
 .tab[aria-selected="true"] { background: var(--parch); color: var(--ink); }
 .close { margin-left: auto; flex: none; border: 0; background: transparent; color: #e8d6b0; font-size: 26px; line-height: 1; padding: 4px 10px; min-height: 40px; min-width: 40px; }
 .page { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; background: radial-gradient(ellipse at 50% 0%, #f2e4c6, var(--parch) 60%, var(--parch-2)); border-radius: 0 6px 6px 6px; padding: 16px 18px 24px; user-select: text; -webkit-user-select: text; }
@@ -175,6 +175,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .page p { line-height: 1.5; margin: 6px 0; max-width: 62ch; }
 .lead { color: var(--ink-soft); font-style: italic; font-family: var(--f-display); font-size: 16px; }
 .paused { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.subtabs { position: sticky; top: -16px; z-index: 2; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: -16px -18px 10px; padding: 10px 18px 8px; background: linear-gradient(var(--parch) 85%, rgba(0,0,0,0)); }
+.subtabs button { border: 1px solid var(--line); background: transparent; color: var(--ink-soft); border-radius: 999px; padding: 5px 12px; min-height: 34px; font: 600 14px var(--f-body, inherit); cursor: pointer; }
+.subtabs button[aria-pressed="true"] { background: var(--leather); border-color: var(--leather); color: var(--parch); }
+.subtabs .paused { margin-left: auto; font-size: 11px; }
+.subtabs + h3 { font-size: 22px; }
+@media (max-height: 520px) { .subtabs + h3 { display: none; } .page .lead { font-size: 14px; margin: 2px 0 6px; } .page h4 { font-size: 17px; margin: 12px 0 4px; } .page { padding-top: 12px; } .subtabs { top: -12px; margin-top: -12px; padding-top: 8px; } }
 table.acct { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 15px; }
 table.acct td { padding: 3px 0; border-bottom: 1px dotted var(--line); }
 table.acct td:last-child { text-align: right; padding-left: 10px; white-space: nowrap; }
@@ -3802,7 +3808,16 @@ function hud(s) {
 }
 
 /* ----- the ledger book ----- */
-const TABS = [['tasks', 'Tasks'], ['ledger', 'Ledger'], ['shops', 'Shops'], ['staff', 'Staff'], ['people', 'People'], ['renown', 'Renown'], ['family', 'Family'], ['property', 'Property'], ['jobs', 'Jobs'], ['village', 'Village'], ['justice', 'Justice'], ['realm', 'Realm'], ['calendar', 'Calendar'], ['goals', 'Goals']];
+/* the book: five sections, each with a few pages. A section remembers the page you last read in it. */
+const SECTIONS = [
+  ['today', 'Today', [['tasks', 'Tasks'], ['goals', 'Goals'], ['calendar', 'Calendar']]],
+  ['money', 'Money', [['ledger', 'Ledger'], ['jobs', 'Work']]],
+  ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
+  ['people', 'People', [['people', 'Townsfolk'], ['family', 'Family'], ['renown', 'Your name']]],
+  ['power', 'Power', [['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
+];
+const TABS = SECTIONS.flatMap(x => x[2]);
+const sectionOf = k => (SECTIONS.find(x => x[2].some(y => y[0] === k)) || (k === 'manage' ? SECTIONS[2] : SECTIONS[0]));
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
@@ -3814,9 +3829,11 @@ function closeOverlay() {
 }
 function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
 function renderBook(turn) {
-  $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
+  const sec = sectionOf(UI.tab); UI.subOf = UI.subOf || {}; if (sec[2].some(y => y[0] === UI.tab)) UI.subOf[sec[0]] = UI.tab;
+  $('tabs').innerHTML = SECTIONS.map(([k, n, pages]) => `<button type="button" class="tab" role="tab" aria-selected="${sec[0] === k}" data-c='${JSON.stringify(['ui', 'tab', (UI.subOf && UI.subOf[k]) || pages[0][0]])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  const subs = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}<span class="paused" title="Time stands still while the book is open">Paused</span></nav>`;
+  pg.innerHTML = subs + ({ requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -3889,7 +3906,7 @@ function managerNews(s) {
   const dec = s.decisions || [], rep = (s.reports || []).slice(0, 8);
   if (!dec.length && !rep.length) return '';
   let h = '';
-  if (dec.length) h += `<div class="box warnbox"><h5>Waiting on your word</h5>${dec.map(d => `<p>${esc(d.text)}</p><div class="acts">${B_('Pay ' + d.cost + 'c to mend it', ['decide', d.id, 'pay'], '', s.coins < d.cost)}${B_('Let it wait', ['decide', d.id, 'wait'], 'alt')}</div>`).join('')}</div>`;
+  if (dec.length) h += `<div class="box warnbox"><h5>Waiting on your word</h5>${dec.map(d => decisionHTML(s, d)).join('')}</div>`;
   if (rep.length) h += `<div class="box"><h5>From your managers</h5><ul class="plog">${rep.map(r => `<li>Day ${r.day}: ${esc(r.text)}</li>`).join('')}</ul></div>`;
   return h;
 }
@@ -4005,6 +4022,7 @@ function handsBox(s, shop) {
     h += `<div class="seg" role="group" aria-label="Job for ${esc(x.name)}">${Sim.ROLES.map(r => `<button type="button" aria-pressed="${(x.role || 'make') === r}" data-c='${esc(JSON.stringify(['setHandRole', shop.id, i, r]))}'>${esc({ make: 'Bench', counter: 'Counter', round: 'Sell round', supply: 'Supplies' }[r])}</button>`).join('')}</div>`;
     if (x.wage < x.ask) h += `<p class="why">${esc(x.name.split(' ')[0])} asked for ${x.ask}c: their mood falls each day.</p>`;
   });
+  if (shop.manager) h += `<p class="why">${shop.policy.mgrHire !== false ? esc(shop.manager.name.split(' ')[0]) + ' hires for you, up to what the place holds, and lets go only those doing really badly. To cut costs they ask you first, on the Requests page.' : 'You do the hiring here.'}</p><div class="acts">${shop.policy.mgrHire !== false ? B_('Let me do the hiring', ['mgrHire', shop.id, false], 'alt') : B_('Let ' + esc(shop.manager.name.split(' ')[0]) + ' hire', ['mgrHire', shop.id, true], 'alt')}</div>`;
   if (shop.manager && hs.length) h += `<div class="acts">${shop.policy.mgrRoles !== false ? B_('Let me choose the jobs', ['mgrRoles', shop.id, false], 'alt') : B_('Let ' + esc(shop.manager.name.split(' ')[0]) + ' choose the jobs', ['mgrRoles', shop.id, true], 'alt')}</div>`;
   if (!shop.worker) h += `<p>Hire a worker to run it first.</p>`;
   else if (hs.length < Sim.HAND_MAX) h += s.applicants.length ? `<p>Take someone on${hs.length >= room ? ' <span class="why">(it will be crowded)</span>' : ''}:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Hire ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
@@ -4527,7 +4545,7 @@ function taskList(s) {
     if (R.exile) out.push({ who: 'Your cause', title: 'Win your way back from exile', note: 'Allies ' + R.exile.allies.length + '/3 · war chest ' + (R.exile.fund || 0) + '/600c · towns ' + R.support.towns + '/55 · ruler’s standing ' + Math.round(R.kingSupport) + ' (under 50)', act: B_('The Realm', ['page', 'realm']) });
     const open = (R.contracts || []).filter(c => !c.taken).length; if (open) out.push({ who: 'Lords and towns', title: open + ' contract' + (open > 1 ? 's' : '') + ' waiting to be taken', note: 'Deeds done win lordships and allies.', act: B_('See them', ['page', 'realm']), soft: true });
   }
-  for (const d of (s.decisions || [])) out.push({ who: 'Your manager', title: d.text, note: '', act: B_('Property', ['page', 'property']) });
+  for (const d of (s.decisions || [])) out.push({ who: d.from || 'Your manager', title: d.kind === 'fire' ? 'Asks to let ' + d.name + ' go' : d.text, note: d.kind === 'fire' ? d.text : '', act: B_('Requests', ['page', 'requests']) });
   const offers = (s.offers || []).filter(o => s.people[o.pid]); if (offers.length) out.push({ who: 'Buyers', title: offers.length + ' offer' + (offers.length > 1 ? 's' : '') + ' for your property', note: '', act: B_('Property', ['page', 'property']) });
   if (UI.waypoint && G.people[UI.waypoint]) out.push({ who: 'You', title: 'Find ' + G.people[UI.waypoint].name, note: 'Follow the gold light and the mark on the minimap.', act: B_('Stop looking', ['ui', 'clearWaypoint'], 'alt') });
   return out;
@@ -4630,6 +4648,17 @@ function showElectionAlert(A) {
   const sc = $('scroll'); sc.hidden = false; Snd.play('scroll');
   const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
 }
+function decisionHTML(s, d) {
+  if (d.kind === 'fire') return `<div class="box"><h5>Day ${d.day} · ${esc(d.from)}</h5><p>${esc(d.text)}</p><div class="acts">${B_('Yes, let ' + esc(d.name.split(' ')[0]) + ' go', ['decide', d.id, 'yes'], 'warn')}${B_('No, keep them', ['decide', d.id, 'no'], 'alt')}</div></div>`;
+  return `<div class="box"><h5>Day ${d.day}</h5><p>${esc(d.text)}</p><div class="acts">${B_('Pay ' + d.cost + 'c to mend it', ['decide', d.id, 'pay'], '', s.coins < d.cost)}${B_('Let it wait', ['decide', d.id, 'wait'], 'alt')}</div></div>`;
+}
+function pageRequests(s) {
+  const dec = s.decisions || [], rep = (s.reports || []).slice(0, 12);
+  let h = `<h3>Requests</h3><p class="lead">What your managers ask of you, and what they have done on their own.</p>`;
+  h += dec.length ? dec.map(d => decisionHTML(s, d)).join('') : `<p>Nothing waits on your word.</p>`;
+  if (rep.length) h += `<h4>From your managers</h4><ul class="decisions">${rep.map(r => `<li>${esc(typeof r === 'string' ? r : (r.day != null ? 'Day ' + r.day + ': ' : '') + (r.text || ''))}</li>`).join('')}</ul>`;
+  return h;
+}
 function pageElections(s) {
   let h = electionsBox(s);
   const E = Sim.electState(s), open = Sim.upcomingRaces(s).filter(r => r.open);
@@ -4663,7 +4692,7 @@ function pageRealm(s) {
   const bar = (n, lab) => `<div class="kvbar"><span>${lab}</span><div class="bar ${n < 35 ? 'low' : ''}"><i style="width:${n}%"></i></div><b class="num">${n}</b></div>`;
   const mineL = Sim.yourLordships(s), mineS = Sim.yourSeats(s), f = (Sim.you(s).sex === 'f');
   let h = `<h3>The Kingdom of Alderwyn</h3><p class="lead">${ruler ? 'You rule Alderwyn from Crownmere castle. Keep the treasury out of debt and the realm behind you, or someone will take the crown from you.' : R.exile ? 'You are in exile, stripped of lands and offices. You can rebuild, and in time claim the crown again.' : 'Six regions under one crown. Win the lords, the guilds, the court and the towns, and the crown can be yours.'}</p>`;
-  h += electionsBox(s);
+  { const nv = Sim.nextVote(s); h += `<div class="why">${nv ? 'Next vote: ' + esc(nv.label) + (nv.days <= 0 ? ', today at noon.' : ', in ' + nv.days + (nv.days === 1 ? ' day.' : ' days.')) : 'Offices are won at the vote.'}<div class="acts">${B_('Elections', ['ui', 'tab', 'elections'], 'alt')}</div></div>`; }
   const urgent = R.plot || (R.after && ruler); if (urgent) h += rebellionBox(s, R);
   if (ruler) { const n = (s.folk && s.folk.aud.length) || 0; h += `<div class="box"><h5>The throne room</h5><p>${n ? n + (n === 1 ? ' petitioner waits' : ' petitioners wait') + ' to be heard. Each brings a choice: kind, or cold.' : 'No one waits to be heard today.'}</p><div class="acts">${B_('Hold court', ['ui', 'throne'], n ? '' : 'alt')}</div></div>`; }
   h += `<div class="box"><dl class="kv"><dt>On the throne</dt><dd>${ruler ? esc(s.name) + ' (you)' : esc(K ? K.name : 'no one')}${!ruler && K ? ', aged ' + K.age : ''}</dd>${!ruler ? `<dt>The King’s standing</dt><dd class="num">${Math.round(R.kingSupport)}</dd>` : ''}<dt>Your favour at court</dt><dd class="num">${Math.round(R.favour)}</dd><dt>Your lordships</dt><dd>${mineL.length ? mineL.map(id => esc(Sim.REGIONS[id])).join(', ') : 'none'}</dd><dt>Your council seats</dt><dd>${mineS.length ? mineS.map(k => Sim.COUNCIL[k]).join(', ') : 'none'}</dd></dl></div>`;
@@ -6268,6 +6297,12 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.62', date: '7 November', title: 'A tidier book, and managers who hire', items: [
+    'The book has five sections instead of fourteen tabs: Today (tasks, goals, calendar), Money (ledger, work), Business (shops, staff, requests, property), People (townsfolk, family, your name) and Power (elections, village, realm, justice). Each section has its pages along the top and remembers the one you last read.',
+    'A manager now hires for you, up to what the building holds comfortably, from people willing to work for you. Turn it off on the Staff page to hire yourself.',
+    'A manager lets someone go on their own only for a really bad job: slow, sour and no better after three days. To cut costs (losing money, or too crowded) they ask you first, with their reason, on the new Requests page. Yes or no is yours.',
+    'Requests also lists everything your managers report, day by day, and anything waiting on your word shows in Tasks.'
+  ] },
   { v: '0.61', date: '7 November', title: 'Polling day', items: [
     'The top bar shows the day, and the days until the next vote that matters to you (\u201cVote 4d\u201d, then \u201cVote today\u201d, in red when it is yours). Tap it for the elections.',
     'On polling day morning, everyone grown goes to their own town\u2019s hall or square to vote, then back to their day. For the crown, every town of Alderwyn votes at home and riders carry the tallies to Crownmere for the count at noon.',
