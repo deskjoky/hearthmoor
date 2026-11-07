@@ -303,20 +303,33 @@
   const queueSlot = (shop, i) => { const q = plotPt(shop, 'queue0'); return { x: q.x, z: q.z + i * 1.0 * (PLOTS[shop.plot].dir || 1) }; };
   const empById = id => BIZ_SITES.find(e => e.id === id);
   /* ---------- drop-in work: walk into any working business, work its bench for as long as you like, leave when you like.
-     Each round is four strokes of the trade's minigame. A round with three good strokes is paid on the spot; four good
-     strokes, three of them dead centre, is a perfect round. Pay grows with your level in that trade, which follows you
-     everywhere. Money is in units of 10c (see the coin note in the page): a level-1 round pays 0.5, shown as 5c.
+     Each item is a run of coloured bars to hit with the matching buttons; see the chain rules below. Pay grows steeply with
+     your level in that trade, which follows you everywhere. Money is in units of 10c (see the coin note in the page).
      Where the money comes from: piecework. What you make goes on the carts to market, outside the businesses' own counter
      sales, and the buyer pays per piece. The business takes a tenth on top for the use of its bench; at your own bench
      that tenth is yours. So an owner never pays for your work out of pocket, a shop's own takings are untouched, and no
      treasury pays anything. Fast-forward cannot speed it up: rounds are played in real time, and the game runs at 1x while
      you work. */
-  const WORK_LEVELS = [0, 10, 35, 90, 180], WORK_PAY = [0.5, 0.75, 1.1, 1.5, 2.0];
-  const PERFECT_BONUS = 0.25, STREAK_STEP = 0.05, STREAK_MAX = 0.25, BENCH_CUT = 0.1, ROUND_MIN = 3;   // ROUND_MIN: game minutes, about 4 seconds at 1x
+  // Like Fable 3: every good item adds one to your chain, up to x10, and pay is the level's base times the chain. One mistake
+  // and the chain is gone. Levels pay far more, and come from work, but the top two also need standing in the world.
+  const WORK_LEVELS = [0, 15, 60, 180, 400], WORK_PAY = [0.2, 0.4, 0.8, 1.4, 2.5];
+  const CHAIN_MAX = 10, PERFECT_BONUS = 0.25, BENCH_CUT = 0.1, ROUND_MIN = 2;   // ROUND_MIN: game minutes between items, under 3 seconds at 1x
+  // what a level needs besides practice: 4 a seat on a village council or better, 5 having been an Elder, or a lord or better
+  const LEVEL_RANK = [0, 0, 0, 1, 2], RANK_NAME = ['', 'a seat on the village council', 'to have been an Elder, or to be a lord'];
+  function workRank(s) {
+    const R = s.realm, v = s.village;
+    if (s.offices && (s.offices.lord === 'player' || s.offices.elder === 'player')) return 2;
+    if ((s.rec && s.rec.everElder) || (R && (isRuler(s) || yourLordships(s).length || Object.keys(COUNCIL).some(k => R.council[k] === 'player')))) return 2;
+    if (v && v.council) return 1;
+    return 0;
+  }
   function tradeXp(s, t) { return (s.tradeXp && s.tradeXp[t]) || 0; }
-  function tradeLevel(s, t) { const x = tradeXp(s, t); let l = 1; for (let i = 1; i < WORK_LEVELS.length; i++) if (x >= WORK_LEVELS[i]) l = i + 1; return l; }
-  function levelProgress(s, t) { const l = tradeLevel(s, t), x = tradeXp(s, t); if (l >= WORK_LEVELS.length) return { level: l, have: x, need: null, frac: 1 }; const a = WORK_LEVELS[l - 1], b = WORK_LEVELS[l]; return { level: l, have: x - a, need: b - a, frac: (x - a) / (b - a) }; }
-  function roundPay(s, t, perfect, streak, own) { const base = WORK_PAY[tradeLevel(s, t) - 1], bonus = (perfect ? PERFECT_BONUS : 0) + Math.min(STREAK_MAX, STREAK_STEP * streak); return Math.round(base * (1 + bonus) * (own ? 1 + BENCH_CUT : 1) * 1000) / 1000; }
+  function xpLevel(s, t) { const x = tradeXp(s, t); let l = 1; for (let i = 1; i < WORK_LEVELS.length; i++) if (x >= WORK_LEVELS[i]) l = i + 1; return l; }
+  function tradeLevel(s, t) { const l = xpLevel(s, t), r = workRank(s); let k = 1; while (k < l && LEVEL_RANK[k] <= r) k++; return k; }
+  function levelGate(s, t) { const l = tradeLevel(s, t); return l < xpLevel(s, t) ? 'Level ' + (l + 1) + ' needs ' + RANK_NAME[LEVEL_RANK[l]] + '.' : null; }
+  function levelProgress(s, t) { const l = tradeLevel(s, t), x = tradeXp(s, t); if (l >= WORK_LEVELS.length) return { level: l, have: x, need: null, frac: 1 }; const a = WORK_LEVELS[l - 1], b = WORK_LEVELS[l]; return { level: l, have: Math.min(x, b) - a, need: b - a, frac: Math.min(1, (x - a) / (b - a)), gate: levelGate(s, t) }; }
+  function barsFor(level) { return { bars: level <= 1 ? 2 : level <= 3 ? 3 : 4, colours: level <= 3 ? 2 : 3 }; }
+  function roundPay(s, t, perfect, chain, own) { return Math.round(WORK_PAY[tradeLevel(s, t) - 1] * clamp(chain || 1, 1, CHAIN_MAX) * (perfect ? 1 + PERFECT_BONUS : 1) * (own ? 1 + BENCH_CUT : 1) * 1000) / 1000; }
   function learned(s, trade) { return tradeLevel(s, trade) >= 2; }
   // your very first shop is a starter stall at a one-time price; after that a lot and a counter cost what a business does
   const STARTER_PRICE = 70;
@@ -5536,28 +5549,27 @@
       case 'workStart': {
         const W = workPlace(s, a); if (!W) return fail('There is no work to be had there.');
         const no = workRefusal(s, W); if (no) return fail(no);
-        s.work = { at: a, trade: W.trade, since: s.t, earned: 0, rounds: 0, streak: 0, own: W.own };
+        s.work = { at: a, trade: W.trade, since: s.t, earned: 0, rounds: 0, chain: 1, best: 1, own: W.own };
         s.workSeen = s.workSeen || {}; const first = !s.workSeen[W.trade]; s.workSeen[W.trade] = true;
-        return { ok: true, msg: { first, level: tradeLevel(s, W.trade) } };
+        return { ok: true, msg: Object.assign({ first, level: tradeLevel(s, W.trade) }, barsFor(tradeLevel(s, W.trade))) };
       }
       case 'workRound': {
-        // a: good strokes (of 4), b: dead-centre strokes. Paid at once; nothing earned is ever taken back
+        // a: true for a good item (every bar hit with the right button), false for a mistake; b: true if every hit was dead centre
         const w = s.work; if (!w) return fail('You are not at a bench.');
         const W = workPlace(s, w.at); if (!W) { s.work = null; return fail('The work there has stopped.'); }
         if (s.workLast != null && s.t - s.workLast < ROUND_MIN) return fail('Too quick.');
-        s.workLast = s.t;
-        const hits = clamp(a | 0, 0, 4), perf = clamp(b | 0, 0, hits);
-        if (hits < 3) { w.streak = 0; w.lastPay = 0; return { ok: true, msg: { pay: 0, failed: true, streak: 0, level: tradeLevel(s, w.trade) } }; }
-        const perfect = hits === 4 && perf >= 3, lv0 = tradeLevel(s, w.trade), pay = roundPay(s, w.trade, perfect, w.streak, W.own);
+        s.workLast = s.t; if (!w.chain) w.chain = 1;
+        if (!a) { const lost = w.chain; w.chain = 1; w.lastPay = 0; return { ok: true, msg: { pay: 0, failed: true, lost, chain: 1, level: tradeLevel(s, w.trade) } }; }
+        const lv0 = tradeLevel(s, w.trade), pay = roundPay(s, w.trade, !!b, w.chain, W.own), at = w.chain;
         earn(s, pay); s.stats.jobPay += pay; s.rec.wagesEarned += pay; s.rec.workRounds = (s.rec.workRounds || 0) + 1;
         if (!W.own && s.people && s.people[W.owner]) s.people[W.owner].purse += Math.round(pay * BENCH_CUT * 100) / 100;   // the bench's tenth, paid by the buyer
         s.tradeXp = s.tradeXp || {}; s.tradeXp[w.trade] = (s.tradeXp[w.trade] || 0) + 1;
-        w.earned = Math.round((w.earned + pay) * 1000) / 1000; w.rounds++; w.lastPay = pay; const streak = w.streak; w.streak++;
+        w.earned = Math.round((w.earned + pay) * 1000) / 1000; w.rounds++; w.lastPay = pay; w.chain = Math.min(CHAIN_MAX, w.chain + 1); w.best = Math.max(w.best || 1, at);
         const lv = tradeLevel(s, w.trade), up = lv > lv0;
-        if (up) event(s, 'Your ' + tradeName(w.trade).toLowerCase() + ' work has reached level ' + lv + '. Each round now pays more' + (lv === 2 && TRADE_KEYS.includes(w.trade) ? ', and you know the trade well enough to open a ' + tradeName(w.trade).toLowerCase() + ' of your own' : '') + '.', 'good');
-        return { ok: true, msg: { pay, perfect, streak, level: lv, levelUp: up } };
+        if (up) event(s, 'Your ' + tradeName(w.trade).toLowerCase() + ' work has reached level ' + lv + '. Each item now pays more' + (lv === 2 && TRADE_KEYS.includes(w.trade) ? ', and you know the trade well enough to open a ' + tradeName(w.trade).toLowerCase() + ' of your own' : '') + '.', 'good');
+        return { ok: true, msg: { pay, perfect: !!b, chain: w.chain, at, level: lv, levelUp: up } };
       }
-      case 'workStop': { const w = s.work; s.work = null; return { ok: true, msg: w ? { earned: w.earned, rounds: w.rounds } : null }; }
+      case 'workStop': { const w = s.work; s.work = null; return { ok: true, msg: w ? { earned: w.earned, rounds: w.rounds, best: w.best } : null }; }
       case 'apply_old': {
         const e = empById(a);
         if (!e) return fail('No such employer');
@@ -7444,7 +7456,7 @@
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
-    openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, STREAK_STEP, STREAK_MAX, BENCH_CUT,
+    openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
     relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR

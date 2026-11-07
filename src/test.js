@@ -27,35 +27,39 @@ function shopWithWorker(trade, seed, tier) {
   return { s, shop };
 }
 
-console.log('1. Drop-in work: any bench, paid by the round, levels that follow you (v0.54)');
+console.log('1. Drop-in work: any bench, a chain up to x10, levels that follow you (v0.55)');
 {
-  const s = Sim.newGame(11); const c0 = s.coins, R = (h, p) => { Sim.advance(s, 4); return Sim.cmd(s, 'workRound', h, p); };
-  check(Sim.cmd(s, 'workStart', 'gerd').ok && s.work && s.work.trade === 'bakery', 'walk into the bakehouse and start work, no hiring needed');
-  const r1 = R(4, 1); check(r1.ok && r1.msg.pay === Sim.WORK_PAY[0] && s.coins === c0 + r1.msg.pay, 'a good round pays at once (' + r1.msg.pay + ')');
-  const r2 = R(4, 4); check(r2.msg.perfect && Math.abs(r2.msg.pay - Sim.WORK_PAY[0] * (1 + Sim.PERFECT_BONUS + Sim.STREAK_STEP)) < 1e-9, 'a perfect round pays a quarter more, and the streak adds to it');
-  const before = s.coins, r3 = R(2, 0); check(r3.ok && r3.msg.failed && s.coins === before && s.work.streak === 0, 'a poor round pays nothing and breaks the streak, but takes nothing back');
-  check(!Sim.cmd(s, 'workRound', 4, 4).ok, 'rounds cannot come faster than they can be played');
-  for (let i = 0; i < 12; i++) R(4, 2);
-  check(Sim.tradeLevel(s, 'bakery') === 2 && Sim.learned(s, 'bakery'), 'ten good rounds reach level 2, which is enough to open a bakery');
-  const stop = Sim.cmd(s, 'workStop'); check(stop.ok && !s.work && stop.msg.rounds >= 13, 'stop whenever you like, and keep what you earned (' + stop.msg.earned + ')');
-  const kept = s.coins; check(Sim.cmd(s, 'workStart', 'forge').ok && Sim.cmd(s, 'workRound', 4, 4).ok === false, 'leaving and coming straight back cannot be used to pay twice');
-  check(s.coins === kept, 'nothing was paid for that');
-  for (let i = 0; i < 3; i++) R(4, 2);
-  check(Sim.tradeXp(s, 'smithy') === 3 && Sim.tradeXp(s, 'bakery') >= 12, 'each trade keeps its own progress, at every bench');
+  const s = Sim.newGame(11); const c0 = s.coins, R = (good, perf) => { Sim.advance(s, 3); return Sim.cmd(s, 'workRound', good, perf); };
+  check(Sim.cmd(s, 'workStart', 'gerd').ok && s.work && s.work.trade === 'bakery' && s.work.chain === 1, 'walk into the bakehouse and start work, no hiring needed');
+  const r1 = R(true, false); check(r1.ok && r1.msg.pay === Sim.WORK_PAY[0] && s.coins === c0 + r1.msg.pay && s.work.chain === 2, 'a good item pays the level rate at once, and the chain grows to x2');
+  const r2 = R(true, true); check(Math.abs(r2.msg.pay - Sim.WORK_PAY[0] * 2 * (1 + Sim.PERFECT_BONUS)) < 1e-9, 'the next pays twice as much, and a quarter more for dead-centre presses');
+  for (let i = 0; i < 13; i++) R(true, false);
+  check(s.work.chain === Sim.CHAIN_MAX, 'the chain tops out at x' + Sim.CHAIN_MAX);
+  const before = s.coins, r3 = R(false); check(r3.ok && r3.msg.failed && r3.msg.lost === Sim.CHAIN_MAX && s.coins === before && s.work.chain === 1, 'one mistake and the chain is gone, but nothing earned is taken back');
+  check(!Sim.cmd(s, 'workRound', true, true).ok, 'items cannot come faster than they can be played');
+  check(Sim.tradeLevel(s, 'bakery') === 2 && Sim.learned(s, 'bakery'), Sim.WORK_LEVELS[1] + ' good items reach level 2, enough to open a bakery');
+  const stop = Sim.cmd(s, 'workStop'); check(stop.ok && !s.work && stop.msg.rounds >= 15, 'stop whenever you like, and keep what you earned (' + stop.msg.earned + ')');
+  const kept = s.coins; check(Sim.cmd(s, 'workStart', 'forge').ok && Sim.cmd(s, 'workRound', true, true).ok === false && s.coins === kept, 'leaving and coming straight back cannot be used to pay twice');
+  for (let i = 0; i < 3; i++) R(true, false);
+  check(Sim.tradeXp(s, 'smithy') === 3 && Sim.tradeXp(s, 'bakery') >= 15 && s.work.chain === 4, 'each trade keeps its own progress, and a new bench starts a new chain');
+  // the top levels need standing as well as practice
+  s.tradeXp.bakery = 1000; check(Sim.tradeLevel(s, 'bakery') === 3 && /council/.test(Sim.levelGate(s, 'bakery')), 'level 4 also needs a seat on a council');
+  s.village.council = true; check(Sim.tradeLevel(s, 'bakery') === 4 && /Elder|lord/.test(Sim.levelGate(s, 'bakery')), 'and level 5 needs an Elder or a lord');
+  s.rec.everElder = true; check(Sim.tradeLevel(s, 'bakery') === 5 && Sim.roundPay(s, 'bakery', false, Sim.CHAIN_MAX, false) >= Sim.WORK_PAY[0] * Sim.CHAIN_MAX * 10, 'a master at a full chain earns more than ten times a beginner’s best');
   const back = Sim.deserialize(Sim.serialize(s)); check(back.tradeXp.bakery === s.tradeXp.bakery && back.tradeXp.smithy === 3, 'trade levels are kept in the save');
 }
 
 console.log('2. Where the money comes from, and who will not have you');
 {
   const s = Sim.newGame(12); const owner = s.people[s.biz.gerd.owner], p0 = owner.purse, ch = s.village.chest;
-  Sim.cmd(s, 'workStart', 'gerd'); let paid = 0; for (let i = 0; i < 10; i++) { Sim.advance(s, 4); paid += Sim.cmd(s, 'workRound', 4, 3).msg.pay; }
+  Sim.cmd(s, 'workStart', 'gerd'); let paid = 0; for (let i = 0; i < 10; i++) { Sim.advance(s, 3); paid += Sim.cmd(s, 'workRound', true, false).msg.pay; }
   check(Math.abs(owner.purse - p0 - paid * Sim.BENCH_CUT) < 0.05, 'the owner pays nothing out of pocket: the buyer pays them a tenth on top for the bench');
   check(s.village.chest === ch, 'no public chest pays for piecework');
   check(Sim.cmd(s, 'apply', 'gerd').ok === false, 'there are no shifts to apply for any more');
   owner.hate = 70; check(!Sim.cmd(s, 'workStart', 'gerd').ok && Sim.cmd(s, 'workStart', 'forge').ok, 'an owner with a grudge turns you away, and another bench takes you');
   s.coins = 200; s.tradeXp.bakery = 20; check(Sim.cmd(s, 'open', 1, 'bakery').ok && s.coins === 200 - Sim.STARTER_PRICE, 'your first shop is a starter stall at a one-time price (' + Sim.STARTER_PRICE + ')');
   check(Sim.cmd(s, 'workStart', 'shop:' + s.shops[0].id).ok && s.work.own, 'you can work your own bench');
-  Sim.advance(s, 4); const r = Sim.cmd(s, 'workRound', 4, 0); check(Math.abs(r.msg.pay - Sim.WORK_PAY[1] * (1 + Sim.BENCH_CUT)) < 1e-9, 'at your own bench you keep the tenth');
+  Sim.advance(s, 3); const r = Sim.cmd(s, 'workRound', true, false); check(Math.abs(r.msg.pay - Sim.WORK_PAY[1] * (1 + Sim.BENCH_CUT)) < 1e-9, 'at your own bench you keep the tenth');
   check(Sim.openCost(s, 'tavern').coin === Sim.TRADES.tavern.tiers[0].cost.coin, 'after the starter, a shop costs the full price');
 }
 
@@ -63,7 +67,7 @@ console.log('3. You must reach level 2 in a trade before opening that shop');
 {
   const s = Sim.newGame(13); s.coins = 500; s.starterUsed = true;
   check(!Sim.cmd(s, 'open', 0, 'smithy').ok, 'cannot open a smithy without the trade');
-  s.tradeXp = { smithy: 10 };
+  s.tradeXp = { smithy: 20 };
   check(!Sim.cmd(s, 'open', 0, 'smithy').ok, 'a smithy also needs 4 ore');
   s.player.inv.ore = 4;
   const cost = Sim.TRADES.smithy.tiers[0].cost.coin;
@@ -164,7 +168,7 @@ console.log('9. Forty-day soak: from the bench to two businesses');
       if (want && !s.work) Sim.cmd(s, 'workStart', want);
       if (!bakery && Sim.learned(s, 'bakery') && s.coins >= Sim.STARTER_PRICE) { Sim.cmd(s, 'open', 1, 'bakery'); log.push('D' + s.day + ' opened bakery'); }
       if (bakery && !smithy && Sim.learned(s, 'smithy') && s.coins >= Sim.TRADES.smithy.tiers[0].cost.coin && p.inv.ore >= 4) { Sim.cmd(s, 'open', 2, 'smithy'); log.push('D' + s.day + ' opened smithy'); }
-      if (s.work) { if (m % 10 === 0) Sim.cmd(s, 'workRound', 4, 2); }
+      if (s.work) { if (m % 6 === 0) Sim.cmd(s, 'workRound', m % 60 !== 0, false); }
       else if (bakery && !bakery.worker && bakery.goods > 0) { if (Sim.dist(p, Sim.plotPt(bakery, 'serve')) > 0.5) Sim.cmd(s, 'serve', bakery.id); }
       else if (bakery && !bakery.worker && (bakery.stock.grain >= 2 && bakery.stock.wood >= 1)) Sim.cmd(s, 'craft', bakery.id);
       else if (bakery && !bakery.worker && bakery.stock.grain < 2 && Sim.carried(s) < 6) Sim.cmd(s, 'gather', 'grain');
