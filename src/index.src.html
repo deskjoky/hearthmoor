@@ -3569,6 +3569,7 @@ function comingOn(s, d) {
   if (d % 7 === 1) out.push({ k: 'week', t: 'The lord gives his weekly word on the village’s business.' });
   if (R && d % 7 === 3) out.push({ k: 'week', t: 'The court’s week turns: the great figures of the realm make their moves.' });
   if (v && v.disputeDay === d) out.push({ k: 'you', t: 'A dispute comes before the village council.' });
+  for (const r of Sim.electionsOn(s, d)) out.push({ k: 'you', t: 'Polling day: ' + Sim.raceLabel(r) + '.' });
   if (V && V.peaceUntil === d) out.push({ k: 'you', t: 'The truce with Valdoria ends.' });
   const rate = s.ageRate; if (rate && s.you) {
     const Y = s.you, r0 = Y.bday % rate; if (d % rate === r0) { const n = Math.floor((d - r0) / rate) - Math.floor((s.day - r0) / rate); out.push({ k: 'you', t: d > s.day ? 'Your birthday: you turn ' + (Y.age + n) + '.' : 'Your birthday.' }); }
@@ -3753,6 +3754,7 @@ function myBusinesses(s) {
   return out;
 }
 function hud(s) {
+  { const hb = s.elect && s.elect.handbook; if (hb && !hb.seen && $('scroll').hidden) { hb.seen = true; showHandbook(hb); } }
   { const n = taskList(s).filter(x => !x.soft).length, el = $('taskN'); if (el && el.textContent !== String(n || '')) el.textContent = n || ''; }
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
   { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year + '. ' + c.next.charAt(0).toUpperCase() + c.next.slice(1) + ' in ' + c.daysLeft + (c.daysLeft === 1 ? ' day.' : ' days.'); }
@@ -3985,9 +3987,11 @@ function handsBox(s, shop) {
   if (st && Sim.staffOn(shop, 'round').length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c.</p>`;
   hs.forEach((x, i) => {
     h += `<div class="staffrow"><span><b>${esc(x.name)}</b> · ${Sim.skillLabel(x.skill)} · mood ${Math.round(x.mood)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${x.wage}c</output><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'hand' + shop.id + ':' + i ? B_('Yes, let go', ['fireHand', shop.id, i], 'warn') + B_('Keep', ['ui', 'confirm', null], 'alt') : B_('Let go', ['ui', 'confirm', 'hand' + shop.id + ':' + i], 'alt')}</div>`;
+    if (shop.manager && shop.policy.mgrRoles !== false) h += `<p class="num">${esc(Sim.ROLE_NAME[x.role || 'make'])} <span class="why">· set by ${esc(shop.manager.name.split(' ')[0])}</span></p>`; else
     h += `<div class="seg" role="group" aria-label="Job for ${esc(x.name)}">${Sim.ROLES.map(r => `<button type="button" aria-pressed="${(x.role || 'make') === r}" data-c='${esc(JSON.stringify(['setHandRole', shop.id, i, r]))}'>${esc({ make: 'Bench', counter: 'Counter', round: 'Sell round', supply: 'Supplies' }[r])}</button>`).join('')}</div>`;
     if (x.wage < x.ask) h += `<p class="why">${esc(x.name.split(' ')[0])} asked for ${x.ask}c: their mood falls each day.</p>`;
   });
+  if (shop.manager && hs.length) h += `<div class="acts">${shop.policy.mgrRoles !== false ? B_('Let me choose the jobs', ['mgrRoles', shop.id, false], 'alt') : B_('Let ' + esc(shop.manager.name.split(' ')[0]) + ' choose the jobs', ['mgrRoles', shop.id, true], 'alt')}</div>`;
   if (!shop.worker) h += `<p>Hire a worker to run it first.</p>`;
   else if (hs.length < Sim.HAND_MAX) h += s.applicants.length ? `<p>Take someone on${hs.length >= room ? ' <span class="why">(it will be crowded)</span>' : ''}:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Hire ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
   return h + `</div>`;
@@ -4480,7 +4484,7 @@ function oakHallCard(s, walking, id) {
 function taskList(s) {
   const v = s.village, out = [], go = (k, lab) => B_(lab || 'Take me there', ['goto', k]);
   const STEP_ACT = { 0: go('hall', 'Go to the Village Hall'), 1: B_('Shops', ['page', 'shops']), 2: go('granary', 'Go to the granary'), 3: B_('Staff', ['page', 'staff']), 4: go('tower', 'Go to the watchtower'), 5: go('hall', 'Go to the Village Hall'), 6: go('hall', 'Go to the Village Hall'), 7: go('manor', 'Go to the manor gate'), 8: B_('Village', ['page', 'village']) };
-  if (Sim.STEPS[v.step] && v.step < 9) out.push({ who: Sim.elderTitle(s), title: Sim.stepText(s, Sim.STEPS[v.step]), note: v.step === 8 ? 'Your standing is ' + v.standing + ' of 80.' : '', act: STEP_ACT[v.step] || '' });
+  if (Sim.STEPS[v.step] && v.step < 9) out.push({ who: Sim.elderTitle(s), title: Sim.stepText(s, Sim.STEPS[v.step]), note: v.step === 8 ? (() => { const r = Sim.electState(s).races.elder; return r ? (r.open ? 'The season is open: polling on day ' + r.poll + '. Stand on the Realm page.' : 'Next election: season opens day ' + (r.poll - Sim.ELECT_SEASON) + '.') : ''; })() : '', act: STEP_ACT[v.step] || '' });
   if (s.realm && Sim.isRuler(s)) for (const q of s.realm.petitions || []) out.push({ who: 'A petition to the crown', title: { relief: 'A hungry town asks for grain', defiance: 'A lord defies the crown\u2019s court', guilds: 'The guilds ask for lower tariffs' }[q.kind] || 'A petition', note: 'Answer by day ' + q.until + '.', act: B_('The Realm', ['page', 'realm']) });
   { const nob = s.courts ? Object.values(s.courts).flatMap(C => C.cases.filter(c => c.requested && c.status === 'open' && s.people[c.accused] && s.people[c.accused].noble && Sim.canJudge(s, C))) : []; for (const c of nob) out.push({ who: 'The crown\u2019s court', title: 'A noble is accused: ' + s.people[c.accused].name, note: c.what + '.', act: B_('Justice', ['page', 'justice']) }); }
   if (s.folk) {
@@ -4587,12 +4591,33 @@ function diplomacy(s, V) {
   }
   return acts.length ? `<p><b>Diplomacy</b></p><div class="acts">${acts.join('')}</div><p class="why">A trade pact brings Valdoria’s duty down to 5% while you keep Alderwyn’s tariff low; an alliance takes it to nothing and ends the closing of the port. A royal marriage joins the houses and warms relations each week while the marriage lasts; if it ends, the Queen takes it hard.</p>` : '';
 }
+function electionsBox(s) {
+  const races = Sim.upcomingRaces(s), E = Sim.electState(s), mine = Sim.yourOffice(s);
+  let h = `<h4>Elections</h4><p class="lead">${mine ? 'You hold the office of ' + esc(Sim.raceLabel(Object.assign({ region: mine.region }, mine))) + '. ' : ''}Offices are won at the vote. A season opens ${Sim.ELECT_SEASON} days before polling: pay for a campaign to stand, then speak and make promises. You hold one office at a time.</p>${mine ? `<div class="acts">${B_('Read your charge', ['ui', 'handbook'], 'alt')}</div>` : ''}`;
+  const pend = E.pledges.map((pl, i) => [pl, i]).filter(([pl]) => pl.state === 'given');
+  pend.forEach(([pl, i]) => { h += `<div class="why"><b>Your promise:</b> ${esc(pl.text)}, by day ${pl.due}.<div class="acts">${B_('Keep it · ' + pl.cost + 'c', ['keepPledge', i], '', s.coins < pl.cost)}</div></div>`; });
+  const open = races.filter(r => r.open), soon = races.filter(r => !r.open).slice(0, 4);
+  for (const r of open) {
+    const bar = Sim.standBar(s, r), fee = Sim.standFee(s, r), poll = Sim.pollNow(s, r);
+    h += `<div class="box"><h5>${esc(Sim.raceLabel(r))} · polling day ${r.poll}</h5>`;
+    h += poll.length ? `<p class="num">${poll.map(x => (x.id === 'player' ? '<b>You</b>' : esc(x.name)) + ' ' + x.share + '%').join(' · ')}</p>` : `<p>No one stands yet.</p>`;
+    if (r.you) {
+      h += `<div class="acts">${B_('Speak to the crowds<small>+' + Sim.speechGain(s) + ' · once a day</small>', ['speech', r.key], '', r.speech === s.day)}${r.pledge == null ? Sim.PLEDGES[r.office].map((P, i) => B_('Promise: ' + esc(P[0]) + '<small>keep it if you win</small>', ['pledge', r.key, i], 'alt')).join('') : ''}${B_('Withdraw', ['withdraw', r.key], 'alt')}</div>`;
+      if (r.pledge != null) h += `<p>You promised to ${esc(Sim.PLEDGES[r.office][r.pledge][0].toLowerCase())}.</p>`;
+    } else h += bar ? `<p class="why">${esc(bar)}</p>` : `<div class="acts">${B_('Stand for election · ' + fee + 'c', ['stand', r.key], '', s.coins < fee)}</div>`;
+    h += `</div>`;
+  }
+  if (soon.length) h += `<div class="box"><dl class="kv">${soon.map(r => `<dt>${esc(Sim.raceLabel(r))}</dt><dd>season opens day ${r.poll - Sim.ELECT_SEASON}, polling day ${r.poll} · to stand ${Sim.standFee(s, r)}c</dd>`).join('')}</dl></div>`;
+  if (E.history.length) h += `<details><summary>Past results</summary><ul>${E.history.slice(0, 10).map(x => `<li>Day ${x.d}: ${esc(x.label)}. ${esc(x.text)}</li>`).join('')}</ul></details>`;
+  return h;
+}
 function pageRealm(s) {
   const R = s.realm; if (!R) return '<h3>The Realm</h3><p>Not yet.</p>';
   const sup = Sim.computeSupport(s), S = R.support, ruler = Sim.isRuler(s), K = s.people[R.king];
   const bar = (n, lab) => `<div class="kvbar"><span>${lab}</span><div class="bar ${n < 35 ? 'low' : ''}"><i style="width:${n}%"></i></div><b class="num">${n}</b></div>`;
   const mineL = Sim.yourLordships(s), mineS = Sim.yourSeats(s), f = (Sim.you(s).sex === 'f');
   let h = `<h3>The Kingdom of Alderwyn</h3><p class="lead">${ruler ? 'You rule Alderwyn from Crownmere castle. Keep the treasury out of debt and the realm behind you, or someone will take the crown from you.' : R.exile ? 'You are in exile, stripped of lands and offices. You can rebuild, and in time claim the crown again.' : 'Six regions under one crown. Win the lords, the guilds, the court and the towns, and the crown can be yours.'}</p>`;
+  h += electionsBox(s);
   const urgent = R.plot || (R.after && ruler); if (urgent) h += rebellionBox(s, R);
   if (ruler) { const n = (s.folk && s.folk.aud.length) || 0; h += `<div class="box"><h5>The throne room</h5><p>${n ? n + (n === 1 ? ' petitioner waits' : ' petitioners wait') + ' to be heard. Each brings a choice: kind, or cold.' : 'No one waits to be heard today.'}</p><div class="acts">${B_('Hold court', ['ui', 'throne'], n ? '' : 'alt')}</div></div>`; }
   h += `<div class="box"><dl class="kv"><dt>On the throne</dt><dd>${ruler ? esc(s.name) + ' (you)' : esc(K ? K.name : 'no one')}${!ruler && K ? ', aged ' + K.age : ''}</dd>${!ruler ? `<dt>The King’s standing</dt><dd class="num">${Math.round(R.kingSupport)}</dd>` : ''}<dt>Your favour at court</dt><dd class="num">${Math.round(R.favour)}</dd><dt>Your lordships</dt><dd>${mineL.length ? mineL.map(id => esc(Sim.REGIONS[id])).join(', ') : 'none'}</dd><dt>Your council seats</dt><dd>${mineS.length ? mineS.map(k => Sim.COUNCIL[k]).join(', ') : 'none'}</dd></dl></div>`;
@@ -4602,12 +4627,12 @@ function pageRealm(s) {
   if (!ruler) {
     h += `<h4>Rising at court</h4><div class="box"><p>Favour at court comes from gifts to the King’s treasury and from attending court in Crownmere castle. It fades slowly if you stay away.</p><div class="acts">${B_('Gift 150c to the crown', ['giftCrown', 150], 'alt', s.coins < 150)}${B_('Gift 500c', ['giftCrown', 500], 'alt', s.coins < 500)}</div>
       ${mineS.length ? `<p>As a councillor you can quietly turn the court against the King, once a day, at a risk of being overheard.</p><div class="acts">${B_('Whisper against the King', ['undermineKing'], 'alt')}</div>` : ''}
-      <div class="acts">${B_('Claim the crown', ['claimCrown'], 'warn', !(mineL.length && (mineS.length || R.exile)))}</div></div>`;
+      ${R.exile ? `<div class="acts">${B_('Claim the crown', ['claimCrown'], 'warn')}</div>` : ''}</div>`;
   }
   // what you have done, and who stands with you
   const allies = Sim.alliesOf(s), deeds = R.deeds || {};
   h += `<h4>Deeds and allies</h4><div class="box"><dl class="kv"><dt>Deeds done</dt><dd>${Object.keys(deeds).length ? Object.keys(deeds).map(id => esc(Sim.REGIONS[id]) + ' ' + deeds[id]).join(', ') : 'none yet'}</dd><dt>Promises kept</dt><dd>${R.kept || 0}${R.broken ? ' (broken ' + R.broken + ')' : ''}</dd><dt>Allies</dt><dd>${allies.length ? esc(allies.join(', ')) : 'none yet'}</dd>${R.embezzled ? `<dt>Taken from the treasury</dt><dd class="debt">${R.embezzled}c</dd>` : ''}</dl>
-    <p>A lordship comes by service (a deed done in that region, and favour 45) or by wealth (a crown grant: own property there, favour 25). A council seat needs an ally and a name for good government. The crown needs three allies and a promise kept.</p></div>`;
+    <p>Lordships and the crown are won at the vote: deeds done in a region and favour at court help you there. A council seat needs an ally and a name for good government.</p></div>`;
   const pr = (R.promises || []).find(x => x.state === 'asked' || x.state === 'given');
   if (pr) { const q = s.people[pr.pid]; h += `<div class="why">${pr.state === 'asked' ? `<b>${esc(q ? q.name : 'A lord')}</b> asks your word that the roads of ${esc(Sim.REGIONS[pr.region])} will stay safe (danger under 30) for a week.<div class="acts">${B_('Give my word', ['givePromise'])}${B_('Decline', ['refusePromise'], 'alt')}</div>` : `You have promised ${esc(q ? q.name : 'a lord')} the roads of ${esc(Sim.REGIONS[pr.region])} stay safe until day ${pr.until}. Danger now: ${Math.round((s.bandits || {})[pr.region] || 0)}.`}</div>`; }
   const cs = R.contracts || [];
@@ -4627,7 +4652,7 @@ function pageRealm(s) {
     const step = (k, lab, max) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] - (k === 'tax' ? 0.25 : 1)])}' aria-label="Less">&minus;</button><output class="num">${k === 'tax' ? g[k] + '×' : g[k] + '/' + max}</output><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] + (k === 'tax' ? 0.25 : 1)])}' aria-label="More">+</button></div></div>`;
     return `<div class="box"><h5>${esc(Sim.REGIONS[id])}</h5><dl class="kv"><dt>Held by</dt><dd>${mine ? 'You' : esc(Sim.lordName(s, id))}</dd><dt>Roads</dt><dd>${danger} (${bl})</dd><dt>Property market</dt><dd class="num">${Math.round(Sim.marketOf(s, id) * 100)}%</dd></dl>
       ${mine && id !== 'hearthmoor' && id !== 'crownmere' ? step('patrol', 'Patrols, 4c a day each', 3) + step('garrison', 'Garrison, 6c a day each', 3) + step('roads', 'Road mending, 3c a day each', 3) + step('tax', 'Taxes', 2) : ''}
-      <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${!mine && !R.exile && id !== 'crownmere' ? B_('Seek this lordship · ' + (Sim.LORDSHIP_FEE[id] || 400) + 'c<small>by service: favour 45 and a deed done here</small>', ['seekLordship', id], 'alt') + B_('Buy a crown grant · ' + (Sim.GRANT_PRICE[id] || 2000) + 'c<small>by wealth: own property here, favour 25</small>', ['buyLordship', id], 'alt', s.coins < (Sim.GRANT_PRICE[id] || 2000)) : ''}</div></div>`;
+      <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${(() => { const r = Sim.electState(s).races['lord:' + id]; return r && !mine ? '<span class="pill">Election day ' + r.poll + '</span>' : ''; })()}</div></div>`;
   }).join('')}</div>`;
   h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k]; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${(() => { const pth = Sim.COUNCIL_PATH[k], held0 = Object.keys(Sim.COUNCIL).find(x => R.council[x] === 'player'), shut = held0 && Sim.COUNCIL_PATH[held0] !== pth, need = shut ? [] : Sim.seatNeeds(s, k), mine = held0 && Sim.COUNCIL_PATH[held0];
       return `<p class="why">${esc(Sim.PATH_NAME[pth].replace(/^the /, 'The '))}${k === 'treasury' ? ', after Master of Trade' : ''}.${shut ? ' You sit on ' + esc(Sim.PATH_NAME[mine]) + ': resign that seat first to change roads.' : c === 'player' ? '' : need.length ? ' You must first ' + esc(need.join('; ')) + '.' : ' You have walked this road.'}</p>${c !== 'player' && !ruler && !R.exile && !shut ? `<div class="acts">${B_('Seek this seat', ['seekSeat', k], 'alt', need.length > 0)}</div>` : ''}${c === 'player' && !ruler ? (UI.confirm === 'resign' ? `<div class="acts">${B_('Yes, resign', ['resignSeat'], 'warn')}${B_('Keep it', ['ui', 'confirm', null], 'alt')}</div><p class="why">Another takes the seat, you lose a little favour, and you wait ten days before seeking any seat.</p>` : `<div class="acts">${B_('Resign this seat&hellip;', ['ui', 'confirm', 'resign'], 'alt')}</div>`) : ''}`; })()}</div>`; }).join('')}</div><p>The council is three roads: coin (Master of Trade, then Lord Treasurer), arms (Marshal) or law (Lord Justice). You hold one seat at a time; to change roads, resign and earn the new seat. Each seat is earned by results (deliveries made, roads made safe, fair verdicts) and also needs a region, two allies, a record of good rule and favour of 65.</p>`;
@@ -5345,6 +5370,8 @@ function uiCmd(k, v) {
   if (k === 'miniClose') { closeMini(); return; }
   if (k === 'notes') { showNotes(); return; }
   if (k === 'testSound') { Snd.unlock(); setTimeout(() => { Snd.play('great'); const el = $('sndStatus'); if (el) el.textContent = Snd.status() + ' If you still hear nothing, turn the volume up with the side buttons.'; }, 120); return; }
+  if (k === 'closeBook') { $('scroll').hidden = true; return; }
+  if (k === 'handbook') { const m = Sim.yourOffice(G); if (m) showHandbook(Object.assign({ day: G.day }, m)); return; }
   if (k === 'closeNotes') { $('scroll').hidden = true; meta.seenNotes = NOTES[0].v; saveMeta(); return; }
   if (k === 'reload') { saveNow(); meta.seenNotes = null; saveMeta(); location.reload(); return; }
   if (k === 'dialogNext') { UI.dialog.shift(); renderDialog(); return; }
@@ -6195,6 +6222,16 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.58', date: '7 November', title: 'Elections', items: [
+    'Offices are won at the vote now. The Elder every 15 days (Hearthmoor\u2019s villagers vote), each region\u2019s lord every 30 (that region\u2019s townsfolk), and the crown every 60 (the lords, the business owners and the towns). Lordships and the crown can no longer be bought or granted.',
+    'A season opens three days before polling day. To stand you pay for a campaign: dearer for a higher office and a bigger town. Then speak to the crowds once a day and make one promise. Keep the promise within 15 days of winning, or people remember.',
+    'Only those who stand can win. Someone better liked who does not stand cannot take your office, and you cannot take theirs.',
+    'Your standing, fame, good name, what people remember of you, deeds done in a region and the people who work for you all count. The Realm page shows a running poll.',
+    'You hold one office at a time. Win a higher one and your old seat passes to someone else; lose your own re-election and you are out of office (you keep your coin, property and name).',
+    'When you take an office, a charge opens listing what you can do and what is asked of you. Read it again any time from the Realm page.',
+    'A manager now sets each employee\u2019s job by their skill and temper, and changes them as the shop needs. Choose yourself if you prefer, on the Staff page.',
+    'Election days appear on the calendar.'
+  ] },
   { v: '0.57', date: '7 November', title: 'Full-time staff', items: [
     'Hands are now full-time employees, and you can hire as many as you like. Each building holds a few comfortably (a stall 1, timber 2, stone 3). Past that it gets crowded: everyone works slower, moods sink, quarrels break out and people quit.',
     'Give each employee a job on the Staff page: at the bench, on the counter, selling round town, or fetching supplies. The first one you hire takes the counter, so your worker stays at the bench and never stops to serve.',
@@ -6611,6 +6648,53 @@ const NOTES = [
     'The title screen opens like a book in landscape.'
   ] }
 ];
+const HANDBOOK = {
+  elder: { title: 'The Elder’s Charge', can: [
+    'Draw the Elder’s pay each day, and hold the key to the village chest.',
+    'Set the travellers’ toll, and spend the chest on village projects and works.',
+    'Appoint and dismiss the village officers: the granary keeper and the watchmen.',
+    'Decide on help for the poor, and what becomes of the common land.',
+    'Order investigations, and judge the village’s cases and disputes.',
+    'Pay for the festivities when a holiday comes round.'], must: [
+    'The moot meets each week. If your approval sinks, it can vote you out.',
+    'The chair goes back to the vote every 15 days. Lose and you are out of office.',
+    'An empty chest, a hungry winter or a harsh verdict is laid at your door.',
+    'Keep any promise you made to win, within 15 days, or people remember.',
+    'You hold one office at a time: win a lordship and the chair passes to another.'] },
+  lord: { title: 'The Lord’s Charge', can: [
+    'Govern your lands: set patrols, a garrison, road mending and taxes on the Realm page.',
+    'Collect your region’s taxes each day, less what you spend keeping it.',
+    'Hear the serious cases brought before your courts.',
+    'In Hearthmoor, live in the manor, appoint the captain of the guard and pay for it.',
+    'Pay for the festivities when a holiday comes round.',
+    'Stand for the crown when its election comes.'], must: [
+    'Bandits on your roads are your problem. Every raid costs you goodwill.',
+    'High taxes fill your purse and empty your support. Patrols and garrisons cost coin every day.',
+    'The region votes again every 30 days. Lose and you are out of office.',
+    'Keep any promise you made to win, within 15 days, or people remember.',
+    'Win the crown and your lordship passes to another.'] },
+  crown: { title: 'The Crown’s Charge', can: [
+    'Rule the treasury: set the taxes on the regions and the tariffs on trade.',
+    'Raise or stand down the army, and make or unmake the laws.',
+    'Hold court in the throne room, and answer the petitions sent to the crown.',
+    'Hear appeals and grant pardons.',
+    'Make war or peace with Valdoria, treat with its queen, arrange a royal match.'], must: [
+    'A treasury in debt turns the realm against you.',
+    'If your support stays under 30 for six days the realm abandons you; under 42, rivals may rise.',
+    'Taking coin from the treasury for yourself is noticed at court.',
+    'The crown goes back to the vote every 60 days. Lose and you hold no office at all.',
+    'Keep any promise you made to win, within 15 days, or people remember.'] }
+};
+function showHandbook(o) {
+  const B = HANDBOOK[o.office]; if (!B) return;
+  const where = o.office === 'lord' ? Sim.REGIONS[o.region] : o.office === 'elder' ? 'Hearthmoor' : 'Alderwyn';
+  $('vellum').innerHTML = `<div class="wax" aria-hidden="true">H</div><h2 id="scrollTitle">${esc(B.title)}</h2><p class="sv">${esc(where)} &middot; day ${o.day}</p><div class="fleur" aria-hidden="true">&#10086; &#10086; &#10086;</div>
+    <h3>What you can do</h3><ul>${B.can.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    <h3>What is asked of you</h3><ul>${B.must.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    <div class="acts"><button type="button" class="btn" data-c='["ui","closeBook"]'>I accept the charge</button></div>`;
+  const sc = $('scroll'); sc.hidden = false; Snd.play('scroll');
+  const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
+}
 function showNotes() {
   const [n, ...older] = NOTES;
   $('vellum').innerHTML = `<div class="wax" aria-hidden="true">H</div><h2 id="scrollTitle">Tidings from Hearthmoor</h2><p class="sv">Version ${n.v} &middot; ${n.date}</p><div class="fleur" aria-hidden="true">&#10086; &#10086; &#10086;</div>
