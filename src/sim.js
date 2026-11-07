@@ -328,7 +328,7 @@
   function tradeLevel(s, t) { const l = xpLevel(s, t), r = workRank(s); let k = 1; while (k < l && LEVEL_RANK[k] <= r) k++; return k; }
   function levelGate(s, t) { const l = tradeLevel(s, t); return l < xpLevel(s, t) ? 'Level ' + (l + 1) + ' needs ' + RANK_NAME[LEVEL_RANK[l]] + '.' : null; }
   function levelProgress(s, t) { const l = tradeLevel(s, t), x = tradeXp(s, t); if (l >= WORK_LEVELS.length) return { level: l, have: x, need: null, frac: 1 }; const a = WORK_LEVELS[l - 1], b = WORK_LEVELS[l]; return { level: l, have: Math.min(x, b) - a, need: b - a, frac: Math.min(1, (x - a) / (b - a)), gate: levelGate(s, t) }; }
-  function barsFor(level) { return { bars: level <= 1 ? 2 : level <= 3 ? 3 : 4, colours: level <= 3 ? 2 : 3 }; }
+  function barsFor(level) { return { bars: level <= 1 ? 2 : level <= 3 ? 3 : 4, colours: 3 }; }   // three buttons from the first item, like Fable 3's pie-making at its hardest
   function roundPay(s, t, perfect, chain, own) { return Math.round(WORK_PAY[tradeLevel(s, t) - 1] * clamp(chain || 1, 1, CHAIN_MAX) * (perfect ? 1 + PERFECT_BONUS : 1) * (own ? 1 + BENCH_CUT : 1) * 1000) / 1000; }
   function learned(s, trade) { return tradeLevel(s, trade) >= 2; }
   // your very first shop is a starter stall at a one-time price; after that a lot and a counter cost what a business does
