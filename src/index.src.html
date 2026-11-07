@@ -3263,6 +3263,8 @@ function cardHTML(s) {
   }
   if (here === 'manor') {
     const v = s.village;
+    const elderIn = s.offices.elder === 'player' || !!Sim.yourOffice(s), mineM = s.offices.lord === 'player';
+    if (mineM || elderIn) return `<h2>Varrow Manor</h2><div class="sub">${mineM ? 'Your manor, and your seat as lord of Hearthmoor.' : 'As ' + (s.offices.elder === 'player' ? 'Elder' : 'one who holds office') + ', the gate opens to you: no need to wait on the steward. ' + esc(Sim.lordTitle(s)) + ' will see you.'}</div>${walking}<div class="acts">${mineM ? '' : B_('See the Lord', ['gate'])}</div>`;
     const info = v.step >= 8 ? 'The gate stands open to you now. The steward will send for you.' : v.step === 7 ? 'You carry the steward\u2019s letter. The guard is expecting you.' : `The seat of ${esc(Sim.lordTitle(s))}, on its rise above the village, who holds Hearthmoor for ${esc(Sim.REALM.king)}. The gate is barred to shopkeepers and hired hands.`;
     return `<h2>Varrow Manor</h2><div class="sub">${info}</div>${walking}<div class="acts">${B_(v.step === 7 ? 'Present the letter' : 'Speak to the guard', ['gate'], v.step === 7 ? '' : 'alt')}</div>`;
   }
@@ -6432,6 +6434,10 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.68', date: '7 November', title: 'Fixes', items: [
+    'Holding the Elder\u2019s chair, or any higher office, now closes the village story, so its old tasks (\u201cWin the Elder\u2019s chair\u201d and the like) no longer linger in Tasks.'
+    'As Elder (or in any higher office) you can see the Lord at the manor gate at once, without waiting on the steward. A visit once a week wins a little favour at court and with the Lord.',
+  ] },
   { v: '0.67', date: '7 November', title: 'Your office', items: [
     'A new Your office page (first under Power) is the control panel for the office you hold: every power, what it does, and its controls in one place. As councillor or Elder: the chest, the toll, help for the poor, the village works, officers, projects and the open land. As a lord: your region\u2019s patrols, garrison, roads and taxes. On the royal council: your seat\u2019s work. On the throne: taxes, tariffs, the army, the laws, petitions and court.',
     'It also shows how long you have held the office, when it next goes to the vote, any promise you owe, and the office\u2019s full charge.'

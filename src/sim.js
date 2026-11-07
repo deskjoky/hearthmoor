@@ -1392,6 +1392,9 @@
   const ownsAny = s => s.shops.length > 0 || Object.values(s.biz || {}).some(b => b.owner === 'player');
   function checkVillage(s) {
     const v = s.village;
+    // once you hold the Elder's chair or anything above it, the village story is done: its old tasks no longer apply
+    if (v.step < 9 && v.step > 0 && (s.offices.elder === 'player' || (s.elect && yourOffice(s)))) { v.step = 9; v.letter = false; s.rec.everElder = s.rec.everElder || s.offices.elder === 'player'; }
+    else if (v.council && v.step > 0 && v.step < 6) v.step = 6;
     if (v.step === 0) { v.step = 1; event(s, elderTitle(s) + ': "Hearthmoor belongs to ' + REALM.lord + ', who holds it for ' + REALM.king + ' in ' + REALM.capital + '. A hired hand has no say here. A shopkeeper might. Make a living here, and we will talk."', 'story'); }
     if (v.step === 1 && ownsAny(s)) startShortage(s);
     if (v.step === 3 || v.step === 4 || (v.step === 5 && !v.councilInvite)) inviteCouncil(s);
@@ -1470,7 +1473,18 @@
     }
   }
   function gateTalk(s) {
-    const v = s.village;
+    const v = s.village, mine = s.elect ? yourOffice(s) : null;
+    // the Elder (or anyone above) is the lord's own next step: the gate opens without the steward
+    if (s.offices.lord === 'player') { event(s, 'The guard salutes. This is your manor.', 'info'); return; }
+    if (s.offices.elder === 'player' || mine) {
+      const L = s.offices.lord && s.people[s.offices.lord], g = s.gov, R = s.realm, r = s.elect && s.elect.races['lord:hearthmoor'];
+      const name = L ? L.name : 'the lord';
+      const mood = g && g.approval.lord < 40 ? 'He looks tired: the village grumbles about him, and he knows it.' : g && g.approval.lord > 65 ? 'He is in good spirits: the village speaks well of him.' : 'He is civil, and careful.';
+      const said = mine && mine.office !== 'elder' ? '"' + raceLabel(Object.assign({}, mine)).replace(/^the /, 'The ') + '. You honour my hall."' : '"The Elder of Hearthmoor. Sit. Tell me how the village fares."';
+      event(s, 'The guard opens the gate for you. ' + name + ' receives you in the hall. ' + said + ' ' + mood + (r ? ' His lordship goes to the vote on day ' + r.poll + '.' : ''), 'story');
+      if (R && (!v.lordSeen || s.day - v.lordSeen >= 7)) { v.lordSeen = s.day; R.favour = clamp(R.favour + 2, 0, 100); if (L) L.opinion = clamp((L.opinion || 0) + 3, -100, 100); }
+      return;
+    }
     if (v.step === 7) {
       v.step = 8; v.metSteward = true;
       event(s, 'Steward ' + holderName(s, 'steward') + ' meets you at the gate: "His lordship hears Hearthmoor has a councillor worth knowing. Lords have need of such people. We will send for you." (Chapter Three, The Lord\u2019s Favor, comes in a later update.)', 'story');
