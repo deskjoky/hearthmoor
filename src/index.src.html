@@ -3131,7 +3131,7 @@ function toast(text, kind, force) {
   el.className = 'toast ' + (kind || 'info'); el.textContent = text;
   box.appendChild(el);
   while (box.children.length > 2) box.removeChild(box.firstChild);
-  if (kind === 'coin') Snd.play('coin');
+
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, kind === 'story' ? 6500 : 3800);
 }
 // the place you chose to go to wins over any other place you happen to be standing in
@@ -5633,7 +5633,7 @@ function drainEvents() {
   if (said.length) { said.forEach(e => pagesOf(e.text).forEach(t => UI.dialog.push(t))); renderDialog(); }
   const coins = fresh.filter(e => e.kind === 'coin'), rest = fresh.filter(e => e.kind !== 'coin' && !said.includes(e));
   rest.slice(-2).forEach(e => toast(e.text, e.kind));
-  if (coins.length) toast(coins.length === 1 ? coins[0].text : `${coins.length} sales just now.`, 'coin');
+  // sales no longer pop up or chime: they are counted in the ledger
 }
 let last = performance.now(), uiTimer = 0;
 /* ----- a waypoint on someone you went looking for ----- */
@@ -6392,6 +6392,9 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.66', date: '7 November', title: 'Quieter', items: [
+    'Sales no longer pop up on screen or chime. Every sale is still counted in the ledger.'
+  ] },
   { v: '0.65', date: '7 November', title: 'Run for office', items: [
     'Every polling place (the Village Hall, each town\u2019s square, the Great Market of Crownmere) has a Run for office button on its card.',
     'It opens a new Run for office page (under Power): every office, with the ones chosen where you stand first. Each shows when its season opens, what it costs, whether you can run and why not, and the button to run, speak, promise or withdraw.'
