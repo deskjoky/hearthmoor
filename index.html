@@ -107,6 +107,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .goal { pointer-events: auto; max-width: 720px; margin: 6px auto 0; font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .goal em { font-family: var(--f-display); font-style: italic; color: #f5cf73; font-size: 14px; }
 
+.daychip { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; border: 1px solid var(--line); border-radius: 5px; padding: 2px 8px; min-width: 56px; height: 36px; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.daychip b { font-size: 13px; font-weight: 700; white-space: nowrap; }
+.daychip small { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.daychip small:empty { display: none; }
+.daychip.soon small { color: #8a2b20; font-weight: 700; }
 .speeds { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; flex: none; }
 .fast { border: 0; border-left: 1px solid var(--line); background: transparent; min-width: 34px; height: 34px; padding: 0 6px; font-size: 14px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .fast:first-child { border-left: 0; }
@@ -581,6 +586,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     <div class="speeds" id="speeds" role="group" aria-label="How fast time passes">
       <button class="fast" type="button" data-speed="1" aria-label="Normal speed" aria-pressed="true">1&times;</button><button class="fast" type="button" data-speed="2" aria-label="Twice as fast" aria-pressed="false">2&times;</button><button class="fast" type="button" data-speed="4" aria-label="Four times as fast" aria-pressed="false">4&times;</button><button class="fast" type="button" data-speed="8" aria-label="Eight times as fast" aria-pressed="false">8&times;</button>
     </div>
+    <button type="button" class="daychip num" id="dayChip" data-c='["page","elections"]' aria-label="The day, and the next vote"><b id="dayN">Day 1</b><small id="voteN"></small></button>
     <div class="coins num" id="coins">5c</div>
     <button class="book-btn task-btn" id="taskBtn" type="button">Tasks<span id="taskN"></span></button><button class="book-btn" id="bookBtn" type="button">Ledger</button>
   </div>
@@ -3012,7 +3018,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const h = hourOf(s), night = h < 6 || h >= 20.2 + h01(a.id, s.day, 31) * 0.7, j = p.job, town = townOf(p), ts = townSpots(town);
     const home = homePoint(s, p);
     let tgt = null, doing = '', working = false;
+    const vk = !night && !p.kid && !p.held && p.age >= 16 && s.elect ? pollingToday(s)[town] : null, vt0 = 7 + h01(a.id, s.day, 93) * 4.4;
     if (night) { tgt = home || wellSpot(s, a.id, 9, town); doing = home ? 'Asleep' : 'Sleeping rough by the well'; }
+    else if (vk && h >= vt0 && h < vt0 + 0.5 && h < 12 && h01(a.id, s.day, 94) < 0.85) { tgt = voteSpot(s, town, a.id); doing = 'Voting for ' + raceLabel(s.elect.races[vk]); }
     else if (j && j.type === 'commons') {
       if (h < 7) { tgt = a.spot; doing = 'Walking to work'; }
       else if (h < 12 || (h >= 13 && h < 17)) { tgt = a.spot; doing = jobDoing(j.what); working = true; }
@@ -5135,17 +5143,19 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const cands = r.cands.filter(id => s.people[id] && s.people[id].status === 'here'), all = cands.concat(r.you ? ['player'] : []);
     const votes = new Map(all.map(c => [c, 0])); if (!all.length) return { votes, total: 0, all };
     const hold = holderOf(s, r.office, r.region), you = r.you ? yourPull(s, r) : 0, staff = yourStaff(s);
-    let total = 0;
+    let total = 0; const byTown = {};
     for (const { p, w } of voterPool(s, r)) {
       let best = null, bs = -1e9;
       if (votes.has(p.id)) best = p.id;
       else {
-        for (const c of cands) { const q = s.people[c], sc = 40 + (q.rep || 0) * 0.45 + (c === hold ? 6 : 0) + (p.job && q.job && p.job.biz && p.job.biz === q.job.biz ? 8 : 0) + (p.household && p.household === q.household ? 20 : 0) + (erand(s) - 0.5) * 36; if (sc > bs) { bs = sc; best = c; } }
+        for (const c of cands) { const q = s.people[c], sc = 40 + (q.rep || 0) * 0.45 + (c === hold ? 6 : 0) + (r.ballot === c && (p.opinion || 0) >= 30 ? 10 : 0) + (p.job && q.job && p.job.biz && p.job.biz === q.job.biz ? 8 : 0) + (p.household && p.household === q.household ? 20 : 0) + (erand(s) - 0.5) * 36; if (sc > bs) { bs = sc; best = c; } }
         if (r.you) { const sc = you + (p.opinion || 0) * 0.45 + (staff.has(p.id) ? 15 : 0) + (erand(s) - 0.5) * 36; if (sc > bs) { bs = sc; best = 'player'; } }
       }
       votes.set(best, votes.get(best) + w); total += w;
+      const tw = townOf(p); byTown[tw] = (byTown[tw] || 0) + w;
     }
-    return { votes, total, all };
+    if (r.ballot && votes.has(r.ballot)) { votes.set(r.ballot, votes.get(r.ballot) + 1); total += 1; }
+    return { votes, total, all, byTown };
   }
   // a rough poll, for the campaign page: your share of the vote if it were held today
   function pollNow(s, r) {
@@ -5203,11 +5213,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function pollRace(s, r) {
     const E = electState(s), res = tally(s, r), hold = holderOf(s, r.office, r.region), label = raceLabel(r);
-    const absent = r.you && r.present === false; r.open = false; r.present = null; r.poll += ELECT_EVERY[r.office];
+    const absent = r.you && r.present === false, ballot = r.ballot; r.open = false; r.present = null; r.ballot = null; r.poll += ELECT_EVERY[r.office];
+    if (r.office === 'crown') event(s, 'Riders carry the tallies from every town of Alderwyn to Crownmere, and the count is read at noon.', 'info');
     if (!res.all.length || !res.total) { E.history.unshift({ d: s.day, label, text: 'No one stood.' }); r.you = false; return; }
     const rank = res.all.map(c => [c, res.votes.get(c)]).sort((a, b) => b[1] - a[1]), win = rank[0][0], pct = c => Math.round(res.votes.get(c) / res.total * 100);
     const nm = c => c === 'player' ? 'you' : s.people[c].name, line = rank.map(([c]) => nm(c) + ' ' + pct(c) + '%').join(', ');
-    E.history.unshift({ d: s.day, label, win: win === 'player' ? s.name : s.people[win].name, you: r.you ? pct('player') : null, text: line }); if (E.history.length > 40) E.history.length = 40;
+    E.history.unshift({ d: s.day, key: r.key, label, win: win === 'player' ? s.name : s.people[win].name, you: r.you ? pct('player') : null, text: line, cands: rank.map(([c, v]) => ({ name: c === 'player' ? s.name : s.people[c].name, you: c === 'player', votes: Math.round(v), pct: pct(c) })), total: Math.round(res.total), towns: Object.keys(res.byTown).length, yourVote: ballot && s.people[ballot] ? s.people[ballot].name : null }); if (E.history.length > 40) E.history.length = 40;
     const youRan = r.you; r.you = false;
     if (absent) event(s, 'You were not at ' + venueName(r) + ' when the votes were counted. People noticed.', 'bad');
     if (win === hold && win === 'player') recordPledge(s, r);
@@ -5245,6 +5256,34 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   function venueName(r) { const v = raceVenue(r), L = LOCS[v.loc]; return (L && L.name ? L.name : 'the square') + (v.town === 'hearthmoor' || !L || (L.name || '').includes(TOWNS[v.town] ? TOWNS[v.town].name : '~') ? '' : ' in ' + (TOWNS[v.town] ? TOWNS[v.town].name : v.town)); }
   function atVenue(s, r) { const L = LOCS[raceVenue(r).loc]; return !!L && Math.hypot(s.player.x - L.x, s.player.z - L.z) < Math.max(10, (L.r || 0) + 8); }
   function inTown(s, r) { return (townAt(s.player.x, s.player.z) || 'hearthmoor') === raceVenue(r).town; }
+  // where people vote: every voter at their own town's hall or square. For the crown that is every town of Alderwyn,
+  // and riders carry each town's tally to Crownmere for the count at noon.
+  const venueOf = town => town === 'hearthmoor' ? 'hall' : MARKET_AT[town];
+  function voteTowns(r) { return r.office === 'elder' ? ['hearthmoor'] : r.office === 'lord' ? [r.region] : Object.keys(MARKET_AT).filter(t => !(TOWNS[t] && TOWNS[t].foreign)); }
+  function pollingToday(s) {   // town -> the race its people vote in this morning
+    const E = s.elect; if (!E) return {};
+    if (E.vday !== s.day) { E.vday = s.day; E.vmap = {}; for (const r of Object.values(E.races)) if (r.open && r.poll === s.day) for (const tw of voteTowns(r)) if (!E.vmap[tw]) E.vmap[tw] = r.key; }
+    return E.vmap;
+  }
+  function voteSpot(s, town, id) { const L = LOCS[venueOf(town)]; return L ? ringSpot(L.x, L.z, 1.2, Math.max(3, (L.r || 4) * 0.8), id, s.day, 97) : null; }
+  // the next vote worth showing on the top bar: yours, then your office's, then the nearest where you stand now
+  function nextVote(s) {
+    const E = s.elect; if (!E) return null;
+    const all = Object.values(E.races), here = townAt(s.player.x, s.player.z) || 'hearthmoor', m = yourOffice(s);
+    const pick = all.filter(r => r.you && r.open)[0] || (m && all.find(r => r.office === m.office && (m.office !== 'lord' || r.region === m.region))) || all.filter(r => voteTowns(r).includes(here)).sort((a, b) => a.poll - b.poll)[0];
+    return pick ? { key: pick.key, label: raceLabel(pick), days: pick.poll - s.day, you: !!pick.you, open: pick.open } : null;
+  }
+  // you vote too, if you are not standing: in person, on polling day morning, at your town's place. Those who think well of you follow your lead.
+  function canVote(s, r) {
+    if (!r.open || r.poll !== s.day) return 'You vote on polling day, before noon.';
+    if (r.you) return 'You are standing in this one.';
+    if (r.ballot) return 'You have voted.';
+    if (hourOf(s) >= 12) return 'The polls closed at noon.';
+    const here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    if (!voteTowns(r).includes(here)) return 'Only ' + (r.office === 'elder' ? 'Hearthmoor' : r.office === 'lord' ? REGIONS[r.region] : 'the towns of Alderwyn') + ' votes in this one.';
+    const L = LOCS[venueOf(here)]; if (!L || Math.hypot(s.player.x - L.x, s.player.z - L.z) > Math.max(10, (L.r || 0) + 8)) return 'Vote at ' + ((L && L.name) || 'the square') + '.';
+    return null;
+  }
   function alertRace(s, r, kind) {
     const E = electState(s), at = venueName(r), label = raceLabel(r);
     const text = kind === 'open' ? 'Re-election season: ' + label + '. The vote is at noon on day ' + r.poll + ', at ' + at + '. Campaign in the town until then, and be there on the day.'
@@ -7303,6 +7342,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         spend(s, fee); r.poll = s.day + ELECT_SEASON + 1; r.challenged = s.day; r.challenger = true;
         event(s, 'You force an early vote for ' + raceLabel(r) + ' (' + fee + 'c). The season opens tomorrow; polling on day ' + r.poll + '. You are on the ballot.', 'story'); return ok();
       }
+      case 'vote': {
+        const r = ensureRaces(s).races[a]; if (!r) return fail('No such election.');
+        const no = canVote(s, r); if (no) return fail(no);
+        if (!r.cands.includes(b) || !s.people[b]) return fail('They are not standing.');
+        r.ballot = b; event(s, 'You cast your vote for ' + s.people[b].name + ' (' + raceLabel(r) + '). Those who think well of you take note.', 'info'); return ok();
+      }
       case 'withdraw': { const r = electState(s).races[a]; if (!r || !r.you) return fail('You are not standing.'); r.you = false; event(s, 'You withdraw from the race for ' + raceLabel(r) + '.', 'info'); return ok(); }
       case 'speech': {
         const r = electState(s).races[a]; if (!r || !r.you || !r.open) return fail('You are not standing.');
@@ -8522,7 +8567,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
@@ -11687,6 +11732,10 @@ function hud(s) {
   { const n = taskList(s).filter(x => !x.soft).length, el = $('taskN'); if (el && el.textContent !== String(n || '')) el.textContent = n || ''; }
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
   { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year + '. ' + c.next.charAt(0).toUpperCase() + c.next.slice(1) + ' in ' + c.daysLeft + (c.daysLeft === 1 ? ' day.' : ' days.'); }
+  { const nv = Sim.nextVote(s), el = $('voteN'), dn = 'Day ' + s.day; if ($('dayN').textContent !== dn) $('dayN').textContent = dn;
+    const vt = !nv ? '' : nv.days <= 0 ? 'Vote today' : nv.days === 1 ? 'Vote 1d' : nv.days <= 60 ? 'Vote ' + nv.days + 'd' : '';
+    if (el.textContent !== vt) el.textContent = vt; $('dayChip').classList.toggle('soon', !!nv && nv.days <= 1 && (nv.you || nv.open));
+    $('dayChip').title = nv ? 'Day ' + s.day + '. The vote for ' + nv.label + (nv.days <= 0 ? ' is today at noon.' : ' is in ' + nv.days + (nv.days === 1 ? ' day.' : ' days.')) : 'Day ' + s.day; }
   $('coins').textContent = s.coins + 'c'; $('coins').classList.toggle('debt', s.coins < 0);
   if (UI.lastCoins != null && s.coins > UI.lastCoins) { const el = $('coins'); el.classList.remove('gain'); void el.offsetWidth; el.classList.add('gain'); clearTimeout(UI.coinT); UI.coinT = setTimeout(() => el.classList.remove('gain'), 850); } UI.lastCoins = s.coins;
   const inv = s.player.inv, chips = [];
@@ -11731,7 +11780,7 @@ function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) {
 function renderBook(turn) {
   $('tabs').innerHTML = TABS.map(([k, n]) => `<button type="button" class="tab" role="tab" aria-selected="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = '<div class="paused">Time stands still while the book is open</div>' + ({ elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -12522,8 +12571,12 @@ function diplomacy(s, V) {
   return acts.length ? `<p><b>Diplomacy</b></p><div class="acts">${acts.join('')}</div><p class="why">A trade pact brings Valdoria’s duty down to 5% while you keep Alderwyn’s tariff low; an alliance takes it to nothing and ends the closing of the port. A royal marriage joins the houses and warms relations each week while the marriage lasts; if it ends, the Queen takes it hard.</p>` : '';
 }
 function venueBox(s, here) {
-  const races = Sim.upcomingRaces(s).filter(r => Sim.raceVenue(r).loc === here && (r.open || !Sim.challengeBar(s, r)));
-  if (!races.length) return '';
+  const town = (L[here] && L[here].town) || 'hearthmoor', vhere = (town === 'hearthmoor' ? 'hall' : Sim.MARKET_AT[town]) === here;
+  const voting = vhere ? Sim.upcomingRaces(s).filter(r => r.open && r.poll === s.day && !r.you && Sim.voteTowns(r).includes(town)) : [];
+  const vb = voting.map(r => { const no = Sim.canVote(s, r);
+    return `<div class="why"><b>Polling day: ${esc(Sim.raceLabel(r))}.</b> ${no ? esc(no) : 'Cast your vote before noon. Those who think well of you follow your lead.'}${!no ? `<div class="acts">${r.cands.filter(id => s.people[id]).map(id => B_('Vote for ' + esc(s.people[id].name), ['vote', r.key, id], 'alt')).join('')}</div>` : ''}</div>`; }).join('');
+  const races = Sim.upcomingRaces(s).filter(r => Sim.raceVenue(r).loc === here && (r.open || !Sim.challengeBar(s, r)) && !(voting.includes(r)));
+  if (!races.length) return vb;
   return races.map(r => {
     const fee = Sim.standFee(s, r), bar = Sim.standBar(s, r);
     let a = '';
@@ -12531,7 +12584,7 @@ function venueBox(s, here) {
     else if (r.open) a = bar ? `<span class="why">${esc(bar)}</span>` : B_('Run for ' + esc(Sim.raceLabel(r)) + ' · ' + fee + 'c', ['stand', r.key], '', s.coins < fee);
     else a = B_('Force an early vote · ' + fee * 2 + 'c', ['challenge', r.key], 'alt', s.coins < fee * 2);
     return `<div class="why"><b>${esc(Sim.raceLabel(r).replace(/^the /, 'The '))}:</b> ${r.open ? 'the vote is here at noon on day ' + r.poll + '.' : 'the holder is faltering.'}<div class="acts">${a}</div></div>`;
-  }).join('');
+  }).join('') + vb;
 }
 function showElectionAlert(A) {
   const L0 = L[A.loc], go = L0 ? `<button type="button" class="btn" data-c='${esc(JSON.stringify(['goto', A.loc]))}'>Go to ${esc(L0.name || 'the venue')}</button>` : '';
@@ -12540,6 +12593,13 @@ function showElectionAlert(A) {
     <div class="acts">${go}<button type="button" class="btn alt" data-c='["ui","closeBook"]'>Later</button></div>`;
   const sc = $('scroll'); sc.hidden = false; Snd.play('scroll');
   const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
+}
+function pageElections(s) {
+  let h = electionsBox(s);
+  const E = Sim.electState(s), open = Sim.upcomingRaces(s).filter(r => r.open);
+  if (open.length) h += `<h4>Who is standing</h4>` + open.map(r => { const pl = Sim.pollNow(s, r), share = id => (pl.find(x => x.id === id) || {}).share || 0; return `<div class="box"><h5>${esc(Sim.raceLabel(r))}</h5><table class="acct"><tbody>${(r.you ? [{ id: 'player' }] : []).concat(r.cands.map(id => ({ id }))).map(c => { const q = c.id === 'player' ? null : s.people[c.id]; return `<tr><td>${c.id === 'player' ? '<b>You</b>' : esc(q ? q.name : '?') + `<br><small>${esc(q ? Sim.occupation(s, q) : '')} · respect ${Math.round(q ? q.rep || 0 : 0)}</small>`}</td><td class="num">${share(c.id)}% in the poll</td></tr>`; }).join('')}</tbody></table><p class="why">Voters: ${esc(r.office === 'elder' ? 'the grown villagers of Hearthmoor' : r.office === 'lord' ? 'the grown townsfolk of ' + Sim.REGIONS[r.region] : 'the lords, the business owners and the towns of Alderwyn, each town at its own square')}. The vote at noon on day ${r.poll}.</p></div>`; }).join('');
+  if (E.history.length) h += `<h4>Results</h4>` + E.history.slice(0, 12).map(x => `<div class="box"><h5>Day ${x.d}: ${esc(x.label)}</h5>${x.cands ? `<table class="acct"><tbody>${x.cands.map(c => `<tr class="${c.name === x.win ? 'tot' : ''}"><td>${c.you ? '<b>You</b>' : esc(c.name)}${c.name === x.win ? ' (elected)' : ''}</td><td class="num">${c.votes} votes · ${c.pct}%</td></tr>`).join('')}</tbody></table><p class="why">${x.total} votes cast${x.towns > 1 ? ' in ' + x.towns + ' towns' : ''}.${x.yourVote ? ' You voted for ' + esc(x.yourVote) + '.' : ''}</p>` : `<p>${esc(x.text)}</p>`}</div>`).join('');
+  return h;
 }
 function electionsBox(s) {
   const races = Sim.upcomingRaces(s), E = Sim.electState(s), mine = Sim.yourOffice(s);
@@ -14170,8 +14230,14 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.07.2225';
+const BUILD = '2026.11.07.2227';
 const NOTES = [
+  { v: '0.61', date: '7 November', title: 'Polling day', items: [
+    'The top bar shows the day, and the days until the next vote that matters to you (\u201cVote 4d\u201d, then \u201cVote today\u201d, in red when it is yours). Tap it for the elections.',
+    'On polling day morning, everyone grown goes to their own town\u2019s hall or square to vote, then back to their day. For the crown, every town of Alderwyn votes at home and riders carry the tallies to Crownmere for the count at noon.',
+    'You can vote too, when you are not standing: go to your town\u2019s polling place on the morning of the vote. Those who think well of you follow your lead.',
+    'A new Elections page lists who is standing, what each does, their respect and their share of the poll, and every past result with the votes cast for each candidate.'
+  ] },
   { v: '0.60', date: '7 November', title: 'Campaigning in person', items: [
     'You run for office in person: at the Village Hall for Hearthmoor, at a town\u2019s square for its lordship, and at the Great Market of Crownmere for the crown. The place shows a \u201cRun for\u201d button while the season is open, and the Elections box has a \u201cGo to\u201d button.',
     'Speeches are given in the town whose votes you want.',
