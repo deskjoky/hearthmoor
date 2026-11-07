@@ -53,8 +53,7 @@ console.log('1. Drop-in work: any bench, a chain up to x10, levels that follow y
   for (let i = 0; i < 3; i++) R(true, false);
   check(Sim.tradeXp(s, 'smithy') === 3 && Sim.tradeXp(s, 'bakery') >= 15 && s.work.chain === 4, 'each trade keeps its own progress, and a new bench starts a new chain');
   // the top levels need standing as well as practice
-  s.tradeXp.bakery = 1000; check(Sim.tradeLevel(s, 'bakery') === 3 && /council/.test(Sim.levelGate(s, 'bakery')), 'level 4 also needs a seat on a council');
-  s.village.council = true; check(Sim.tradeLevel(s, 'bakery') === 4 && /Elder|lord/.test(Sim.levelGate(s, 'bakery')), 'and level 5 needs an Elder or a lord');
+  s.tradeXp.bakery = 1000; check(Sim.tradeLevel(s, 'bakery') === 5 && !Sim.levelGate(s, 'bakery'), 'levels 4 and 5 come from work alone, with no office needed');
   s.rec.everElder = true; check(Sim.tradeLevel(s, 'bakery') === 5 && Sim.roundPay(s, 'bakery', false, Sim.CHAIN_MAX, false) >= Sim.WORK_PAY[0] * Sim.CHAIN_MAX * 10, 'a master at a full chain earns more than ten times a beginner’s best');
   const back = Sim.deserialize(Sim.serialize(s)); check(back.tradeXp.bakery === s.tradeXp.bakery && back.tradeXp.smithy === 3, 'trade levels are kept in the save');
 }
@@ -870,7 +869,7 @@ console.log('30. The books add up: every coin has a named line');
 
 console.log('31. Law and order: the watch, cases, cells, and the people who know');
 {
-  const s = Sim.newGame(31); Sim.applyStart(s, 'elder'); s.village.chest = 400; Sim.advance(s, 1440);
+  const s = Sim.newGame(31); Sim.applyStart(s, 'elder'); holdElections(s); s.village.chest = 400; Sim.advance(s, 1440);
   const J = s.justice, C = (...a) => Sim.cmd(s, ...a);
   check(J && J.watch.length >= 1 && J.cells === 2, 'Hearthmoor starts with a named watch and two cells');
   // a true accusation and a false one, side by side: what investigation can turn up points each way

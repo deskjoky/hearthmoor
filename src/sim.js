@@ -4613,12 +4613,13 @@
     if (office === 'lord') {
       const g = R.regions[region], cur = regionLord(s, region), L0 = cur && cur !== 'player' && s.people[cur];
       if (g.lord === 'office') { appoint(s, 'lord', who); }
-      else { if (L0) { L0.noble = null; L0.retired = true; plog(s, L0, 'Voted out as lord of ' + REGIONS[region] + '.'); } g.lord = who; if (who !== 'player' && s.people[who]) { const q = s.people[who]; q.noble = region; plog(s, q, 'Elected lord of ' + REGIONS[region] + '.'); } }   // a lord keeps whatever business they run
+      if (who !== 'player' && cur === 'player' && s.heraldry) delete s.heraldry[region];
+      if (g.lord === 'office') {} else { if (L0) { L0.noble = null; L0.retired = true; plog(s, L0, 'Voted out as lord of ' + REGIONS[region] + '.'); } g.lord = who; if (who !== 'player' && s.people[who]) { const q = s.people[who]; q.noble = region; plog(s, q, 'Elected lord of ' + REGIONS[region] + '.'); } }   // a lord keeps whatever business they run
       return;
     }
     if (office === 'crown') {
       if (who === 'player') { crownYou(s, 'The lords, the guilds and the towns vote you to the throne'); return; }
-      const q = s.people[who]; R.crown = 'king'; R.king = who; R.kingSupport = 55; R.lowDays = 0;
+      const q = s.people[who]; R.crown = 'king'; R.king = who; R.kingSupport = 55; R.lowDays = 0; if (s.heraldry) delete s.heraldry.realm;
       for (const k of Object.keys(COUNCIL)) if (R.council[k] === who) R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id;
       for (const id of Object.keys(R.regions)) if (R.regions[id].lord === who) { R.regions[id].lord = null; vacantSeat(s, id); }
       if (q) plog(s, q, 'Elected to the crown of Alderwyn.');
@@ -4629,7 +4630,7 @@
     const m = yourOffice(s); if (!m || (m.office === keep.office && m.region === keep.region)) return null;
     if (m.office === 'seat') { s.realm.council[m.region] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[m.region] + ' in place of ' + s.name + '.' }).id; return m.region; }
     if (m.office === 'elder') { s.offices.elder = null; const w = electElder(s, 'player', 'With you gone to higher office, the moot chooses a new Elder. '); return w; }
-    if (m.office === 'lord') { const g = s.realm.regions[m.region]; if (g.lord === 'office') { s.offices.lord = null; replaceLord(s, s.name + ' was called to higher office'); } else { g.lord = null; vacantSeat(s, m.region); } return m.region; }
+    if (m.office === 'lord') { if (s.heraldry) delete s.heraldry[m.region]; const g = s.realm.regions[m.region]; if (g.lord === 'office') { s.offices.lord = null; replaceLord(s, s.name + ' was called to higher office'); } else { g.lord = null; vacantSeat(s, m.region); } return m.region; }
     return null;
   }
   function electionDay(s) {
@@ -4747,6 +4748,13 @@
     if (crossed(7)) for (const r of Object.values(E.races)) if (r.open && r.you) { if (s.day === r.poll) alertRace(s, r, 'today'); else if (s.day === r.poll - 1) alertRace(s, r, 'tomorrow'); }
     if (crossed(12)) for (const r of Object.values(E.races)) if (r.open && r.poll === s.day) { if (r.you) r.present = atVenue(s, r); pollRace(s, r); }
   }
+  /* heraldry: a lord designs the banner of their town, and the crown the royal banner of Alderwyn */
+  const HERALDRY = {
+    divisions: { plain: 'Plain', pale: 'Halved', fess: 'Halved across', bend: 'Diagonal', saltirePer: 'Quartered across', quarterly: 'Quartered', chief: 'Chief', bordure: 'Border', palePale: 'Centre stripe', fessBand: 'Band', cross: 'Cross', saltire: 'Saltire', chevron: 'Chevron', paly: 'Stripes', barry: 'Bars', chequy: 'Chequered' },
+    charges: { none: 'None', crown: 'Crown', star: 'Star', sun: 'Sun', moon: 'Moon', tower: 'Tower', tree: 'Tree', wheat: 'Wheat', hammer: 'Hammer', anchor: 'Anchor', key: 'Key', sword: 'Sword', cross: 'Cross', heart: 'Heart', bell: 'Bell', roundel: 'Ring' },
+    tinctures: { red: '#a8231c', blue: '#2b4a7a', green: '#2f6b3a', black: '#26221f', purple: '#5e2a6e', crimson: '#7a1f3a', teal: '#2a6b6b', brown: '#6b4a2e', sky: '#5f8fc4', orange: '#c8641e', gold: '#d9b04a', white: '#efe9d8' }
+  };
+  function validBanner(b) { const H = HERALDRY; return b && H.divisions[b.div] && H.charges[b.charge] && H.tinctures[b.field] && H.tinctures[b.second] && H.tinctures[b.mark]; }
   function upcomingRaces(s) { return Object.values(ensureRaces(s).races).sort((a, b) => a.poll - b.poll); }
   function electionsOn(s, d) { if (!s.elect) return []; return Object.values(s.elect.races).filter(r => d >= r.poll && (d - r.poll) % ELECT_EVERY[r.office] === 0); }
   // the cost of standing: dearer for a higher office and a bigger town. You cannot buy the office itself; only the chance to ask for it
@@ -6144,7 +6152,7 @@
         return ok('Sold ' + n + ' ' + a + ' for ' + got + 'c.');
       }
       case 'setPrice': if (shop) shop.price = clamp(Math.round(b), 1, TRADES[shop.trade].wtp * 3); return ok();
-      case 'policy': if (shop) shop.policy[b] = typeof c === 'string' ? c : !!c; if (shop && b === 'supplyBy' && c === 'worker') shop.policy.supplyRuns = true; return ok();
+      case 'policy': if (shop) shop.policy[b] = typeof c === 'string' ? c : !!c; if (shop && b === 'supplyRuns') shop.policy.supplyBy = c ? 'auto' : (shop.policy.supplyBy === 'worker' ? 'auto' : shop.policy.supplyBy); if (shop && b === 'supplyBy' && c === 'worker') shop.policy.supplyRuns = true; return ok();
       case 'setHandRole': { if (!shop || !shop.hands || !shop.hands[b] || !ROLES.includes(c)) return fail('No such employee.'); if (shop.manager) shop.policy.mgrRoles = false; shop.hands[b].role = c; return ok(); }
       case 'mgrHire': { if (!shop || !shop.manager) return fail('No manager there.'); shop.policy.mgrHire = !!b; return ok(); }
       case 'mgrRoles': { if (!shop || !shop.manager) return fail('No manager there.'); shop.policy.mgrRoles = !!b; if (b) assignRoles(s, shop); return ok(); }
@@ -6799,6 +6807,14 @@
         const no = canVote(s, r); if (no) return fail(no);
         if (!r.cands.includes(b) || !s.people[b]) return fail('They are not standing.');
         r.ballot = b; event(s, 'You cast your vote for ' + s.people[b].name + ' (' + raceLabel(r) + '). Those who think well of you take note.', 'info'); return ok();
+      }
+      case 'setBanner': {
+        // a: a region you are lord of, or 'realm' as ruler; b: the design
+        if (!validBanner(b)) return fail('That is not a banner.');
+        if (a === 'realm') { if (!isRuler(s)) return fail('Only the crown sets the royal banner.'); }
+        else if (!s.realm || !s.realm.regions[a] || regionLord(s, a) !== 'player') return fail('Only the lord of ' + (REGIONS[a] || 'a town') + ' sets its banner.');
+        s.heraldry = s.heraldry || {}; s.heraldry[a] = { div: b.div, charge: b.charge, field: b.field, second: b.second, mark: b.mark, day: s.day };
+        event(s, a === 'realm' ? 'Your royal banner is raised over every castle and square in Alderwyn.' : 'Your banner is raised over ' + REGIONS[a] + '.', 'good'); return ok();
       }
       case 'withdraw': { const r = electState(s).races[a]; if (!r || !r.you) return fail('You are not standing.'); r.you = false; event(s, 'You withdraw from the race for ' + raceLabel(r) + '.', 'info'); return ok(); }
       case 'speech': {
@@ -8025,7 +8041,7 @@
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
