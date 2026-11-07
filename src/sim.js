@@ -513,7 +513,7 @@
   function makeApplicants(s) {
     s.applicants = [];
     const taken = s.shops.filter(x => x.worker).map(x => x.worker.name).concat(Object.values(s.people || {}).map(p => p.name));
-    const seekers = s.people ? villagers(s).filter(idleAdult) : [];
+    const seekers = s.people ? villagers(s).filter(p => idleAdult(p) && refuses(s, p) === null) : [];
     seekers.sort((a, b) => (s.village.jobless.includes(b.name) ? 1 : 0) - (s.village.jobless.includes(a.name) ? 1 : 0));
     for (const p of seekers.slice(0, 4)) s.applicants.push({ name: p.name, pid: p.id, skill: Math.round((0.7 + p.skill * 0.5) * 100) / 100, ask: Math.round(4 + p.skill * 5), local: true });
     for (let i = 0; i < (s.applicants.length >= 2 ? 1 : 2); i++) {
@@ -2188,11 +2188,20 @@
     if (s.offices.lord === 'player') { s.offices.lord = null; replaceLord(s, 'the old lord died without an heir'); }
     if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; s.player.seat = null; }
     s.houses.filter(h => h.owner === 'player').forEach(h => { h.owner = 'office:lord'; });
-    Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => { b.closed = true; b.manager = null; });
+    Object.values(s.biz || {}).filter(b => b.owner === 'player').forEach(b => { b.closed = true; b.manager = null; b.owner = old.id; });   // it passes out of your hands with the one who died
     s.shops.slice().forEach(sh => { if (sh.worker && sh.worker.pid && s.people[sh.worker.pid]) s.people[sh.worker.pid].job = null; });
     s.shops = []; s.coins = 5; s.job = null; s.village.council = false; s.village.standing = 0; s.player.horse = null; s.player.riding = false;
     s.name = name || 'Wren'; s.player.x = P.home.x; s.player.z = P.home.z;
     const gen = Y.generation; s.you = null; const Z = you(s); Z.generation = gen + 1; Z.sex = sex || 'm'; Z.age = 20; if (s.name.includes(' ')) Z.family = s.name.split(' ').slice(1).join(' ');
+    // a new, unrelated life: nothing that belonged to the old character follows the stranger. The world, and its memory of the dead, stay.
+    s.tradeXp = {}; s.work = null; s.workLast = null; s.workSeen = {}; s.starterUsed = false; s.rec.everElder = false; s.job = null;
+    s.player.inv = { grain: 0, wood: 0, ore: 0 }; s.player.house = null; s.ship = null;
+    if (s.elect) { const E = s.elect; for (const r of Object.values(E.races)) { r.you = false; r.pledge = null; r.challenger = false; } E.pledges.forEach(pl => { if (pl.state === 'given') pl.state = 'lapsed'; }); E.kept = 0; E.broken = 0; E.handbook = null; E.alert = null; }
+    for (const q of living(s)) { q.opinion = 0; q.hate = 0; q.mem = []; if (q.nem) q.nem = null; }
+    s.folk = null; setupFolk(s);
+    if (s.realm) { const R = s.realm; R.favour = 0; R.deeds = {}; R.kept = 0; R.broken = 0; R.plot = null; R.exile = null; R.after = null; R.promises = []; R.bought = {}; R.offer = null; R.embezzled = 0; (R.figures || []).forEach(f => { f.ally = false; f.foe = false; f.progress = 0; }); }
+    if (s.valdoria) { const V = s.valdoria; V.standing = 0; V.charter = false; V.favour = 0; }
+    if (s.justice) s.justice.secrets = [];
     s.pendingDeath = null;
     event(s, 'A newcomer arrives in Hearthmoor with 5 coins: ' + s.name + '. The world remembers those who came before.', 'story');
   }
@@ -4488,6 +4497,7 @@
     if (r.office === 'lord') b += Math.min(20, deedsIn(s, r.region) * 4) + (s.realm ? (s.realm.favour - 40) * 0.1 : 0);
     if (r.office === 'crown') b += (computeSupport(s) - 50) * 0.5;
     if (mine && mine.office === r.office) b += 5;
+    if (r.present === true) b += 4; else if (r.present === false) b -= 12;   // the crowd sees who turned up
     return b;
   }
   // the people who work for you vote for you, mostly
@@ -4556,19 +4566,21 @@
         r.open = true; r.cands = npcCandidates(s, r); r.boost = 0; r.bought = []; r.buys = 0; r.speech = -1; r.pledge = null;
         const m = yourOffice(s); r.you = !!(m && m.office === r.office && (r.office !== 'lord' || m.region === r.region)) || !!r.challenger; r.challenger = false;
         const names = r.cands.map(id => s.people[id].name);
-        event(s, 'Election season: ' + raceLabel(r) + '. Polling on day ' + r.poll + '. ' + (names.length ? 'Standing: ' + names.join(', ') + (r.you ? ', and you' : '') + '.' : 'No one has stood yet.') + (r.you ? '' : standBar(s, r) ? '' : ' You could stand.'), r.you || !standBar(s, r) ? 'story' : 'info');
+        if (r.you) alertRace(s, r, 'open');
+        event(s, 'Election season: ' + raceLabel(r) + '. The vote is at noon on day ' + r.poll + ', at ' + venueName(r) + '. ' + (names.length ? 'Standing: ' + names.join(', ') + (r.you ? ', and you' : '') + '.' : 'No one has stood yet.') + (r.you ? '' : standBar(s, r) ? '' : ' You could stand.'), r.you || !standBar(s, r) ? 'story' : 'info');
       }
-      if (r.open && s.day >= r.poll) pollRace(s, r);
+      if (r.open && s.day >= r.poll) { if (r.you && r.present == null) r.present = false; pollRace(s, r); }
     }
   }
   function pollRace(s, r) {
     const E = electState(s), res = tally(s, r), hold = holderOf(s, r.office, r.region), label = raceLabel(r);
-    r.open = false; r.poll += ELECT_EVERY[r.office];
+    const absent = r.you && r.present === false; r.open = false; r.present = null; r.poll += ELECT_EVERY[r.office];
     if (!res.all.length || !res.total) { E.history.unshift({ d: s.day, label, text: 'No one stood.' }); r.you = false; return; }
     const rank = res.all.map(c => [c, res.votes.get(c)]).sort((a, b) => b[1] - a[1]), win = rank[0][0], pct = c => Math.round(res.votes.get(c) / res.total * 100);
     const nm = c => c === 'player' ? 'you' : s.people[c].name, line = rank.map(([c]) => nm(c) + ' ' + pct(c) + '%').join(', ');
     E.history.unshift({ d: s.day, label, win: win === 'player' ? s.name : s.people[win].name, you: r.you ? pct('player') : null, text: line }); if (E.history.length > 40) E.history.length = 40;
     const youRan = r.you; r.you = false;
+    if (absent) event(s, 'You were not at ' + venueName(r) + ' when the votes were counted. People noticed.', 'bad');
     if (win === hold && win === 'player') recordPledge(s, r);
     if (win === hold) { event(s, win === 'player' ? 'Re-elected ' + label + ' (' + line + ').' + (r.pledge ? ' Now keep your promise, within 15 days.' : '') : nm(win) + ' keeps ' + label.replace(/^the /, 'the ') + ' (' + line + ').' + (youRan ? ' You lost.' : ''), win === 'player' ? 'good' : youRan ? 'bad' : 'info'); if (win === 'player') s.rec.timesElected++; return; }
     if (win === 'player') {
@@ -4596,6 +4608,28 @@
     const q = s.people[hold], R = s.realm;
     const weak = r.office === 'elder' ? !!(s.gov && s.gov.approval.elder < 45) : r.office === 'crown' ? R.kingSupport < 45 : r.region === 'hearthmoor' ? !!(s.gov && s.gov.approval.lord < 45) || ((s.bandits && s.bandits.hearthmoor) || 0) > 40 : (q && (q.rep || 0) < 45) || ((s.bandits && s.bandits[r.region]) || 0) > 40;
     return weak ? null : (q ? q.name : 'The holder') + ' is too well thought of to be challenged early. Wait until they falter (low standing, or bandits on the roads).';
+  }
+  /* where each election is held, in person: the Village Hall for Hearthmoor, a town's square elsewhere, the Great
+     Market of Crownmere for the crown. You put your name forward there, you speak in that town, and at noon on polling
+     day the candidates stand before the crowd there. A candidate who is not there loses votes. */
+  function raceVenue(r) { const town = r.office === 'elder' ? 'hearthmoor' : r.office === 'crown' ? 'crownmere' : r.region; return { town, loc: town === 'hearthmoor' ? 'hall' : MARKET_AT[town] }; }
+  function venueName(r) { const v = raceVenue(r), L = LOCS[v.loc]; return (L && L.name ? L.name : 'the square') + (v.town === 'hearthmoor' || !L || (L.name || '').includes(TOWNS[v.town] ? TOWNS[v.town].name : '~') ? '' : ' in ' + (TOWNS[v.town] ? TOWNS[v.town].name : v.town)); }
+  function atVenue(s, r) { const L = LOCS[raceVenue(r).loc]; return !!L && Math.hypot(s.player.x - L.x, s.player.z - L.z) < Math.max(10, (L.r || 0) + 8); }
+  function inTown(s, r) { return (townAt(s.player.x, s.player.z) || 'hearthmoor') === raceVenue(r).town; }
+  function alertRace(s, r, kind) {
+    const E = electState(s), at = venueName(r), label = raceLabel(r);
+    const text = kind === 'open' ? 'Re-election season: ' + label + '. The vote is at noon on day ' + r.poll + ', at ' + at + '. Campaign in the town until then, and be there on the day.'
+      : kind === 'tomorrow' ? 'Tomorrow is polling day for ' + label + '. Be at ' + at + ' by noon.'
+      : 'Today is polling day for ' + label + '. Be at ' + at + ' by noon: a candidate who is not there loses votes.';
+    E.alert = { key: r.key, kind, text, loc: raceVenue(r).loc, day: s.day, seen: false };
+    event(s, text, 'story');
+  }
+  // called every tick: reminders at 7 in the morning, and the vote itself at noon
+  function electionTick(s, before) {
+    const E = s.elect; if (!E) return;
+    const crossed = h => { const mark = Math.floor(s.t / 1440) * 1440 + h * 60; return before < mark && s.t >= mark; };
+    if (crossed(7)) for (const r of Object.values(E.races)) if (r.open && r.you) { if (s.day === r.poll) alertRace(s, r, 'today'); else if (s.day === r.poll - 1) alertRace(s, r, 'tomorrow'); }
+    if (crossed(12)) for (const r of Object.values(E.races)) if (r.open && r.poll === s.day) { if (r.you) r.present = atVenue(s, r); pollRace(s, r); }
   }
   function upcomingRaces(s) { return Object.values(ensureRaces(s).races).sort((a, b) => a.poll - b.poll); }
   function electionsOn(s, d) { if (!s.elect) return []; return Object.values(s.elect.races).filter(r => d >= r.poll && (d - r.poll) % ELECT_EVERY[r.office] === 0); }
@@ -5999,6 +6033,7 @@
         if (!shop) return fail('Pick a shop to hire for.');
         if (shop.worker) return fail('That shop already has a worker.');
         const ap = s.applicants[b];
+        { const q0 = ap && ap.pid && s.people ? s.people[ap.pid] : null, no = refuses(s, q0); if (no) { s.applicants.splice(b, 1); return fail(no); } }
         if (!ap) return fail('That applicant has gone.');
         const wage = clamp(Math.round(c || ap.ask), 1, 40);
         let wp = ap.pid && s.people ? s.people[ap.pid] : null;
@@ -6024,6 +6059,7 @@
         shop.hands = shop.hands || [];
         if (shop.hands.length >= HAND_MAX) return fail('Nobody else could squeeze in.');
         const ap = s.applicants[b]; if (!ap) return fail('That applicant has gone.');
+        { const q0 = ap && ap.pid && s.people ? s.people[ap.pid] : null, no = refuses(s, q0); if (no) { s.applicants.splice(b, 1); return fail(no); } }
         const wage = clamp(Math.round(c || ap.ask), 1, 40);
         let wp = ap.pid && s.people ? s.people[ap.pid] : null;
         if (!wp && s.people) { wp = newPerson(s, { name: ap.name, age: 18 + Math.floor(rand(s) * 20), purse: 10, skill: (ap.skill - 0.7) / 0.6 }); const h = vacancy(s, 4); if (h) moveIn(s, wp, h); }
@@ -6625,6 +6661,7 @@
         if (!r.open) return fail('The season for ' + raceLabel(r) + ' opens on day ' + (r.poll - ELECT_SEASON) + '.');
         if (r.you) return fail('You are already standing.');
         const bar = standBar(s, r); if (bar) return fail(bar);
+        if (!atVenue(s, r)) return fail('Put your name forward in person, at ' + venueName(r) + '.');
         const fee = standFee(s, r); if (s.coins < fee) return fail('Running for ' + raceLabel(r) + ' costs ' + fee + 'c: criers, banners, ale for the crowds.');
         spend(s, fee); r.you = true; r.boost = 0;
         event(s, 'You put your name forward for ' + raceLabel(r) + ' (' + fee + 'c for the campaign). Polling on day ' + r.poll + '.', 'story'); return ok();
@@ -6633,6 +6670,7 @@
         const r = ensureRaces(s).races[a]; if (!r) return fail('No such election.');
         const bar = challengeBar(s, r); if (bar) return fail(bar);
         const fee = standFee(s, r) * 2; if (s.coins < fee) return fail('Forcing an early vote costs ' + fee + 'c.');
+        if (!atVenue(s, r)) return fail('Call for an early vote in person, at ' + venueName(r) + '.');
         spend(s, fee); r.poll = s.day + ELECT_SEASON + 1; r.challenged = s.day; r.challenger = true;
         event(s, 'You force an early vote for ' + raceLabel(r) + ' (' + fee + 'c). The season opens tomorrow; polling on day ' + r.poll + '. You are on the ballot.', 'story'); return ok();
       }
@@ -6640,6 +6678,7 @@
       case 'speech': {
         const r = electState(s).races[a]; if (!r || !r.you || !r.open) return fail('You are not standing.');
         if (r.speech === s.day) return fail('You have spoken today. Speak again tomorrow.');
+        if (!inTown(s, r)) return fail('Speak to the crowds in ' + (TOWNS[raceVenue(r).town] ? TOWNS[raceVenue(r).town].name : 'the town') + ', where the votes are.');
         const g = speechGain(s); r.speech = s.day; r.boost += g;
         event(s, 'You speak to the crowds for ' + raceLabel(r) + '. They listen.', 'info'); return ok();
       }
@@ -6993,7 +7032,7 @@
         if (!o || (a === 'biz' && o.owner !== 'player')) return fail('That is not your business.');
         if (o.manager) return fail('It already has a manager.');
         const cand = managerCandidates(s, a, b).find(x => x.pid === c); if (!cand) return fail('They cannot take the post.');
-        const q = s.people[c];
+        const q = s.people[c]; { const no = refuses(s, q); if (no) return fail(no); }
         if (q.job && q.job.type === 'biz') { const ob = s.biz[q.job.biz]; if (ob) ob.staff = ob.staff.filter(x => x.pid !== q.id); }
         q.job = { type: 'manage', kind: a, ref: b }; q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
         o.manager = { pid: q.id, name: q.name, skill: cand.skill, wage: cand.ask, budget: 10, staffTarget: a === 'biz' ? Math.max(1, o.staff.length) : 0, since: s.day, honest: charOf(q) };
@@ -7053,6 +7092,7 @@
     if (s.folk) folkStep(s);
     separate(s);
     checkVillage(s);
+    if (s.elect) electionTick(s, before);
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
     if (s.coins < 0 && -s.coins > (s.rec.maxDebt || 0)) s.rec.maxDebt = -s.coins;
   }
@@ -7768,6 +7808,8 @@
     }
     return fail('Unknown command.');
   }
+  // the reason someone will not work for you, or null: a grudge, or a name so dark that decent folk keep away (no dice: the same answer every time)
+  function refuses(s, q) { if (!q) return null; const F = setupFolk(s); if ((q.hate || 0) >= 35 || (q.opinion || 0) < -25) return q.name + ' will not work for you: they have not forgotten what you did.'; if (F.moral <= -40 && charOf(q) > 0.55) return q.name + ' will not work for someone with your name.'; return null; }
   function willWork(s, q) { const F = setupFolk(s); if ((q.hate || 0) >= 35 || (q.opinion || 0) < -25) return false; if (F.moral <= -40 && charOf(q) > 0.55) return false; if (F.moral <= -70) return rand(s) < 0.3; return true; }
 
   /* ---------- throne audiences: the crown's day, one petitioner at a time ---------- */
@@ -7851,7 +7893,7 @@
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,

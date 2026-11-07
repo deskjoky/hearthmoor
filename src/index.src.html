@@ -3076,6 +3076,7 @@ const UI = { person: null, mode: 'title', overlay: null, sel: null, loc: null, t
 const calm = () => meta.settings.motion === 'reduced' || matchMedia('(prefers-reduced-motion: reduce)').matches;
 const B_ = (label, c, cls, dis) => `<button type="button" class="btn ${cls || ''}" data-c='${esc(JSON.stringify(c))}' ${dis ? 'disabled' : ''}>${label}</button>`;
 function act(c) {
+  if (c[0] === 'goto' && !$('scroll').hidden) $('scroll').hidden = true;
   if (c[0] === 'page') { openBook(c[1]); return; }
   if (c[0] === 'goto') { travel(c[1]); return; }
   if (c[0] === 'goto') { UI.loc = c[1]; UI.openLoc = c[1]; }
@@ -3569,7 +3570,7 @@ function comingOn(s, d) {
   if (d % 7 === 1) out.push({ k: 'week', t: 'The lord gives his weekly word on the village’s business.' });
   if (R && d % 7 === 3) out.push({ k: 'week', t: 'The court’s week turns: the great figures of the realm make their moves.' });
   if (v && v.disputeDay === d) out.push({ k: 'you', t: 'A dispute comes before the village council.' });
-  for (const r of Sim.electionsOn(s, d)) out.push({ k: 'you', t: 'Polling day: ' + Sim.raceLabel(r) + '.' });
+  for (const r of Sim.electionsOn(s, d)) out.push({ k: 'you', t: 'The vote for ' + Sim.raceLabel(r) + ', at noon at ' + Sim.venueName(r) + '.' });
   if (V && V.peaceUntil === d) out.push({ k: 'you', t: 'The truce with Valdoria ends.' });
   const rate = s.ageRate; if (rate && s.you) {
     const Y = s.you, r0 = Y.bday % rate; if (d % rate === r0) { const n = Math.floor((d - r0) / rate) - Math.floor((s.day - r0) / rate); out.push({ k: 'you', t: d > s.day ? 'Your birthday: you turn ' + (Y.age + n) + '.' : 'Your birthday.' }); }
@@ -3695,6 +3696,8 @@ function renderCard(force) {
   let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
   // a place you merely walk past shows only its name; tap the tab to open it
   const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
+  // an election venue: put your name forward, speak, or call an early vote, in person
+  if (here && html && !p.dest) { const vb = venueBox(G, here); if (vb) html += vb; }
   // a town's market square: buy and sell here too
   { const mt = here && Object.keys(Sim.MARKET_AT).find(t => Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) { const cs = ((G.realm && G.realm.contracts) || []).filter(c => c.taken && c.region === mt && c.kind !== 'clear'); if (cs.length) html += `<div class="acts">${cs.map(c => B_('Deliver for ' + esc(c.who) + ' (' + (c.delivered || 0) + '/' + c.qty + ')', ['fulfil', c.n])).join('')}</div>`; if (mt !== 'hearthmoor') html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; } }
   // a door you can go through
@@ -3755,6 +3758,7 @@ function myBusinesses(s) {
 }
 function hud(s) {
   { const hb = s.elect && s.elect.handbook; if (hb && !hb.seen && $('scroll').hidden) { hb.seen = true; showHandbook(hb); } }
+  { const al = s.elect && s.elect.alert; if (al && !al.seen && $('scroll').hidden) { al.seen = true; showElectionAlert(al); } }
   { const n = taskList(s).filter(x => !x.soft).length, el = $('taskN'); if (el && el.textContent !== String(n || '')) el.textContent = n || ''; }
   { const key = (s.player.house || '') + '|' + (Sim.yourSeat(s) || '') + '|' + Sim.yourLordships(s).join(); if (key !== UI.myHouse) { UI.myHouse = key; syncMyHome(); } }
   { const c = Sim.calendar(s); $('clock').textContent = `${c.dom} ${c.monthName} · ${Sim.clock(s.t)}`; $('clock').title = 'Day ' + s.day + ', ' + c.season + ' of year ' + c.year + '. ' + c.next.charAt(0).toUpperCase() + c.next.slice(1) + ' in ' + c.daysLeft + (c.daysLeft === 1 ? ' day.' : ' days.'); }
@@ -4492,6 +4496,7 @@ function taskList(s) {
     if (Sim.isRuler(s) && F.aud.length) out.push({ who: 'The throne room', title: F.aud.length === 1 ? 'A petitioner waits to be heard' : F.aud.length + ' petitioners wait to be heard', note: 'Each brings a choice, kind or cold. Left a week, they go away bitter.', act: B_('Hold court', ['ui', 'throne']) });
     if (F.ambush) { const q = s.people[F.ambush.pid]; out.push({ who: 'A warning', title: F.ambush.kind === 'assassin' ? 'Someone has hired a blade against you' : 'Someone has paid thugs to beat you', note: (q ? q.name + ' paid for it. ' : '') + 'Face them first, keep guards close, or stay off the roads and out of the streets at night.', act: B_('Your enemies', ['page', 'renown']) }); }
   }
+  if (s.elect) for (const r of Sim.upcomingRaces(s).filter(r => r.open && r.you)) out.push({ who: 'Your campaign', title: (r.poll === s.day ? 'Today at noon: the vote for ' : 'Day ' + r.poll + ', noon: the vote for ') + Sim.raceLabel(r), note: 'Be at ' + Sim.venueName(r) + ' when the votes are counted. Speak in the town once a day until then.', act: go(Sim.raceVenue(r).loc, 'Go to ' + Sim.venueName(r)) });
   if (v.shortage) out.push({ who: 'The village', title: 'Refill the granary: ' + v.granary + ' of ' + v.granaryNeed + ' grain', note: 'Until it is full, villagers buy less at every shop.', act: go('granary', 'Go to the granary') });
   if (v.dispute != null && (v.council || s.offices.elder === 'player')) out.push({ who: 'The council', title: 'Settle the dispute before the council', note: Sim.DISPUTES[v.dispute].text, act: go('hall', 'Go to the Village Hall') });
   if (v.contract) out.push({ who: v.contract.who, title: 'Deliver ' + Sim.goodsName(v.contract.trade, v.contract.qty) + ' to the Trading Post', note: 'By day ' + v.contract.until + ', for ' + v.contract.reward + 'c.', act: go('market', 'Go to the Trading Post') });
@@ -4591,23 +4596,43 @@ function diplomacy(s, V) {
   }
   return acts.length ? `<p><b>Diplomacy</b></p><div class="acts">${acts.join('')}</div><p class="why">A trade pact brings Valdoria’s duty down to 5% while you keep Alderwyn’s tariff low; an alliance takes it to nothing and ends the closing of the port. A royal marriage joins the houses and warms relations each week while the marriage lasts; if it ends, the Queen takes it hard.</p>` : '';
 }
+function venueBox(s, here) {
+  const races = Sim.upcomingRaces(s).filter(r => Sim.raceVenue(r).loc === here && (r.open || !Sim.challengeBar(s, r)));
+  if (!races.length) return '';
+  return races.map(r => {
+    const fee = Sim.standFee(s, r), bar = Sim.standBar(s, r);
+    let a = '';
+    if (r.open && r.you) a = B_('Speak to the crowds<small>+' + Sim.speechGain(s) + '</small>', ['speech', r.key], '', r.speech === s.day) + B_('Campaign', ['page', 'realm'], 'alt');
+    else if (r.open) a = bar ? `<span class="why">${esc(bar)}</span>` : B_('Run for ' + esc(Sim.raceLabel(r)) + ' · ' + fee + 'c', ['stand', r.key], '', s.coins < fee);
+    else a = B_('Force an early vote · ' + fee * 2 + 'c', ['challenge', r.key], 'alt', s.coins < fee * 2);
+    return `<div class="why"><b>${esc(Sim.raceLabel(r).replace(/^the /, 'The '))}:</b> ${r.open ? 'the vote is here at noon on day ' + r.poll + '.' : 'the holder is faltering.'}<div class="acts">${a}</div></div>`;
+  }).join('');
+}
+function showElectionAlert(A) {
+  const L0 = L[A.loc], go = L0 ? `<button type="button" class="btn" data-c='${esc(JSON.stringify(['goto', A.loc]))}'>Go to ${esc(L0.name || 'the venue')}</button>` : '';
+  $('vellum').innerHTML = `<div class="wax" aria-hidden="true">H</div><h2 id="scrollTitle">${A.kind === 'open' ? 'Re-election' : 'Polling Day'}</h2><p class="sv">Day ${A.day}</p><div class="fleur" aria-hidden="true">&#10086; &#10086; &#10086;</div>
+    <p style="text-align:center;font-size:17px;line-height:1.45">${esc(A.text)}</p>
+    <div class="acts">${go}<button type="button" class="btn alt" data-c='["ui","closeBook"]'>Later</button></div>`;
+  const sc = $('scroll'); sc.hidden = false; Snd.play('scroll');
+  const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
+}
 function electionsBox(s) {
   const races = Sim.upcomingRaces(s), E = Sim.electState(s), mine = Sim.yourOffice(s);
-  let h = `<h4>Elections</h4><p class="lead">${mine ? 'You hold the office of ' + esc(Sim.raceLabel(Object.assign({ region: mine.region }, mine))) + '. ' : ''}Offices are won at the vote. A season opens ${Sim.ELECT_SEASON} days before polling: pay for a campaign to stand, then speak and make promises. You hold one office at a time.</p>${mine ? `<div class="acts">${B_('Read your charge', ['ui', 'handbook'], 'alt')}</div>` : ''}`;
+  let h = `<h4>Elections</h4><p class="lead">${mine ? 'You hold the office of ' + esc(Sim.raceLabel(Object.assign({ region: mine.region }, mine))) + '. ' : ''}Offices are won at the vote. A season opens ${Sim.ELECT_SEASON} days before polling: put your name forward in person at the town\u2019s hall or square, speak in the town, make a promise, and be there at noon on polling day. You hold one office at a time.</p>${mine ? `<div class="acts">${B_('Read your charge', ['ui', 'handbook'], 'alt')}</div>` : ''}`;
   const pend = E.pledges.map((pl, i) => [pl, i]).filter(([pl]) => pl.state === 'given');
   pend.forEach(([pl]) => { h += `<div class="why"><b>Your promise:</b> ${esc(pl.text)}, by day ${pl.due}. ${esc(pl.how || '')}</div>`; });
   const open = races.filter(r => r.open), soon = races.filter(r => !r.open).slice(0, 4);
   for (const r of open) {
     const bar = Sim.standBar(s, r), fee = Sim.standFee(s, r), poll = Sim.pollNow(s, r);
-    h += `<div class="box"><h5>${esc(Sim.raceLabel(r))} · polling day ${r.poll}</h5>`;
+    h += `<div class="box"><h5>${esc(Sim.raceLabel(r))} · the vote at noon, day ${r.poll}</h5><p>At ${esc(Sim.venueName(r))}.${r.you ? ' Be there at noon on the day: a candidate who is not there loses votes.' : ''}</p>`;
     h += poll.length ? `<p class="num">${poll.map(x => (x.id === 'player' ? '<b>You</b>' : esc(x.name)) + ' ' + x.share + '%').join(' · ')}</p>` : `<p>No one stands yet.</p>`;
     if (r.you) {
-      h += `<div class="acts">${B_('Speak to the crowds<small>+' + Sim.speechGain(s) + ' · once a day</small>', ['speech', r.key], '', r.speech === s.day)}${r.pledge == null ? Sim.pledgesFor(s, r).map(P => B_('Promise: ' + esc(P.text) + '<small>' + esc(P.how) + '</small>', ['pledge', r.key, P.id], 'alt')).join('') : ''}${B_('Withdraw', ['withdraw', r.key], 'alt')}</div>`;
+      h += `<div class="acts">${B_('Speak to the crowds<small>+' + Sim.speechGain(s) + ' · once a day, in the town</small>', ['speech', r.key], '', r.speech === s.day || !Sim.inTown(s, r))}${!Sim.inTown(s, r) || r.poll === s.day ? B_('Go to ' + esc(Sim.venueName(r)), ['goto', Sim.raceVenue(r).loc], 'alt') : ''}${r.pledge == null ? Sim.pledgesFor(s, r).map(P => B_('Promise: ' + esc(P.text) + '<small>' + esc(P.how) + '</small>', ['pledge', r.key, P.id], 'alt')).join('') : ''}${B_('Withdraw', ['withdraw', r.key], 'alt')}</div>`;
       if (r.pledge != null && Sim.PLEDGES[r.pledge]) h += `<p>You promised to ${esc(Sim.PLEDGES[r.pledge].text.toLowerCase())}. If you win, do it within 15 days.</p>`;
-    } else h += bar ? `<p class="why">${esc(bar)}</p>` : `<div class="acts">${B_('Stand for election · ' + fee + 'c', ['stand', r.key], '', s.coins < fee)}</div>`;
+    } else h += bar ? `<p class="why">${esc(bar)}</p>` : Sim.atVenue(s, r) ? `<div class="acts">${B_('Stand for election · ' + fee + 'c', ['stand', r.key], '', s.coins < fee)}</div>` : `<p>To run, put your name forward at ${esc(Sim.venueName(r))} (${fee}c).</p><div class="acts">${B_('Go to ' + esc(Sim.venueName(r)), ['goto', Sim.raceVenue(r).loc], 'alt')}</div>`;
     h += `</div>`;
   }
-  if (soon.length) h += `<div class="box"><dl class="kv">${soon.map(r => `<dt>${esc(Sim.raceLabel(r))}</dt><dd>season opens day ${r.poll - Sim.ELECT_SEASON}, polling day ${r.poll} · to stand ${Sim.standFee(s, r)}c${!Sim.challengeBar(s, r) ? ' ' + B_('Force an early vote · ' + Sim.standFee(s, r) * 2 + 'c<small>the holder is faltering</small>', ['challenge', r.key], 'alt', s.coins < Sim.standFee(s, r) * 2) : ''}</dd>`).join('')}</dl></div>`;
+  if (soon.length) h += `<div class="box"><dl class="kv">${soon.map(r => `<dt>${esc(Sim.raceLabel(r))}</dt><dd>season opens day ${r.poll - Sim.ELECT_SEASON}, polling day ${r.poll} · to stand ${Sim.standFee(s, r)}c, at ${esc(Sim.venueName(r))}${!Sim.challengeBar(s, r) ? ' · the holder is faltering: you can force an early vote there (' + Sim.standFee(s, r) * 2 + 'c) ' + B_('Go there', ['goto', Sim.raceVenue(r).loc], 'alt') : ''}</dd>`).join('')}</dl></div>`;
   if (E.history.length) h += `<details><summary>Past results</summary><ul>${E.history.slice(0, 10).map(x => `<li>Day ${x.d}: ${esc(x.label)}. ${esc(x.text)}</li>`).join('')}</ul></details>`;
   return h;
 }
@@ -6222,6 +6247,15 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.60', date: '7 November', title: 'Campaigning in person', items: [
+    'You run for office in person: at the Village Hall for Hearthmoor, at a town\u2019s square for its lordship, and at the Great Market of Crownmere for the crown. The place shows a \u201cRun for\u201d button while the season is open, and the Elections box has a \u201cGo to\u201d button.',
+    'Speeches are given in the town whose votes you want.',
+    'The vote is held at noon on polling day, at the same place. Be there: a candidate who is not loses votes, and everyone notices.',
+    'Reminders: a scroll opens when your re-election season begins, the morning before polling day, and on the morning of the vote, with a button to take you there. The vote also sits in your Tasks, and on the calendar with its time and place.',
+    'Forcing an early vote is also done in person, at the same place.',
+    'Starting a new life as a stranger now truly starts fresh: no old campaigns or promises, trade skills, ownership, grudges, name or favour at court carry over. The world still remembers the one who died.',
+    'People with a grudge against you no longer apply for work at your shops, and cannot be hired as workers, employees or managers.'
+  ] },
   { v: '0.59', date: '7 November', title: 'Repairs, after review', items: [
     'Work rounds are always paid, however quickly you finish them and whatever the speed of the world. Before, a fast round at a high level could be refused as too quick.',
     'Trade mastery comes from work alone. Levels 4 and 5 no longer need a council seat or office, and losing a seat never lowers your level.',

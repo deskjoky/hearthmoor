@@ -6,8 +6,12 @@ let failures = 0;
 function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + msg); } else console.log('  ok: ' + msg); }
 function runIdle(s, max = 3000) { let m = 0; while ((s.player.dest || s.player.action) && m < max) { Sim.step(s, 1); m++; } return m; }
 function untilHour(s, h) { let g = 0; while (Math.abs(Sim.hourOf(s) - h) > 0.01 && g < 1500) { Sim.step(s, 1); g++; } }
+function holdElections(s) {   // for tests of other things: keep the vote far off so an office set up by hand stays put
+  for (const r of Object.values(Sim.ensureRaces(s).races)) { r.poll = s.day + 9999; r.open = false; }
+}
 function winElection(s, key) {   // put the player through an election and make sure they win
   const r = Sim.ensureRaces(s).races[key]; r.poll = s.day + 3; r.open = false; Sim.advance(s, 1440); if (!r.open) Sim.advance(s, 1440);
+  const at = Sim.LOCS[Sim.raceVenue(r).loc]; s.player.x = at.x; s.player.z = at.z; s.player.dest = null;
   const c0 = s.coins; s.coins = Math.max(s.coins, 99999); Sim.cmd(s, 'stand', key); s.coins = c0; r.boost = 400;
   let k = 0; while (r.open && k < 8) { Sim.advance(s, 1440); k++; }
 }
@@ -557,7 +561,7 @@ console.log('18. Managers: someone you trust runs the place while you are away')
   check(s.people[cb[0].pid].job.type === 'manage' && Sim.occupation(s, s.people[cb[0].pid]).includes('The Bell'), 'a manager\u2019s job is to manage');
   s.player.x = Sim.STAGE.greenhaven.x; s.player.z = Sim.STAGE.greenhaven.z;
   Sim.advance(s, 1440 * 12);
-  check(sh.worker && sh.policy.supplyRuns, 'the bakery\u2019s manager hired ' + sh.worker.name + ' and keeps supplies coming, with you in Greenhaven');
+  check(sh.worker && Sim.supplier(sh) === 'manager', 'the bakery\u2019s manager hired ' + sh.worker.name + ' and keeps supplies coming, with you in Greenhaven');
   const led = s.ledger.slice(-5).map(e => e.shops[0] ? e.shops[0].profit : 0);
   check(led.every(x => x > 0), 'the managed bakery makes a profit every day: ' + led.join(', ') + 'c');
   check((s.reports || []).length >= 20 && s.reports.some(r => r.text.startsWith('The Bell')), 'managers report every evening (' + s.reports.length + ' reports)');
@@ -574,7 +578,7 @@ console.log('19. The Elder\u2019s powers: the village works, officers, and the o
 {
   const s = Sim.newGame(104); s.coins = 500; const v = s.village;
   Sim.electElder ? null : null;
-  s.offices.elder = 'player'; v.council = true; v.chest = 200; s.gov.relief = 'none';
+  s.offices.elder = 'player'; v.council = true; v.chest = 200; s.gov.relief = 'none'; holdElections(s);
   check(!Sim.cmd(s, 'openLand', 'cottages').ok, 'the land is opened in person, at the hall or on the land');
   s.player.x = Sim.LOCS.hall.x; s.player.z = Sim.LOCS.hall.z;
   const pop0 = Sim.villagers(s).length;
@@ -718,7 +722,7 @@ console.log('24. Stage II checks: a month away with your businesses in good hand
   const stillOpen = !s.biz.o_bell.closed && !s.biz.g_bake.closed && s.shops.length === 1;
   // a month's takings swing a long way with luck (from about -700c to +1,500c across seeds); the test is that the managers keep all three open and nothing is ruined
   check(stillOpen && s.coins > c0 - 800, 'after thirty days away, all three businesses are open (' + (s.coins - c0 >= 0 ? s.coins - c0 + 'c richer' : c0 - s.coins + 'c poorer, by luck of trade') + ')');
-  const elder = (w) => { const g = Sim.newGame(151), v = g.village; g.offices.elder = 'player'; v.council = true; v.chest = 600; Sim.cmd(g, 'works', w); Sim.advance(g, 1440 * 12); return g.gov.approval.elder; };
+  const elder = (w) => { const g = Sim.newGame(151), v = g.village; g.offices.elder = 'player'; holdElections(g); v.council = true; v.chest = 600; Sim.cmd(g, 'works', w); Sim.advance(g, 1440 * 12); return g.gov.approval.elder; };
   const gen = elder(40), mean = elder(0);
   check(gen > mean + 3, 'as Elder, your choices count: after twelve days, generous village works leave approval at ' + Math.round(gen) + ', starving them leaves it at ' + Math.round(mean));
 }
@@ -771,15 +775,16 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   const g0 = R.favour; Sim.cmd(s, 'giftCrown', 300); const g1 = R.favour - g0; Sim.cmd(s, 'giftCrown', 300); const g2 = R.favour - g0 - g1;
   check(g2 < g1, 'a second gift soon after the first counts for less (' + Math.round(g1) + ' then ' + Math.round(g2) + ' favour)');
   R.favour = 60; s.people[R.regions.eastwatch.lord].rep = 30;
-  check(!Sim.cmd(s, 'seekLordship', 'eastwatch').ok, 'favour and coin are not enough: the King wants a deed done in Eastwatch first');
+  holdElections(s); Sim.setupFolk(s).fame = 20;
+  check(!!Sim.standBar(s, Sim.ensureRaces(s).races['lord:eastwatch']), 'favour and coin are not enough: you need a stake in Eastwatch to stand there');
   // do a contract for Eastwatch
   R.contracts = [{ n: 999, kind: 'supply', region: 'eastwatch', good: 'grain', qty: 10, reward: 60, what: 'deliver 10 grain to the market in Eastwatch', who: 'Rowena Tarrant', until: s.day + 6, day: s.day }];
   check(Sim.cmd(s, 'takeContract', 999).ok, 'you take a contract to supply Eastwatch');
   s.player.inv.grain = 10; atMarket('eastwatch');
   check(Sim.cmd(s, 'fulfil', 999).ok && Sim.deedsIn(s, 'eastwatch') === 1, 'you deliver the grain: a deed done for Eastwatch');
-  court(); check(Sim.cmd(s, 'seekLordship', 'eastwatch').ok && Sim.yourLordships(s).includes('eastwatch'), 'now the King grants you Eastwatch');
+  winElection(s, 'lord:eastwatch'); holdElections(s); check(Sim.yourLordships(s).includes('eastwatch'), 'now Eastwatch elects you its lord');
   s.people[R.regions.ironcrest.lord].rep = 20; R.deeds.ironcrest = 1;
-  check(!Sim.cmd(s, 'seekLordship', 'ironcrest').ok, 'a lord holds one region at a time');
+  check(/already hold a lordship/.test(Sim.standBar(s, Sim.ensureRaces(s).races['lord:ironcrest']) || ''), 'a lord holds one region at a time');
   check(Sim.cmd(s, 'moveToSeat').ok && /Castle/.test(Sim.homeOfYou(s).name), 'you move into your seat: ' + Sim.homeOfYou(s).name);
   check(!Sim.cmd(s, 'seekSeat', 'trade').ok, 'a council seat needs allies and a name for good government');
   // allies: back the reformer and the lord of Ironcrest; good government
@@ -800,7 +805,7 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   const rally = () => { Sim.cmd(s, 'patronage', 'lords'); Sim.cmd(s, 'patronage', 'guilds'); for (const t of Object.keys(Sim.TOWNS)) Sim.cmd(s, 'patronage', 'town', t); };
   for (let round = 0; round < 3; round++) { rally(); for (let d = 0; d < 15; d++) { court(); Sim.cmd(s, 'attendCourt'); away(); Sim.advance(s, 1440); s.bandits.eastwatch = 5; } }
   rally(); R.kingSupport = Math.min(R.kingSupport, 40); court(); const sup = Sim.computeSupport(s);
-  const rc = Sim.cmd(s, 'claimCrown'); check(rc.ok && Sim.isRuler(s), 'with ' + Sim.alliesOf(s).length + ' allies, a kept promise and support of ' + sup + ', you are crowned' + (rc.ok ? '' : ': ' + rc.msg));
+  winElection(s, 'crown'); holdElections(s); check(Sim.isRuler(s) && !Sim.yourLordships(s).includes('eastwatch'), 'with ' + Sim.alliesOf(s).length + ' allies and support of ' + sup + ', the realm votes you to the throne, and Eastwatch passes to another');
   R.treasury = Math.max(R.treasury, 1000); Sim.cmd(s, 'rule', 'draw', 700); check(R.embezzled === 700, 'taking 700c from the treasury is remembered');
   R.figures.find(f => f.kind === 'reformer').ally = false; s.coins = 0; for (let d = 0; d < 30 && Sim.isRuler(s); d++) { away(); Sim.advance(s, 1440); s.coins = Math.min(s.coins, 0); }   // a ruler with nothing to repay it from
   check(!Sim.isRuler(s) && R.exile, 'an inquiry finds the theft, you cannot repay, and the council removes you: exile');
@@ -957,7 +962,7 @@ console.log('32. Courts of the towns, and the crown’s hand');
 
 console.log('33. The calendar, the seasons, and justice in proportion');
 {
-  const s = newGameRaw(33); s.ageRate = 0; Sim.applyStart(s, 'lord'); s.coins = 4000; Sim.advance(s, 1440);
+  const s = newGameRaw(33); s.ageRate = 0; Sim.applyStart(s, 'lord'); s.coins = 4000; Sim.advance(s, 1440); holdElections(s);
   const cal = d => Sim.calendar({ day: d });
   check(cal(1).monthName === 'Thawmonth' && cal(1).dom === 1 && cal(5).dom === 5 && cal(6).monthName === 'Seedmonth', 'months are five days long');
   check(cal(46).season === 'winter' && cal(31).season === 'autumn' && cal(61).year === 2 && cal(61).season === 'spring', 'twelve months make a sixty-day year, in four seasons');
@@ -1630,7 +1635,7 @@ console.log('50. Staff, elections and promises (v0.57-v0.59)');
   const h = Sim.newGame(5906); Sim.applyStart(h, 'lord'); Sim.advance(h, 60); h.coins = 99999; if (h.folk) h.folk.fame = 40;
   const cr = Sim.ensureRaces(h).races.crown; cr.poll = h.day + 40; h.realm.kingSupport = 70;
   check(!!Sim.challengeBar(h, cr), 'a popular king cannot be challenged early');
-  h.realm.kingSupport = 30; const bar = Sim.challengeBar(h, cr);
+  h.realm.kingSupport = 30; const bar = Sim.challengeBar(h, cr); { const at = Sim.LOCS[Sim.raceVenue(cr).loc]; h.player.x = at.x; h.player.z = at.z; }
   check(!bar && Sim.cmd(h, 'challenge', 'crown').ok !== false && cr.poll <= h.day + 4, 'a faltering king can be forced to an early vote' + (bar ? ': ' + bar : ''));
 }
 
