@@ -199,6 +199,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .staffpick small { color: var(--ink-soft); font-size: 12.5px; }
 .staffpick.warn { border-color: #a8322a; }
 .box > .staffpick { margin: 4px 0; }
+.runcard.ok { border-color: var(--leather); }
+.runbtn .btn { font-weight: 700; }
 .ladder span { color: var(--ink-soft); }
 .ladder span.done { text-decoration: line-through; }
 .ladder span.on { color: var(--ink); font-weight: 700; }
@@ -11760,7 +11762,7 @@ function renderCard(force) {
   // a place you merely walk past shows only its name; tap the tab to open it
   const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
   // an election venue: put your name forward, speak, or call an early vote, in person
-  if (here && html && !p.dest) { const vb = venueBox(G, here); if (vb) html += vb; }
+  if (here && html && !p.dest) { const vb = venueBox(G, here); if (vb) { const i = html.indexOf('</h2>'); html = i >= 0 ? html.slice(0, i + 5) + vb + html.slice(i + 5) : html + vb; } }
   // a town's market square: buy and sell here too
   { const mt = here && Object.keys(Sim.MARKET_AT).find(t => Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) { const cs = ((G.realm && G.realm.contracts) || []).filter(c => c.taken && c.region === mt && c.kind !== 'clear'); if (cs.length) html += `<div class="acts">${cs.map(c => B_('Deliver for ' + esc(c.who) + ' (' + (c.delivered || 0) + '/' + c.qty + ')', ['fulfil', c.n])).join('')}</div>`; if (mt !== 'hearthmoor') html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; } }
   // a door you can go through
@@ -11865,7 +11867,7 @@ const SECTIONS = [
   ['money', 'Money', [['ledger', 'Ledger'], ['jobs', 'Work']]],
   ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
   ['people', 'People', [['people', 'Townsfolk'], ['family', 'Family'], ['renown', 'Your name']]],
-  ['power', 'Power', [['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
+  ['power', 'Power', [['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
 ];
 const TABS = SECTIONS.flatMap(x => x[2]);
 const sectionOf = k => (SECTIONS.find(x => x[2].some(y => y[0] === k)) || (k === 'manage' ? SECTIONS[2] : SECTIONS[0]));
@@ -11884,7 +11886,7 @@ function renderBook(turn) {
   $('tabs').innerHTML = SECTIONS.map(([k, n, pages]) => `<button type="button" class="tab" role="tab" aria-selected="${sec[0] === k}" data-c='${JSON.stringify(['ui', 'tab', (UI.subOf && UI.subOf[k]) || pages[0][0]])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
   const subs = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}<span class="paused" title="Time stands still while the book is open">Paused</span></nav>`;
-  pg.innerHTML = subs + ({ requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -12720,7 +12722,9 @@ function diplomacy(s, V) {
   }
   return acts.length ? `<p><b>Diplomacy</b></p><div class="acts">${acts.join('')}</div><p class="why">A trade pact brings Valdoria’s duty down to 5% while you keep Alderwyn’s tariff low; an alliance takes it to nothing and ends the closing of the port. A royal marriage joins the houses and warms relations each week while the marriage lasts; if it ends, the Queen takes it hard.</p>` : '';
 }
-function venueBox(s, here) {
+function venueBox(s, here) { const vb = venueBoxInner(s, here), any = Sim.upcomingRaces(s).some(r => Sim.raceVenue(r).loc === here);
+  return any ? `<div class="acts runbtn">${B_('Run for office', ['page', 'run'])}</div>` + vb : vb; }
+function venueBoxInner(s, here) {
   const town = (L[here] && L[here].town) || 'hearthmoor', vhere = (town === 'hearthmoor' ? 'hall' : Sim.MARKET_AT[town]) === here;
   const voting = vhere ? Sim.upcomingRaces(s).filter(r => r.open && r.poll === s.day && !r.you && Sim.voteTowns(r).includes(town)) : [];
   const vb = voting.map(r => { const no = Sim.canVote(s, r);
@@ -12753,6 +12757,34 @@ function pageRequests(s) {
   let h = `<h3>Requests</h3><p class="lead">What your managers ask of you, and what they have done on their own.</p>`;
   h += dec.length ? dec.map(d => decisionHTML(s, d)).join('') : `<p>Nothing waits on your word.</p>`;
   if (rep.length) h += `<h4>From your managers</h4><ul class="decisions">${rep.map(r => `<li>${esc(typeof r === 'string' ? r : (r.day != null ? 'Day ' + r.day + ': ' : '') + (r.text || ''))}</li>`).join('')}</ul>`;
+  return h;
+}
+/* Run for office: every office, with what you need and a button to run. Offices chosen where you stand come first. */
+function raceCard(s, r) {
+  const fee = Sim.standFee(s, r), bar = Sim.standBar(s, r), at = Sim.atVenue(s, r), vn = Sim.venueName(r), mine = Sim.yourOffice(s);
+  const holds = mine && mine.office === r.office && (mine.region || null) === (r.region || null), hold = Sim.electState(s) && r.office !== 'council' ? null : null;
+  let st, acts = '';
+  if (r.you && r.open) {
+    st = `<b>You are standing.</b> The vote is at noon on day ${r.poll}, here at ${esc(vn)}.`;
+    acts = B_('Speak to the crowds<small>+' + Sim.speechGain(s) + ' · once a day, in the town</small>', ['speech', r.key], '', r.speech === s.day || !Sim.inTown(s, r)) + (r.pledge == null ? Sim.pledgesFor(s, r).map(P => B_('Promise: ' + esc(P.text) + '<small>' + esc(P.how) + '</small>', ['pledge', r.key, P.id], 'alt')).join('') : '') + (!at ? B_('Go to ' + esc(vn), ['goto', Sim.raceVenue(r).loc], 'alt') : '') + B_('Withdraw', ['withdraw', r.key], 'alt');
+  } else if (r.open) {
+    st = `<b>The season is open.</b> The vote is at noon on day ${r.poll}, at ${esc(vn)}.`;
+    acts = bar ? '' : at ? B_('Run for office · ' + fee + 'c', ['stand', r.key], '', s.coins < fee) : B_('Go to ' + esc(vn) + ' to run', ['goto', Sim.raceVenue(r).loc], 'alt');
+  } else {
+    st = `Next vote day ${r.poll}. The season opens day ${r.poll - Sim.ELECT_SEASON}${r.poll - Sim.ELECT_SEASON - s.day > 0 ? ' (in ' + (r.poll - Sim.ELECT_SEASON - s.day) + ' day' + (r.poll - Sim.ELECT_SEASON - s.day === 1 ? '' : 's') + ')' : ''}. Running costs ${fee}c.`;
+    if (!Sim.challengeBar(s, r)) acts = at ? B_('Force an early vote · ' + fee * 2 + 'c<small>the holder is faltering</small>', ['challenge', r.key], 'alt', s.coins < fee * 2) : B_('Go to ' + esc(vn), ['goto', Sim.raceVenue(r).loc], 'alt');
+  }
+  const ok = !bar || r.you;
+  return `<div class="box runcard${ok ? ' ok' : ''}"><h5>${esc(Sim.raceLabel(r).replace(/^the /, 'The ').replace(/^a seat/, 'A seat'))}${holds ? ' <span class="pill yes">yours</span>' : ''}</h5><p>${st}</p><p class="why">${bar && !r.you ? esc(bar) : holds ? 'You hold it: you are on the ballot whenever it comes up.' : 'You can run for this.'}</p>${acts ? `<div class="acts">${acts}</div>` : ''}</div>`;
+}
+function pageRun(s) {
+  const races = Sim.upcomingRaces(s), here = races.filter(r => Sim.atVenue(s, r)), rest = races.filter(r => !here.includes(r));
+  const ok = r => !Sim.standBar(s, r) || r.you;
+  let h = `<h3>Run for office</h3><p class="lead">${here.length ? 'Offices chosen here at ' + esc(Sim.venueName(here[0])) + ' come first.' : 'You run in person, at the place each office is chosen. Go there while its season is open.'}</p>`;
+  if (here.length) h += `<h4>Chosen here</h4>` + here.map(r => raceCard(s, r)).join('');
+  const can = rest.filter(ok), cannot = rest.filter(r => !ok(r));
+  if (can.length) h += `<h4>${here.length ? 'Elsewhere, open to you' : 'Open to you'}</h4>` + can.map(r => raceCard(s, r)).join('');
+  if (cannot.length) h += `<details><summary>Not yet within reach (${cannot.length})</summary>${cannot.map(r => raceCard(s, r)).join('')}</details>`;
   return h;
 }
 function pageElections(s) {
@@ -14401,8 +14433,12 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.07.2247';
+const BUILD = '2026.11.07.2256';
 const NOTES = [
+  { v: '0.65', date: '7 November', title: 'Run for office', items: [
+    'Every polling place (the Village Hall, each town\u2019s square, the Great Market of Crownmere) has a Run for office button on its card.',
+    'It opens a new Run for office page (under Power): every office, with the ones chosen where you stand first. Each shows when its season opens, what it costs, whether you can run and why not, and the button to run, speak, promise or withdraw.'
+  ] },
   { v: '0.64', date: '7 November', title: 'Counting staff plainly', items: [
     'Staff counts now include everyone who works in a shop, the worker too: a stall has room for 2, a timber building 3, a stone one 4. The manager is counted separately.'
   ] },
