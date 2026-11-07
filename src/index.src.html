@@ -270,6 +270,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .mneedle { position: absolute; top: -3px; bottom: -3px; width: 4px; margin-left: -2px; background: #f6efe0; box-shadow: 0 0 6px #000; border-radius: 2px; }
 .mtrack.tavern .mneedle { width: auto; left: 0 !important; right: auto; margin: 0; background: linear-gradient(#f3e3b0, #d9a640); box-shadow: none; border-radius: 0; }
 .mlabel { position: absolute; left: 10px; top: 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,248,230,.85); text-shadow: 0 1px 2px #000; pointer-events: none; }
+.mslow { font-size: 11px; color: var(--ink-soft); font-style: italic; }
+.mx { font-family: var(--f-body); font-size: 14px !important; border: 1px solid rgba(42,31,22,.35) !important; border-radius: 4px; padding: 2px 10px; min-width: 56px !important; }
+.mstats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; } .mstats span:first-child { color: var(--ink); font-weight: 600; }
+.mprog { height: 4px; border-radius: 2px; background: rgba(42,31,22,.15); margin: 4px 0 2px; overflow: hidden; } .mprog i { display: block; height: 100%; width: 0; background: #b07a2a; }
+.mstroke { position: absolute; right: 10px; top: 6px; font-size: 11px; color: rgba(255,248,230,.85); text-shadow: 0 1px 2px #000; pointer-events: none; }
 .mmsg { margin: 2px 0 6px; font-size: 13px; color: var(--ink-soft); min-height: 1.3em; }
 .mgo { width: 100%; min-height: 46px; font-family: var(--f-display); font-size: 19px; touch-action: none; }
 @media (orientation: portrait) { .mini { width: calc(100vw - 24px); bottom: calc(env(safe-area-inset-bottom, 0px) + 170px); } }
@@ -564,6 +569,23 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 (function () {
 'use strict';
 const $ = id => document.getElementById(id);
+/* ----- the coin of the realm: every amount the game shows is in pennies of ten. Inside the simulation one unit is 10c,
+   for the player, the villagers, the businesses and every treasury alike, so a wage, a rent and a price always share one
+   scale. The conversion happens here, where text reaches the screen, so nothing can be missed on one side of a payment.
+   Only text between tags is touched: attributes, ids and drawing data never are. ----- */
+const COIN = 10;
+function coinNum(n) { const v = Math.round(parseFloat(String(n).replace(/,/g, '')) * COIN); return Math.abs(v) >= 1000 ? v.toLocaleString('en-US') : String(v); }
+function coinText(t) {
+  if (typeof t !== 'string' || !/\dc\b|\d coins?\b/.test(t)) return t;
+  return t.replace(/(^|[^#\w.,])(\d[\d,]*(?:\.\d+)?)(?:(\s*(?:–|-|to)\s*)(\d[\d,]*(?:\.\d+)?))?c\b/g, (m, pre, a, mid, b) => pre + coinNum(a) + (mid ? mid + coinNum(b) : '') + 'c')
+    .replace(/(^|[^#\w.,])(\d[\d,]*) coins\b/g, (m, pre, n) => pre + coinNum(n) + ' coins');
+}
+function coinify(h) { return typeof h !== 'string' || !/\dc\b|\d coins?\b/.test(h) ? h : h.replace(/(<[^>]*>)|([^<]+)/g, (m, tag, text) => tag || coinText(text)); }
+(() => {
+  const H = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML'), T = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+  Object.defineProperty(Element.prototype, 'innerHTML', { configurable: true, get() { return H.get.call(this); }, set(v) { H.set.call(this, coinify(v)); } });
+  Object.defineProperty(Node.prototype, 'textContent', { configurable: true, get() { return T.get.call(this); }, set(v) { T.set.call(this, coinText(v)); } });
+})();
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const TR = Sim.TRADES;
@@ -622,11 +644,14 @@ try { const m = JSON.parse(store.get(META) || 'null'); if (m) meta = Object.assi
 function saveMeta() { store.set(META, JSON.stringify(meta)); }
 // the first version kept one save under an older key: move it into slot 1
 (function legacy() { const old = store.get('hearthmoor.save'); if (old && !store.get(KEY(1))) { store.set(KEY(1), old); const b = store.get('hearthmoor.save.bak'); if (b) store.set(BAK(1), b); meta.lastSlot = 1; saveMeta(); } })();
+// a slot holds a game, nothing, or a save from before v0.54 that cannot be loaded but is never thrown away
 function readSlot(n) {
-  for (const k of [KEY(n), BAK(n)]) { const str = store.get(k); if (!str) continue; try { return Sim.deserialize(str); } catch (e) { } }
-  return null;
+  let old = null;
+  for (const k of [KEY(n), BAK(n)]) { const str = store.get(k); if (!str) continue; try { return Sim.deserialize(str); } catch (e) { if (e.old && !old) { try { const o = JSON.parse(str); old = { old: true, name: o.name, day: o.day }; } catch (x) { old = { old: true }; } } } }
+  return old;
 }
-function slotInfo(n) { const s = readSlot(n); if (!s) return null; let when = null; try { when = (JSON.parse(store.get(KEY(n) + '.when') || 'null')); } catch (e) { } return Object.assign(Sim.summary(s), { when }); }
+const playable = g => g && !g.old ? g : null;
+function slotInfo(n) { const s = readSlot(n); if (!s) return null; if (s.old) return s; let when = null; try { when = (JSON.parse(store.get(KEY(n) + '.when') || 'null')); } catch (e) { } return Object.assign(Sim.summary(s), { when }); }
 let G = null, slot = null, lastSave = 0, saveOk = true;
 function saveNow() {
   if (!G || !slot || UI.mode !== 'play') return;
@@ -3002,11 +3027,9 @@ const B_ = (label, c, cls, dis) => `<button type="button" class="btn ${cls || ''
 function act(c) {
   if (c[0] === 'page') { openBook(c[1]); return; }
   if (c[0] === 'goto') { travel(c[1]); return; }
-  if (c[0] === 'work' && G.job && !Sim.playerAtWork(G) && Sim.dist(G.player, L['emp:' + G.job.emp]) > L['emp:' + G.job.emp].r) { travel('emp:' + G.job.emp); }
   if (c[0] === 'goto') { UI.loc = c[1]; UI.openLoc = c[1]; }
   else if (c[0] === 'walk') UI.loc = null;
   else if (c[0] === 'gather') UI.loc = Sim.GATHER[c[1]].loc;
-  else if (c[0] === 'work' && G.job) UI.loc = 'emp:' + G.job.emp;
   else if (['store', 'craft', 'serve'].includes(c[0])) { const sh = Sim.shopById(G, c[1]); if (sh) UI.loc = 'plot' + sh.plot; }
   if (c[0] === 'open') UI.loc = 'plot' + c[1];
   const r = Sim.cmd(G, c[0], c[1], c[2], c[3]);
@@ -3047,9 +3070,8 @@ function carryText(s) {
 const PLACES = [['hall', 'Village Hall'], ['field', 'Wheat Field'], ['forest', 'Pine Woods'], ['pit', 'Iron Pit'], ['market', 'Trading Post'], ['home', 'Your Hut']];
 function placesRow(s) {
   const list = [];
-  if (s.job) list.push(['emp:' + s.job.emp, 'Your job']);
   s.shops.forEach(x => list.push(['plot' + x.plot, TR[x.trade].name + ' (' + Sim.PLOTS[x.plot].name.split(' ')[0] + ')']));
-  if (!s.job && !s.shops.length) list.push(['well', 'The square']);
+  if (!s.shops.length) list.push(['well', 'The square']);
   const v = s.village, task = { 2: ['granary', 'Granary'], 4: ['tower', 'Watchtower'], 7: ['manor', 'Manor gate'] }[v.step];
   if (task) list.push(task);
   if (v.cottage !== 'forsale') list.push(['cottage', 'Your cottage']);
@@ -3100,26 +3122,13 @@ function cardHTML(s) {
   const walking = p.dest ? `<div class="sub">Walking&hellip;</div>` : '';
   const Lh = here && L[here];
   // a shop you work at
-  if (Lh && Lh.emp && s.biz && s.biz[Lh.emp] && s.biz[Lh.emp].owner === 'player' && !(s.job && s.job.emp === Lh.emp)) return ownedBizCard(s, s.biz[Lh.emp], walking);
+  if (Lh && Lh.emp && s.biz && s.biz[Lh.emp] && s.biz[Lh.emp].owner === 'player') return ownedBizCard(s, s.biz[Lh.emp], walking);
   if (Lh && Lh.emp) {
-    const e = Sim.empById(Lh.emp), mine = s.job && s.job.emp === e.id, T = TR[e.trade];
-    const learnt = Sim.learned(s, e.trade), shifts = s.trades[e.trade];
-    let info = `<h2>${esc(e.name)}</h2><div class="sub">${esc(e.boss)}'s ${T.name.toLowerCase()} · shifts ${shiftText(e)} · ${e.wage}c a shift · ${learnt ? 'you know this trade' : `work ${Sim.LEARN_SHIFTS} shifts to learn ${T.name.toLowerCase()}${shifts ? ` (${shifts}/${Sim.LEARN_SHIFTS})` : ''}`}</div>${walking}`;
-    const acts = [];
-    if (mine) {
-      const on = Sim.inShift(s), len = (e.shift[1] - e.shift[0]) * 60;
-      if (on) info += `<div class="why">${Sim.playerAtWork(s) ? '<b>Working your shift.</b> Stay here to get paid, or lend a hand for tips.' : '<b>Your shift is on.</b> Go to the workstation to be counted.'} Strikes: ${s.job.strikes}/3.</div>${progressBar(s.job.workedMin / (len * 0.6))}`;
-      if (on && Sim.playerAtWork(s)) { acts.push(B_(MINI[e.trade].name + '<small>tips so far: ' + (s.job.tips || 0) + '/8c</small>', ['ui', 'mini'])); acts.push(B_('Work the rest of the shift<small>skip to ' + String(e.shift[1]).padStart(2, '0') + ':00 and get paid</small>', ['workRest'], 'alt')); }
-      else info += `<div class="why">Your next shift is ${shiftText(e)}. You have worked ${s.job.shifts} ${s.job.shifts === 1 ? 'shift' : 'shifts'} here. Strikes: ${s.job.strikes}/3.</div>`;
-      if (!Sim.playerAtWork(s)) acts.push(B_('Go to work', ['work']));
-      acts.push(UI.confirm === 'quit' ? B_('Yes, quit', ['quitJob'], 'warn') + B_('Stay', ['ui', 'confirm', null], 'alt') : B_('Quit this job', ['ui', 'confirm', 'quit'], 'alt'));
-    } else if (s.job) {
-      info += `<div class="why">You already work at ${esc(Sim.empById(s.job.emp).name)}. You can only hold one job at a time.</div>`;
-    } else {
-      info += `<div class="why">${esc(e.boss)} needs a hand. Show up for each shift to get paid. Miss three and you're let go.</div>`;
-      acts.push(B_(`Ask ${esc(e.boss)} for work`, ['apply', e.id]));
-    }
-    { const b = s.biz && s.biz[e.id]; if (b && b.owner !== 'player' && s.people[b.owner]) { const pr = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + pr + 'c', ['buyBiz', b.id], 'alt', s.coins < pr)); } }
+    const e = Sim.empById(Lh.emp), T = TR[e.trade], b = s.biz && s.biz[e.id];
+    let info = `<h2>${esc(e.name)}</h2><div class="sub">${esc(e.boss)}'s ${T.name.toLowerCase()} · open ${shiftText(e)}</div>${walking}`;
+    const acts = [workBtn(s, e.id)];
+    info += workLine(s, e.id);
+    if (b && b.owner !== 'player' && s.people[b.owner]) { const pr = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + pr + 'c', ['buyBiz', b.id], 'alt', s.coins < pr)); }
     return info + `<div class="acts">${acts.join('')}</div>`;
   }
   // a lot: empty or your shop
@@ -3130,8 +3139,8 @@ function cardHTML(s) {
     }
     if (!shop) {
       const acts = Sim.TRADE_KEYS.map(k => {
-        const T = TR[k], cost = T.tiers[0].cost, known = Sim.learned(s, k), can = known && Sim.canPay(s, cost);
-        return B_(`Open a ${T.name.toLowerCase()}<small>${known ? Sim.costText(cost) : 'learn it at ' + esc(Sim.EMPLOYERS.find(e => e.trade === k).name)}</small>`, ['open', Lh.plot, k], can ? '' : 'alt', !can);
+        const T = TR[k], cost = Sim.openCost(s, k), known = Sim.learned(s, k), can = known && Sim.canPay(s, cost);
+        return B_(`Open a ${T.name.toLowerCase()}<small>${known ? Sim.costText(cost) + (G.starterUsed ? '' : ', a one-time starter price') : 'reach level 2 at ' + esc(Sim.EMPLOYERS.find(e => e.trade === k).name)}</small>`, ['open', Lh.plot, k], can ? '' : 'alt', !can);
       });
       return `<h2>${esc(Lh.name)}</h2><div class="sub">An empty lot facing the square. Open any trade you have learned.</div>${walking}<div class="acts">${acts.join('')}</div>`;
     }
@@ -3141,6 +3150,7 @@ function cardHTML(s) {
     if (crafting) { acts.push(B_('Stop', ['stop'], 'alt')); if (q) acts.push(B_(`Serve ${q} waiting`, ['serve', shop.id])); }
     else { acts.push(B_(shop.work.loaded ? 'Finish the batch' : `${T.craft} ${Sim.goodsName(shop.trade, Ti.out)}`, ['craft', shop.id])); acts.push(B_('Mind the counter', ['serve', shop.id], 'alt')); }
     if (Object.keys(T.recipe).some(g => p.inv[g])) acts.push(B_('Store what I carry', ['store', shop.id], 'alt'));
+    if (!crafting) acts.push(workBtn(s, 'shop:' + shop.id));
     acts.push(B_('Manage', ['ui', 'manage', ['shop', shop.id]], 'alt'));
     const stock = Object.keys(T.recipe).map(g => shop.stock[g] + ' ' + g).join(', ');
     const status = `${Ti.name} · ${Sim.goodsName(shop.trade, shop.goods)} on the shelf · storage ${stock} (max ${Ti.cap}) · ${shop.price}c each${q ? ` · <b>${q} waiting</b>` : ''}${shop.worker ? ' · ' + esc(shop.worker.name) + ((shop.hands || []).length ? ' and ' + shop.hands.map(h => esc(h.name.split(' ')[0])).join(' and ') + ' work' : ' works') + ' here' : ''}`;
@@ -3484,6 +3494,18 @@ function budgetNote(s, t, h) {
   return (works ? ' <b>Works for you</b>, so if they leave you lose a worker too.' : '') + (left < 0 ? ` <b>Cannot afford the rent:</b> ${-left}c short each day after food. They will fall behind and may leave town.` : left <= 1 ? ' Only just gets by.' : '');
 }
 
+/* ----- drop-in work: the button on every working business ----- */
+function workBtn(s, at) {
+  const W = Sim.workPlace(s, at); if (!W) return '';
+  const no = Sim.workRefusal(s, W); if (no) return B_('Work here<small>the owner will not have you</small>', ['ui', 'mini', at], 'alt', true);
+  const lv = Sim.tradeLevel(s, W.trade), pay = Sim.roundPay(s, W.trade, false, 0, W.own);
+  return B_('Work here<small>' + esc(Sim.tradeName(W.trade).toLowerCase()) + ' level ' + lv + ' · about ' + pay + 'c a round' + (W.own ? ', your own bench' : '') + '</small>', ['ui', 'mini', at], '');
+}
+function workLine(s, at) {
+  const W = Sim.workPlace(s, at); if (!W) return '';
+  const no = Sim.workRefusal(s, W); if (no) return `<div class="why">${esc(no)}</div>`;
+  return `<div class="why">Walk in and work the bench whenever you like, for as long as you like: every good round is paid at once, and you get better at the trade as you go.${W.own ? ' At your own bench you keep the tenth the owner would take.' : ''}</div>`;
+}
 function personCard(s, pr, body) {
   const doing = body && (body.why || body.doing);
   const log = pr.log.slice(0, 3).map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('');
@@ -3523,7 +3545,7 @@ function renderCard(force) {
   // a door you can go through
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
-  const mineHere = Lh && ((Lh.emp && ((G.job && G.job.emp === Lh.emp) || (G.biz && G.biz[Lh.emp] && G.biz[Lh.emp].owner === 'player'))) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
+  const mineHere = Lh && ((Lh.emp && (G.biz && G.biz[Lh.emp] && G.biz[Lh.emp].owner === 'player')) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
   const tab = html && here && Lh && UI.openLoc !== here && !mineHere && meta.settings.cards !== 'open';
   if (tab) { const m = html.match(/<h2>([\s\S]*?)<\/h2>/); html = `<button type="button" class="cardtab" data-c='["ui","openCard"]'>${m ? m[1] : 'This place'}<small>tap to open</small></button>`; }
   else if (html && here && Lh && !mineHere) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
@@ -3555,7 +3577,7 @@ function rankOf(s) {
   if (s.offices && s.offices.elder === 'player') return { key: 'elder', title: 'Elder of Hearthmoor' };
   if (v && v.council) return { key: 'councillor', title: 'Councillor' };
   if (s.shops.length || Object.values(s.biz || {}).some(b => b.owner === 'player')) return { key: 'merchant', title: 'Merchant' };
-  if (s.job) return { key: 'hand', title: 'Hired hand' };
+  if ((s.rec.workRounds || 0) > 0) return { key: 'hand', title: 'Journeyman' };
   return { key: 'newcomer', title: 'Newcomer' };
 }
 const RANK_ORDER = ['newcomer', 'hand', 'merchant', 'councillor', 'elder', 'lord', 'c_trade', 'c_war', 'c_law', 'c_treasury', 'ruler'];
@@ -3589,7 +3611,7 @@ function hud(s) {
   const carry = Sim.GOODS.filter(g => inv[g]).map(g => `<b>${inv[g]}</b> ${g}`);
   chips.push(carry.length ? 'Carrying ' + carry.join(' · ') : 'Hands empty');
   if (s.player.horse) chips.push(`<span class="chip num btn" data-c='["ride"]' role="button" tabindex="0">${s.player.riding ? 'Riding ' + esc(s.player.horse.name) + ' · get down' : 'Mount ' + esc(s.player.horse.name)}</span>`);
-  if (s.job) { const e = Sim.empById(s.job.emp), on = Sim.inShift(s); chips.push(`<span class="chip num ${on ? 'on' : ''}">${on ? 'On shift' : 'Job'}: ${esc(e.name)} ${shiftText(e)}</span>`); }
+  if (s.work) chips.push(`<span class="chip num on">Working · ${s.work.rounds} ${s.work.rounds === 1 ? 'round' : 'rounds'} · ${s.work.earned}c</span>`);
   { const w = waypointPos(); if (w) chips.push(`<span class="chip num btn" data-c='["ui","clearWaypoint"]' role="button" tabindex="0">Finding ${esc(w.name.split(' ')[0])}${w.near ? ' \u00b7 ' + Math.round(Math.hypot(s.player.x - w.x, s.player.z - w.z)) + ' m' : ' \u00b7 in ' + esc(TOWN_NAMES[w.town])} \u00d7</span>`); }
   if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>${s.village.council ? ' · Councillor' : ''}`);
   const mine = myBusinesses(s);
@@ -3848,16 +3870,13 @@ function pageStaff(s, only) {
   return html;
 }
 function pageJobs(s) {
-  let html = `<h3>Work</h3><p class="lead">Learn a trade by working for someone who already knows it.</p>`;
-  if (s.job) {
-    const e = Sim.empById(s.job.emp);
-    html += `<div class="box"><h5>${esc(e.name)}</h5><dl class="kv"><dt>Boss</dt><dd>${esc(e.boss)}</dd><dt>Shift</dt><dd>${shiftText(e)}</dd><dt>Pay</dt><dd>${e.wage}c a shift</dd><dt>Shifts worked here</dt><dd>${s.job.shifts}</dd><dt>Strikes</dt><dd>${s.job.strikes} of 3</dd></dl>
-      <p>Be at the workstation for most of the shift to get full pay. Missing a shift gives a strike; at three you are let go. Getting let go costs nothing more: you can find work again the same day.</p>
-      <div class="acts">${B_('Go to work', ['work'])}${UI.confirm === 'quitb' ? B_('Yes, quit', ['quitJob'], 'warn') + B_('Stay', ['ui', 'confirm', null], 'alt') : B_('Quit&hellip;', ['ui', 'confirm', 'quitb'], 'alt')}</div></div>`;
-  } else html += `<p>You have no job right now. You can hold one job at a time.</p>`;
-  html += `<h4>Shops that hire</h4><table class="trades"><thead><tr><th>Shop</th><th>Shift</th><th>Pay</th><th>Your trade</th></tr></thead><tbody>
-    ${Sim.EMPLOYERS.map(e => `<tr><td>${esc(e.name)}<br><button type="button" class="place" data-c='${esc(JSON.stringify(['goto', 'emp:' + e.id]))}'>Go there</button></td><td class="num">${shiftText(e)}</td><td>${e.wage}c</td><td>${TR[e.trade].name}<br>${Sim.learned(s, e.trade) ? '<span class="pill yes">learned</span>' : `<span class="pill">${s.trades[e.trade]}/${Sim.LEARN_SHIFTS} shifts</span>`}</td></tr>`).join('')}</tbody></table>
-    <p>Two shifts teach you the basics. Every further shift, and every batch you make yourself, makes you faster at that trade in your own shop, up to 30%: ${Sim.TRADE_KEYS.map(k => TR[k].name.toLowerCase() + ' +' + Sim.skillPct(s, k) + '%').join(', ')}.</p>`;
+  let html = `<h3>Work</h3><p class="lead">Walk into any working business and choose Work here. Work as long as you like and leave whenever you like: every good round is paid on the spot.</p>`;
+  html += `<div class="box"><p>A round is four strokes. Three good strokes pay the round; four, with three dead centre, is a perfect round worth a quarter more. Rounds in a row build a streak, up to a quarter more again. A poor round pays nothing and breaks the streak, but nothing you have earned is ever taken back. Time runs at 1&times; while you work.</p><p>Your level in each trade follows you to every bench, in every town. Level 2 in a trade also lets you open a shop of that trade.</p></div>`;
+  const all = Object.keys(MINI), worked = all.filter(t => Sim.tradeXp(s, t) > 0);
+  html += `<h4>Your trades</h4>` + (worked.length ? `<table class="trades"><thead><tr><th>Trade</th><th>Level</th><th>Rounds</th><th>A round pays</th></tr></thead><tbody>${worked.map(t => { const P = Sim.levelProgress(s, t); return `<tr><td>${esc(Sim.tradeName(t))}</td><td>${P.level}${P.need ? ` <small>(${P.have}/${P.need})</small>` : ' <small>(master)</small>'}</td><td class="num">${Sim.tradeXp(s, t)}</td><td>${Sim.roundPay(s, t, false, 0, false)}c</td></tr>`; }).join('')}</tbody></table>` : '<p>You have not worked a bench yet. The four shops across the square in Hearthmoor are a good start.</p>');
+  html += `<h4>What each level pays</h4><table class="trades"><thead><tr><th>Level</th><th>Good rounds</th><th>A round pays</th><th>Perfect, best streak</th></tr></thead><tbody>${Sim.WORK_LEVELS.map((n, i) => `<tr><td>${i + 1}</td><td class="num">${n}</td><td>${Sim.WORK_PAY[i]}c</td><td>${Math.round(Sim.WORK_PAY[i] * (1 + Sim.PERFECT_BONUS + Sim.STREAK_MAX) * 100) / 100}c</td></tr>`).join('')}</tbody></table>
+    <p class="why">Where the money comes from: what you make at the bench is sold by the piece to the carters who take goods to market, apart from the shop's own counter. The business takes a tenth on top for the use of its bench; at your own bench that tenth is yours.</p>`;
+  html += `<h4>Benches in Hearthmoor</h4><div class="acts">${Sim.EMPLOYERS.map(e => `<button type="button" class="btn alt" data-c='${esc(JSON.stringify(['goto', 'emp:' + e.id]))}'>${esc(e.name)}<small>${esc(TR[e.trade].name.toLowerCase())} · level ${Sim.tradeLevel(s, e.trade)}</small></button>`).join('')}</div>`;
   return html;
 }
 function personRow(s, pr) {
@@ -4249,7 +4268,8 @@ function ownedBizCard(s, b, walking) {
   if (b.disrepair) html += `<div class="why">Needs mending: takings are down by a third.</div>`;
   if (b.burnt && b.burnt > s.day) html += `<div class="why"><b>Burned.</b> Shut until day ${b.burnt}.</div>`;
   if (!b.lease && !b.seized) html += bizDials(s, b, true);
-  const acts = [B_('Manage', ['ui', 'manage', ['biz', b.id]])];
+  const acts = [workBtn(s, b.id), B_('Manage', ['ui', 'manage', ['biz', b.id]], 'alt')];
+  if (Sim.isPrestige(s, b.id)) { html += `<div class="why"><b>One of the great properties.</b> Its upkeep is dear (counted in its takings). Host a feast here, once a week, for the town, the nobles and the court.</div>`; acts.push(B_('Host a feast · 150c', ['fFeast', b.id], 'alt', s.coins < 150 || (s.folk && s.folk.feast && s.day - s.folk.feast < 7))); }
   if (b.disrepair) acts.push(B_('Mend it · ' + (b.repairCost || 30) + 'c', ['repairBiz', b.id], 'alt', s.coins < (b.repairCost || 30)));
   acts.push(B_('All businesses', ['ui', 'btown', town], 'alt'));
   return html + `<div class="acts">${acts.join('')}</div>`;
@@ -4263,8 +4283,9 @@ function oakBizCard(s, Lh, walking) {
   const dist = { market: 'Market Square', guild: 'Guild Quarter', riverside: 'Riverside', east: 'East Bank', green: 'on the green', river: 'on the river Green', south: Lh.town === 'crownmere' ? 'South Ward' : 'South Lane', estate: 'across the river', court: 'Court Quarter', lake: 'Lakeside', old: 'Old Town', west: 'West Gate Road' }[site.district] || '';
   const blurb = { g_mill: ' The Great Mill grinds the valley\u2019s wheat and barley into flour for half the kingdom\u2019s bakers.', g_estate: ' The Ashcombes\u2019 hall and home farm: the family own half the cottages in town and the best of the land.', g_plough: ' Farmers\u2019 ale, a fire, and the gossip of the whole valley.' }[b.id] || '';
   let html = `<h2>${esc(Lh.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${dist}.${blurb} ${own ? 'It is yours.' : 'Run by ' + esc(owner ? owner.name : site.boss) + '.'} ${b.staff.length} ${b.staff.length === 1 ? 'hand' : 'hands'} · last day ${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit.${rivals.length ? ' Competes with ' + esc(rivals.join(' and ')) + '.' : ''}</div>${walking}`;
-  const acts = [];
-  if (!own && owner) { const price = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)); }
+  const acts = [workBtn(s, b.id)];
+  if (Sim.isPrestige(s, b.id)) html += `<div class="why"><b>One of the great properties of ${esc(TOWN_NAMES[Lh.town])}.</b> Owning it brings fame and the chance to host feasts that the court notices, with upkeep to match.</div>`;
+  if (!own && owner) { const price = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + price + 'c', ['buyBiz', b.id], 'alt', s.coins < price)); }
   if (own) acts.push(B_('Manage', ['ui', 'manage', ['biz', b.id]]));
   acts.push(B_(own ? 'All businesses' : 'Businesses', ['ui', 'btown', Lh.town], 'alt'));
   return html + `<div class="acts">${acts.join('')}</div>`;
@@ -4312,7 +4333,6 @@ function taskList(s) {
   if (v.shortage) out.push({ who: 'The village', title: 'Refill the granary: ' + v.granary + ' of ' + v.granaryNeed + ' grain', note: 'Until it is full, villagers buy less at every shop.', act: go('granary', 'Go to the granary') });
   if (v.dispute != null && (v.council || s.offices.elder === 'player')) out.push({ who: 'The council', title: 'Settle the dispute before the council', note: Sim.DISPUTES[v.dispute].text, act: go('hall', 'Go to the Village Hall') });
   if (v.contract) out.push({ who: v.contract.who, title: 'Deliver ' + Sim.goodsName(v.contract.trade, v.contract.qty) + ' to the Trading Post', note: 'By day ' + v.contract.until + ', for ' + v.contract.reward + 'c.', act: go('market', 'Go to the Trading Post') });
-  if (s.job) { const e = Sim.empById(s.job.emp); out.push({ who: e.boss, title: 'Your shift at ' + e.name, note: shiftText(e) + (Sim.inShift(s) ? ' · on now' : '') + ' · strikes ' + s.job.strikes + '/3', act: go('emp:' + e.id, 'Go to work') }); }
   const J = s.justice;
   if (J) {
     for (const C of Object.values(s.courts || {}).filter(C => Sim.canJudge(s, C))) for (const c of C.cases.filter(c => !c.delegated)) { const A = s.people[c.accused]; out.push({ who: 'The guard of ' + C.name, title: 'Hear the ' + Sim.CRIME[c.kind].toLowerCase() + ' case against ' + (A ? A.name : 'someone'), note: c.what + '.', act: B_('Justice', ['ui', 'court', C.id]) }); }
@@ -4429,7 +4449,7 @@ function pageRealm(s) {
   // what you have done, and who stands with you
   const allies = Sim.alliesOf(s), deeds = R.deeds || {};
   h += `<h4>Deeds and allies</h4><div class="box"><dl class="kv"><dt>Deeds done</dt><dd>${Object.keys(deeds).length ? Object.keys(deeds).map(id => esc(Sim.REGIONS[id]) + ' ' + deeds[id]).join(', ') : 'none yet'}</dd><dt>Promises kept</dt><dd>${R.kept || 0}${R.broken ? ' (broken ' + R.broken + ')' : ''}</dd><dt>Allies</dt><dd>${allies.length ? esc(allies.join(', ')) : 'none yet'}</dd>${R.embezzled ? `<dt>Taken from the treasury</dt><dd class="debt">${R.embezzled}c</dd>` : ''}</dl>
-    <p>A lordship needs a deed done in that region. A council seat needs two allies and a name for good government. The crown needs three allies and a promise kept.</p></div>`;
+    <p>A lordship comes by service (a deed done in that region, and favour 45) or by wealth (a crown grant: own property there, favour 25). A council seat needs an ally and a name for good government. The crown needs three allies and a promise kept.</p></div>`;
   const pr = (R.promises || []).find(x => x.state === 'asked' || x.state === 'given');
   if (pr) { const q = s.people[pr.pid]; h += `<div class="why">${pr.state === 'asked' ? `<b>${esc(q ? q.name : 'A lord')}</b> asks your word that the roads of ${esc(Sim.REGIONS[pr.region])} will stay safe (danger under 30) for a week.<div class="acts">${B_('Give my word', ['givePromise'])}${B_('Decline', ['refusePromise'], 'alt')}</div>` : `You have promised ${esc(q ? q.name : 'a lord')} the roads of ${esc(Sim.REGIONS[pr.region])} stay safe until day ${pr.until}. Danger now: ${Math.round((s.bandits || {})[pr.region] || 0)}.`}</div>`; }
   const cs = R.contracts || [];
@@ -4449,7 +4469,7 @@ function pageRealm(s) {
     const step = (k, lab, max) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] - (k === 'tax' ? 0.25 : 1)])}' aria-label="Less">&minus;</button><output class="num">${k === 'tax' ? g[k] + '×' : g[k] + '/' + max}</output><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] + (k === 'tax' ? 0.25 : 1)])}' aria-label="More">+</button></div></div>`;
     return `<div class="box"><h5>${esc(Sim.REGIONS[id])}</h5><dl class="kv"><dt>Held by</dt><dd>${mine ? 'You' : esc(Sim.lordName(s, id))}</dd><dt>Roads</dt><dd>${danger} (${bl})</dd><dt>Property market</dt><dd class="num">${Math.round(Sim.marketOf(s, id) * 100)}%</dd></dl>
       ${mine && id !== 'hearthmoor' && id !== 'crownmere' ? step('patrol', 'Patrols, 4c a day each', 3) + step('garrison', 'Garrison, 6c a day each', 3) + step('roads', 'Road mending, 3c a day each', 3) + step('tax', 'Taxes', 2) : ''}
-      <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${!mine && !R.exile && id !== 'crownmere' ? B_('Seek this lordship · ' + (Sim.LORDSHIP_FEE[id] || 400) + 'c', ['seekLordship', id], 'alt') : ''}</div></div>`;
+      <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${!mine && !R.exile && id !== 'crownmere' ? B_('Seek this lordship · ' + (Sim.LORDSHIP_FEE[id] || 400) + 'c<small>by service: favour 45 and a deed done here</small>', ['seekLordship', id], 'alt') + B_('Buy a crown grant · ' + (Sim.GRANT_PRICE[id] || 2000) + 'c<small>by wealth: own property here, favour 25</small>', ['buyLordship', id], 'alt', s.coins < (Sim.GRANT_PRICE[id] || 2000)) : ''}</div></div>`;
   }).join('')}</div>`;
   h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k]; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${(() => { const pth = Sim.COUNCIL_PATH[k], held0 = Object.keys(Sim.COUNCIL).find(x => R.council[x] === 'player'), shut = held0 && Sim.COUNCIL_PATH[held0] !== pth, need = shut ? [] : Sim.seatNeeds(s, k), mine = held0 && Sim.COUNCIL_PATH[held0];
       return `<p class="why">${esc(Sim.PATH_NAME[pth].replace(/^the /, 'The '))}${k === 'treasury' ? ', after Master of Trade' : ''}.${shut ? ' You sit on ' + esc(Sim.PATH_NAME[mine]) + ': resign that seat first to change roads.' : c === 'player' ? '' : need.length ? ' You must first ' + esc(need.join('; ')) + '.' : ' You have walked this road.'}</p>${c !== 'player' && !ruler && !R.exile && !shut ? `<div class="acts">${B_('Seek this seat', ['seekSeat', k], 'alt', need.length > 0)}</div>` : ''}${c === 'player' && !ruler ? (UI.confirm === 'resign' ? `<div class="acts">${B_('Yes, resign', ['resignSeat'], 'warn')}${B_('Keep it', ['ui', 'confirm', null], 'alt')}</div><p class="why">Another takes the seat, you lose a little favour, and you wait ten days before seeking any seat.</p>` : `<div class="acts">${B_('Resign this seat&hellip;', ['ui', 'confirm', 'resign'], 'alt')}</div>`) : ''}`; })()}</div>`; }).join('')}</div><p>The council is three roads: coin (Master of Trade, then Lord Treasurer), arms (Marshal) or law (Lord Justice). You hold one seat at a time; to change roads, resign and earn the new seat. Each seat is earned by results (deliveries made, roads made safe, fair verdicts) and also needs a region, two allies, a record of good rule and favour of 65.</p>`;
@@ -4495,7 +4515,7 @@ function pageVillage(s) {
     <p>Hearthmoor is held by ${esc(Sim.lordTitle(s))} for ${esc(R.king)} in ${esc(R.capital)}. Steward ${esc(Sim.holderName(s, 'steward'))} runs his estate and his tax collector visits each week. Day to day, ${esc(Sim.elderTitle(s))} and the council decide what gets built, set the toll and settle quarrels. Travelers bring news from Ashford, Kellmere and the capital.</p>
     ${govHTML(s)}
     <div class="box"><dl class="kv"><dt>Your standing</dt><dd>${v.standing}/100</dd><dt>Position</dt><dd>${v.council ? 'Councillor since day ' + s.rec.councilSince : v.step > 0 ? 'Known to the elder' : 'A newcomer'}</dd><dt>Granary</dt><dd>${v.shortage ? 'short: ' + v.granary + '/' + v.granaryNeed + ' grain' : 'stocked'}</dd><dt>Watchtower</dt><dd>${v.towerBuilt ? 'rebuilt' : 'in ruins'}</dd><dt>Out of work</dt><dd>${v.jobless.length ? v.jobless.join(' and ') : 'nobody'}</dd><dt>Taxes paid</dt><dd>${s.rec.taxesPaid}c</dd></dl></div>
-    <h4>The elder’s tasks</h4><ul class="goals">${Sim.STEPS.map((t, i) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : i + 1}</span><span>${esc(Sim.stepText(s, t))}</span></li>`).join('')}</ul>`;
+    <h4>The four things the village asks</h4><ul class="goals">${Sim.VILLAGE_MILESTONES.map((i, n) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : n + 1}</span><span>${esc(Sim.stepText(s, Sim.STEPS[i]))}</span></li>`).join('')}</ul>`;
   if (v.council || s.offices.elder === 'player') {
     html += `<h4>Your powers</h4><p>Chest: <b class="${v.chest < 0 ? 'neg' : ''}">${v.chest}c</b>. Projects and rulings are made in person at the Village Hall.</p>
       ${s.offices.elder === 'player' ? elderBusiness(s) : ''}
@@ -4660,11 +4680,10 @@ function travel(key) {
   drainEvents(); renderCard(true);
 }
 /* ----- sleeping through the night: wake half an hour before your shift, or at 05:30 ----- */
-function wakeAt() { const s = G; if (s.job) { const e = Sim.empById(s.job.emp); if (e && e.shift) return Math.max(0, e.shift[0] * 60 - 30); } return 330; }
+function wakeAt() { return 330; }
 function sleepMins() { const now = Math.floor(G.t % 1440); return (wakeAt() - now + 1440) % 1440; }
-function sleepBtn() { const m = sleepMins(), w = wakeAt(), now = Math.floor(G.t % 1440); if (G.job && Sim.inShift(G)) return ''; if (m < 60 || (now >= 240 && now < 720)) return ''; return B_('Sleep until ' + String(Math.floor(w / 60)).padStart(2, '0') + ':' + String(w % 60).padStart(2, '0') + '<small>' + Math.round(m / 60) + ' hours</small>', ['ui', 'sleep'], 'alt'); }
+function sleepBtn() { const m = sleepMins(), w = wakeAt(), now = Math.floor(G.t % 1440); if (m < 60 || (now >= 240 && now < 720)) return ''; return B_('Sleep until ' + String(Math.floor(w / 60)).padStart(2, '0') + ':' + String(w % 60).padStart(2, '0') + '<small>' + Math.round(m / 60) + ' hours</small>', ['ui', 'sleep'], 'alt'); }
 function sleepTill() {
-  if (G.job && Sim.inShift(G)) { toast('You are meant to be at work.', 'warn'); return; }
   let m = sleepMins(); const now = Math.floor(G.t % 1440); if (m < 60 || (now >= 240 && now < 720)) { toast('It is morning: no time to sleep.', 'info'); return; }
   const w = wakeAt(); while (m > 0) { const st = Math.min(60, m); Sim.advance(G, st); m -= st; }
   toast('You sleep, and wake at ' + String(Math.floor(w / 60)).padStart(2, '0') + ':' + String(w % 60).padStart(2, '0') + '.', 'info', true);
@@ -4676,14 +4695,14 @@ function pinLabel(k) {
   const s = G, v = s.village, Lk = L[k];
   if (k === 'you') return s.name;
   if (Lk.plot != null) { const sh = Sim.shopOnPlot(s, Lk.plot); return sh ? 'Your ' + TR[sh.trade].name.toLowerCase() : Sim.PLOTS[Lk.plot].grant && !v.landGranted ? 'Council land' : Lk.name; }
-  if (Lk.emp) return MAPNAME[Lk.emp] + (s.job && s.job.emp === Lk.emp ? ' ★' : '');
+  if (Lk.emp) return MAPNAME[Lk.emp];
   return { well: 'The square', home: 'Your hut', cottage: v.cottage === 'forsale' ? 'Cottage for sale' : 'Your cottage', tower: 'Watchtower', manor: 'Varrow Manor', market: 'Trading Post', forest: 'Pine Woods', field: 'Wheat Field', pit: 'Iron Pit', hall: 'Village Hall', granary: 'Granary' }[k] || Lk.name;
 }
 function pinKind(k) {
   const Lk = L[k];
   if (k === 'you') return 'you';
   if (Lk.plot != null) return Sim.shopOnPlot(G, Lk.plot) ? 'mine' : 'lot';
-  if (Lk.emp) return G.job && G.job.emp === Lk.emp ? 'mine' : 'work';
+  if (Lk.emp) return 'work';
   if (Lk.biz && Lk.town) return G.biz[Lk.biz] && G.biz[Lk.biz].owner === 'player' ? 'mine' : 'work';
   if (k === 'oakhall' || k === 'oakkeep' || k === 'ghhall' || k === 'cmhall' || k === 'cmcastle' || k === 'cmgreat') return 'realm';
   if (['hall', 'manor', 'tower', 'granary'].includes(k)) return 'realm';
@@ -4953,7 +4972,7 @@ const ICONS = {
 const icon = (n, cls) => `<svg class="ic ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
 function pauseMainHTML(s) {
   const sm = Sim.summary(s), v = s.village;
-  const pos = s.offices && s.offices.lord === 'player' ? 'Lord of Hearthmoor' : s.offices && s.offices.elder === 'player' ? 'Elder of Hearthmoor' : v.council ? 'Councillor of Hearthmoor' : s.shops.length ? 'Shopkeeper of Hearthmoor' : s.job ? 'Hired hand at ' + sm.job : 'Newcomer to Hearthmoor';
+  const pos = s.offices && s.offices.lord === 'player' ? 'Lord of Hearthmoor' : s.offices && s.offices.elder === 'player' ? 'Elder of Hearthmoor' : v.council ? 'Councillor of Hearthmoor' : s.shops.length ? 'Shopkeeper of Hearthmoor' : (s.rec.workRounds || 0) > 0 ? 'Journeyman of Hearthmoor' : 'Newcomer to Hearthmoor';
   const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
   const here = s.people ? Sim.living(s).length : 0;
   const tiles = [
@@ -5039,7 +5058,7 @@ function settingsHTML() {
 /* ----- title screen ----- */
 const COIN_LOGO = `<div class="tcoin" aria-hidden="true"><div class="spin">${[-2.5, -1.5, -0.5, 0.5, 1.5, 2.5].map(z => `<div class="rim" style="transform:translateZ(${z}px)"></div>`).join('')}<div class="face"></div></div><div class="shadow"></div></div>`;
 const CREST = `<svg class="crest" viewBox="0 0 512 512" aria-hidden="true"><path d="M136 176 H376 V292 C376 370 318 418 256 444 C194 418 136 370 136 292 Z" fill="#8c2e21" stroke="#a87d22" stroke-width="16" stroke-linejoin="round"/><path d="M196 380 V268 H212 V250 H230 V268 H244 V250 H268 V268 H282 V250 H300 V268 H316 V380 Z" fill="#e2b552"/><path d="M244 380 V340 A12 12 0 0 1 268 340 V380 Z" fill="#8c2e21"/><path d="M150 158 L136 72 L196 116 L256 52 L316 116 L376 72 L362 158 Z" fill="#e2b552" stroke="#7a4f12" stroke-width="8" stroke-linejoin="round"/><rect x="146" y="150" width="220" height="24" rx="6" fill="#e2b552" stroke="#7a4f12" stroke-width="8"/></svg>`;
-function slotLine(info) { if (!info) return 'Empty'; return `${esc(info.name)} · Day ${info.day} · ${info.coins}c · ${info.shops} ${info.shops === 1 ? 'shop' : 'shops'}${info.when ? ' · ' + ago(info.when) : ''}`; }
+function slotLine(info) { if (!info) return 'Empty'; if (info.old) return `${esc(info.name || 'A game')}${info.day ? ' · Day ' + info.day : ''} · from an older version, cannot be loaded`; return `${esc(info.name)} · Day ${info.day} · ${info.coins}c · ${info.shops} ${info.shops === 1 ? 'shop' : 'shops'}${info.when ? ' · ' + ago(info.when) : ''}`; }
 function ago(t) { const m = Math.round((Date.now() - t) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 24) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; }
 // a small front-on portrait of your character for the creator
 function lookSVG(l) {
@@ -5061,11 +5080,11 @@ function renderTitle() {
   const back = `<button type="button" class="back" data-c='["ui","tview","main"]'>&larr; Back</button>`;
   let left, right;
   if (UI.titleView === 'main') {
-    const last = meta.lastSlot && slotInfo(meta.lastSlot);
+    const last0 = meta.lastSlot && slotInfo(meta.lastSlot), last = last0 && !last0.old ? last0 : null;
     left = `${COIN_LOGO}<h1 class="tname">Hearthmoor</h1><p class="tsub">A chronicle of trade and crowns</p><div class="rule"></div><div class="tfoot">Chapters One and Two<br>A Place in the Village</div><button type="button" class="tnews" data-c='["ui","notes"]'>What\u2019s new in version ${NOTES[0].v}</button><div class="tbuild">Build ${esc(BUILD)}</div>`;
     right = `<div class="tmenu">
       ${last ? `<button type="button" class="tbtn primary" data-c='["ui","continue"]'>Continue<small>${slotLine(last)}</small></button>` : ''}
-      <button type="button" class="tbtn ${last ? '' : 'primary'}" data-c='["ui","tview","new"]'>New game<small>Arrive with 5 coins and nothing else</small></button>
+      <button type="button" class="tbtn ${last ? '' : 'primary'}" data-c='["ui","tview","new"]'>New game<small>Arrive with 5c and nothing else</small></button>
       <button type="button" class="tbtn" data-c='["ui","tview","load"]'>Load game<small>Three save slots, or paste a save code</small></button>
       <button type="button" class="tbtn" data-c='["ui","tview","settings"]'>Settings</button></div>`;
   } else if (UI.titleView === 'new') {
@@ -5083,14 +5102,14 @@ function renderTitle() {
     } else {
     left = `<button type="button" class="back" data-c='["ui","newStep",0]'>&larr; Back to your character</button><h3>A new life</h3><p>Start from nothing, as the game was meant to be played, or further up the ladder.</p><div class="tmenu">${Object.keys(Sim.STARTS).map(k => `<button type="button" class="tbtn slotbtn ${(UI.startMode || 'normal') === k ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'startMode', k])}'>${esc(Sim.STARTS[k].name)}<small>${esc(Sim.STARTS[k].say)}</small></button>`).join('')}</div><div class="ccprev small">${lookSVG(L0)}<p><b>${esc(fullNewName())}</b></p></div>`;
     right = `<label>Save in</label><div class="tmenu">${infos.map((info, i) => `<button type="button" class="tbtn slotbtn ${UI.newSlot === i + 1 ? 'primary' : ''}" data-c='${JSON.stringify(['ui', 'newSlot', i + 1])}'>Slot ${i + 1}<small>${slotLine(info)}</small></button>`).join('')}</div>
-      ${infos[UI.newSlot - 1] ? `<p class="warnline">Slot ${UI.newSlot} holds a game. Starting here replaces it.</p>` : ''}
+      ${infos[UI.newSlot - 1] ? `<p class="warnline">Slot ${UI.newSlot} holds ${infos[UI.newSlot - 1].old ? 'an old game from before version 0.54' : 'a game'}. Starting here replaces it.</p>` : ''}
       <div class="tmenu" style="margin-top:8px"><button type="button" class="tbtn primary" data-c='["ui","begin"]'>Begin</button></div>`;
     }
   } else if (UI.titleView === 'load') {
     if (UI.newSlot == null) { const e0 = [1, 2, 3].find(n => !slotInfo(n)); UI.newSlot = e0 || 3; }   // imports go into an empty slot when there is one
     left = `${back}<h3>Load game</h3><label for="importFile">Load a save file (.txt or .json)</label><input type="file" id="importFile" accept=".txt,.json,text/plain,application/json"><label for="importBox">Or paste a save code</label><textarea id="importBox" placeholder="Paste a save code here"></textarea>
       <div class="tmenu" style="margin-top:6px"><button type="button" class="tbtn" data-c='["ui","import"]'>Load this code<small>into slot ${UI.newSlot || 1}${slotInfo(UI.newSlot || 1) ? ', replacing it' : ''}</small></button></div>${UI.importMsg ? `<p>${esc(UI.importMsg)}</p>` : ''}`;
-    right = `<div class="tmenu">${[1, 2, 3].map(n => { const info = slotInfo(n); return `<div class="slot"><div><b>Slot ${n}</b><span>${slotLine(info)}</span></div>${info ? B_('Load', ['ui', 'load', n]) + (UI.confirm === 'del' + n ? B_('Erase', ['ui', 'erase', n], 'warn') : B_('&times;', ['ui', 'confirm', 'del' + n], 'alt')) : ''}</div>`; }).join('')}</div>
+    right = `<div class="tmenu">${[1, 2, 3].map(n => { const info = slotInfo(n); return `<div class="slot"><div><b>Slot ${n}</b><span>${slotLine(info)}</span></div>${info ? (info.old ? '' : B_('Load', ['ui', 'load', n])) + (UI.confirm === 'del' + n ? B_('Erase', ['ui', 'erase', n], 'warn') : B_('&times;', ['ui', 'confirm', 'del' + n], 'alt')) : ''}</div>`; }).join('')}</div>
       ${UI.confirm && UI.confirm.startsWith('del') ? `<p class="warnline">Tap Erase to delete slot ${UI.confirm.slice(3)} for good.</p>` : ''}`;
   } else {
     const st = meta.settings;
@@ -5162,7 +5181,7 @@ function uiCmd(k, v) {
   if (k === 'seek') { const q = G.people[v]; if (!q) return; UI.waypoint = v; const t = Sim.townOf(q), here = Sim.townAt(G.player.x, G.player.z) || 'hearthmoor'; if (t !== here) { if (Sim.kingdomOf(t) !== Sim.kingdomOf(here)) { toast(q.name + ' is across the sea in ' + TOWN_NAMES[t] + '. Take a ship.', 'warn', true); return; } uiCmd('journey', t); } else { if (UI.overlay) closeOverlay(); toast('You go looking for ' + q.name + '. Follow the marker.', 'info', true); } return; }
   if (k === 'throne') { if (v === false) { UI.throne = false; closeScene(); return; } if (UI.overlay) closeOverlay(); UI.throne = true; openScene(); return; }
   if (k === 'blade') { const q = G.people[v]; if (!q) return; if (UI.confirm === 'blade' + v) { UI.confirm = null; act(['fBlade', v, null, true]); } else { UI.confirm = 'blade' + v; toast('Pay to have ' + q.name + ' killed? Tap again to pay. It will darken your name, and if it is traced to you, worse.', 'warn', true); } return; }
-  if (k === 'mini') { openMini(); return; }
+  if (k === 'mini') { if (UI.overlay) closeOverlay(); openMini(v); return; }
   if (k === 'miniClose') { closeMini(); return; }
   if (k === 'notes') { showNotes(); return; }
   if (k === 'testSound') { Snd.unlock(); setTimeout(() => { Snd.play('great'); const el = $('sndStatus'); if (el) el.textContent = Snd.status() + ' If you still hear nothing, turn the volume up with the side buttons.'; }, 120); return; }
@@ -5189,7 +5208,7 @@ function uiCmd(k, v) {
     return;
   }
   if (k === 'quitTitle') { toTitle(); return; }
-  if (k === 'continue') { const n = meta.lastSlot, g = n && readSlot(n); if (g) enterGame(g, n); else { UI.titleView = 'load'; renderTitle(); } return; }
+  if (k === 'continue') { const n = meta.lastSlot, g = n && playable(readSlot(n)); if (g) enterGame(g, n); else { UI.titleView = 'load'; renderTitle(); } return; }
   if (k === 'startMode') { UI.startMode = v; renderTitle(); return; }
   if (k === 'look') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newLook[v] = arguments[2]; renderTitle(); return; }
   if (k === 'newStep') { (() => { const f = $('newFirst'), l = $('newLast'); if (f) UI.newFirst = f.value.trim(); if (l) UI.newLast = l.value.trim(); })(); UI.newStep = v; renderTitle(); return; }
@@ -5200,7 +5219,7 @@ function uiCmd(k, v) {
     const g = Sim.newGame((Date.now() % 2147483647) | 0, name); g.look = Object.assign({}, UI.newLook || DEFAULT_LOOK); Sim.you(g).sex = g.look.body === 'f' ? 'f' : 'm'; Sim.applyStart(g, UI.startMode || 'normal'); UI.newStep = 0;
     enterGame(g, UI.newSlot || 1); return;
   }
-  if (k === 'load') { const g = readSlot(v); if (g) enterGame(g, v); else { UI.importMsg = 'That slot could not be read.'; renderTitle(); } return; }
+  if (k === 'load') { const r = readSlot(v), g = playable(r); if (g) enterGame(g, v); else { UI.importMsg = r && r.old ? 'That game is from before version 0.54, when money, work and the climb to power changed. It cannot be carried over: start a new game. The old save is kept.' : 'That slot could not be read.'; renderTitle(); } return; }
   if (k === 'erase') { store.del(KEY(v)); store.del(BAK(v)); store.del(KEY(v) + '.when'); if (meta.lastSlot === v) { meta.lastSlot = null; saveMeta(); } UI.confirm = null; renderTitle(); return; }
   if (k === 'import') {
     const t = ($('importBox') || {}).value || '';
@@ -5225,7 +5244,7 @@ $('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, MAP_C.r
 $('menuBtn').onclick = () => openPause();
 $('goal').onclick = () => openBook('goals');
 function setSpeed(n) { UI.speed = n; document.querySelectorAll('#speeds .fast').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === n))); }
-$('speeds').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (b) setSpeed(+b.dataset.speed); });
+$('speeds').addEventListener('click', e => { const b = e.target.closest('[data-speed]'); if (!b) return; if (mini.on) { toast('Time runs at 1\u00d7 while you work. Stop working to speed it up.', 'info', true); return; } setSpeed(+b.dataset.speed); });
 ['book', 'pause'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) closeOverlay(); }));
 document.addEventListener('keydown', e => { if (e.code === 'KeyM' && UI.mode === 'play' && !(e.target.closest && e.target.closest('input, textarea'))) { if (UI.overlay === 'map') closeOverlay(); else if (!UI.overlay) openMap(); return; } if (e.key === 'Escape' && UI.mode === 'play') { if (UI.overlay) closeOverlay(); else openPause(); } });
 
@@ -5680,7 +5699,7 @@ const Interior = (function () {
   function card() {
     const d = R.d, names = R.people.map(x => x.key.startsWith && String(x.key).startsWith('w:') ? (G.shops.find(sh => 'w:' + sh.id === x.key) || {}).worker : (G.agents.find(a => a.id === x.key) || {})).filter(Boolean).map(a => a.name);
     const who = names.length ? 'Here: ' + names.slice(0, 6).join(', ') + (names.length > 6 ? ' and ' + (names.length - 6) + ' more' : '') + '.' : d.kind === 'home' ? 'Nobody else is home.' : 'Nobody is in just now.';
-    return `<h2>${esc(d.title)}</h2><div class="sub">${esc(d.note || '')} ${esc(who)}</div><div class="acts">${B_('Step outside', ['ui', 'leave'])}${d.kind === 'home' ? (() => { const lv = d.house ? (d.house.comfort || 0) : (G.player.hutComfort || 0); return lv < 3 ? B_('Improve this home<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', d.house ? d.house.id : 'hut'], 'alt') : ''; })() : ''}${d.kind === 'castle' ? B_('The Realm', ['page', 'realm'], 'alt') : ''}</div>`;
+    return `<h2>${esc(d.title)}</h2><div class="sub">${esc(d.note || '')} ${esc(who)}</div><div class="acts">${d.kind === 'biz' ? workBtn(G, d.bizId || (d.shop ? 'shop:' + d.shop.id : null)) : ''}${B_('Step outside', ['ui', 'leave'])}${d.kind === 'home' ? (() => { const lv = d.house ? (d.house.comfort || 0) : (G.player.hutComfort || 0); return lv < 3 ? B_('Improve this home<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', d.house ? d.house.id : 'hut'], 'alt') : ''; })() : ''}${d.kind === 'castle' ? B_('The Realm', ['page', 'realm'], 'alt') : ''}</div>`;
   }
   return { enter, leave, step, camera: camera_, card, scene: sc, active: () => !!R };
 })();
@@ -5914,25 +5933,52 @@ document.addEventListener('click', e => { if (e.target.closest && e.target.close
 document.addEventListener('visibilitychange', () => { if (document.hidden) Snd.suspend(); else Snd.resume(); });
 
 /* ================= work mini-games: something to do on shift ================= */
+// every trade has its own bench: a timed stroke (strike when the needle is in the bright band) or a pour (hold, and let go at the line)
+const MT = (name, verb, bar, ok, bad, sound, kind, hint, track) => ({ name, verb, bar, ok, bad, sound, kind: kind || 'time', hint: hint || (verb + ' when the needle is inside the bright band. Dead centre is perfect.'), track: track || 'joinery' });
+const POUR_HINT = v => 'Hold to ' + v + ', and let go when it reaches the line. Too much and it spills.';
 const MINI = {
-  bakery: { name: 'Bake the bread', verb: 'Pull it out', hint: 'Pull the loaf out when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'knead', bar: 'Heat of the oven', done: 'loaves', one: 'loaf', ok: 'Golden crust', bad: 'Burnt' },
-  smithy: { name: 'Strike the iron', verb: 'Strike', hint: 'Strike when the needle is inside the bright band. Dead centre is perfect.', kind: 'time', sound: 'clang', bar: 'Heat of the iron', done: 'tools', one: 'tool', ok: 'Clean strike', bad: 'Cold iron' },
-  tavern: { name: 'Pour the ale', verb: 'Hold to pour', hint: 'Hold to pour and let go when the ale reaches the line. Too much and it spills.', kind: 'pour', sound: 'pour', bar: 'Mug', done: 'mugs', one: 'mug', ok: 'A perfect pint', bad: 'Spilled' },
-  joinery: { name: 'Saw the plank', verb: 'Saw', hint: 'Saw when the needle is on your mark, inside the bright band.', kind: 'time', sound: 'saw', bar: 'Blade', done: 'cuts', one: 'cut', ok: 'Straight cut', bad: 'Crooked' }
+  bakery: MT('Bake the bread', 'Pull it out', 'Heat of the oven', 'Golden crust', 'Burnt', 'knead', 'time', 'Pull the loaf out when the needle is inside the bright band. Dead centre is perfect.', 'bakery'),
+  smithy: MT('Strike the iron', 'Strike', 'Heat of the iron', 'Clean strike', 'Cold iron', 'clang', 'time', null, 'smithy'),
+  tavern: MT('Pour the ale', 'Hold to pour', 'Mug', 'A perfect pint', 'Spilled', 'pour', 'pour', POUR_HINT('pour'), 'tavern'),
+  joinery: MT('Saw the plank', 'Saw', 'Blade', 'Straight cut', 'Crooked', 'saw', 'time', 'Saw when the needle is on your mark, inside the bright band.', 'joinery'),
+  mill: MT('Feed the millstones', 'Hold to feed', 'Hopper', 'Fine flour', 'Choked the stones', 'pour', 'pour', POUR_HINT('let the grain run'), 'tavern'),
+  butcher: MT('Cut the joints', 'Cleave', 'Cleaver', 'A clean joint', 'Ragged cut', 'clang', 'time', null, 'bakery'),
+  chandler: MT('Dip the candles', 'Hold to dip', 'Tallow', 'An even candle', 'Lumpy wax', 'pour', 'pour', POUR_HINT('dip'), 'tavern'),
+  tailor: MT('Stitch the seam', 'Stitch', 'Needle', 'A neat stitch', 'Puckered', 'saw', 'time', null, 'joinery'),
+  weaver: MT('Throw the shuttle', 'Throw', 'Loom', 'A tight weave', 'Dropped thread', 'saw', 'time', null, 'joinery'),
+  potter: MT('Shape the pot', 'Draw it up', 'Wheel', 'A true pot', 'Slumped', 'knead', 'time', null, 'bakery'),
+  cooper: MT('Drive the hoops', 'Drive', 'Hoop', 'A tight barrel', 'Sprung stave', 'clang', 'time', null, 'joinery'),
+  wheelwright: MT('Fit the spokes', 'Hammer', 'Spoke', 'A true wheel', 'Wobbly', 'clang', 'time', null, 'joinery'),
+  carter: MT('Load the cart', 'Heave', 'Load', 'Well stacked', 'Spilled the load', 'knead', 'time', null, 'joinery'),
+  boatwright: MT('Caulk the hull', 'Drive', 'Seam', 'Watertight', 'A leak', 'clang', 'time', null, 'joinery'),
+  goldsmith: MT('Engrave the ring', 'Cut', 'Graver', 'A fine line', 'Slipped', 'saw', 'time', null, 'smithy'),
+  apothecary: MT('Measure the tincture', 'Hold to pour', 'Phial', 'Exactly right', 'Spoiled the dose', 'pour', 'pour', POUR_HINT('pour'), 'tavern'),
+  mason: MT('Dress the stone', 'Chisel', 'Chisel', 'A true face', 'Cracked', 'clang', 'time', null, 'smithy'),
+  tanner: MT('Scrape the hide', 'Scrape', 'Hide', 'Clean hide', 'Torn', 'saw', 'time', null, 'bakery'),
+  dairy: MT('Churn the butter', 'Hold to churn', 'Churn', 'Sweet butter', 'Curdled', 'pour', 'pour', POUR_HINT('churn'), 'tavern')
 };
 const mini = { on: false };
-function openMini() {
-  const e = Sim.empById(G.job.emp), M = MINI[e.trade];
-  Object.assign(mini, { on: true, trade: e.trade, M, pos: 0, dir: 1, speed: 0.55, zone: newZone(), level: 0, holding: false, streak: 0, perfects: 0, made: 0, hits: 0, msg: M.hint, flash: '' });
+// start working: the game drops to 1x while you are at the bench, and goes back to your speed when you stop
+function openMini(at) {
+  const r = Sim.cmd(G, 'workStart', at); if (!r.ok) { toast(r.msg, 'warn', true); return; }
+  const w = G.work, M = MINI[w.trade] || MINI.joinery;
+  Object.assign(mini, { on: true, at, trade: w.trade, M, pos: 0, dir: 1, speed: 0.55, zone: newZone(), level: 0, holding: false, strokes: 0, hits: 0, perfects: 0, lastPay: null, msg: r.msg.first ? M.hint : M.name + '. Every good round pays at once.', from: { x: G.player.x, z: G.player.z }, speedWas: UI.speed });
+  if (UI.speed !== 1) setSpeed(1);
   $('mini').hidden = false; $('panel').hidden = true; renderMini(true);
 }
-function closeMini() { mini.on = false; $('mini').hidden = true; renderCard(true); }
+function closeMini(quiet) {
+  if (!mini.on) return; mini.on = false; $('mini').hidden = true;
+  const r = Sim.cmd(G, 'workStop'); if (mini.speedWas && mini.speedWas !== 1) setSpeed(mini.speedWas);
+  if (!quiet && r.msg && r.msg.rounds) toast('You stop working. You earned ' + r.msg.earned + 'c in ' + r.msg.rounds + (r.msg.rounds === 1 ? ' round.' : ' rounds.'), 'coin', true);
+  renderCard(true);
+}
 function newZone() { const w = 0.16 + Math.random() * 0.06; const a = 0.15 + Math.random() * (0.7 - w); return [a, a + w]; }
 function renderMini(full) {
-  const M = mini.M;
+  const M = mini.M, w = G.work;
   if (full) {
-    $('mini').innerHTML = `<div class="mhead"><b>${M.name}</b><span id="mscore" class="num"></span><button type="button" class="mx" data-c='["ui","miniClose"]' aria-label="Stop">&times;</button></div>
-      <div class="mtrack ${mini.trade}"><div class="mzone" id="mzone"></div><div class="mline" id="mline"></div><div class="mneedle" id="mneedle"></div><span class="mlabel">${M.bar}</span></div>
+    $('mini').innerHTML = `<div class="mhead"><b>${M.name}</b><span class="mslow">time runs at 1&times; while you work</span><button type="button" class="mx" data-c='["ui","miniClose"]' aria-label="Stop working">Stop</button></div>
+      <div class="mstats num"><span id="mlvl"></span><span id="mlast"></span><span id="mtotal"></span><span id="mstreak"></span></div><div class="mprog" id="mprog"><i></i></div>
+      <div class="mtrack ${M.track}"><div class="mzone" id="mzone"></div><div class="mline" id="mline"></div><div class="mneedle" id="mneedle"></div><span class="mlabel">${M.bar}</span><span class="mstroke" id="mstroke"></span></div>
       <p class="mmsg" id="mmsg"></p>
       <button type="button" class="btn mgo" id="mgo">${M.verb}</button>`;
     const go = $('mgo');
@@ -5948,11 +5994,19 @@ function renderMini(full) {
   $('mzone').style.left = (z[0] * 100) + '%'; $('mzone').style.width = ((z[1] - z[0]) * 100) + '%';
   $('mline').style.left = (M.kind === 'pour' ? 100 : -10) + '%';
   $('mmsg').textContent = mini.msg;
-  $('mscore').textContent = `${mini.made} ${mini.made === 1 ? M.one : M.done} · tips ${G.job ? (G.job.tips || 0) : 0}/8c`;
+  if (w) {
+    const P = Sim.levelProgress(G, w.trade), sb = Math.round(Math.min(Sim.STREAK_MAX, Sim.STREAK_STEP * w.streak) * 100);
+    $('mlvl').textContent = Sim.tradeName(w.trade) + ' level ' + P.level + (P.need ? ' · ' + P.have + '/' + P.need : ' · master');
+    $('mlast').textContent = mini.lastPay == null ? 'Next round: ' + Sim.roundPay(G, w.trade, false, w.streak, w.own) + 'c' : mini.lastPay ? 'Last round +' + mini.lastPay + 'c' : 'Last round: nothing';
+    $('mtotal').textContent = 'This session ' + w.earned + 'c';
+    $('mstreak').textContent = w.streak ? 'Streak ' + w.streak + ' · +' + sb + '%' : 'No streak';
+    $('mprog').firstChild.style.width = Math.round(P.frac * 100) + '%';
+    $('mstroke').textContent = 'Stroke ' + Math.min(4, mini.strokes + 1) + ' of 4';
+  }
 }
 function stepMini(dt) {
   if (!mini.on) return;
-  if (!G.job || !Sim.inShift(G) || !Sim.playerAtWork(G)) { closeMini(); toast('You stepped away from your work.', 'info', true); return; }
+  if (!G.work || Math.hypot(G.player.x - mini.from.x, G.player.z - mini.from.z) > 6) { closeMini(); return; }
   if (mini.M.kind === 'pour') { if (mini.holding) { mini.level += dt * 0.42; if (mini.level > 1.04) { mini.holding = false; judge(); } } }
   else { mini.pos += mini.dir * mini.speed * dt; if (mini.pos > 1) { mini.pos = 1; mini.dir = -1; } if (mini.pos < 0) { mini.pos = 0; mini.dir = 1; } }
   renderMini(false);
@@ -5962,19 +6016,17 @@ function judge() {
   let q;
   if (M.kind === 'pour') { const l = mini.level; q = l > 1 ? 0 : l >= 0.86 && l <= 0.92 ? 2 : l >= 0.82 && l <= 0.95 ? 1 : 0; mini.level = 0; }
   else { const [a, b] = mini.zone, mid = (a + b) / 2, half = (b - a) / 2, off = Math.abs(mini.pos - mid); q = off <= half * 0.35 ? 2 : off <= half ? 1 : 0; }
-  Snd.play(M.sound);
-  if (q) {
-    mini.hits++; mini.streak++; if (q === 2) mini.perfects++;
-    mini.msg = (q === 2 ? 'Perfect! ' : '') + M.ok + '.' + (mini.streak > 2 ? ' ' + mini.streak + ' in a row.' : '');
-    if (mini.hits % 4 === 0) {
-      const tip = mini.perfects >= 3 ? 2 : 1; mini.perfects = 0; mini.made++;
-      const r = Sim.cmd(G, 'shiftTip', tip);
-      Snd.play(tip > 1 ? 'great' : 'good');
-      mini.msg = r.ok && !r.msg ? `${Sim.empById(G.job.emp).boss} is pleased: +${tip}c tip.` : (r.msg || 'Good work.');
-      drainEvents();
-    }
-    mini.speed = Math.min(1.4, mini.speed + 0.04);
-  } else { Snd.play('miss'); mini.streak = 0; mini.msg = M.bad + '. Try again.'; mini.speed = Math.max(0.5, mini.speed - 0.06); }
+  Snd.play(q ? M.sound : 'miss');
+  mini.strokes++; if (q) mini.hits++; if (q === 2) mini.perfects++;
+  mini.msg = q ? (q === 2 ? 'Perfect! ' : '') + M.ok + '.' : M.bad + '.';
+  if (q) mini.speed = Math.min(1.4, mini.speed + 0.03); else mini.speed = Math.max(0.5, mini.speed - 0.05);
+  if (mini.strokes >= 4) {
+    const r = Sim.cmd(G, 'workRound', mini.hits, mini.perfects), m = r.msg || {};
+    if (r.ok && m.failed) { mini.lastPay = 0; mini.msg = 'A poor round: ' + mini.hits + ' of 4. Nothing paid, and the streak is broken. Go again.'; }
+    else if (r.ok) { mini.lastPay = m.pay; Snd.play(m.perfect ? 'great' : 'good'); mini.msg = (m.perfect ? 'A perfect round! ' : 'A good round. ') + '+' + m.pay + 'c' + (m.levelUp ? ' · Level ' + m.level + '!' : ''); drainEvents(); }
+    else mini.msg = r.msg || 'Steady: take a breath.';
+    mini.strokes = 0; mini.hits = 0; mini.perfects = 0;
+  }
   mini.zone = newZone();
   renderMini(false);
 }
@@ -5982,6 +6034,23 @@ function judge() {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.54', date: '7 November', title: 'Work the bench, and climb faster', items: [
+    'A new game is needed. Money, work and the climb to power have all changed, so games from before this version cannot be carried over. Your old saves are kept, marked as from an older version.',
+    'Drop-in work. There are no shifts any more. Walk into any working business, in any town, and choose Work here. Work as long as you like and leave whenever you like. Every good round is paid on the spot, and you can work the bakery, then the forge, then the tavern, without asking anyone.',
+    'Every trade has its own bench: baking, hammering, pouring, sawing, cleaving, stitching, dipping candles, measuring tinctures and more. A round is four strokes. Three good strokes pay; four, with three dead centre, is a perfect round worth a quarter more. A streak adds up to a quarter more again. A poor round pays nothing and breaks the streak, but nothing earned is ever taken back.',
+    'Trade levels. Each trade has five levels, and your level follows you to every bench. Higher levels pay much more per round. Level 2 in a trade lets you open a shop of that trade.',
+    'Time runs at 1\u00d7 while you work, and goes back to your speed the moment you stop. Fast-forward never speeds up the pay.',
+    'Where the money comes from: what you make at the bench is sold by the piece to the carters. The business takes a tenth on top for its bench, so no owner pays you out of pocket; at your own bench the tenth is yours.',
+    'The coin has a new face. Every amount is ten times what it was, for everyone at once: a common wage is 70\u2060c, food 30\u2060c a day, a village rent 20\u201330\u2060c. Nothing is richer or poorer for it; the changes below are what make the climb faster.',
+    'Property is dear, and where it stands is everything. Hearthmoor businesses cost about 2,000\u20134,000\u2060c, Greenhaven 5,000\u20139,000\u2060c, Oakbridge and Eastwatch 10,000\u201327,000\u2060c, and Crownmere or Valdor 18,000\u201348,000\u2060c, with the heart of town costing up to three times the edge. Richer towns have richer customers, and dearer supplies and premises.',
+    'Your first shop is a starter stall at a one-time price of 700\u2060c. It pays for itself in about four days. Later businesses take longer: about two weeks in a village, three in a market town, a month in the capital.',
+    'The great properties: the great estates, and the finest places in Crownmere and Valdor, cost 100,000\u2013250,000\u2060c. They bring fame, dear upkeep, rivals who wanted them, and feasts you can host once a week for the town, the nobles and the court.',
+    'Houses pay back slowly, at least five weeks of rent, so a cheap hut is a home, not a money machine.',
+    'The village asks four things: make a living, solve a problem (the grain shortage), lead as councillor, and win the succession, at standing 60 instead of 80. Hiring the idle and rebuilding the watchtower are still loved, but no longer required.',
+    'Two roads to a lordship. By service: favour 45 at court and a deed done in the region. By wealth: a crown grant, if you own property there and the King is willing to see you. A bought title has all a lord\u2019s powers; the old nobility resent it, the merchants admire it, and governing well quiets the talk.',
+    'The royal council asks one proof per road instead of several errands, one ally instead of two, and favour 55 instead of 65. Crown support still needs 65, but fame and a good name now count toward it, and so do the businesses you own.',
+    'Making amends is priced by the harm done and what the person lives on, and a bribe by who they are and what they risk, not by how rich you are. A blood feud still cannot be bought off.'
+  ] },
   { v: '0.53', date: '6 November', title: 'Your name, and your enemies', items: [
     'Your name. Everything you do to people is remembered, and it adds up to how good or cruel you are, and how far your name is known. People greet you by it, work for you by it, and buy from you by it. See the new Renown page.',
     'People remember. Everyone you hire, pay well, evict, sack, overcharge or convict remembers it, and so does their family. Tap anyone to see what they hold against you, or thank you for.',
@@ -6449,7 +6518,7 @@ function finishBench(el) {
 function boot(data) {
   // the title screen shows your latest village behind it, or a fresh one
   const fromHot = data && data.game ? (() => { try { return Sim.deserialize(data.game); } catch (e) { return null; } })() : null;
-  G = fromHot || (meta.lastSlot && readSlot(meta.lastSlot)) || Sim.newGame(4242);
+  G = fromHot || (meta.lastSlot && playable(readSlot(meta.lastSlot))) || Sim.newGame(4242);
   G.events.length = 0;
   if (hot && hot.snapshot) hot.snapshot(() => ({ game: UI.mode === 'play' ? Sim.serialize(G) : null, slot }));
   resize();

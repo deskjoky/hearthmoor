@@ -20,54 +20,54 @@ function invariants(s) {
   return null;
 }
 function shopWithWorker(trade, seed, tier) {
-  const s = Sim.newGame(seed); s.coins = 3000; s.trades[trade] = 5; s.player.inv.ore = 10;
+  const s = Sim.newGame(seed); s.coins = 3000; (s.tradeXp = s.tradeXp || {})[trade] = 20; s.starterUsed = true; s.village.step = 9; s.player.inv.ore = 10;   // past the village story: no famine in the numbers
   Sim.cmd(s, 'open', 1, trade);
   const shop = s.shops[0]; shop.tier = tier || 0;
   Sim.cmd(s, 'hire', shop.id, 0, s.applicants[0].ask); Sim.cmd(s, 'policy', shop.id, 'supplyRuns', true);
   return { s, shop };
 }
 
-console.log('1. Jobs: hiring on, shifts, pay, learning, one job at a time');
+console.log('1. Drop-in work: any bench, paid by the round, levels that follow you (v0.54)');
 {
-  const s = Sim.newGame(11);
-  const r = Sim.cmd(s, 'apply', 'gerd');
-  check(r.ok && s.job && s.job.emp === 'gerd', 'got a job at the bakehouse');
-  check(!Sim.cmd(s, 'apply', 'forge').ok, 'cannot take a second job at the same time');
-  const c0 = s.coins;
-  for (let d = 0; d < 2; d++) {
-    Sim.cmd(s, 'work'); runIdle(s);
-    untilHour(s, 12.1);
-    Sim.advance(s, 1440 - 6);
-    untilHour(s, 6.0);
-  }
-  check(s.job.shifts >= 2 && s.coins === c0 + 6 * s.job.shifts, s.job.shifts + ' shifts paid 6c each (coins ' + c0 + ' -> ' + s.coins + ')');
-  check(Sim.learned(s, 'bakery'), 'two shifts teach the bakery trade');
-  check(!Sim.learned(s, 'smithy'), 'smithing is still unknown');
-  const q = Sim.cmd(s, 'quitJob');
-  check(q.ok && !s.job, 'quitting frees you to work elsewhere');
-  check(Sim.cmd(s, 'apply', 'forge').ok, 'took a job at the forge after quitting');
+  const s = Sim.newGame(11); const c0 = s.coins, R = (h, p) => { Sim.advance(s, 4); return Sim.cmd(s, 'workRound', h, p); };
+  check(Sim.cmd(s, 'workStart', 'gerd').ok && s.work && s.work.trade === 'bakery', 'walk into the bakehouse and start work, no hiring needed');
+  const r1 = R(4, 1); check(r1.ok && r1.msg.pay === Sim.WORK_PAY[0] && s.coins === c0 + r1.msg.pay, 'a good round pays at once (' + r1.msg.pay + ')');
+  const r2 = R(4, 4); check(r2.msg.perfect && Math.abs(r2.msg.pay - Sim.WORK_PAY[0] * (1 + Sim.PERFECT_BONUS + Sim.STREAK_STEP)) < 1e-9, 'a perfect round pays a quarter more, and the streak adds to it');
+  const before = s.coins, r3 = R(2, 0); check(r3.ok && r3.msg.failed && s.coins === before && s.work.streak === 0, 'a poor round pays nothing and breaks the streak, but takes nothing back');
+  check(!Sim.cmd(s, 'workRound', 4, 4).ok, 'rounds cannot come faster than they can be played');
+  for (let i = 0; i < 12; i++) R(4, 2);
+  check(Sim.tradeLevel(s, 'bakery') === 2 && Sim.learned(s, 'bakery'), 'ten good rounds reach level 2, which is enough to open a bakery');
+  const stop = Sim.cmd(s, 'workStop'); check(stop.ok && !s.work && stop.msg.rounds >= 13, 'stop whenever you like, and keep what you earned (' + stop.msg.earned + ')');
+  const kept = s.coins; check(Sim.cmd(s, 'workStart', 'forge').ok && Sim.cmd(s, 'workRound', 4, 4).ok === false, 'leaving and coming straight back cannot be used to pay twice');
+  check(s.coins === kept, 'nothing was paid for that');
+  for (let i = 0; i < 3; i++) R(4, 2);
+  check(Sim.tradeXp(s, 'smithy') === 3 && Sim.tradeXp(s, 'bakery') >= 12, 'each trade keeps its own progress, at every bench');
+  const back = Sim.deserialize(Sim.serialize(s)); check(back.tradeXp.bakery === s.tradeXp.bakery && back.tradeXp.smithy === 3, 'trade levels are kept in the save');
 }
 
-console.log('2. Missing shifts: warning, then fired, with no lasting penalty');
+console.log('2. Where the money comes from, and who will not have you');
 {
-  const s = Sim.newGame(12);
-  Sim.cmd(s, 'apply', 'ash');
-  const fired = [];
-  for (let d = 0; d < 4 && s.job; d++) { Sim.advance(s, 1440); }
-  check(!s.job, 'fired after missing shifts');
-  check(s.rec.timesFired === 1 && s.rec.shiftsMissed === 3, 'three missed shifts recorded, one firing');
-  check(s.events.some(e => /one more shift/.test(e.text)) || s.ledger.some(l => l.notes.some(n => /2 of 3/.test(n.text))), 'a warning came before the firing');
-  check(Sim.cmd(s, 'apply', 'ash').ok, 'can ask for work again straight away');
+  const s = Sim.newGame(12); const owner = s.people[s.biz.gerd.owner], p0 = owner.purse, ch = s.village.chest;
+  Sim.cmd(s, 'workStart', 'gerd'); let paid = 0; for (let i = 0; i < 10; i++) { Sim.advance(s, 4); paid += Sim.cmd(s, 'workRound', 4, 3).msg.pay; }
+  check(Math.abs(owner.purse - p0 - paid * Sim.BENCH_CUT) < 0.05, 'the owner pays nothing out of pocket: the buyer pays them a tenth on top for the bench');
+  check(s.village.chest === ch, 'no public chest pays for piecework');
+  check(Sim.cmd(s, 'apply', 'gerd').ok === false, 'there are no shifts to apply for any more');
+  owner.hate = 70; check(!Sim.cmd(s, 'workStart', 'gerd').ok && Sim.cmd(s, 'workStart', 'forge').ok, 'an owner with a grudge turns you away, and another bench takes you');
+  s.coins = 200; s.tradeXp.bakery = 20; check(Sim.cmd(s, 'open', 1, 'bakery').ok && s.coins === 200 - Sim.STARTER_PRICE, 'your first shop is a starter stall at a one-time price (' + Sim.STARTER_PRICE + ')');
+  check(Sim.cmd(s, 'workStart', 'shop:' + s.shops[0].id).ok && s.work.own, 'you can work your own bench');
+  Sim.advance(s, 4); const r = Sim.cmd(s, 'workRound', 4, 0); check(Math.abs(r.msg.pay - Sim.WORK_PAY[1] * (1 + Sim.BENCH_CUT)) < 1e-9, 'at your own bench you keep the tenth');
+  check(Sim.openCost(s, 'tavern').coin === Sim.TRADES.tavern.tiers[0].cost.coin, 'after the starter, a shop costs the full price');
 }
 
-console.log('3. You must learn a trade before opening that shop');
+console.log('3. You must reach level 2 in a trade before opening that shop');
 {
-  const s = Sim.newGame(13); s.coins = 500;
-  check(!Sim.cmd(s, 'open', 0, 'smithy').ok, 'cannot open a smithy without learning smithing');
-  s.trades.smithy = 2;
+  const s = Sim.newGame(13); s.coins = 500; s.starterUsed = true;
+  check(!Sim.cmd(s, 'open', 0, 'smithy').ok, 'cannot open a smithy without the trade');
+  s.tradeXp = { smithy: 10 };
   check(!Sim.cmd(s, 'open', 0, 'smithy').ok, 'a smithy also needs 4 ore');
   s.player.inv.ore = 4;
-  check(Sim.cmd(s, 'open', 0, 'smithy').ok && s.shops.length === 1 && s.player.inv.ore === 0 && s.coins === 440, 'opened a smithy for 60c and 4 ore');
+  const cost = Sim.TRADES.smithy.tiers[0].cost.coin;
+  check(Sim.cmd(s, 'open', 0, 'smithy').ok && s.shops.length === 1 && s.player.inv.ore === 0 && s.coins === 500 - cost, 'opened a smithy for ' + cost + 'c and 4 ore');
   check(!Sim.cmd(s, 'open', 0, 'smithy').ok, 'a lot can only hold one shop');
 }
 
@@ -108,24 +108,25 @@ console.log('6. Broke players can always recover');
   Sim.cmd(s, 'goto', 'market'); runIdle(s);
   const r = Sim.cmd(s, 'sell', 'wood', s.player.inv.wood);
   check(r.ok && s.coins >= 15, 'gathered and sold wood for ' + s.coins + 'c with nothing to start');
-  check(Sim.cmd(s, 'apply', 'tankard').ok, 'and a job is always available');
+  check(Sim.cmd(s, 'workStart', 'tankard').ok, 'and there is always a bench to work at');
 }
 
 console.log('7. Save and restore mid-task gives identical futures');
 {
   const { s: a, shop } = shopWithWorker('smithy', 3);
-  Sim.cmd(a, 'apply', 'ash');
   Sim.cmd(a, 'gather', 'ore');
   let guard = 0;
   while (!(shop.worker.task === 'craft' && shop.work.loaded && shop.work.progress > 5) && guard < 5000) { Sim.step(a, 1); guard++; }
   check(shop.worker.task === 'craft' && a.player.action, 'paused while the smith is mid-forge and you are mid-dig');
   const b = Sim.deserialize(Sim.serialize(a));
-  check(JSON.stringify(b.player.inv) === JSON.stringify(a.player.inv) && b.coins === a.coins && b.job.emp === 'ash', 'inventory, coins and job restored');
+  check(JSON.stringify(b.player.inv) === JSON.stringify(a.player.inv) && b.coins === a.coins, 'inventory and coins restored');
   check(b.shops[0].worker.task === 'craft' && b.shops[0].work.progress === shop.work.progress, 'worker task and work progress restored');
   Sim.advance(a, 3000); Sim.advance(b, 3000);
   check(Sim.serialize(a) === Sim.serialize(b), 'both copies play out identically for 3000 more minutes');
   let bad = false; try { Sim.deserialize('{"hello":1}'); } catch (e) { bad = true; }
   check(bad, 'rejects a file that is not a save');
+  const o16 = JSON.parse(Sim.serialize(a)); o16.v = 16; let why = null; try { Sim.deserialize(JSON.stringify(o16)); } catch (e) { why = e; }
+  check(why && why.old && /new game/.test(why.message), 'a save from before v0.54 is refused, with a clear message to start a new game');
 }
 
 console.log('8. Old saves from the first version still load');
@@ -135,7 +136,7 @@ console.log('8. Old saves from the first version still load');
   if (!Old || Old.VERSION !== 1) console.log('  (skipped: first-version sim not on disk)');
   else {
     const o = Old.newGame(5); o.coins = 77; o.tier = 1; Old.cmd(o, 'hire', 0, 9); Old.advance(o, 2000);
-    const s = Sim.deserialize(Old.serialize(o));
+    const s = Sim.deserialize(Old.serialize(o), { allowOld: true });
     check(s.v === Sim.VERSION && s.shops.length === 1 && s.shops[0].trade === 'bakery' && s.shops[0].tier === 1, 'v1 bakery becomes a Timber Bakery on the Middle lot');
     check(s.coins === o.coins && s.shops[0].worker && s.shops[0].worker.name === o.worker.name, 'coins and worker carried over');
     Sim.advance(s, 1440 * 2);
@@ -143,7 +144,7 @@ console.log('8. Old saves from the first version still load');
   }
 }
 
-console.log('9. Forty-day soak: from hired hand to two businesses');
+console.log('9. Forty-day soak: from the bench to two businesses');
 {
   const s = Sim.newGame(2024);
   let problem = null, maxSupply = 0, run = 0;
@@ -157,13 +158,13 @@ console.log('9. Forty-day soak: from hired hand to two businesses');
         if (!x.worker && s.applicants.length && s.coins >= 25) { Sim.cmd(s, 'hire', x.id, 0, s.applicants[0].ask); Sim.cmd(s, 'policy', x.id, 'supplyRuns', true); }
         if (Sim.cmd(s, 'upgrade', x.id).ok) log.push('D' + s.day + ' upgrade ' + x.trade);
       }
-      if (!s.job && !bakery) Sim.cmd(s, 'apply', 'gerd');
-      if (s.job && s.job.emp === 'gerd' && Sim.learned(s, 'bakery') && bakery && bakery.worker) { Sim.cmd(s, 'quitJob'); Sim.cmd(s, 'apply', 'forge'); }
-      if (s.job && s.job.emp === 'forge' && Sim.learned(s, 'smithy') && smithy) Sim.cmd(s, 'quitJob');
-      if (!bakery && Sim.learned(s, 'bakery') && s.coins >= 30) { Sim.cmd(s, 'open', 1, 'bakery'); log.push('D' + s.day + ' opened bakery'); }
-      if (bakery && !smithy && Sim.learned(s, 'smithy') && s.coins >= 60 && p.inv.ore >= 4) { Sim.cmd(s, 'open', 2, 'smithy'); log.push('D' + s.day + ' opened smithy'); }
-      if (s.job && Sim.inShift(s)) { if (!Sim.playerAtWork(s)) Sim.cmd(s, 'work'); }
-      else if (s.job && Sim.hourOf(s) > Sim.empById(s.job.emp).shift[0] - 1.2 && Sim.hourOf(s) < Sim.empById(s.job.emp).shift[0]) Sim.cmd(s, 'work');
+      // work a bench in the mornings: the bakehouse until you can open a bakery, then the forge
+      const want = h < 12 ? (!bakery ? 'gerd' : !smithy ? 'forge' : null) : null;
+      if (s.work && s.work.at !== want) Sim.cmd(s, 'workStop');
+      if (want && !s.work) Sim.cmd(s, 'workStart', want);
+      if (!bakery && Sim.learned(s, 'bakery') && s.coins >= Sim.STARTER_PRICE) { Sim.cmd(s, 'open', 1, 'bakery'); log.push('D' + s.day + ' opened bakery'); }
+      if (bakery && !smithy && Sim.learned(s, 'smithy') && s.coins >= Sim.TRADES.smithy.tiers[0].cost.coin && p.inv.ore >= 4) { Sim.cmd(s, 'open', 2, 'smithy'); log.push('D' + s.day + ' opened smithy'); }
+      if (s.work) { if (m % 10 === 0) Sim.cmd(s, 'workRound', 4, 2); }
       else if (bakery && !bakery.worker && bakery.goods > 0) { if (Sim.dist(p, Sim.plotPt(bakery, 'serve')) > 0.5) Sim.cmd(s, 'serve', bakery.id); }
       else if (bakery && !bakery.worker && (bakery.stock.grain >= 2 && bakery.stock.wood >= 1)) Sim.cmd(s, 'craft', bakery.id);
       else if (bakery && !bakery.worker && bakery.stock.grain < 2 && Sim.carried(s) < 6) Sim.cmd(s, 'gather', 'grain');
@@ -172,7 +173,7 @@ console.log('9. Forty-day soak: from hired hand to two businesses');
       else Sim.cmd(s, 'gather', 'wood');
       if (p.action && p.action.type === 'gather') p.action.left = Math.min(p.action.left, 50);
     }
-    if (p.action && p.action.type === 'gather' && (Sim.carried(s) >= 14 || (s.job && Sim.inShift(s)))) Sim.cmd(s, 'stop');
+    if (p.action && p.action.type === 'gather' && Sim.carried(s) >= 14) Sim.cmd(s, 'stop');
     Sim.step(s, 1);
     problem = invariants(s);
     const sup = s.shops.some(x => x.worker && x.worker.task === 'supply');
@@ -181,7 +182,7 @@ console.log('9. Forty-day soak: from hired hand to two businesses');
   console.log('   ' + log.join(', '));
   const last = s.ledger.slice(-3);
   console.log('   last days:', last.map(d => `D${d.day}: ${d.profit}c (${d.shops.map(x => x.trade + ' ' + x.profit).join(', ')})`).join(' | '));
-  console.log('   records:', JSON.stringify({ coins: s.coins, netWorth: Sim.netWorth(s), shifts: s.rec.shiftsWorked, made: s.rec.made, sold: s.rec.goodsSold, walked: Math.round(s.rec.walked) }));
+  console.log('   records:', JSON.stringify({ coins: s.coins, netWorth: Sim.netWorth(s), rounds: s.rec.workRounds, made: s.rec.made, sold: s.rec.goodsSold, walked: Math.round(s.rec.walked) }));
   check(!problem, 'no invariant broken' + (problem ? ': ' + problem : ''));
   check(maxSupply < 150, 'supply runs finish (longest ' + maxSupply + ' min)');
   check(s.shops.length >= 2, 'bot owns two businesses');
@@ -191,12 +192,12 @@ console.log('9. Forty-day soak: from hired hand to two businesses');
 }
 
 
-console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the council');
+console.log('10. Chapter Two: four milestones to the Elder\u2019s chair (v0.54)');
 {
-  const s = Sim.newGame(31); s.coins = 400; s.trades.bakery = 2; s.trades.tavern = 2;
+  const s = Sim.newGame(31); s.coins = 4000; (s.tradeXp = s.tradeXp || {}, s.tradeXp.bakery = 20); (s.tradeXp = s.tradeXp || {}, s.tradeXp.tavern = 20);
   const v = s.village;
-  Sim.cmd(s, 'talk'); runIdle(s);
-  check(v.step === 1, 'meeting the elder starts the chapter');
+  Sim.step(s, 1);
+  check(v.step === 1, 'the elder\u2019s first ask comes on its own: make a living');
   Sim.cmd(s, 'open', 1, 'bakery');
   Sim.step(s, 1);
   check(v.step === 2 && v.shortage, 'owning a business brings the grain shortage');
@@ -208,8 +209,9 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   Sim.cmd(s, 'gather', 'grain'); runIdle(s);
   check(s.player.inv.grain >= 20, 'gathered grain for the village');
   Sim.cmd(s, 'donate'); runIdle(s);
-  check(!v.shortage && v.step >= 3 && v.standing >= 20, 'the shortage ends and standing rises (' + v.standing + ')');
-  if (v.step === 3) check(v.jobless.length >= 1 && v.jobless.every(n => s.applicants.some(a => a.local && a.name === n)), 'jobless villagers (' + v.jobless.join(', ') + ') wait in the square and appear as applicants');
+  check(!v.shortage && v.standing >= 20, 'the shortage ends and standing rises (' + v.standing + ')');
+  check(v.council && v.landGranted && v.step === 6, 'solving the village\u2019s problem puts you on the council at once');
+  check(v.jobless.length >= 0 && v.joblessSet, 'the idle villagers are named, as a good deed you may do (' + v.jobless.join(', ') + ')');
   Sim.advance(s, 1440 * 4);
   const fed = s.ledger.slice(-3).reduce((a, d) => a + d.shops[0].served, 0) / 3;
   check(fed > lean, 'customers come back once people are fed (' + lean.toFixed(1) + ' -> ' + fed.toFixed(1) + ' a day)');
@@ -217,18 +219,17 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   Sim.cmd(s, 'fire', shop.id);
   Sim.cmd(s, 'open', 2, 'tavern');
   const pick = () => { const i = s.applicants.findIndex(a => v.jobless.includes(a.name)); return i >= 0 ? i : s.applicants.findIndex(a => a.local); };
-  if (v.step === 3) { Sim.cmd(s, 'hire', s.shops[0].id, pick()); Sim.cmd(s, 'hire', s.shops[1].id, pick()); }
-  else console.log('   (the jobless found work elsewhere before you could hire them)');
+  const st0 = v.standing; if (v.jobless.length) { Sim.cmd(s, 'hire', s.shops[0].id, pick()); if (s.shops[1]) Sim.cmd(s, 'hire', s.shops[1].id, pick()); }
   Sim.step(s, 1);
-  check(v.step === 4, 'the idle villagers have work and the elder moves on (' + (v.jobsGiven || 0) + ' hired by you)');
-  // the tower
-  s.player.inv = { grain: 0, wood: 20, ore: 0 };
+  check(v.step === 6, 'giving the idle work is a good deed, not a gate (' + (v.jobsGiven || 0) + ' hired by you)');
+  // the tower: optional, and loved
+  s.player.inv = { grain: 0, wood: 20, ore: 0 }; const st1 = v.standing;
   Sim.cmd(s, 'fundTower'); runIdle(s);
-  check(v.towerBuilt && v.step === 5, 'the watchtower is rebuilt');
-  Sim.cmd(s, 'talk'); runIdle(s);
+  check(v.towerBuilt && v.step === 6 && v.standing > st1, 'the watchtower is rebuilt, for standing, without holding up the chapter');
   check(v.council && v.landGranted && Number.isFinite(v.chest) && v.chest > -50 && v.step === 6, 'seated on the council with a chest and a land grant (the watch draws its wages from the chest, which may run a small debt)' + ` [council ${v.council} land ${v.landGranted} chest ${v.chest} step ${v.step}]`);
-  check(Sim.cmd(s, 'open', 3, 'joinery').ok === false && (s.trades.joinery = 2) && Sim.cmd(s, 'open', 3, 'joinery').ok, 'the Hall lot can now be built on');
-  // council powers change the game
+  check(Sim.cmd(s, 'open', 3, 'joinery').ok === false && ((s.tradeXp = s.tradeXp || {}, s.tradeXp.joinery = 20)) && Sim.cmd(s, 'open', 3, 'joinery').ok, 'the Hall lot can now be built on');
+  // council powers change the game (council business is done at the Village Hall)
+  Sim.cmd(s, 'goto', 'hall'); runIdle(s);
   const pk = Object.keys(Sim.PROJECTS).filter(k => !v.projects[k]).sort((a, b) => Sim.PROJECTS[b].cost - Sim.PROJECTS[a].cost)[0];
   console.log('   (the elder has already paid for: ' + (Object.keys(v.projects).join(', ') || 'nothing') + ')');
   if (v.chest < Sim.PROJECTS[pk].cost) check(!Sim.cmd(s, 'project', pk).ok, 'a councillor cannot overspend the chest');
@@ -242,10 +243,10 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
   if (v.chest < 60) Sim.cmd(s, 'giveChest', 60 - v.chest);
   const rs = Sim.cmd(s, 'settle', 2);
   check(v.dispute == null && s.rec.disputesSettled === 1, 'settled the dispute' + (rs.ok ? '' : ': ' + rs.msg));
-  Sim.step(s, 1);
-  check(v.step === 7 && v.letter, 'the lord’s steward sends a letter');
-  const rg = Sim.cmd(s, 'gate'); runIdle(s, 6000);
-  check(v.step >= 8, 'met the steward at the manor gate: chapter complete' + (v.step >= 8 ? '' : ' [step ' + v.step + ' ' + JSON.stringify(rg) + ' letter ' + JSON.stringify(v.letter) + ']'));
+  Sim.step(s, 1); Sim.step(s, 1);
+  check(v.step >= 8 && v.letter, 'leading the council brings the steward\u2019s letter, with no trip to the gate');
+  v.standing = 61; Sim.step(s, 1);
+  check(s.offices.elder === 'player' || v.step === 9, 'at standing 60 the elder names you his successor');
   Sim.cmd(s, 'toll', 'high');
   const before = s.agents.length; Sim.advance(s, 1440 * 7);
   check(s.rec.taxesPaid > 0, 'the tax collector came (' + s.rec.taxesPaid + 'c paid)');
@@ -257,7 +258,7 @@ console.log('10. Chapter Two: the elder, the shortage, jobs, the tower, the coun
 
 console.log('11. Property, orders and selling a shop');
 {
-  const s = Sim.newGame(41); s.coins = 300; s.trades.smithy = 2; s.player.inv.ore = 4;
+  const s = Sim.newGame(41); s.coins = 3000; s.starterUsed = true; (s.tradeXp = s.tradeXp || {}, s.tradeXp.smithy = 20); s.player.inv.ore = 4;
   Sim.cmd(s, 'open', 0, 'smithy');
   check(Sim.cmd(s, 'buyCottage').ok && s.village.cottage === 'owned', 'bought the run-down cottage');
   s.player.inv.wood = 12;
@@ -271,8 +272,8 @@ console.log('11. Property, orders and selling a shop');
   const coin = s.coins; const r = Sim.cmd(s, 'deliver');
   check(r.ok && s.coins === coin + c.reward, 'delivered the order for ' + c.reward + 'c');
   const before = s.coins; Sim.cmd(s, 'sellShop', s.shops[0].id);
-  check(s.shops.length === 0 && s.coins === before + 30, 'sold the smithy for half its building cost');
-  s.trades.tavern = 2;
+  check(s.shops.length === 0 && s.coins === before + Sim.TRADES.smithy.tiers[0].cost.coin / 2, 'sold the smithy for half its building cost');
+  (s.tradeXp = s.tradeXp || {}, s.tradeXp.tavern = 20);
   check(Sim.cmd(s, 'open', 0, 'tavern').ok, 'and opened a different trade on the same lot');
 }
 
@@ -287,7 +288,7 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
   check(Object.values(q.biz).filter(b => !b.closed).length >= 3, 'the village shops stay open without you');
 
   // fired, broke, evicted, gone
-  const s = Sim.newGame(78); s.coins = 500; s.trades.bakery = 2; Sim.setupJustice(s);   // the watch is already full, so it offers no work
+  const s = Sim.newGame(78); s.coins = 500; (s.tradeXp = s.tradeXp || {}, s.tradeXp.bakery = 20); Sim.setupJustice(s);   // the watch is already full, so it offers no work
   Sim.cmd(s, 'open', 1, 'bakery');
   const shop = s.shops[0]; let ai = s.applicants.findIndex(a => a.local && a.name.split(' ')[0] === 'Bram'); if (ai < 0) ai = s.applicants.findIndex(a => a.local);
   const name = s.applicants[ai].name;
@@ -350,7 +351,7 @@ console.log('12. People: purses, jobs, homes, and how anyone can fall');
 console.log('13. Debt, respect, votes: anyone in power can fall, and only the deserving rise');
 {
   // your own debts
-  const s = Sim.newGame(77); s.coins = 200; s.trades.bakery = 2;
+  const s = Sim.newGame(77); s.coins = 200; (s.tradeXp = s.tradeXp || {}, s.tradeXp.bakery = 20);
   Sim.cmd(s, 'open', 1, 'bakery'); Sim.cmd(s, 'hire', s.shops[0].id, 0, 30);
   s.coins = -60;
   Sim.advance(s, 1440);
@@ -434,7 +435,7 @@ console.log('14. The rebuilt village, and saves from before it');
   const tam = Object.values(o.people).filter(p => p.job && p.job.biz === 'mill'); tam.forEach(p => { p.status = 'gone'; });
   while (o.houses.length < 15) o.houses.push({ id: 'h' + o.houses.length, name: 'Old Hut ' + o.houses.length, x: 0, z: 0, owner: 'office:lord', rent: 2, cap: 1, tenants: [] });
   o.houses[14].owner = 'player'; o.coins = 100; o.player.x = 999;
-  const back = Sim.deserialize(JSON.stringify(o));
+  const back = Sim.deserialize(JSON.stringify(o), { allowOld: true });
   check(back.v === Sim.VERSION && back.biz.mill && back.houses.filter(h => h.town !== 'oakbridge').length === Sim.HOUSES.length, 'an old save moves into the new village and gains the mill');
   check(back.coins > 100, 'a house that no longer exists is paid for (' + (back.coins - 100) + 'c)');
   check(Math.abs(back.player.x - Sim.P.home.x) < 1, 'you wake at your hut in the new village');
@@ -458,7 +459,7 @@ console.log('15. Oakbridge: a market city of its own');
   const bodies = s.agents.filter(a => a.kind === 'person');
   check(bodies.length > 200 && bodies.every(a => Sim.townOf(s.people[a.pid]) === 'oakbridge'), 'in Oakbridge, ' + bodies.length + ' townsfolk are out and about');
   // a shop at home keeps selling to villagers while you are away
-  const h = Sim.newGame(94); h.coins = 500; h.trades.bakery = 2; Sim.cmd(h, 'open', 1, 'bakery');
+  const h = Sim.newGame(94); h.coins = 500; (h.tradeXp = h.tradeXp || {}, h.tradeXp.bakery = 20); Sim.cmd(h, 'open', 1, 'bakery');
   const sh = h.shops[0]; Sim.cmd(h, 'hire', sh.id, 0, 12); Sim.cmd(h, 'policy', sh.id, 'supplyRuns', true);
   Sim.advance(h, 1440); h.player.x = 420; h.player.z = -420; Sim.advance(h, 1440 * 3);
   const sold = h.ledger.slice(-2).reduce((a, d) => a + d.shops[0].sold, 0);
@@ -489,7 +490,7 @@ console.log('15. Oakbridge: a market city of its own');
   // a save from the first, smaller Oakbridge moves into the new one, families and all
   const old = Sim.newGame(96); old.v = 7; const oh = old.houses.filter(h => h.town === 'oakbridge'); oh.forEach(h => { h.x = 0; h.z = 0; });
   old.houses = old.houses.filter(h => h.town !== 'oakbridge' || +h.id.slice(1) < 63);
-  const nb = Sim.deserialize(JSON.stringify(old)), nh = nb.houses.filter(h => h.town === 'oakbridge');
+  const nb = Sim.deserialize(JSON.stringify(old), { allowOld: true }), nh = nb.houses.filter(h => h.town === 'oakbridge');
   check(nb.v === Sim.VERSION && nh.length === O.houses.length && nh.every(h => h.x !== 0) && Sim.oakFolk(nb).every(p => p.home), 'a save from the smaller Oakbridge moves everyone into the larger town');
 }
 
@@ -513,7 +514,7 @@ console.log('16. Greenhaven: the farming town up the north road');
   const old = Sim.newGame(102); old.v = 8; delete old.towns.greenhaven; old.houses = old.houses.filter(h => h.town !== 'greenhaven');
   Object.keys(old.biz).filter(k => old.biz[k].town === 'greenhaven').forEach(k => delete old.biz[k]);
   Object.values(old.people).filter(p => p.town === 'greenhaven').forEach(p => delete old.people[p.id]);
-  const nb = Sim.deserialize(JSON.stringify(old));
+  const nb = Sim.deserialize(JSON.stringify(old), { allowOld: true });
   check(nb.v === Sim.VERSION && nb.towns.greenhaven && Sim.townFolk(nb, 'greenhaven').length >= 70, 'a save from before the north road opened gains Greenhaven');
 }
 
@@ -536,7 +537,7 @@ console.log('17. Getting about: coaches, a horse, and the roads between towns');
 
 console.log('18. Managers: someone you trust runs the place while you are away');
 {
-  const s = Sim.newGame(7); s.coins = 3000; s.trades.bakery = 5;
+  const s = Sim.newGame(7); s.coins = 3000; (s.tradeXp = s.tradeXp || {}, s.tradeXp.bakery = 20);
   Sim.cmd(s, 'buyBiz', 'o_bell'); Sim.cmd(s, 'open', 1, 'bakery'); const sh = s.shops[0];
   check(!Sim.cmd(s, 'hireManager', 'shop', sh.id, (Sim.managerCandidates(s, 'shop', sh.id)[0] || {}).pid).ok, 'a stall is too small for a manager');
   sh.tier = 1;
@@ -700,7 +701,7 @@ console.log('23. Crownmere: the capital on Crown Lake');
 
 console.log('24. Stage II checks: a month away with your businesses in good hands, and real choices as Elder');
 {
-  const s = Sim.newGame(150); s.coins = 3000; s.trades.bakery = 5;
+  const s = Sim.newGame(150); s.coins = 3000; (s.tradeXp = s.tradeXp || {}, s.tradeXp.bakery = 20);
   Sim.cmd(s, 'buyBiz', 'o_bell'); Sim.cmd(s, 'buyBiz', 'g_bake'); Sim.cmd(s, 'open', 1, 'bakery'); const sh = s.shops[0];
   for (const [k, id] of [['biz', 'o_bell'], ['biz', 'g_bake'], ['shop', sh.id]]) { const c = Sim.managerCandidates(s, k, id)[0]; Sim.cmd(s, 'hireManager', k, id, c.pid); }
   s.player.x = Sim.STAGE.crownmere.x + 400; s.player.z = Sim.STAGE.crownmere.z - 200;   // away in the hills, far from all three
@@ -777,7 +778,7 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   s.bandits.eastwatch = 5; for (let d = 0; d < 10; d++) { away(); Sim.advance(s, 1440); s.bandits.eastwatch = 5; }
   R.favour = 70; court();
   check(!Sim.cmd(s, 'seekSeat', 'trade').ok && Sim.seatNeeds(s, 'trade').length > 0, 'Master of Trade wants proof of the road of coin: ' + Sim.seatNeeds(s, 'trade').join('; '));
-  R.contractsByKind = Object.assign(R.contractsByKind || {}, { supply: 3 }); s.coins += 3000;
+  R.contractsByKind = Object.assign(R.contractsByKind || {}, { supply: 3 }); s.coins += 30000;
   Object.values(s.biz).filter(b => b.town === 'eastwatch' && b.owner !== 'player' && s.people[b.owner]).slice(0, 3).forEach(b => Sim.cmd(s, 'buyBiz', b.id));
   check(Sim.cmd(s, 'seekSeat', 'trade').ok, 'with ' + Sim.alliesOf(s).length + ' allies, ten days of good rule, three businesses and three contracts, you are named Master of Trade');
   check(!Sim.cmd(s, 'seekSeat', 'war').ok && s.player.councilPath === 'coin', 'on the road of coin, the Marshal\u2019s seat is shut to you');
@@ -792,7 +793,7 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   rally(); R.kingSupport = Math.min(R.kingSupport, 40); court(); const sup = Sim.computeSupport(s);
   const rc = Sim.cmd(s, 'claimCrown'); check(rc.ok && Sim.isRuler(s), 'with ' + Sim.alliesOf(s).length + ' allies, a kept promise and support of ' + sup + ', you are crowned' + (rc.ok ? '' : ': ' + rc.msg));
   R.treasury = Math.max(R.treasury, 1000); Sim.cmd(s, 'rule', 'draw', 700); check(R.embezzled === 700, 'taking 700c from the treasury is remembered');
-  R.figures.find(f => f.kind === 'reformer').ally = false; s.coins = 0; for (let d = 0; d < 30 && Sim.isRuler(s); d++) { away(); Sim.advance(s, 1440); }
+  R.figures.find(f => f.kind === 'reformer').ally = false; s.coins = 0; for (let d = 0; d < 30 && Sim.isRuler(s); d++) { away(); Sim.advance(s, 1440); s.coins = Math.min(s.coins, 0); }   // a ruler with nothing to repay it from
   check(!Sim.isRuler(s) && R.exile, 'an inquiry finds the theft, you cannot repay, and the council removes you: exile');
   s.coins = 3000; court();
   check(!Sim.cmd(s, 'claimCrown').ok, 'waiting is not enough: you need allies, a war chest, the towns and the new ruler exposed');
@@ -817,11 +818,12 @@ console.log('29. One fair economy, and how you begin');
   const C = Sim.LOCS[Sim.MARKET_AT.crownmere]; s.player.x = C.x; s.player.z = C.z; const c0 = s.coins;
   check(Sim.cmd(s, 'sell', 'ore', 20).ok && s.coins > c0 + 20, 'carried to Crownmere it sells for ' + (s.coins - c0) + 'c: trade pays, but not without limit');
   // every business on the same rules
-  const g2 = newGameRaw(201); g2.ageRate = 0; g2.bandits = null; g2.coins = 2000; g2.trades.bakery = 5; Sim.cmd(g2, 'open', 1, 'bakery'); const sh = g2.shops[0];
+  const g2 = newGameRaw(201); g2.ageRate = 0; g2.bandits = null; g2.coins = 2000; (g2.tradeXp = g2.tradeXp || {}, g2.tradeXp.bakery = 20); Sim.cmd(g2, 'open', 1, 'bakery'); const sh = g2.shops[0];
   check(Sim.shopShare(g2, sh) < 0.7, 'your Bread Stand shares the village’s bread trade with Gerd’s Bakehouse (' + Math.round(Sim.shopShare(g2, sh) * 100) + '% of it)');
   Sim.cmd(g2, 'buyBiz', 'o_bell'); for (let d = 0; d < 4; d++) Sim.advance(g2, 1440);
-  const paybacks = Object.values(g2.biz).filter(b => !b.closed && b.lastProfit > 0 && b.trade !== 'estate').map(b => Sim.bizPrice(g2, b.id) / b.lastProfit);
-  check(paybacks.length > 50 && Math.min(...paybacks) > 8, 'no business pays for itself in under a week: the quickest takes ' + Math.round(Math.min(...paybacks)) + ' days');
+  const avgP = b => b.profits.reduce((a, x) => a + x, 0) / b.profits.length;
+  const paybacks = Object.values(g2.biz).filter(b => !b.closed && avgP(b) > 0 && b.trade !== 'estate').map(b => Sim.bizPrice(g2, b.id) / avgP(b));
+  check(paybacks.length > 50 && Math.min(...paybacks) > 6, 'no business pays for itself in under a week on its average takings: the quickest takes ' + Math.round(Math.min(...paybacks)) + ' days');
   // starts
   for (const m of ['merchant', 'elder', 'lord', 'ruler']) {
     const g = Sim.newGame(210, 'Josh Bales'); Sim.applyStart(g, m);
@@ -835,7 +837,7 @@ console.log('29. One fair economy, and how you begin');
   check(Y3.age < 16 && Y3.regent && !g3.village.council && !Sim.cmd(g3, 'buyBiz', 'o_bell').ok, 'carrying on as a ' + Y3.age + '-year-old: ' + Y3.regent.name + ' is regent, the council seat falls vacant, and you cannot sign for a business yet');
 console.log('30. The books add up: every coin has a named line');
 {
-  const s = Sim.newGame(77); s.coins = 3000; s.trades.bakery = 99; s.player.inv = { grain: 10, wood: 10, ore: 10 };
+  const s = Sim.newGame(77); s.coins = 3000; (s.tradeXp = s.tradeXp || {}, s.tradeXp.bakery = 20); s.player.inv = { grain: 10, wood: 10, ore: 10 };
   Sim.cmd(s, 'open', 0, 'bakery'); const sh = s.shops[0]; if (s.applicants.length) Sim.cmd(s, 'hire', sh.id, 0, s.applicants[0].ask);
   const bz = Object.values(s.biz).find(b => b.town === 'oakbridge'); Sim.cmd(s, 'buyBiz', bz.id);
   const h = s.houses.find(x => !x.town && x.owner === 'office:lord'); Sim.cmd(s, 'buyHouse', h.id);
@@ -870,7 +872,7 @@ console.log('31. Law and order: the watch, cases, cells, and the people who know
   check(C('jArrest', c1.id).ok && C('jArrest', c2.id).ok && !C('jArrest', c3.id).ok, 'two cells hold two prisoners; a third arrest is refused');
   check(!C('jHear', c1.id, { days: 5 }, 'guilty').ok, 'the Elder cannot order more than three days');
   // a held worker leaves your shop short, and comes back
-  s.coins = 500; s.trades.bakery = 9; C('open', 0, 'bakery'); const sh = s.shops[0]; s.applicants.unshift({ name: vil[4].name, pid: vil[4].id, skill: 1, ask: 7 }); C('hire', sh.id, 0, 7);
+  s.coins = 500; (s.tradeXp = s.tradeXp || {}, s.tradeXp.bakery = 20); C('open', 0, 'bakery'); const sh = s.shops[0]; s.applicants.unshift({ name: vil[4].name, pid: vil[4].id, skill: 1, ask: 7 }); C('hire', sh.id, 0, 7);
   C('jRelease', vil[2].id); const c4 = mk(vil[4]); C('jArrest', c4.id);
   check(vil[4].held && Sim.income(s, vil[4]) === 0, vil[4].name + ', your worker, is held: no work and no wage');
   for (let d = 0; d < 6; d++) Sim.advance(s, 1440);
@@ -1009,6 +1011,7 @@ console.log('33. The calendar, the seasons, and justice in proportion');
   let mine = 0, all = 0; for (let d = 0; d < 20; d++) { Sim.advance(t2, 1440); }
   for (const Cx of Object.values(t2.courts)) for (const c of Cx.closed.concat(Cx.cases)) { all++; if (c.decidedBy === 'you' || (!c.delegated && c.status === 'open')) mine++; }
   check(all > 5 && mine <= all * 0.5, 'a ruler of every court sees ' + mine + ' of ' + all + ' cases; the rest are heard by the captains');
+  { const bad = s.ledger.slice(1).filter(e => e.unexplained); if (bad.length) console.log('   unexplained:', JSON.stringify(bad.map(e => [e.day, e.unexplained]))); }
   check(s.ledger.slice(1).every(e => !e.unexplained), 'skimmed takings, seized cargo and restitution all have lines in your books');
 }
 
@@ -1094,7 +1097,7 @@ console.log('36. Across the Sundering Sea: the passage, Stormrest Isle and Dawnp
   const old = JSON.parse(Sim.serialize(newGameRaw(38))); old.v = 13; delete old.towns.dawnport; delete old.valdoria;
   for (const id in old.people) if (old.people[id].town === 'dawnport') delete old.people[id];
   old.houses = old.houses.filter(h => h.town !== 'dawnport'); for (const id in old.biz) if (old.biz[id].town === 'dawnport') delete old.biz[id];
-  const up = Sim.deserialize(JSON.stringify(old));
+  const up = Sim.deserialize(JSON.stringify(old), { allowOld: true });
   check(up.towns.dawnport && up.valdoria && Sim.living(up).filter(p => p.town === 'dawnport').length >= 440, 'an old save gains Dawnport and its people when loaded');
 }
 
@@ -1158,7 +1161,7 @@ console.log('38. Valdoria: Goldmeadow, Thornwick, Stonewatch, its roads, and tre
   const old = JSON.parse(Sim.serialize(newGameRaw(41))); old.v = 14; for (const id of ['goldmeadow', 'thornwick', 'stonewatch']) delete old.towns[id];
   for (const id in old.people) if (['goldmeadow', 'thornwick', 'stonewatch'].includes(old.people[id].town) || old.people[id].royal) delete old.people[id];
   old.houses = old.houses.filter(h => !['goldmeadow', 'thornwick', 'stonewatch'].includes(h.town)); for (const id in old.biz) if (['goldmeadow', 'thornwick', 'stonewatch'].includes(old.biz[id].town)) delete old.biz[id]; delete old.valdoria.royals;
-  const up = Sim.deserialize(JSON.stringify(old)); check(up.towns.stonewatch && up.valdoria.royals && Sim.living(up).filter(p => p.town === 'thornwick').length >= 60, 'an old save gains Valdoria’s towns and its royal house');
+  const up = Sim.deserialize(JSON.stringify(old), { allowOld: true }); check(up.towns.stonewatch && up.valdoria.royals && Sim.living(up).filter(p => p.town === 'thornwick').length >= 60, 'an old save gains Valdoria’s towns and its royal house');
 }
 
 console.log('39. Work in Valdoria: contracts from its towns, and their markets');
@@ -1296,7 +1299,7 @@ console.log('42. Stage VIII: Valdor, the Queen, Valdorian courts and roads (v0.4
 {
   // an older save gains Valdor and the Queen as it loads
   const s = newGameRaw(47); delete s.towns.valdor; delete s.valdoria.queen; for (const id in s.people) if (s.people[id].town === 'valdor') delete s.people[id]; s.houses = s.houses.filter(h => h.town !== 'valdor'); if (s.courts) delete s.courts.valdor; if (s.goods) delete s.goods.valdor; s.v = 15;
-  const s2 = Sim.deserialize(Sim.serialize(s));
+  s.v = 15; const s2 = Sim.deserialize(Sim.serialize(s), { allowOld: true });
   check(s2.v === Sim.VERSION && s2.towns.valdor && Sim.queenOf(s2) && Sim.living(s2).filter(p => p.town === 'valdor').length >= 350, 'a save from v0.48 gains Valdor, its people and the Queen as it loads');
   check(s2.goods.valdor && Sim.goodsPrice(s2, 'valdor', 'grain') > 0, 'with a market of its own');
   Sim.advance(s2, 1440); check(s2.courts.valdor, 'and Valdor’s court sits from the next day');
@@ -1514,6 +1517,49 @@ console.log('47. Your name, your enemies, and the people you employ and house (v
   // foreign enemies: your war costs a Valdorian their son
   Sim.warGrief(s, 1); check(Sim.nemeses(s).some(x => Sim.isForeign(x)), 'a war you lead makes enemies in Valdoria');
   const back = Sim.deserialize(Sim.serialize(s)); check(back.folk && back.folk.nem.length === F.nem.length && back.folk.towns.hearthmoor.all, 'all of it is kept in the save');
+}
+
+console.log('48. Money, property and the climb (v0.54)');
+{
+  const s = newGameRaw(80); s.ageRate = 0; s.bandits = null; Sim.advance(s, 1440 * 2);
+  // prices by town and spot, in units of 10c
+  const range = { hearthmoor: [150, 520], greenhaven: [380, 1050], oakbridge: [900, 2700], eastwatch: [900, 2900], crownmere: [1700, 5200], valdor: [1700, 5200] };
+  for (const t in range) { const P = Object.keys(s.biz).filter(id => (s.biz[id].town || 'hearthmoor') === t && !Sim.isPrestige(s, id)).map(id => Sim.bizPrice(s, id)); check(P.length && Math.min(...P) >= range[t][0] && Math.max(...P) <= range[t][1], t + ' businesses cost ' + Math.min(...P) * 10 + '–' + Math.max(...P) * 10 + 'c'); }
+  const pr = Sim.prestigeIds(s).map(id => Sim.bizPrice(s, id)); check(pr.length >= 4 && pr.every(x => x >= 10000), 'the great properties cost 100,000c and more (' + pr.map(x => x * 10).join(', ') + ')');
+  // a cheap hut is not the best investment in the realm
+  const worst = Math.min(...s.houses.map(h => Sim.housePrice(s, h) / Math.max(1, h.rent0 || h.rent))); check(worst >= 30, 'no house pays for itself in under a month of rent (fastest ' + Math.round(worst) + ' days)');
+  // a fair wage keeps a household fed and housed
+  for (const t of ['hearthmoor', 'oakbridge', 'crownmere', 'valdor']) { const rents = s.houses.filter(h => (h.town || 'hearthmoor') === t).map(h => h.rent).sort((a, b) => a - b), med = rents[Math.floor(rents.length / 2)]; check(Sim.fairWage(t) - 3 - med >= 0, 'in ' + t + ' a fair wage (' + Sim.fairWage(t) * 10 + 'c) covers food (30c) and a middling rent (' + med * 10 + 'c)'); }
+  // the starter stall cannot be sold for more than it cost
+  s.coins = 1000; s.tradeXp = { bakery: 20 }; Sim.cmd(s, 'open', 1, 'bakery'); const c1 = s.coins; Sim.cmd(s, 'sellShop', s.shops[0].id); check(s.coins - c1 <= Sim.STARTER_PRICE / 2 + 0.01, 'selling the starter stall returns half its price, no more');
+  // amends answer to the harm and the person's means, not to your wealth
+  Sim.setupFolk(s); const q = Sim.living(s).find(x => !x.kid && x.job); Sim.wrong(s, q, 40, 'You threw them out.'); const a1 = Sim.amendsCost(s, q); s.coins = 1e6; check(Sim.amendsCost(s, q) === a1 && a1 >= 50, 'what it costs to make amends does not grow with your purse (' + a1 * 10 + 'c)');
+  check(Sim.bribeCost(s, q) > 0, 'a bribe is priced by who they are');
+}
+{
+  // the village's four asks, and the Elder's chair at standing 60
+  const s = Sim.newGame(81); s.coins = 2000; s.tradeXp = { bakery: 20 }; const v = s.village;
+  Sim.step(s, 1); check(v.step === 1, 'first ask: make a living');
+  Sim.cmd(s, 'open', 1, 'bakery'); Sim.step(s, 1); check(v.step === 2 && v.shortage, 'second: the grain shortage');
+  s.player.inv.grain = 20; Sim.cmd(s, 'donate'); runIdle(s); check(v.council && v.step === 6, 'solved, and straight onto the council');
+  v.step = 7; Sim.step(s, 1); check(v.step === 8, 'leading the council needs no trip to the manor gate');
+  v.standing = 59; Sim.step(s, 1); check(s.offices.elder !== 'player', 'at 59 the chair is not yet yours');
+  v.standing = 60; Sim.step(s, 1); check(s.offices.elder === 'player', 'at 60 the elder names you');
+}
+{
+  // a lordship by wealth: a real crown grant
+  const s = newGameRaw(82); s.ageRate = 0; s.bandits = null; Sim.advance(s, 1440); const R = s.realm; s.coins = 50000; Sim.setupFolk(s);
+  check(!Sim.cmd(s, 'buyLordship', 'greenhaven').ok, 'the King grants land only to those with a stake in it');
+  const gid = Object.keys(s.biz).find(id => s.biz[id].town === 'greenhaven' && s.biz[id].trade !== 'estate'); Sim.cmd(s, 'buyBiz', gid);
+  R.favour = 10; check(!Sim.cmd(s, 'buyLordship', 'greenhaven').ok, 'and to those the King is willing to see');
+  R.favour = 30; const old = Sim.regionLord(s, 'greenhaven'), others = Object.keys(R.regions).map(id => Sim.regionLord(s, id)).filter(l => l && l !== old && s.people[l]), op0 = others.map(l => s.people[l].opinion || 0), m0 = s.folk.moral, t0 = R.treasury;
+  check(Sim.cmd(s, 'buyLordship', 'greenhaven').ok && Sim.regionLord(s, 'greenhaven') === 'player', 'with property there and the King willing, gold buys the lordship');
+  check(R.treasury > t0 && s.folk.moral === m0, 'the crown takes the money, and buying a title is not a wicked deed');
+  check(!others.length || others.some((l, i) => (s.people[l].opinion || 0) < op0[i]), 'the old nobility think less of you for it');
+  check(!old || !s.people[old] || s.people[old].hate >= 20, 'and the lord who was bought out holds a grudge');
+  // the council asks one proof per road
+  check(!Sim.seatNeeds(s, 'trade').some(x => /supply/.test(x)), 'Master of Trade needs businesses, not errands');
+  check(Sim.seatNeeds(s, 'war').length <= 2 && Sim.seatNeeds(s, 'law').length <= 3, 'and the other roads ask one proof of competence each');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
