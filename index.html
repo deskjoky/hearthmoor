@@ -11867,7 +11867,7 @@ const SECTIONS = [
   ['money', 'Money', [['ledger', 'Ledger'], ['jobs', 'Work']]],
   ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
   ['people', 'People', [['people', 'Townsfolk'], ['family', 'Family'], ['renown', 'Your name']]],
-  ['power', 'Power', [['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
+  ['power', 'Power', [['office', 'Your office'], ['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
 ];
 const TABS = SECTIONS.flatMap(x => x[2]);
 const sectionOf = k => (SECTIONS.find(x => x[2].some(y => y[0] === k)) || (k === 'manage' ? SECTIONS[2] : SECTIONS[0]));
@@ -11886,7 +11886,7 @@ function renderBook(turn) {
   $('tabs').innerHTML = SECTIONS.map(([k, n, pages]) => `<button type="button" class="tab" role="tab" aria-selected="${sec[0] === k}" data-c='${JSON.stringify(['ui', 'tab', (UI.subOf && UI.subOf[k]) || pages[0][0]])}'>${n}</button>`).join('');
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
   const subs = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}<span class="paused" title="Time stands still while the book is open">Paused</span></nav>`;
-  pg.innerHTML = subs + ({ run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   pg.scrollTop = y; turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -12787,6 +12787,62 @@ function pageRun(s) {
   if (cannot.length) h += `<details><summary>Not yet within reach (${cannot.length})</summary>${cannot.map(r => raceCard(s, r)).join('')}</details>`;
   return h;
 }
+function villagePowers(s) {
+  const v = s.village; let html = '';
+  {
+    html += `<h4>Your powers</h4><p>Chest: <b class="${v.chest < 0 ? 'neg' : ''}">${v.chest}c</b>. Projects and rulings are made in person at the Village Hall.</p>
+      ${s.offices.elder === 'player' ? elderBusiness(s) : ''}
+      ${s.offices.elder === 'player' ? `<div class="setting"><span>Help for the poor</span>${seg2('relief', s.gov.relief, [['none', 'None'], ['some', 'A little'], ['all', 'Everyone in need']])}<p>Each morning the chest feeds the hungry and the homeless. A little: up to three people, 2c each, only while the chest has coin. Everyone: 3c each, borrowing if need be. The village notices either way.</p></div>` : ''}
+      <div class="setting"><span>Toll on travelers</span>${seg2('toll', v.toll, Object.keys(Sim.TOLLS).map(k => [k, Sim.TOLLS[k].name]))}<p>A toll fills the chest from every traveler who stops, but fewer travelers come. None: all of them; low: about 85%; high: about 60%.</p></div>
+      <div class="grid2">${Object.keys(Sim.PROJECTS).map(k => { const pr = Sim.PROJECTS[k]; return `<div class="box"><h5>${esc(pr.name)}</h5><p>${esc(pr.text)}</p><p>${v.projects[k] ? '<span class="pill yes">done on day ' + v.projects[k] + '</span>' : pr.cost + 'c from the chest'}</p></div>`; }).join('')}</div>
+      ${v.dispute != null ? `<p><b>Waiting at the Village Hall:</b> ${esc(Sim.DISPUTES[v.dispute].text)}</p>` : '<p>No quarrels before the council today.</p>'}`;
+  }
+  return html;
+}
+function rulerHTML(s) {
+  const R = s.realm; let h = '';
+  {
+    const st = (k, v, d, lab, fmt) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['rule', k, v - d])}' aria-label="Less">&minus;</button><output class="num">${fmt(v)}</output><button type="button" data-c='${JSON.stringify(['rule', k, v + d])}' aria-label="More">+</button></div></div>`;
+    const pets = R.petitions || [];
+    if (pets.length) h += `<h4>Petitions to the crown</h4>` + pets.map(q => { const ch = Sim.PETITION_CHOICES[q.kind](q); return `<div class="box"><p>${esc(q.text)}</p><p class="why">Answer by day ${q.until}; left unanswered, it counts as a refusal, and the silence is noticed.</p><div class="acts">${B_(esc(ch[0]), ['petition', q.id, 0], 'alt', q.kind === 'relief' && R.treasury < q.cost)}${B_(esc(ch[1]), ['petition', q.id, 1], 'alt')}</div></div>`; }).join('');
+    h += `<h4>Ruling Alderwyn</h4><div class="box"><dl class="kv"><dt>Treasury</dt><dd class="num ${R.treasury < 0 ? 'debt' : ''}">${R.treasury}c</dd><dt>Last day</dt><dd class="num">+${R.lastIncome || 0}c, −${R.lastSpend || 0}c</dd>${R.rival ? `<dt>Rival claimant</dt><dd><b>${esc(R.rival.name)}</b>, ${Math.round(R.rival.strength)} men</dd>` : ''}</dl>
+      ${st('tax', R.taxRate, 0.25, 'Taxes on the regions', v => v + '×')}${st('tariff', R.tariff, 0.25, 'Tariffs on trade', v => v + '×')}${st('levies', R.levies, 20, 'The army (levies, 0.25c a day each)', v => v + ' men')}
+      <p>Higher taxes and tariffs fill the treasury but cost you the guilds and the towns. The army keeps the roads clear and rivals at bay.</p>
+      <h5>Laws</h5>${Object.keys(Sim.LAWS).map(k => `<div class="staffrow"><span><b>${Sim.LAWS[k].name}</b>: ${Sim.LAWS[k].say}</span>${B_(R.laws[k] ? 'In force · repeal' : 'Proclaim', ['rule', 'law', k], R.laws[k] ? '' : 'alt')}</div>`).join('')}
+      <div class="acts">${B_('Take 200c for yourself', ['rule', 'draw', 200], 'alt')}${B_('Give 200c to the treasury', ['rule', 'give', 200], 'alt', s.coins < 200)}${R.rival ? B_('Buy off ' + esc(R.rival.name) + ' · ' + Math.round(R.rival.strength * 6) + 'c', ['rule', 'payRival'], 'warn') : ''}</div></div>`;
+  }
+  return h;
+}
+/* Your office: a control panel for the office you hold, with what each power means */
+function regionControls(s, id) {
+  const R = s.realm, g = R.regions[id];
+  if (id === 'hearthmoor') return `<p>Hearthmoor’s lord governs through the manor and the village court: appoint the captain of the guard and set its size on the Justice page.</p><div class="acts">${B_('Justice', ['ui', 'tab', 'justice'], 'alt')}</div>`;
+  const step = (k, lab, max, say) => `<div class="staffrow"><span><b>${lab}</b><br><small>${say}</small></span><div class="stepper"><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] - (k === 'tax' ? 0.25 : 1)])}' aria-label="Less">&minus;</button><output class="num">${k === 'tax' ? g[k] + '×' : g[k] + '/' + max}</output><button type="button" data-c='${JSON.stringify(['regionSet', id, k, g[k] + (k === 'tax' ? 0.25 : 1)])}' aria-label="More">+</button></div></div>`;
+  const bl = Math.round((s.bandits && s.bandits[id]) || 0);
+  return `<p>Roads: ${bl > 60 ? 'bandits raiding' : bl > 40 ? 'bandits about' : bl > 20 ? 'some thieves' : 'quiet'} (${bl}). Market: ${Math.round(Sim.marketOf(s, id) * 100)}%.</p>`
+    + step('patrol', 'Patrols', 3, '4c a day each. Riders on the roads: fewer bandits.')
+    + step('garrison', 'Garrison', 3, '6c a day each. Soldiers in the town: raids fail, order holds.')
+    + step('roads', 'Road mending', 3, '3c a day each. Good roads bring more travellers and trade.')
+    + step('tax', 'Taxes', 2, 'Your income from the region. Higher fills your purse; the people like it less.')
+    + `<div class="acts">${B_('Pay for patrols now · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}</div>`;
+}
+function pageOffice(s) {
+  const mine = Sim.yourOffice(s), v = s.village, E = Sim.electState(s);
+  const office = mine ? mine.office : v.council ? 'council' : null;
+  if (!office) return `<h3>Your office</h3><p class="lead">You hold no office yet.</p><div class="box"><p>The first step is a seat on the village council. Own a business or earn standing 20 in Hearthmoor, then run at the Village Hall when the seat comes up.</p><div class="acts">${B_('Run for office', ['ui', 'tab', 'run'])}</div></div>`;
+  const label = office === 'council' ? 'Village councillor' : Sim.raceLabel(Object.assign({ office }, mine || {})).replace(/^the /, 'The ');
+  const r = office === 'council' ? null : Sim.upcomingRaces(s).find(x => x.office === office && (x.region || null) === ((mine && mine.region) || null));
+  const B = HANDBOOK[office];
+  let h = `<h3>${esc(label)}</h3><p class="lead">${E.since != null && mine ? 'Held ' + Sim.heldDays(s) + (Sim.heldDays(s) === 1 ? ' day. ' : ' days. ') : ''}${r ? 'Next vote on this office: day ' + r.poll + ', at ' + esc(Sim.venueName(r)) + '.' : 'The council seat is yours while you hold it.'}</p>`;
+  if (B) h += `<details class="box"><summary><b>What this office means</b></summary><h5>What you can do</h5><ul>${B.can.map(i => `<li>${esc(i)}</li>`).join('')}</ul><h5>What is asked of you</h5><ul>${B.must.map(i => `<li>${esc(i)}</li>`).join('')}</ul></details>`;
+  const pend = E.pledges.filter(pl => pl.state === 'given');
+  if (pend.length) h += pend.map(pl => `<div class="why"><b>Your promise:</b> ${esc(pl.text)}, by day ${pl.due}. ${esc(pl.how || '')}</div>`).join('');
+  if (office === 'council' || office === 'elder') h += villagePowers(s);
+  if (office === 'lord') { h += `<h4>Your lands: ${esc(Sim.REGIONS[mine.region])}</h4><div class="box">${regionControls(s, mine.region)}</div><div class="acts">${B_('Courts and the watch', ['ui', 'tab', 'justice'], 'alt')}${B_('Give up ' + esc(Sim.REGIONS[mine.region]), ['renounceLordship', mine.region], 'alt')}</div>`; }
+  if (office === 'seat' || office === 'crown') h += crownPowers(s);
+  if (office === 'crown') h += rulerHTML(s) + `<div class="acts">${B_('Hold court in the throne room', ['ui', 'throne'])}</div>`;
+  return h;
+}
 function pageElections(s) {
   let h = electionsBox(s);
   const E = Sim.electState(s), open = Sim.upcomingRaces(s).filter(r => r.open);
@@ -12862,16 +12918,7 @@ function pageRealm(s) {
       <div class="acts">${B_('Pay for patrols · 60c', ['fundPatrol', id, 60], 'alt', s.coins < 60)}${(() => { const r = Sim.electState(s).races['lord:' + id]; return r && !mine ? '<span class="pill">Election day ' + r.poll + '</span>' : ''; })()}</div></div>`;
   }).join('')}</div>`;
   h += `<h4>The royal council</h4><div class="grid2">${Object.keys(Sim.COUNCIL).map(k => { const c = R.council[k], r = Sim.electState(s).races['seat:' + k], bar = r ? Sim.standBar(s, r) : null; return `<div class="box"><h5>${Sim.COUNCIL[k]}</h5><p>${c === 'player' ? 'You. It pays 8c a day.' : esc(s.people[c] ? s.people[c].name : 'vacant')}</p>${r ? `<p class="why">Elected by the lords and the capital. Next vote: day ${r.poll}${c !== 'player' && bar ? '. ' + esc(bar) : ''}.</p>` : ''}</div>`; }).join('')}</div><p>Seats on the royal council are won at the vote in Crownmere. Only a lord can stand, and only a councillor can stand for the crown.</p>`;
-  if (ruler) {
-    const st = (k, v, d, lab, fmt) => `<div class="staffrow"><span>${lab}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['rule', k, v - d])}' aria-label="Less">&minus;</button><output class="num">${fmt(v)}</output><button type="button" data-c='${JSON.stringify(['rule', k, v + d])}' aria-label="More">+</button></div></div>`;
-    const pets = R.petitions || [];
-    if (pets.length) h += `<h4>Petitions to the crown</h4>` + pets.map(q => { const ch = Sim.PETITION_CHOICES[q.kind](q); return `<div class="box"><p>${esc(q.text)}</p><p class="why">Answer by day ${q.until}; left unanswered, it counts as a refusal, and the silence is noticed.</p><div class="acts">${B_(esc(ch[0]), ['petition', q.id, 0], 'alt', q.kind === 'relief' && R.treasury < q.cost)}${B_(esc(ch[1]), ['petition', q.id, 1], 'alt')}</div></div>`; }).join('');
-    h += `<h4>Ruling Alderwyn</h4><div class="box"><dl class="kv"><dt>Treasury</dt><dd class="num ${R.treasury < 0 ? 'debt' : ''}">${R.treasury}c</dd><dt>Last day</dt><dd class="num">+${R.lastIncome || 0}c, −${R.lastSpend || 0}c</dd>${R.rival ? `<dt>Rival claimant</dt><dd><b>${esc(R.rival.name)}</b>, ${Math.round(R.rival.strength)} men</dd>` : ''}</dl>
-      ${st('tax', R.taxRate, 0.25, 'Taxes on the regions', v => v + '×')}${st('tariff', R.tariff, 0.25, 'Tariffs on trade', v => v + '×')}${st('levies', R.levies, 20, 'The army (levies, 0.25c a day each)', v => v + ' men')}
-      <p>Higher taxes and tariffs fill the treasury but cost you the guilds and the towns. The army keeps the roads clear and rivals at bay.</p>
-      <h5>Laws</h5>${Object.keys(Sim.LAWS).map(k => `<div class="staffrow"><span><b>${Sim.LAWS[k].name}</b>: ${Sim.LAWS[k].say}</span>${B_(R.laws[k] ? 'In force · repeal' : 'Proclaim', ['rule', 'law', k], R.laws[k] ? '' : 'alt')}</div>`).join('')}
-      <div class="acts">${B_('Take 200c for yourself', ['rule', 'draw', 200], 'alt')}${B_('Give 200c to the treasury', ['rule', 'give', 200], 'alt', s.coins < 200)}${R.rival ? B_('Buy off ' + esc(R.rival.name) + ' · ' + Math.round(R.rival.strength * 6) + 'c', ['rule', 'payRival'], 'warn') : ''}</div></div>`;
-  }
+  if (ruler) h += rulerHTML(s);
   h += `<h4>News of the realm</h4><div class="box">${R.log.slice(0, 10).map(e => `<p><span class="num">Day ${e.day}</span> ${esc(e.text)}</p>`).join('') || '<p>All is quiet.</p>'}</div>`;
   // the other crown, across the sea
   const V = s.valdoria;
@@ -12905,14 +12952,7 @@ function pageVillage(s) {
     ${govHTML(s)}
     <div class="box"><dl class="kv"><dt>Your standing</dt><dd>${v.standing}/100</dd><dt>Position</dt><dd>${v.council ? 'Councillor since day ' + s.rec.councilSince : v.step > 0 ? 'Known to the elder' : 'A newcomer'}</dd><dt>Granary</dt><dd>${v.shortage ? 'short: ' + v.granary + '/' + v.granaryNeed + ' grain' : 'stocked'}</dd><dt>Watchtower</dt><dd>${v.towerBuilt ? 'rebuilt' : 'in ruins'}</dd><dt>Out of work</dt><dd>${v.jobless.length ? v.jobless.join(' and ') : 'nobody'}</dd><dt>Taxes paid</dt><dd>${s.rec.taxesPaid}c</dd></dl></div>
     <h4>The four things the village asks</h4><ul class="goals">${Sim.VILLAGE_MILESTONES.map((i, n) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : n + 1}</span><span>${esc(Sim.stepText(s, Sim.STEPS[i]))}</span></li>`).join('')}</ul>`;
-  if (v.council || s.offices.elder === 'player') {
-    html += `<h4>Your powers</h4><p>Chest: <b class="${v.chest < 0 ? 'neg' : ''}">${v.chest}c</b>. Projects and rulings are made in person at the Village Hall.</p>
-      ${s.offices.elder === 'player' ? elderBusiness(s) : ''}
-      ${s.offices.elder === 'player' ? `<div class="setting"><span>Help for the poor</span>${seg2('relief', s.gov.relief, [['none', 'None'], ['some', 'A little'], ['all', 'Everyone in need']])}<p>Each morning the chest feeds the hungry and the homeless. A little: up to three people, 2c each, only while the chest has coin. Everyone: 3c each, borrowing if need be. The village notices either way.</p></div>` : ''}
-      <div class="setting"><span>Toll on travelers</span>${seg2('toll', v.toll, Object.keys(Sim.TOLLS).map(k => [k, Sim.TOLLS[k].name]))}<p>A toll fills the chest from every traveler who stops, but fewer travelers come. None: all of them; low: about 85%; high: about 60%.</p></div>
-      <div class="grid2">${Object.keys(Sim.PROJECTS).map(k => { const pr = Sim.PROJECTS[k]; return `<div class="box"><h5>${esc(pr.name)}</h5><p>${esc(pr.text)}</p><p>${v.projects[k] ? '<span class="pill yes">done on day ' + v.projects[k] + '</span>' : pr.cost + 'c from the chest'}</p></div>`; }).join('')}</div>
-      ${v.dispute != null ? `<p><b>Waiting at the Village Hall:</b> ${esc(Sim.DISPUTES[v.dispute].text)}</p>` : '<p>No quarrels before the council today.</p>'}`;
-  }
+  if (v.council || s.offices.elder === 'player') html += villagePowers(s);
   html += `<h4>Property and orders</h4><p>Old Ama’s cottage: ${({ forsale: 'for sale at 90c', owned: 'yours, needs repairs', repaired: 'repaired, tenant arriving', let: 'rented out at 5c a day' })[v.cottage]}. Rent collected: ${s.rec.rentCollected}c.</p>
     <p>${v.contract ? `Open order at the Trading Post: ${esc(v.contract.who)} wants ${esc(Sim.goodsName(v.contract.trade, v.contract.qty))} by day ${v.contract.until} for ${v.contract.reward}c.` : 'No merchant orders right now. They appear at the Trading Post for goods your shops make.'}</p>`;
   return html;
@@ -14433,8 +14473,12 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.07.2308';
+const BUILD = '2026.11.07.2311';
 const NOTES = [
+  { v: '0.67', date: '7 November', title: 'Your office', items: [
+    'A new Your office page (first under Power) is the control panel for the office you hold: every power, what it does, and its controls in one place. As councillor or Elder: the chest, the toll, help for the poor, the village works, officers, projects and the open land. As a lord: your region\u2019s patrols, garrison, roads and taxes. On the royal council: your seat\u2019s work. On the throne: taxes, tariffs, the army, the laws, petitions and court.',
+    'It also shows how long you have held the office, when it next goes to the vote, any promise you owe, and the office\u2019s full charge.'
+  ] },
   { v: '0.66', date: '7 November', title: 'Quieter', items: [
     'Sales no longer pop up on screen or chime. Every sale is still counted in the ledger.'
   ] },
