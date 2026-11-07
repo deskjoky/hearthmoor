@@ -2606,8 +2606,12 @@ function syncChars(s, t) {
       const key = shop.id + ':h:' + h.name; seenW.add(key);
       let g = workerMeshes.get(key);
       if (!g) { const fem = Sim.sexOf({ name: h.name }) === 'f'; g = makeChar({ tunic: '#a89a7a', skin: SKIN[h.name.length % SKIN.length], apron: APRON[shop.trade], fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[(h.name.length + 2) % 5] }); workerMeshes.set(key, g); }
-      const st = Sim.plotPt(shop, i ? 'store' : 'station'), a = { x: st.x + (i ? -0.9 : 0.9), z: st.z + 0.4, face: Math.PI };
-      g.visible = on; if (on) placeChar(g, a, t, { moving: false, working: true });
+      const role = h.role || 'make', mk = hs.filter(x => (x.role || 'make') === 'make').indexOf(h);
+      let a, out = role === 'round' || (role === 'supply' && shop.fetch);
+      if (role === 'counter') { const sv = Sim.plotPt(shop, 'serve'); out = shop.counterBy !== h.name; a = { x: sv.x, z: sv.z, face: Math.PI }; }
+      else if (role === 'supply') { const st = Sim.plotPt(shop, 'store'); a = { x: st.x - 0.7, z: st.z + 0.3, face: Math.PI }; }
+      else { const st = Sim.plotPt(shop, 'station'), k = Math.max(0, mk); a = { x: st.x + (k % 2 ? -1 : 1) * (0.9 + Math.floor(k / 2) * 0.7), z: st.z + 0.4 + Math.floor(k / 2) * 0.5, face: Math.PI }; }
+      g.visible = on && !out; if (g.visible) placeChar(g, a, t, { moving: false, working: role !== 'counter' });
     });
   }
   // the village watch walks its rounds
@@ -3621,10 +3625,11 @@ function syncHoliday(s) {
   if (HOL.group) { scene.remove(HOL.group); HOL.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   HOL.id = id; HOL.town = t; HOL.group = null; HOL.flames = [];
   if (!H) return;
-  const C = t === 'hearthmoor' ? { x: 0, z: 9, r: 8 } : (() => { const L0 = Sim.LOCS[Sim.MARKET_AT[t]]; return L0 ? { x: L0.x, z: L0.z, r: Math.max(7, (L0.r || 8) * 0.8) } : null; })(); if (!C) return;
+  const C = t === 'hearthmoor' ? { x: SQ.x, z: SQ.z, r: 9.2 } : (() => { const L0 = Sim.LOCS[Sim.MARKET_AT[t]]; return L0 ? { x: L0.x, z: L0.z, r: Math.max(7, (L0.r || 8) * 0.8) } : null; })(); if (!C) return;
   const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c }), E = (c, i) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: i || 0.8 });
   const put = (geo, mat, x, y, z, ry, rz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz; g.add(m); return m; };
   const gy = (x, z) => groundH(x, z);
+  const K = { x: C.x, z: C.z + 3.6 };   // a well or fountain stands at the heart of each square, so the maypole and bonfire go just south of it
   const ringPts = n => Array.from({ length: n }, (_, i) => { const a = i / n * Math.PI * 2; return { x: C.x + Math.cos(a) * C.r, z: C.z + Math.sin(a) * C.r, a }; });
   // bunting on poles round the square, in the day's colours
   const cols = { firstlight: ['#f2d27a', '#fff1c0'], plough: ['#5f9a3a', '#e8e0b0'], maying: ['#f28cb8', '#ffffff', '#8cc8f2', '#f2e07a'], midsummer: ['#e8742a', '#f2c23a'], queensday: ['#a8231c', '#e0b030'], harvest: ['#d9a033', '#8a5a2a'], applefair: ['#b8302a', '#6aa83a'], soulsnight: ['#5a3a6a', '#2a2a2a'], longnight: ['#2f6a3a', '#b8302a'] }[H.id] || ['#ffffff'];
@@ -3637,13 +3642,13 @@ function syncHoliday(s) {
   // lanterns for the night festivals
   if (['firstlight', 'soulsnight', 'longnight', 'midsummer'].includes(H.id)) for (const p of poles) put(new THREE.BoxGeometry(0.26, 0.32, 0.26), E(H.id === 'soulsnight' ? '#ff8a20' : '#ffd070', 1.1), p.x, gy(p.x, p.z) + 3.55, p.z);
   if (H.id === 'maying') {   // the maypole, ribboned
-    put(new THREE.CylinderGeometry(0.12, 0.16, 7, 8), M('#e8dcc0'), C.x, gy(C.x, C.z) + 3.5, C.z);
-    put(new THREE.TorusGeometry(0.5, 0.12, 6, 12), M('#f28cb8'), C.x, gy(C.x, C.z) + 6.6, C.z).rotation.x = Math.PI / 2;
-    ['#f28cb8', '#8cc8f2', '#f2e07a', '#9ad27a', '#ffffff', '#c89af2'].forEach((c, i) => { const a = i / 6 * Math.PI * 2, rx = C.x + Math.cos(a) * 2.2, rz = C.z + Math.sin(a) * 2.2, r = put(new THREE.CylinderGeometry(0.03, 0.03, 6, 4), M(c), (C.x + rx) / 2, gy(C.x, C.z) + 3.6, (C.z + rz) / 2); r.lookAt(rx, gy(rx, rz) + 0.8, rz); r.rotateX(Math.PI / 2); });
+    put(new THREE.CylinderGeometry(0.12, 0.16, 7, 8), M('#e8dcc0'), K.x, gy(K.x, K.z) + 3.5, K.z);
+    put(new THREE.TorusGeometry(0.5, 0.12, 6, 12), M('#f28cb8'), K.x, gy(K.x, K.z) + 6.6, K.z).rotation.x = Math.PI / 2;
+    ['#f28cb8', '#8cc8f2', '#f2e07a', '#9ad27a', '#ffffff', '#c89af2'].forEach((c, i) => { const a = i / 6 * Math.PI * 2, rx = K.x + Math.cos(a) * 2.2, rz = K.z + Math.sin(a) * 2.2, r = put(new THREE.CylinderGeometry(0.03, 0.03, 6, 4), M(c), (K.x + rx) / 2, gy(K.x, K.z) + 3.6, (K.z + rz) / 2); r.lookAt(rx, gy(rx, rz) + 0.8, rz); r.rotateX(Math.PI / 2); });
   }
   if (H.id === 'midsummer' || H.id === 'longnight') {   // a bonfire, or a yule fire
-    const y0 = gy(C.x, C.z); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, l = put(new THREE.CylinderGeometry(0.12, 0.14, 1.8, 5), M('#5a3a22'), C.x + Math.cos(a) * 0.35, y0 + 0.7, C.z + Math.sin(a) * 0.35); l.rotation.z = Math.cos(a) * 0.5; l.rotation.x = Math.sin(a) * 0.5; }
-    const f1 = put(new THREE.ConeGeometry(0.7, H.id === 'midsummer' ? 2.4 : 1.4, 7), E('#ff8a20', 1.2), C.x, y0 + 1.6, C.z), f2 = put(new THREE.ConeGeometry(0.4, 1.6, 6), E('#ffd050', 1.4), C.x, y0 + 1.6, C.z); HOL.flames = [f1, f2];
+    const y0 = gy(K.x, K.z); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, l = put(new THREE.CylinderGeometry(0.12, 0.14, 1.8, 5), M('#5a3a22'), K.x + Math.cos(a) * 0.35, y0 + 0.7, K.z + Math.sin(a) * 0.35); l.rotation.z = Math.cos(a) * 0.5; l.rotation.x = Math.sin(a) * 0.5; }
+    const f1 = put(new THREE.ConeGeometry(0.7, H.id === 'midsummer' ? 2.4 : 1.4, 7), E('#ff8a20', 1.2), K.x, y0 + 1.6, K.z), f2 = put(new THREE.ConeGeometry(0.4, 1.6, 6), E('#ffd050', 1.4), K.x, y0 + 1.6, K.z); HOL.flames = [f1, f2];
   }
   if (H.id === 'harvest' || H.id === 'plough' || H.id === 'applefair') {   // sheaves, or apple barrels
     for (const p of ringPts(6)) { const x = C.x + (p.x - C.x) * 0.6, z = C.z + (p.z - C.z) * 0.6, y0 = gy(x, z); if (H.id === 'applefair') { put(new THREE.CylinderGeometry(0.4, 0.4, 0.8, 8), M('#7a5230'), x, y0 + 0.4, z); put(new THREE.SphereGeometry(0.36, 8, 6), M('#b8302a'), x, y0 + 0.85, z); } else { put(new THREE.CylinderGeometry(0.22, 0.38, 1.3, 7), M('#d9b04a'), x, y0 + 0.65, z); put(new THREE.ConeGeometry(0.3, 0.5, 7), M('#e8c45a'), x, y0 + 1.5, z); } }
@@ -3922,7 +3927,8 @@ function pageShops(s, only) {
       <div class="box"><h5>Price: <span class="num" id="pv-${shop.id}">${shop.price}c</span></h5>
       <input type="range" id="price-${shop.id}" data-shop="${shop.id}" min="1" max="${Math.round(T.wtp * 2.2)}" step="1" value="${shop.price}" aria-label="Price for ${T.many}">
       <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div></div>`;
-    if (shop.worker) html += `<p><label><input type="checkbox" id="pol-${shop.id}" data-shop="${shop.id}" ${shop.policy.supplyRuns ? 'checked' : ''}> ${esc(shop.worker.name)} buys ${Object.keys(T.recipe).join(' and ')} at the Trading Post when storage runs out</label></p>`;
+    if (shop.worker) { const who = Sim.supplier(shop) || 'none', opts = [shop.manager ? ['manager', 'Manager'] : null, ['employee', 'An employee'], ['worker', esc(shop.worker.name.split(' ')[0])], ['none', 'Nobody']].filter(Boolean);
+      html += `<div class="setting"><span>Who fetches ${Object.keys(T.recipe).join(' and ')}</span><div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${who === v}" data-c='${esc(JSON.stringify(['policy', shop.id, 'supplyBy', v]))}'>${n}</button>`).join('')}</div>${(shop.policy.supplyBy === 'employee' && who !== 'employee') ? '<p class="why">Set an employee to Supplies on the Staff page.</p>' : who === 'manager' ? '<p>The manager buys a little cheaper and the bench never stops.</p>' : who === 'worker' ? '<p>The bench stops while they walk to the Trading Post.</p>' : ''}</div>`; }
     if (shop.manager) html += `<p><label><input type="checkbox" id="res-${shop.id}" data-shop="${shop.id}" ${shop.policy.reserve !== false ? 'checked' : ''}> In autumn and winter, the manager lays in a reserve of ${Object.keys(T.recipe).join(' and ')} (up to ${Ti.cap} each, and no more than about ${60 + shop.manager.budget * 4}c a day)</label></p>`;
     if (next) {
       const can = Sim.canPay(s, next.cost, shop);
@@ -3971,17 +3977,19 @@ function pageManage(s) {
   return pageShops(s);
 }
 function handsBox(s, shop) {
-  const T = TR[shop.trade], room = Sim.handRoom(shop), hs = shop.hands || [], Ti = Sim.tierOf(shop), q = Sim.roundQuota(shop);
-  let h = `<div class="box"><h5>Hands at your ${esc(T.name.toLowerCase())} · ${hs.length} of ${room}</h5>`;
-  if (!room) return h + `<p>A ${esc(Ti.name)} has room for one worker and no manager. Upgrade it to take on a hand and a manager.</p></div>`;
-  h += `<p>Each hand helps at the bench and the counter, and takes ${T.product} round the town to sell at a little under your price: the first about ${q} a day, the next fewer. A hand with nothing on the shelf to take out is a wage for nothing.</p>`;
+  const T = TR[shop.trade], room = Sim.handRoom(shop), hs = shop.hands || [], Ti = Sim.tierOf(shop), q = Sim.roundQuota(shop), over = Sim.crowdOver(shop);
+  let h = `<div class="box"><h5>Employees at your ${esc(T.name.toLowerCase())} · ${hs.length} <span class="sub">(a ${esc(Ti.name.toLowerCase())} fits ${room})</span></h5>`;
+  h += `<p>Full-time staff beside ${shop.worker ? esc(shop.worker.name.split(' ')[0]) : 'your worker'}. Give each a job: the bench (makes ${T.many} faster), the counter (serves so the bench never stops), selling round town (about ${q} a day for the first, fewer after), or fetching supplies.</p>`;
+  if (over) h += `<p class="why"><b>Crowded.</b> ${hs.length} employees where ${room} fit: everyone works about ${Math.round((1 - Sim.crowdMul(shop)) * 100)}% slower, moods sink each day and quarrels break out. Upgrade the building or let someone go.</p>`;
   const st = G && G.ledger.length ? G.ledger[G.ledger.length - 1].shops.find(x => x.id === shop.id) : null;
-  if (st && hs.length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c, against ${hs.reduce((a, x) => a + x.wage, 0)}c in wages.</p>`;
+  if (st && Sim.staffOn(shop, 'round').length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c.</p>`;
   hs.forEach((x, i) => {
-    h += `<div class="staffrow"><span><b>${esc(x.name)}</b> · ${Sim.skillLabel(x.skill)} · mood ${Math.round(x.mood)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${x.wage}c</output><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'hand' + shop.id + ':' + i ? B_('Yes, let go', ['fireHand', shop.id, i], 'warn') + B_('Keep', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'hand' + shop.id + ':' + i], 'alt')}</div>`;
+    h += `<div class="staffrow"><span><b>${esc(x.name)}</b> · ${Sim.skillLabel(x.skill)} · mood ${Math.round(x.mood)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${x.wage}c</output><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'hand' + shop.id + ':' + i ? B_('Yes, let go', ['fireHand', shop.id, i], 'warn') + B_('Keep', ['ui', 'confirm', null], 'alt') : B_('Let go', ['ui', 'confirm', 'hand' + shop.id + ':' + i], 'alt')}</div>`;
+    h += `<div class="seg" role="group" aria-label="Job for ${esc(x.name)}">${Sim.ROLES.map(r => `<button type="button" aria-pressed="${(x.role || 'make') === r}" data-c='${esc(JSON.stringify(['setHandRole', shop.id, i, r]))}'>${esc({ make: 'Bench', counter: 'Counter', round: 'Sell round', supply: 'Supplies' }[r])}</button>`).join('')}</div>`;
     if (x.wage < x.ask) h += `<p class="why">${esc(x.name.split(' ')[0])} asked for ${x.ask}c: their mood falls each day.</p>`;
   });
-  if (hs.length < room) h += s.applicants.length ? `<p>Take on a hand:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Take on ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
+  if (!shop.worker) h += `<p>Hire a worker to run it first.</p>`;
+  else if (hs.length < Sim.HAND_MAX) h += s.applicants.length ? `<p>Take someone on${hs.length >= room ? ' <span class="why">(it will be crowded)</span>' : ''}:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Hire ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
   return h + `</div>`;
 }
 function pageStaff(s, only) {
@@ -6187,6 +6195,12 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.57', date: '7 November', title: 'Full-time staff', items: [
+    'Hands are now full-time employees, and you can hire as many as you like. Each building holds a few comfortably (a stall 1, timber 2, stone 3). Past that it gets crowded: everyone works slower, moods sink, quarrels break out and people quit.',
+    'Give each employee a job on the Staff page: at the bench, on the counter, selling round town, or fetching supplies. The first one you hire takes the counter, so your worker stays at the bench and never stops to serve.',
+    'Choose who fetches supplies in the shop menu: the manager, an employee, your worker, or nobody. With a manager it is the manager by default, a little cheaper, and the bench keeps going. Hiring a manager sets it up that way: worker at the bench, an employee on the counter, the manager on supplies.',
+    'Festival decorations now ring the middle of the square, with the maypole and bonfire just beside the well.'
+  ] },
   { v: '0.56', date: '7 November', title: 'Holidays, and the calendar', items: [
     'Holidays. The year has its festivals: Firstlight (new year), the Plough Blessing, Maying, Midsummer Fires, Harvest Home, the Applefall Fair, Souls\u2019 Night and Longnight, and the Queen\u2019s Feast in Valdoria. On the day, the square is dressed for it: bunting in the festival\u2019s colours, lanterns, a ribboned maypole, a midsummer bonfire, harvest sheaves, apple barrels, glowing turnip lanterns in the mist, evergreens and red ribbons. The light changes with the festival too.',
     'Folk spend more on a festival day (the taverns most of all at midsummer, the bakers and butchers at Harvest Home), and everyone is in a better mood. As Elder, a lord or the ruler you can pay for the festivities, and the town remembers who gave them their feast.',

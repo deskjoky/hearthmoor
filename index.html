@@ -1189,10 +1189,16 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       }
       if (shop.hands && shop.hands.length) {
         handsRound(s, shop, ss);
+        const over = crowdOver(shop); ss.crowd = over;
+        if (over && shop.hands.length > 1 && rand(s) < 0.15 * over) {
+          const a = shop.hands[Math.floor(rand(s) * shop.hands.length)], b = [shop.worker].concat(shop.hands).filter(x => x && x !== a)[Math.floor(rand(s) * shop.hands.length)];
+          a.mood = clamp(a.mood - 14, 0, 100); if (b) b.mood = clamp(b.mood - 8, 0, 100);
+          event(s, 'Too many people behind the counter at your ' + TRADES[shop.trade].name.toLowerCase() + ': ' + a.name + (b ? ' and ' + b.name : '') + ' came to words. (' + shop.hands.length + ' employees where ' + handRoom(shop) + ' fit.)', 'bad');
+        }
         for (const h of shop.hands.slice()) {
           spend(s, h.wage); ss.wages += h.wage; s.rec.wagesPaid += h.wage; const hp = h.pid && s.people && s.people[h.pid]; if (hp) hp.purse += h.wage;
-          h.mood = clamp(h.mood + (h.wage >= h.ask ? 5 : -(h.ask - h.wage) * 7) + (shop.manager ? 3 : 0), 0, 100);
-          if (h.mood < 15) { shop.hands = shop.hands.filter(x => x !== h); if (hp) { hp.job = null; plog(s, hp, 'Quit as a hand at your ' + TRADES[shop.trade].name.toLowerCase() + ': the pay was too low.'); } event(s, h.name + ' has quit as a hand at your ' + TRADES[shop.trade].name.toLowerCase() + '. The pay was too low.', 'bad'); }
+          h.mood = clamp(h.mood + (h.wage >= h.ask ? 5 : -(h.ask - h.wage) * 7) + (shop.manager ? 3 : 0) - 4 * crowdOver(shop), 0, 100);
+          if (h.mood < 15) { shop.hands = shop.hands.filter(x => x !== h); if (hp) { hp.job = null; const why = crowdOver(shop) && h.wage >= h.ask ? 'the place is too crowded' : 'the pay was too low'; plog(s, hp, 'Quit as an employee at your ' + TRADES[shop.trade].name.toLowerCase() + ': ' + why + '.'); } event(s, h.name + ' has quit your ' + TRADES[shop.trade].name.toLowerCase() + '. ' + (crowdOver(shop) && h.wage >= h.ask ? 'It is too crowded to work in.' : 'The pay was too low.'), 'bad'); }
         }
       }
       const up = Ti.upkeep;
@@ -1296,7 +1302,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       spend(s, m.wage); mp.purse += m.wage; s.rec.wagesPaid += m.wage;
       let budget = m.budget, did = [];
       const ss = shopStats(s, shop), T = TRADES[shop.trade], floor = Math.ceil(Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * buyPrice(s, 'hearthmoor', g), 0) / Math.max(1, tierOf(shop).out) * 1.1);
-      if (!shop.policy.supplyRuns) { shop.policy.supplyRuns = true; did.push('set the worker to buy supplies'); }
+      
       { /* the manager orders supplies in bulk overnight, a little cheaper, so the worker never has to leave the counter */
         const r = T.recipe, Ti = tierOf(shop), want = {};
         // before and through winter, a manager lays in a reserve of what the shop uses, if you allow it and can spare the coin
@@ -1360,9 +1366,10 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const notes = [], T = TRADES[shop.trade], Ti = tierOf(shop);
     if (shop.hands && shop.hands.length) {
       const hw = shop.hands.reduce((a, h) => a + h.wage, 0);
-      if ((e.rounds || 0) < (e.roundsWanted || 0) * 0.6) notes.push({ text: 'Your hands could have sold ' + e.roundsWanted + ' ' + T.product + ' round the village but sold ' + (e.rounds || 0) + (e.roundsRefused ? ' (' + e.roundsRefused + ' turned them down at ' + Math.max(1, Math.round(shop.price * 0.85)) + 'c)' : '') + ': they cost ' + hw + 'c and brought in ' + (e.roundsCoin || 0) + 'c. ' + (shop.goods < Ti.out ? 'Keep more on the shelf, or let one go.' : 'Most people had already bought: one fewer hand would do.') });
-      else notes.push({ text: 'Your hands sold ' + e.rounds + ' ' + T.product + ' beyond the counter for ' + (e.roundsCoin || 0) + 'c, against ' + hw + 'c in wages.' });
-    } else if (shop.worker && handRoom(shop) > 0 && e.soldOut === 0 && shop.goods >= Ti.out) notes.push({ text: 'Your shelf ended the day with goods to spare. A hand could take some round the town.', fix: { label: 'Hire a hand', cmd: ['page', 'staff'] } });
+      if (e.crowd) notes.push({ text: 'Your ' + Ti.name.toLowerCase() + ' is crowded: ' + shop.hands.length + ' employees where ' + handRoom(shop) + ' fit. Everyone works about ' + Math.round((1 - crowdMul(shop)) * 100) + '% slower and tempers fray. Upgrade the building or let someone go.', fix: { label: 'Staff', cmd: ['page', 'staff'] } });
+      if (!staffOn(shop, 'round').length) {} else if ((e.rounds || 0) < (e.roundsWanted || 0) * 0.6) notes.push({ text: 'Your sellers could have sold ' + e.roundsWanted + ' ' + T.product + ' round the village but sold ' + (e.rounds || 0) + (e.roundsRefused ? ' (' + e.roundsRefused + ' turned them down at ' + Math.max(1, Math.round(shop.price * 0.85)) + 'c)' : '') + ': they cost ' + hw + 'c and brought in ' + (e.roundsCoin || 0) + 'c. ' + (shop.goods < Ti.out ? 'Keep more on the shelf, or let one go.' : 'Most people had already bought: one fewer hand would do.') });
+      else notes.push({ text: 'Your sellers sold ' + e.rounds + ' ' + T.product + ' beyond the counter for ' + (e.roundsCoin || 0) + 'c, against ' + hw + 'c in wages.' });
+    } else if (shop.worker && e.soldOut === 0 && shop.goods >= Ti.out) notes.push({ text: 'Your shelf ended the day with goods to spare. An employee could take some round the town.', fix: { label: 'Hire an employee', cmd: ['page', 'staff'] } });
     const mean = wtpMean(shop, false), lo = Math.round(mean - T.sd * 0.7), hi = Math.round(mean + T.sd * 0.3);
     const cust = n => n + (n === 1 ? ' customer' : ' customers');
     if (e.soldOut > 0) {
@@ -1370,7 +1377,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (e.idleAt) t += ' Work stopped at ' + e.idleAt + ' because storage ran out of ' + recipeText(shop.trade).replace(/\d+ /g, '') + '.';
       else t += ' Make a batch earlier so stock is ready when people arrive.';
       const n = { text: t };
-      if (e.idleAt && shop.worker && !shop.policy.supplyRuns) n.fix = { label: 'Let ' + shop.worker.name + ' buy supplies', cmd: ['policy', shop.id, 'supplyRuns', true] };
+      if (e.idleAt && shop.worker && !supplier(shop)) n.fix = { label: 'Let ' + shop.worker.name + ' buy supplies', cmd: ['policy', shop.id, 'supplyRuns', true] };
       notes.push(n);
     }
     if (e.tooExpensive > 0) {
@@ -1602,20 +1609,66 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function workerAttending(shop) {
     const w = shop.worker;
+    if (w && shop.counterBy) return true;
     return !!w && (w.task === 'serve' || w.task === 'tend') && dist(w, plotPt(shop, 'serve')) < 0.8;
   }
   /* a manager on the floor lends a hand at the bench and the counter: up to half again as fast */
   const mgrBoost = shop => shop && shop.manager ? 1 + 0.25 * Math.min(1.3, shop.manager.skill || 1) : 1;
-  function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop) * handBoost(shop); }
+  function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop) * handBoost(shop) * crowdMul(shop); }
   /* ---------- hands: extra staff for a bigger shop ----------
      A stall is one pair of hands. A timber building has room for a second, a stone one for a third, and
      from the timber building up, a manager. Hands help at the bench and the counter, and each one takes
      goods out to sell beyond the counter (round the houses, to the inns, to carters for Oakbridge) at a
      little under the shop price. That trade is real but limited: the first hand sells the most, the next
      less, and a hand with nothing on the shelf to take out is a wage for nothing. */
-  const HAND_ROOM = [0, 1, 2];
-  const handRoom = shop => HAND_ROOM[shop.tier || 0] || 0;
-  const handBoost = shop => 1 + 0.3 * ((shop && shop.hands) || []).reduce((a, h) => a + Math.min(1.3, h.skill || 1) * (h.mood < 30 ? 0.6 : 1), 0);
+  /* Employees (kept as shop.hands). Hire as many as you like, and give each a job: at the bench, on the
+     counter, selling round town, or fetching supplies. Each building holds a few comfortably; past that they
+     get in each other's way. Everyone slows down, tempers fray and people come to words, and the wages
+     keep coming whether the extra pairs of hands help or not. */
+  const HAND_ROOM = [1, 2, 3], HAND_MAX = 12;
+  const handRoom = shop => HAND_ROOM[(shop && shop.tier) || 0] || 1;
+  const ROLES = ['make', 'counter', 'round', 'supply'];
+  const ROLE_NAME = { make: 'At the bench', counter: 'On the counter', round: 'Selling round town', supply: 'Fetching supplies' };
+  const staffOn = (shop, role) => ((shop && shop.hands) || []).filter(h => (h.role || 'make') === role && h.mood >= 15);
+  const crowdOver = shop => Math.max(0, ((shop && shop.hands) || []).length - handRoom(shop));
+  const crowdMul = shop => 1 / (1 + 0.3 * crowdOver(shop));
+  function defaultRole(shop) { const hs = (shop.hands || []).filter(h => h.role); if (!hs.some(h => h.role === 'counter')) return 'counter'; if (!hs.some(h => h.role === 'round')) return 'round'; return 'make'; }
+  // the bench gets quicker with each extra maker, by less each time; a fetcher with nothing to fetch lends half a hand
+  const handBoost = shop => { let b = 1, i = 0; for (const h of ((shop && shop.hands) || [])) { const r = h.role || 'make'; if (h.mood < 15 || (r !== 'make' && r !== 'supply')) continue; const k = r === 'supply' ? (shop.fetch ? 0 : 0.5) : 1; b += 0.35 * Math.pow(0.8, i++) * k * Math.min(1.3, h.skill || 1) * (h.mood < 30 ? 0.6 : 1); } return b; };
+  function counterSpeed(shop) { const c = staffOn(shop, 'counter')[0]; return c ? Math.min(1.3, c.skill || 1) * (c.mood < 30 ? 0.7 : 1) * mgrBoost(shop) * crowdMul(shop) : 0; }
+  // who fetches supplies: the manager unless you choose otherwise, else an employee set to it, else the worker if allowed
+  function supplier(shop) {
+    const by = shop.policy.supplyBy || 'auto';
+    if (by === 'none') return null;
+    if ((by === 'auto' || by === 'manager') && shop.manager) return 'manager';
+    if ((by === 'auto' || by === 'manager' || by === 'employee') && staffOn(shop, 'supply').length) return 'employee';
+    if (by === 'worker' || shop.policy.supplyRuns) return 'worker';
+    return null;
+  }
+  function supplyWant(s, shop, disc) {
+    const Ti = tierOf(shop), r = TRADES[shop.trade].recipe, want = {};
+    for (const g of Object.keys(r)) want[g] = shop.stock[g] >= r[g] * 3 ? 0 : Math.min(r[g] * 3 - shop.stock[g], Ti.cap - shop.stock[g]);
+    const cost = () => Object.keys(want).reduce((a, g) => a + (want[g] ? Math.ceil(buyPrice(s, 'hearthmoor', g, want[g]) * disc) : 0), 0);
+    while (cost() > s.coins && Object.values(want).some(v => v > 0)) { const g = Object.keys(want).sort((a, b) => want[b] / r[b] - want[a] / r[a])[0]; want[g]--; }
+    return { want, cost: cost(), total: Object.values(want).reduce((a, b) => a + b, 0) };
+  }
+  // the manager or a fetcher goes to the Trading Post while the bench keeps working
+  function fetchStep(s, shop, low, h, H) {
+    const st = shopStats(s, shop);
+    if (shop.fetch) {
+      if (s.t < shop.fetch.at) return;
+      const Ti = tierOf(shop); for (const g in shop.fetch.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + shop.fetch.carry[g]);
+      shop.fetch = null; return;
+    }
+    const who = supplier(shop);
+    if (!low || !who || who === 'worker' || h < H.start || h >= H.end - 1 || shop.fetchWait > s.t) return;
+    const by = who === 'manager' ? shop.manager.name : staffOn(shop, 'supply')[0].name;
+    const { want, cost, total } = supplyWant(s, shop, who === 'manager' ? 0.9 : 1);
+    if (total <= 0) { shop.fetchWait = s.t + 90; return; }
+    spend(s, cost); st.supplies += cost;
+    shop.fetch = { at: s.t + (who === 'manager' ? 20 : 35) * crowdMul(shop) ** -0.5, carry: want, by };
+    event(s, by + ' went for ' + Object.keys(want).filter(g => want[g]).map(g => want[g] + ' ' + g).join(' and ') + ' for your ' + TRADES[shop.trade].name.toLowerCase() + ' (' + cost + 'c).', 'info');
+  }
   const ROUND_SALE = [1, 0.65, 0.4];
   // how many a hand can sell round the town in a day: enough to clear about 12c over the cost of making them
   function roundQuota(shop) { const T = TRADES[shop.trade], cost = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * BUY[g], 0) / Math.max(1, T.tiers[0].out), margin = Math.max(1, T.price * 0.85 - cost); return Math.max(1, Math.round(12 / margin)); }
@@ -1626,9 +1679,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
      wants bread already has it, there is nothing to sell, however many hands you send out. Rival bakers supply
      about half the village, so only the other half is there for your hands. */
   function handsRound(s, shop, st) {
-    const hs = shop.hands || []; if (!hs.length) return null;
+    const hs = staffOn(shop, 'round'); if (!hs.length) return null;
     const T = TRADES[shop.trade], price = Math.max(1, Math.round(shop.price * 0.85));
-    let cap = 0; hs.forEach((h, i) => { cap += Math.round(roundQuota(shop) * (ROUND_SALE[i] || 0.3) * Math.min(1.2, h.skill || 1) * (h.mood < 30 ? 0.6 : 1)); });
+    let cap = 0; hs.forEach((h, i) => { cap += Math.round(roundQuota(shop) * (ROUND_SALE[i] || 0.3) * Math.min(1.2, h.skill || 1) * (h.mood < 30 ? 0.6 : 1) * crowdMul(shop)); });
     const keep = Math.min(shop.goods, Math.ceil(tierOf(shop).out / 2)); let left = Math.max(0, Math.min(cap, shop.goods - keep));
     const done = s.stats['b:' + shop.trade] || {}, mean = wtpMean(shop, false) * 0.97;
     const pool = villagers(s).filter(p => !p.kid && p.status === 'here' && !done[p.id] && p.purse >= price);
@@ -1657,7 +1710,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const front = agentById(s, shop.queue[0]);
     if (!front) { shop.queue.shift(); return; }
     if (front.phase !== 'queue' || dist(front, plotPt(shop, 'queue0')) > 0.6 || shop.goods <= 0) return;
-    const speed = Math.max(pa ? 1 : 0, wa ? workerSpeed(shop.worker, shop) : 0);
+    const speed = Math.max(pa ? 1 : 0, wa ? (shop.counterBy ? counterSpeed(shop) : workerSpeed(shop.worker, shop)) : 0);
     if (speed <= 0) return;
     shop.serveProgress += dt * speed;
     if (shop.serveProgress >= SERVE_MIN) {
@@ -1806,6 +1859,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const h = hourOf(s), H = workerHours(shop), Ti = tierOf(shop), T = TRADES[shop.trade], st = shopStats(s, shop);
     const serve = plotPt(shop, 'serve');
     w.indoors = false;
+    (shop.hands || []).forEach(x => { if (!x.role) x.role = defaultRole(shop); });
+    { // the counter employee keeps the counter all day, and takes lunch once the worker is back
+      const c = staffOn(shop, 'counter')[0];
+      shop.counterBy = c && h >= H.start && h < H.end && !(h >= H.lunch + 0.5 && h < H.lunch + 1) ? c.name : null;
+    }
+    fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), h, H);
     if (w.task === 'supply' && h >= 6 && h < H.end) { supplyRun(s, shop, w, dt); st.workerMin += dt; return; }
     if (h < H.start - 1 || h >= H.end + 1) {
       w.task = 'sleep';
@@ -1821,11 +1880,11 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const low = !shop.work.loaded && !canProduce(shop);
     const target = Math.min(Ti.cap - Ti.out, Ti.out * (2 + ((shop.hands || []).length)));
     const missingCost = Object.keys(T.recipe).reduce((a, g) => a + Math.max(0, T.recipe[g] - shop.stock[g]) * buyPrice(s, 'hearthmoor', g), 0);
-    if (shop.policy.supplyRuns && low && s.coins >= missingCost && h < H.end - 1 && !(w.supWait > s.t)) {
+    if (supplier(shop) === 'worker' && low && s.coins >= missingCost && h < H.end - 1 && !(w.supWait > s.t)) {
       w.task = 'supply'; w.sup = { phase: 'go' };
       supplyRun(s, shop, w, dt); return;
     }
-    if (shop.queue.length && shop.goods > 0) {
+    if (!shop.counterBy && shop.queue.length && shop.goods > 0) {
       w.task = 'serve'; moveTo(w, serve.x, serve.z, 1.1 * dt);
       w.why = 'Serving ' + shop.queue.length + (shop.queue.length === 1 ? ' waiting customer' : ' waiting customers');
       return;
@@ -1840,11 +1899,13 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       } else w.why = 'Going to the ' + T.station + ': shelf has only ' + shop.goods;
       return;
     }
-    w.task = 'tend'; moveTo(w, serve.x, serve.z, 1.1 * dt);
-    if (low) {
+    const spot = shop.counterBy ? plotPt(shop, 'station') : serve;
+    w.task = shop.counterBy ? 'idle' : 'tend'; moveTo(w, spot.x, spot.z, 1.1 * dt);
+    if (low && shop.fetch) w.why = 'Waiting for ' + shop.fetch.by + ' to bring the supplies';
+    else if (low) {
       if (!st.idleAt && shop.goods < target) st.idleAt = clock(s.t);
-      w.why = shop.policy.supplyRuns ? 'Waiting: storage is empty and there is not enough coin to buy ' + recipeText(shop.trade) : 'Waiting at the counter: storage needs ' + recipeText(shop.trade);
-    } else w.why = 'Minding the counter: shelf is stocked (' + goodsName(shop.trade, shop.goods) + ')';
+      w.why = supplier(shop) === 'worker' ? 'Waiting: storage is empty and there is not enough coin to buy ' + recipeText(shop.trade) : 'Waiting at the counter: storage needs ' + recipeText(shop.trade);
+    } else w.why = shop.counterBy ? 'Shelf is stocked (' + goodsName(shop.trade, shop.goods) + '); ' + shop.counterBy + ' has the counter' : 'Minding the counter: shelf is stocked (' + goodsName(shop.trade, shop.goods) + ')';
   }
 
   function supplyRun(s, shop, w, dt) {
@@ -6319,7 +6380,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         return ok('Sold ' + n + ' ' + a + ' for ' + got + 'c.');
       }
       case 'setPrice': if (shop) shop.price = clamp(Math.round(b), 1, TRADES[shop.trade].wtp * 3); return ok();
-      case 'policy': if (shop) shop.policy[b] = !!c; return ok();
+      case 'policy': if (shop) shop.policy[b] = typeof c === 'string' ? c : !!c; if (shop && b === 'supplyBy' && c === 'worker') shop.policy.supplyRuns = true; return ok();
+      case 'setHandRole': { if (!shop || !shop.hands || !shop.hands[b] || !ROLES.includes(c)) return fail('No such employee.'); shop.hands[b].role = c; return ok(); }
       case 'hire': {
         if (!shop) return fail('Pick a shop to hire for.');
         if (shop.worker) return fail('That shop already has a worker.');
@@ -6347,31 +6409,31 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (!shop) return fail('No such shop.');
         if (!shop.worker) return fail('Hire a worker to run it first.');
         shop.hands = shop.hands || [];
-        if (shop.hands.length >= handRoom(shop)) return fail(handRoom(shop) ? 'There is no room for more hands in a ' + tierOf(shop).name + '.' : 'A ' + tierOf(shop).name + ' has room for one worker only. Upgrade it to take on hands.');
+        if (shop.hands.length >= HAND_MAX) return fail('Nobody else could squeeze in.');
         const ap = s.applicants[b]; if (!ap) return fail('That applicant has gone.');
         const wage = clamp(Math.round(c || ap.ask), 1, 40);
         let wp = ap.pid && s.people ? s.people[ap.pid] : null;
         if (!wp && s.people) { wp = newPerson(s, { name: ap.name, age: 18 + Math.floor(rand(s) * 20), purse: 10, skill: (ap.skill - 0.7) / 0.6 }); const h = vacancy(s, 4); if (h) moveIn(s, wp, h); }
-        shop.hands.push({ pid: wp ? wp.id : null, name: ap.name, skill: ap.skill, ask: ap.ask, wage, mood: 60, since: s.day });
+        const role = defaultRole(shop); shop.hands.push({ pid: wp ? wp.id : null, name: ap.name, skill: ap.skill, ask: ap.ask, wage, mood: 60, since: s.day, role });
         s.applicants.splice(b, 1); s.rec.workersHired++;
-        if (wp) { wp.job = { type: 'shop', shop: shop.id, hand: true }; plog(s, wp, 'Taken on as a hand by ' + s.name + ' at ' + wage + 'c a day.'); wp.opinion = clamp(wp.opinion + 12, -100, 100); const ag = bodyOf(s, wp); if (ag) s.agents = s.agents.filter(x => x !== ag); }
-        event(s, ap.name + ' joins your ' + TRADES[shop.trade].name.toLowerCase() + ' as a hand at ' + wage + 'c a day.', 'info');
+        if (wp) { wp.job = { type: 'shop', shop: shop.id, hand: true }; plog(s, wp, 'Taken on full time by ' + s.name + ' at ' + wage + 'c a day.'); wp.opinion = clamp(wp.opinion + 12, -100, 100); const ag = bodyOf(s, wp); if (ag) s.agents = s.agents.filter(x => x !== ag); }
+        event(s, ap.name + ' joins your ' + TRADES[shop.trade].name.toLowerCase() + ' full time at ' + wage + 'c a day: ' + ROLE_NAME[role].toLowerCase() + '.' + (shop.hands.length > handRoom(shop) ? ' It is getting crowded in there.' : ''), 'info');
         return ok();
       }
       case 'fireHand': {
-        if (!shop || !shop.hands) return fail('No such hand.');
-        const h = shop.hands[b]; if (!h) return fail('No such hand.');
+        if (!shop || !shop.hands) return fail('No such employee.');
+        const h = shop.hands[b]; if (!h) return fail('No such employee.');
         shop.hands.splice(b, 1); s.rec.staffFired++;
-        const hp = h.pid && s.people && s.people[h.pid]; if (hp) { hp.job = null; hp.opinion = clamp(hp.opinion - 20, -100, 100); plog(s, hp, 'Let go as a hand by ' + s.name + '.'); }
+        const hp = h.pid && s.people && s.people[h.pid]; if (hp) { hp.job = null; hp.opinion = clamp(hp.opinion - 20, -100, 100); plog(s, hp, 'Let go by ' + s.name + '.'); }
         event(s, 'You let ' + h.name + ' go.', 'info'); return ok();
       }
       case 'setHandWage': {
-        if (!shop || !shop.hands || !shop.hands[b]) return fail('No such hand.');
+        if (!shop || !shop.hands || !shop.hands[b]) return fail('No such employee.');
         shop.hands[b].wage = clamp(Math.round(c), 1, 40); return ok();
       }
       case 'fire': {
         if (!shop || !shop.worker) return fail('No worker to let go.');
-        const w = shop.worker; shop.worker = null; s.rec.workersLetGo++; s.rec.staffFired++; approveHolder(s, 'player', -3);
+        const w = shop.worker; shop.worker = null; shop.counterBy = null; s.rec.workersLetGo++; s.rec.staffFired++; approveHolder(s, 'player', -3);
         if (w.pid && s.people && s.people[w.pid]) { const wp = s.people[w.pid]; wp.job = null; wp.opinion = clamp(wp.opinion - 30, -100, 100); wp.mood = clamp(wp.mood - 20, 0, 100); plog(s, wp, 'Let go by ' + s.name + '.'); addBody(s, wp, { x: w.x, z: w.z }); }
         event(s, 'You let ' + w.name + ' go.' + (w.pid ? ' They will need to find other work to keep up with their rent.' : ''), 'info');
         return ok();
@@ -6529,7 +6591,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (!shop) return fail('No such shop.');
         const refund = Math.floor(TRADES[shop.trade].tiers.slice(0, shop.tier + 1).reduce((t, x, i) => t + (i === 0 && shop.starter ? STARTER_PRICE : (x.cost.coin || 0)), 0) / 2);
         if (shop.worker) { s.rec.workersLetGo++; const w = shop.worker; if (w.pid && s.people && s.people[w.pid]) { const wp = s.people[w.pid]; wp.job = null; plog(s, wp, 'Lost their job when ' + s.name + ' sold the shop.'); addBody(s, wp, { x: w.x, z: w.z }); } }
-        (shop.hands || []).forEach(h => { const hp = h.pid && s.people && s.people[h.pid]; if (hp) { hp.job = null; plog(s, hp, 'Lost their place as a hand when ' + s.name + ' sold the shop.'); } }); shop.hands = [];
+        (shop.hands || []).forEach(h => { const hp = h.pid && s.people && s.people[h.pid]; if (hp) { hp.job = null; plog(s, hp, 'Lost their place when ' + s.name + ' sold the shop.'); } }); shop.hands = [];
         shop.queue.slice().forEach(id => { const ag = agentById(s, id); if (ag) leaveShop(s, ag, null, null); });
         s.shops = s.shops.filter(x => x !== shop);
         s.schedule = s.schedule.filter(e => e.shop !== shop.id);
@@ -7292,6 +7354,12 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         q.job = { type: 'manage', kind: a, ref: b }; q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
         o.manager = { pid: q.id, name: q.name, skill: cand.skill, wage: cand.ask, budget: 10, staffTarget: a === 'biz' ? Math.max(1, o.staff.length) : 0, since: s.day, honest: charOf(q) };
         plog(s, q, 'Became manager of ' + managedName(s, a, b) + ' for ' + s.name + ' at ' + cand.ask + 'c a day.');
+        if (a === 'shop') { // the manager takes over supplies; the worker keeps the bench and an employee the counter
+          o.policy.supplyBy = 'auto'; const hs = o.hands || [];
+          if (hs.length && !hs.some(h => h.role === 'counter')) { const x = hs.find(h => h.role !== 'round') || hs[0]; x.role = 'counter'; }
+          const ctr = hs.find(h => h.role === 'counter');
+          event(s, (o.worker ? o.worker.name + ' keeps the bench, ' : '') + (ctr ? ctr.name + ' the counter, ' : '') + 'and ' + q.name + ' fetches the supplies.', 'info');
+        }
         event(s, q.name + ' will manage ' + managedName(s, a, b) + ' for ' + cand.ask + 'c a day, with a budget of 10c a day for wages, supplies and repairs.', 'good');
         return ok();
       }
@@ -8141,7 +8209,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
@@ -10150,8 +10218,12 @@ function syncChars(s, t) {
       const key = shop.id + ':h:' + h.name; seenW.add(key);
       let g = workerMeshes.get(key);
       if (!g) { const fem = Sim.sexOf({ name: h.name }) === 'f'; g = makeChar({ tunic: '#a89a7a', skin: SKIN[h.name.length % SKIN.length], apron: APRON[shop.trade], fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[(h.name.length + 2) % 5] }); workerMeshes.set(key, g); }
-      const st = Sim.plotPt(shop, i ? 'store' : 'station'), a = { x: st.x + (i ? -0.9 : 0.9), z: st.z + 0.4, face: Math.PI };
-      g.visible = on; if (on) placeChar(g, a, t, { moving: false, working: true });
+      const role = h.role || 'make', mk = hs.filter(x => (x.role || 'make') === 'make').indexOf(h);
+      let a, out = role === 'round' || (role === 'supply' && shop.fetch);
+      if (role === 'counter') { const sv = Sim.plotPt(shop, 'serve'); out = shop.counterBy !== h.name; a = { x: sv.x, z: sv.z, face: Math.PI }; }
+      else if (role === 'supply') { const st = Sim.plotPt(shop, 'store'); a = { x: st.x - 0.7, z: st.z + 0.3, face: Math.PI }; }
+      else { const st = Sim.plotPt(shop, 'station'), k = Math.max(0, mk); a = { x: st.x + (k % 2 ? -1 : 1) * (0.9 + Math.floor(k / 2) * 0.7), z: st.z + 0.4 + Math.floor(k / 2) * 0.5, face: Math.PI }; }
+      g.visible = on && !out; if (g.visible) placeChar(g, a, t, { moving: false, working: role !== 'counter' });
     });
   }
   // the village watch walks its rounds
@@ -11165,10 +11237,11 @@ function syncHoliday(s) {
   if (HOL.group) { scene.remove(HOL.group); HOL.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   HOL.id = id; HOL.town = t; HOL.group = null; HOL.flames = [];
   if (!H) return;
-  const C = t === 'hearthmoor' ? { x: 0, z: 9, r: 8 } : (() => { const L0 = Sim.LOCS[Sim.MARKET_AT[t]]; return L0 ? { x: L0.x, z: L0.z, r: Math.max(7, (L0.r || 8) * 0.8) } : null; })(); if (!C) return;
+  const C = t === 'hearthmoor' ? { x: SQ.x, z: SQ.z, r: 9.2 } : (() => { const L0 = Sim.LOCS[Sim.MARKET_AT[t]]; return L0 ? { x: L0.x, z: L0.z, r: Math.max(7, (L0.r || 8) * 0.8) } : null; })(); if (!C) return;
   const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c }), E = (c, i) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: i || 0.8 });
   const put = (geo, mat, x, y, z, ry, rz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz; g.add(m); return m; };
   const gy = (x, z) => groundH(x, z);
+  const K = { x: C.x, z: C.z + 3.6 };   // a well or fountain stands at the heart of each square, so the maypole and bonfire go just south of it
   const ringPts = n => Array.from({ length: n }, (_, i) => { const a = i / n * Math.PI * 2; return { x: C.x + Math.cos(a) * C.r, z: C.z + Math.sin(a) * C.r, a }; });
   // bunting on poles round the square, in the day's colours
   const cols = { firstlight: ['#f2d27a', '#fff1c0'], plough: ['#5f9a3a', '#e8e0b0'], maying: ['#f28cb8', '#ffffff', '#8cc8f2', '#f2e07a'], midsummer: ['#e8742a', '#f2c23a'], queensday: ['#a8231c', '#e0b030'], harvest: ['#d9a033', '#8a5a2a'], applefair: ['#b8302a', '#6aa83a'], soulsnight: ['#5a3a6a', '#2a2a2a'], longnight: ['#2f6a3a', '#b8302a'] }[H.id] || ['#ffffff'];
@@ -11181,13 +11254,13 @@ function syncHoliday(s) {
   // lanterns for the night festivals
   if (['firstlight', 'soulsnight', 'longnight', 'midsummer'].includes(H.id)) for (const p of poles) put(new THREE.BoxGeometry(0.26, 0.32, 0.26), E(H.id === 'soulsnight' ? '#ff8a20' : '#ffd070', 1.1), p.x, gy(p.x, p.z) + 3.55, p.z);
   if (H.id === 'maying') {   // the maypole, ribboned
-    put(new THREE.CylinderGeometry(0.12, 0.16, 7, 8), M('#e8dcc0'), C.x, gy(C.x, C.z) + 3.5, C.z);
-    put(new THREE.TorusGeometry(0.5, 0.12, 6, 12), M('#f28cb8'), C.x, gy(C.x, C.z) + 6.6, C.z).rotation.x = Math.PI / 2;
-    ['#f28cb8', '#8cc8f2', '#f2e07a', '#9ad27a', '#ffffff', '#c89af2'].forEach((c, i) => { const a = i / 6 * Math.PI * 2, rx = C.x + Math.cos(a) * 2.2, rz = C.z + Math.sin(a) * 2.2, r = put(new THREE.CylinderGeometry(0.03, 0.03, 6, 4), M(c), (C.x + rx) / 2, gy(C.x, C.z) + 3.6, (C.z + rz) / 2); r.lookAt(rx, gy(rx, rz) + 0.8, rz); r.rotateX(Math.PI / 2); });
+    put(new THREE.CylinderGeometry(0.12, 0.16, 7, 8), M('#e8dcc0'), K.x, gy(K.x, K.z) + 3.5, K.z);
+    put(new THREE.TorusGeometry(0.5, 0.12, 6, 12), M('#f28cb8'), K.x, gy(K.x, K.z) + 6.6, K.z).rotation.x = Math.PI / 2;
+    ['#f28cb8', '#8cc8f2', '#f2e07a', '#9ad27a', '#ffffff', '#c89af2'].forEach((c, i) => { const a = i / 6 * Math.PI * 2, rx = K.x + Math.cos(a) * 2.2, rz = K.z + Math.sin(a) * 2.2, r = put(new THREE.CylinderGeometry(0.03, 0.03, 6, 4), M(c), (K.x + rx) / 2, gy(K.x, K.z) + 3.6, (K.z + rz) / 2); r.lookAt(rx, gy(rx, rz) + 0.8, rz); r.rotateX(Math.PI / 2); });
   }
   if (H.id === 'midsummer' || H.id === 'longnight') {   // a bonfire, or a yule fire
-    const y0 = gy(C.x, C.z); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, l = put(new THREE.CylinderGeometry(0.12, 0.14, 1.8, 5), M('#5a3a22'), C.x + Math.cos(a) * 0.35, y0 + 0.7, C.z + Math.sin(a) * 0.35); l.rotation.z = Math.cos(a) * 0.5; l.rotation.x = Math.sin(a) * 0.5; }
-    const f1 = put(new THREE.ConeGeometry(0.7, H.id === 'midsummer' ? 2.4 : 1.4, 7), E('#ff8a20', 1.2), C.x, y0 + 1.6, C.z), f2 = put(new THREE.ConeGeometry(0.4, 1.6, 6), E('#ffd050', 1.4), C.x, y0 + 1.6, C.z); HOL.flames = [f1, f2];
+    const y0 = gy(K.x, K.z); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, l = put(new THREE.CylinderGeometry(0.12, 0.14, 1.8, 5), M('#5a3a22'), K.x + Math.cos(a) * 0.35, y0 + 0.7, K.z + Math.sin(a) * 0.35); l.rotation.z = Math.cos(a) * 0.5; l.rotation.x = Math.sin(a) * 0.5; }
+    const f1 = put(new THREE.ConeGeometry(0.7, H.id === 'midsummer' ? 2.4 : 1.4, 7), E('#ff8a20', 1.2), K.x, y0 + 1.6, K.z), f2 = put(new THREE.ConeGeometry(0.4, 1.6, 6), E('#ffd050', 1.4), K.x, y0 + 1.6, K.z); HOL.flames = [f1, f2];
   }
   if (H.id === 'harvest' || H.id === 'plough' || H.id === 'applefair') {   // sheaves, or apple barrels
     for (const p of ringPts(6)) { const x = C.x + (p.x - C.x) * 0.6, z = C.z + (p.z - C.z) * 0.6, y0 = gy(x, z); if (H.id === 'applefair') { put(new THREE.CylinderGeometry(0.4, 0.4, 0.8, 8), M('#7a5230'), x, y0 + 0.4, z); put(new THREE.SphereGeometry(0.36, 8, 6), M('#b8302a'), x, y0 + 0.85, z); } else { put(new THREE.CylinderGeometry(0.22, 0.38, 1.3, 7), M('#d9b04a'), x, y0 + 0.65, z); put(new THREE.ConeGeometry(0.3, 0.5, 7), M('#e8c45a'), x, y0 + 1.5, z); } }
@@ -11466,7 +11539,8 @@ function pageShops(s, only) {
       <div class="box"><h5>Price: <span class="num" id="pv-${shop.id}">${shop.price}c</span></h5>
       <input type="range" id="price-${shop.id}" data-shop="${shop.id}" min="1" max="${Math.round(T.wtp * 2.2)}" step="1" value="${shop.price}" aria-label="Price for ${T.many}">
       <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div></div>`;
-    if (shop.worker) html += `<p><label><input type="checkbox" id="pol-${shop.id}" data-shop="${shop.id}" ${shop.policy.supplyRuns ? 'checked' : ''}> ${esc(shop.worker.name)} buys ${Object.keys(T.recipe).join(' and ')} at the Trading Post when storage runs out</label></p>`;
+    if (shop.worker) { const who = Sim.supplier(shop) || 'none', opts = [shop.manager ? ['manager', 'Manager'] : null, ['employee', 'An employee'], ['worker', esc(shop.worker.name.split(' ')[0])], ['none', 'Nobody']].filter(Boolean);
+      html += `<div class="setting"><span>Who fetches ${Object.keys(T.recipe).join(' and ')}</span><div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${who === v}" data-c='${esc(JSON.stringify(['policy', shop.id, 'supplyBy', v]))}'>${n}</button>`).join('')}</div>${(shop.policy.supplyBy === 'employee' && who !== 'employee') ? '<p class="why">Set an employee to Supplies on the Staff page.</p>' : who === 'manager' ? '<p>The manager buys a little cheaper and the bench never stops.</p>' : who === 'worker' ? '<p>The bench stops while they walk to the Trading Post.</p>' : ''}</div>`; }
     if (shop.manager) html += `<p><label><input type="checkbox" id="res-${shop.id}" data-shop="${shop.id}" ${shop.policy.reserve !== false ? 'checked' : ''}> In autumn and winter, the manager lays in a reserve of ${Object.keys(T.recipe).join(' and ')} (up to ${Ti.cap} each, and no more than about ${60 + shop.manager.budget * 4}c a day)</label></p>`;
     if (next) {
       const can = Sim.canPay(s, next.cost, shop);
@@ -11515,17 +11589,19 @@ function pageManage(s) {
   return pageShops(s);
 }
 function handsBox(s, shop) {
-  const T = TR[shop.trade], room = Sim.handRoom(shop), hs = shop.hands || [], Ti = Sim.tierOf(shop), q = Sim.roundQuota(shop);
-  let h = `<div class="box"><h5>Hands at your ${esc(T.name.toLowerCase())} · ${hs.length} of ${room}</h5>`;
-  if (!room) return h + `<p>A ${esc(Ti.name)} has room for one worker and no manager. Upgrade it to take on a hand and a manager.</p></div>`;
-  h += `<p>Each hand helps at the bench and the counter, and takes ${T.product} round the town to sell at a little under your price: the first about ${q} a day, the next fewer. A hand with nothing on the shelf to take out is a wage for nothing.</p>`;
+  const T = TR[shop.trade], room = Sim.handRoom(shop), hs = shop.hands || [], Ti = Sim.tierOf(shop), q = Sim.roundQuota(shop), over = Sim.crowdOver(shop);
+  let h = `<div class="box"><h5>Employees at your ${esc(T.name.toLowerCase())} · ${hs.length} <span class="sub">(a ${esc(Ti.name.toLowerCase())} fits ${room})</span></h5>`;
+  h += `<p>Full-time staff beside ${shop.worker ? esc(shop.worker.name.split(' ')[0]) : 'your worker'}. Give each a job: the bench (makes ${T.many} faster), the counter (serves so the bench never stops), selling round town (about ${q} a day for the first, fewer after), or fetching supplies.</p>`;
+  if (over) h += `<p class="why"><b>Crowded.</b> ${hs.length} employees where ${room} fit: everyone works about ${Math.round((1 - Sim.crowdMul(shop)) * 100)}% slower, moods sink each day and quarrels break out. Upgrade the building or let someone go.</p>`;
   const st = G && G.ledger.length ? G.ledger[G.ledger.length - 1].shops.find(x => x.id === shop.id) : null;
-  if (st && hs.length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c, against ${hs.reduce((a, x) => a + x.wage, 0)}c in wages.</p>`;
+  if (st && Sim.staffOn(shop, 'round').length) h += `<p class="num">Yesterday: ${st.rounds || 0} of ${st.roundsWanted || 0} sold round the town for ${st.roundsCoin || 0}c.</p>`;
   hs.forEach((x, i) => {
-    h += `<div class="staffrow"><span><b>${esc(x.name)}</b> · ${Sim.skillLabel(x.skill)} · mood ${Math.round(x.mood)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${x.wage}c</output><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'hand' + shop.id + ':' + i ? B_('Yes, let go', ['fireHand', shop.id, i], 'warn') + B_('Keep', ['ui', 'confirm', null], 'alt') : B_('Let go&hellip;', ['ui', 'confirm', 'hand' + shop.id + ':' + i], 'alt')}</div>`;
+    h += `<div class="staffrow"><span><b>${esc(x.name)}</b> · ${Sim.skillLabel(x.skill)} · mood ${Math.round(x.mood)}</span><div class="stepper"><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage - 1])}' aria-label="Lower wage">&minus;</button><output class="num">${x.wage}c</output><button type="button" data-c='${JSON.stringify(['setHandWage', shop.id, i, x.wage + 1])}' aria-label="Raise wage">+</button></div>${UI.confirm === 'hand' + shop.id + ':' + i ? B_('Yes, let go', ['fireHand', shop.id, i], 'warn') + B_('Keep', ['ui', 'confirm', null], 'alt') : B_('Let go', ['ui', 'confirm', 'hand' + shop.id + ':' + i], 'alt')}</div>`;
+    h += `<div class="seg" role="group" aria-label="Job for ${esc(x.name)}">${Sim.ROLES.map(r => `<button type="button" aria-pressed="${(x.role || 'make') === r}" data-c='${esc(JSON.stringify(['setHandRole', shop.id, i, r]))}'>${esc({ make: 'Bench', counter: 'Counter', round: 'Sell round', supply: 'Supplies' }[r])}</button>`).join('')}</div>`;
     if (x.wage < x.ask) h += `<p class="why">${esc(x.name.split(' ')[0])} asked for ${x.ask}c: their mood falls each day.</p>`;
   });
-  if (hs.length < room) h += s.applicants.length ? `<p>Take on a hand:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Take on ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
+  if (!shop.worker) h += `<p>Hire a worker to run it first.</p>`;
+  else if (hs.length < Sim.HAND_MAX) h += s.applicants.length ? `<p>Take someone on${hs.length >= room ? ' <span class="why">(it will be crowded)</span>' : ''}:</p><div class="acts">${s.applicants.slice(0, 3).map((a, i) => B_('Hire ' + esc(a.name) + ' · ' + a.ask + 'c', ['hireHand', shop.id, i, a.ask], 'alt')).join('')}</div>` : `<p>Nobody is looking for work today.</p>`;
   return h + `</div>`;
 }
 function pageStaff(s, only) {
@@ -13729,8 +13805,14 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.07.2124';
+const BUILD = '2026.11.07.2131';
 const NOTES = [
+  { v: '0.57', date: '7 November', title: 'Full-time staff', items: [
+    'Hands are now full-time employees, and you can hire as many as you like. Each building holds a few comfortably (a stall 1, timber 2, stone 3). Past that it gets crowded: everyone works slower, moods sink, quarrels break out and people quit.',
+    'Give each employee a job on the Staff page: at the bench, on the counter, selling round town, or fetching supplies. The first one you hire takes the counter, so your worker stays at the bench and never stops to serve.',
+    'Choose who fetches supplies in the shop menu: the manager, an employee, your worker, or nobody. With a manager it is the manager by default, a little cheaper, and the bench keeps going. Hiring a manager sets it up that way: worker at the bench, an employee on the counter, the manager on supplies.',
+    'Festival decorations now ring the middle of the square, with the maypole and bonfire just beside the well.'
+  ] },
   { v: '0.56', date: '7 November', title: 'Holidays, and the calendar', items: [
     'Holidays. The year has its festivals: Firstlight (new year), the Plough Blessing, Maying, Midsummer Fires, Harvest Home, the Applefall Fair, Souls\u2019 Night and Longnight, and the Queen\u2019s Feast in Valdoria. On the day, the square is dressed for it: bunting in the festival\u2019s colours, lanterns, a ribboned maypole, a midsummer bonfire, harvest sheaves, apple barrels, glowing turnip lanterns in the mist, evergreens and red ribbons. The light changes with the festival too.',
     'Folk spend more on a festival day (the taverns most of all at midsummer, the bakers and butchers at Harvest Home), and everyone is in a better mood. As Elder, a lord or the ruler you can pay for the festivities, and the town remembers who gave them their feast.',
