@@ -250,6 +250,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ftb { border: 1px solid rgba(60,40,20,.35); background: rgba(255,255,255,.45); color: inherit; border-radius: 6px; padding: 6px 9px; font: inherit; cursor: pointer; }
 .ftb.on { background: #7a2a24; color: #f6ead0; border-color: #7a2a24; }
 #ftOpen { position: fixed; z-index: 7; right: calc(env(safe-area-inset-right, 0px) + 10px); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); border: 0; border-radius: 999px; padding: 8px 14px; background: #7a2a24; color: #f6ead0; font: 600 14px sans-serif; }
+.itemicon { flex: 0 0 40px; margin-right: 8px; background: rgba(255,255,255,.4); border: 1px solid var(--line); border-radius: 6px; vertical-align: middle; }
+.staffrow > .itemicon + span { flex: 1; min-width: 0; }
 .fightfx { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
 .ffloat { position: absolute; left: 0; top: 0; font: 700 16px var(--f-body, sans-serif); color: #f5cf73; text-shadow: 0 1px 2px #000; margin: -10px 0 0 -10px; }
 .ffloat.hurt { color: #ff6b5a; }
@@ -1093,7 +1095,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   }
   function addStanding(s, n, why) {
     if (n && s.gov) approveHolder(s, 'player', n * 0.5);
-    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) s.rec.standingEarned += n;
+    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) { s.rec.standingEarned += n; v.earnedDay = s.day; }
     if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
   }
   function shopLabel(shop) { return tierOf(shop).name + ', ' + PLOTS[shop.plot].name; }
@@ -5372,13 +5374,21 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       ['A decree on weights', 'Merchants want one measure for the whole realm.', [['Decree it', { treasury: 10, standing: 1 }], ['Leave it to the towns', {}]]]]
   };
   const AGENDA_N = { council: [1, 2], elder: [2, 3], lord: [3, 4], seat: [2, 3], crown: [4, 5] };
+  // standing fades unless you keep earning it: after two quiet days it slips, faster the higher it stands
+  function standingDay(s) {
+    const v = s.village; if (!v || v.fadeDay === s.day) return; const first = v.fadeDay == null; v.fadeDay = s.day; if (first) { v.earnedDay = v.earnedDay == null ? s.day : v.earnedDay; return; }
+    const quiet = s.day - (v.earnedDay == null ? s.day : v.earnedDay);
+    if (quiet >= 2 && v.standing > 20) { const n = Math.round((1 + (v.standing - 20) / 30) * 10) / 10; v.standing = Math.max(20, Math.round((v.standing - n) * 10) / 10); if (quiet === 2 || quiet % 4 === 0) event(s, 'Standing \u2212' + n + ': people have not seen you do much for Hearthmoor lately. Work, help, serve, or settle the village\u2019s business to keep their regard.', 'bad'); }
+    // business left unanswered in office counts against you
+    const lapsed = (s.agenda || []).filter(x => x.until < s.day); if (lapsed.length) { addStanding(s, -lapsed.length, lapsed.length === 1 ? 'a matter of your office left unanswered' : lapsed.length + ' matters of your office left unanswered'); s.agenda = s.agenda.filter(x => x.until >= s.day); }
+  }
   function agendaTick(s) {
     const mine = yourOffice(s), office = mine ? mine.office : s.village && s.village.council && s.gov && s.gov.council.includes('player') ? 'council' : null;
     if (!office || !AGENDA[office]) { s.agenda = []; return; }
     if (s.agendaDay === s.day) return; s.agendaDay = s.day;
-    const [lo, hi] = AGENDA_N[office], n = lo + (rand(s) < 0.5 ? 1 : 0);
-    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1); const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
-    for (let i = 0; i < Math.min(n, hi) && pool.length; i++) { const k = pool.splice(Math.floor(rand(s) * pool.length), 1)[0]; s.agenda.push({ id: (s.agendaId = (s.agendaId || 0) + 1), office, k, region: mine && mine.region, until: s.day + 1 }); }
+    const [lo, hi] = AGENDA_N[office], n = lo + (wrand(s) < 0.5 ? 1 : 0);
+    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1);   // lapsed matters were already counted by standingDay const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
+    for (let i = 0; i < Math.min(n, hi) && pool.length; i++) { const k = pool.splice(Math.floor(wrand(s) * pool.length), 1)[0]; s.agenda.push({ id: (s.agendaId = (s.agendaId || 0) + 1), office, k, region: mine && mine.region, until: s.day + 1 }); }
   }
   function agendaDo(s, id, pick) {
     const A = (s.agenda || []).find(x => x.id === id); if (!A) return { ok: false, msg: 'That matter is closed.' };
@@ -5990,6 +6000,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   const GROUNDS = [{ x: -78, z: 24, r: 22, name: 'the Pine Woods' }, { x: 150, z: 42, r: 26, name: 'the east woods' }, { x: -160, z: -800, r: 28, name: 'the Greenhaven woods' }, { x: 336, z: -520, r: 26, name: 'the Oakbridge woods' }, { x: 560, z: -930, r: 26, name: 'the Ironcrest forest' }];
   // where the bandits of each region make camp, a little off the road
   const CAMPS = { hearthmoor: { x: 196, z: 22, name: 'the camp off the east road' }, oakbridge: { x: 332, z: -566, name: 'the camp in the Oakbridge woods' }, crownmere: { x: 248, z: -664, name: 'the camp below the Crown Road' }, greenhaven: { x: -172, z: -842, name: 'the camp in the western woods' }, ironcrest: { x: 560, z: -904, name: 'the camp on the iron road' }, eastwatch: { x: 702, z: -260, name: 'the camp on the coast road' } };
+  // the animals' wandering has its own dice, so it never shifts anything else in the world
+  function wrand(s) { s.wseed = ((s.wseed == null ? 12345 : s.wseed) * 1103515245 + 12345) % 2147483648; return s.wseed / 2147483648; }
   function setupWild(s) {
     if (!s.wild) s.wild = { game: [], nextId: 1, day: 0, camps: {} };
     const W = s.wild;
@@ -5997,7 +6009,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       W.day = s.day;
       GROUNDS.forEach((G0, gi) => {
         const here = W.game.filter(a => a.g === gi && !a.dead).length;
-        for (let i = here; i < 3; i++) { const a = rand(s) * Math.PI * 2, r = rand(s) * G0.r; W.game.push({ id: W.nextId++, g: gi, kind: rand(s) < 0.7 ? 'deer' : 'boar', x: G0.x + Math.sin(a) * r, z: G0.z + Math.cos(a) * r, face: rand(s) * 6.3, hp: 1, flee: 0 }); }
+        for (let i = here; i < 3; i++) { const a = wrand(s) * Math.PI * 2, r = wrand(s) * G0.r; W.game.push({ id: W.nextId++, g: gi, kind: wrand(s) < 0.7 ? 'deer' : 'boar', x: G0.x + Math.sin(a) * r, z: G0.z + Math.cos(a) * r, face: wrand(s) * 6.3, hp: 1, flee: 0 }); }
       });
       W.game = W.game.filter(a => !a.dead);
     }
@@ -6014,7 +6026,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       if (a.kind === 'boar' && d < 5 && !s.fight && !(a.calm > s.t)) { a.charge = true; }
       if (d < scare && a.kind === 'deer') a.flee = 4;
       if (a.flee > 0) { a.flee -= dt; const k = 9 * dt / Math.max(0.1, d); a.x += (a.x - p.x) * k; a.z += (a.z - p.z) * k; a.face = Math.atan2(a.x - p.x, a.z - p.z); a.moving = true; }
-      else { a.moving = rand(s) < 0.02 ? !a.moving : a.moving; if (a.moving) { a.face += (rand(s) - 0.5) * 0.3; a.x += Math.sin(a.face) * dt * 0.9; a.z += Math.cos(a.face) * dt * 0.9; } }
+      else { a.moving = wrand(s) < 0.02 ? !a.moving : a.moving; if (a.moving) { a.face += (wrand(s) - 0.5) * 0.3; a.x += Math.sin(a.face) * dt * 0.9; a.z += Math.cos(a.face) * dt * 0.9; } }
       const gd = Math.hypot(a.x - G0.x, a.z - G0.z); if (gd > G0.r * 1.6) { a.face = Math.atan2(G0.x - a.x, G0.z - a.z); a.flee = 0; }
     }
   }
@@ -8765,7 +8777,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
     if (!s.fight) wildStep(s, dt);
-    if (s.people && s.offices) { agendaTick(s); byElectTick(s); }
+    if (s.people && s.offices) { standingDay(s); agendaTick(s); byElectTick(s); }
     if (s.regaliaPending && s.player.items) { const o = s.regaliaPending; s.regaliaPending = null; const give = { elder: ['chainoffice'], lord: ['mantle', 'signet'], seat: ['signet', 'finecoat'], crown: ['regalia', 'crown', 'mantle'] }[o] || [];
       const names = []; for (const id of give) { if (!ITEMS[id]) continue; let it = s.player.items.find(x => x.id === id); if (!it) { it = addItem(s, id, 1); names.push(ITEMS[id].name.toLowerCase()); } if (it && it.u != null) rpgCmd(s, 'rEquip', it.u); }
       if (names.length) event(s, 'You are sworn in, and given the marks of your office: ' + names.join(', ') + '. You wear them now.', 'good'); }
@@ -14345,27 +14357,106 @@ function pageSkills(s) {
 function pageGear(s) {
   const p = Sim.setupBag(s), G0 = Sim.gearStats(s);
   let h = `<h3>Gear</h3><p class="lead">Armour ${G0.arm}${G0.slow ? ' · heavy armour slows you ' + Math.round(G0.slow * 100) + '%' : ''} · carrying ${Sim.carried(s)} of ${Sim.carryCap(s)}${G0.fine >= 2 ? ' · finely dressed' : G0.fine < 0 ? ' · dressed in rags' : ''}</p>`;
-  h += `<h4>Wearing</h4><div class="box"><dl class="kv">${Object.keys(Sim.SLOTS).map(sl => { const it = Sim.equipped(s, sl); return `<dt>${Sim.SLOTS[sl]}</dt><dd>${it ? esc(itemName(it)) + ' ' + B_('Take off', ['rUnequip', sl], 'alt') : '<span class="why">nothing</span>'}</dd>`; }).join('')}</dl></div>`;
+  h += `<h4>Wearing</h4><div class="box"><dl class="kv">${Object.keys(Sim.SLOTS).map(sl => { const it = Sim.equipped(s, sl); return `<dt>${Sim.SLOTS[sl]}</dt><dd>${it ? itemIcon(it.id, it.dye).replace('width="40" height="40"', 'width="26" height="26"') + ' ' + esc(itemName(it)) + ' ' + B_('Take off', ['rUnequip', sl], 'alt') : '<span class="why">nothing</span>'}</dd>`; }).join('')}</dl></div>`;
   const worn = new Set(Object.values(p.equip)), bag = p.items.filter(it => !worn.has(it.u));
   const groups = [['Weapons and shields', ['weapon', 'shield']], ['Armour', ['armor']], ['Clothes', ['clothes']], ['Rings and amulets', ['trinket']], ['To use', ['use', 'ammo', 'tool']], ['To sell', ['loot']]];
   h += `<h4>Your bag</h4>`;
   if (!bag.length) h += `<p>Nothing else.</p>`;
   for (const [title, kinds] of groups) {
     const xs = bag.filter(it => kinds.includes(Sim.ITEMS[it.id].kind)); if (!xs.length) continue;
-    h += `<p class="skgroup">${title}</p>` + xs.map(it => { const I = Sim.ITEMS[it.id]; return `<div class="staffrow"><span><b>${esc(itemName(it))}</b><br><small>${esc(itemLine(it))}</small></span><div class="acts">${I.slot ? B_('Wear', ['rEquip', it.u]) : ''}${I.kind === 'use' ? B_('Use', ['rUse', it.u]) : ''}${B_('Drop', ['rDrop', it.u], 'alt')}</div></div>`; }).join('');
+    h += `<p class="skgroup">${title}</p>` + xs.map(it => { const I = Sim.ITEMS[it.id]; return `<div class="staffrow">${itemIcon(it.id, it.dye)}<span><b>${esc(itemName(it))}</b><br><small>${esc(itemLine(it))}</small></span><div class="acts">${I.slot ? B_('Wear', ['rEquip', it.u]) : ''}${I.kind === 'use' ? B_('Use', ['rUse', it.u]) : ''}${B_('Drop', ['rDrop', it.u], 'alt')}</div></div>`; }).join('');
   }
   { const inv = s.player.inv, goods = Object.keys(inv).filter(g => inv[g] > 0); if (goods.length) h += `<p class="skgroup">Goods</p><p>${goods.map(g => inv[g] + ' ' + g).join(', ')} (one each to carry).</p>`; }
   return h;
 }
 function renderWares() { if (!G) return; const pg = $('waresPage'), y = pg.scrollTop; const at = UI.waresAt; $('waresTitle').textContent = at === 'market' ? 'The market' : (Sim.empById(at) || {}).name || 'The shop'; if (!Sim.atShop(G, at)) { $('waresSheet').hidden = true; closeOverlay(); return; } pg.innerHTML = pageWares(G).replace(/^<h3>[^<]*<\/h3>/, ''); keepPlace(pg, y); }
+/* ----- pictures of things you can buy: small drawings made in code ----- */
+const DYE_HEX = { red: '#a8322a', blue: '#2f5f8a', green: '#3f6a3a', black: '#2a2622', yellow: '#c9a33a', purple: '#5a3a6e', brown: '#6b4a2e', white: '#e8e2d0' };
+function itemIcon(id, dye) {
+  const I = Sim.ITEMS[id]; if (!I) return '';
+  const ST = '#c9cdd3', DK = '#5d6168', WD = '#7a5634', GD = '#d9b04a', LE = '#8a5a32', ol = 'stroke="#2a2016" stroke-width="1.2" stroke-linejoin="round"';
+  const p = (d, f, extra) => `<path d="${d}" fill="${f}" ${ol} ${extra || ''}/>`, c = (x, y, r, f) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}" ${ol}/>`, r = (x, y, w, h, f, rx) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx || 0}" fill="${f}" ${ol}/>`;
+  const cloth = dye && DYE_HEX[dye] ? DYE_HEX[dye] : null;
+  const body = { rags: '#9a8a6a', tunic: '#a8845a', doublet: '#7a3a2a', finecoat: '#2f4f6a', silks: '#8a3a6e', regalia: '#7a2a24', gambeson: '#d8c9a0', jerkin: LE, studded: '#6b4a2e', chain: '#9aa0a8', brigandine: '#5a3a2a', halfplate: ST, fullplate: '#dfe3e8' };
+  let g = '';
+  if (body[id]) {
+    const f = cloth || body[id];
+    g = p('M12 8 L17 6 Q20 9 23 6 L28 8 L34 15 L30 18 L28 15 L28 34 L12 34 L12 15 L10 18 L6 15 Z', f);
+    if (id === 'rags') g += p('M12 34 L14 30 L16 34 L19 30 L22 34 L25 30 L28 34', 'none');
+    if (id === 'doublet' || id === 'finecoat') g += p('M20 9 L20 34', 'none') + c(20, 15, 1, GD) + c(20, 21, 1, GD) + c(20, 27, 1, GD);
+    if (id === 'silks' || id === 'regalia') g += p('M12 30 L28 30', 'none', 'stroke="' + GD + '" stroke-width="2"') + (id === 'regalia' ? p('M14 10 L20 18 L26 10', 'none', 'stroke="#e8e2d0" stroke-width="2.5"') : '');
+    if (id === 'gambeson') for (let y = 14; y < 34; y += 5) g += p(`M12 ${y} L28 ${y}`, 'none');
+    if (id === 'studded') for (let y = 15; y < 32; y += 5) for (let x = 15; x < 27; x += 5) g += c(x, y, 0.9, ST);
+    if (id === 'chain') for (let y = 13; y < 34; y += 3) g += p(`M12 ${y} Q16 ${y + 2} 20 ${y} Q24 ${y + 2} 28 ${y}`, 'none', 'stroke-width="0.8"');
+    if (id === 'brigandine') for (let y = 13; y < 33; y += 4) for (let x = 14; x < 28; x += 4) g += c(x, y, 0.8, GD);
+    if (id === 'halfplate' || id === 'fullplate') g += p('M13 15 Q20 22 27 15', 'none') + p('M14 24 Q20 28 26 24', 'none');
+  } else if (id === 'hose' || id === 'leathergreaves' || id === 'mailchausses' || id === 'plategreaves') {
+    const f = cloth || { hose: '#5a4a3a', leathergreaves: LE, mailchausses: '#9aa0a8', plategreaves: ST }[id];
+    g = p('M12 6 L28 6 L28 12 L25 36 L21 36 L20 16 L19 36 L15 36 L12 12 Z', f);
+  } else if (id === 'boots' || id === 'fineboots') {
+    const f = id === 'fineboots' ? '#3a2a1a' : LE;
+    g = p('M10 8 L17 8 L17 26 L22 30 L22 34 L8 34 L8 26 Z', f) + p('M22 8 L29 8 L29 26 L34 30 L34 34 L20 34 L20 30 Z', f, 'opacity="0.85"');
+  } else if (I.slot === 'head') {
+    const f = cloth || { strawhat: '#d9c070', woolcap: '#8a3a2a', featheredcap: '#2f5f8a', circlet: GD, crown: GD, leathercap: LE, ironhelm: ST, greathelm: '#dfe3e8' }[id];
+    if (id === 'strawhat') g = p('M4 26 Q20 20 36 26 Q20 30 4 26 Z', f) + p('M13 24 Q14 12 20 12 Q26 12 27 24 Z', f);
+    else if (id === 'circlet') g = p('M8 22 Q20 28 32 22 L32 18 Q20 24 8 18 Z', f) + c(20, 22, 2, '#a8322a');
+    else if (id === 'crown') g = p('M8 28 L8 14 L14 20 L20 10 L26 20 L32 14 L32 28 Z', f) + c(20, 23, 2, '#a8322a') + c(13, 24, 1.4, '#2f5f8a') + c(27, 24, 1.4, '#3f6a3a');
+    else if (id === 'greathelm') g = r(10, 8, 20, 26, f, 4) + r(12, 17, 16, 2.5, '#2a2016');
+    else if (id === 'ironhelm') g = p('M8 26 Q8 8 20 8 Q32 8 32 26 Z', f) + r(19, 18, 2, 12, f);
+    else g = p('M8 28 Q8 10 20 10 Q32 10 32 28 Z', f) + (id === 'featheredcap' ? p('M28 14 Q36 4 34 18', '#e8e2d0') : '');
+  } else if (I.slot === 'cloak') {
+    const f = cloth || { woolcloak: '#5a5a4a', furcloak: '#6b5a44', mantle: '#4a2a5a' }[id];
+    g = p('M14 6 L26 6 L33 34 Q20 37 7 34 Z', f) + c(20, 8, 2, GD) + (id === 'furcloak' ? p('M12 8 Q20 13 28 8', '#d8c9a0') : id === 'mantle' ? p('M7 34 Q20 37 33 34', 'none', 'stroke="' + GD + '" stroke-width="2"') : '');
+  } else if (I.fam === 'sword') {
+    const L = id === 'longsword' || id === 'bluntsword' ? 26 : id === 'shortsword' ? 18 : 22, bl = I.blunt ? '#9a9ea4' : ST;
+    g = `<g transform="rotate(45 20 20)">${p(`M18.5 ${30 - L} L20 ${28 - L} L21.5 ${30 - L} L21.5 30 L18.5 30 Z`, bl)}${r(13, 29.5, 14, 2.5, GD, 1)}${r(18.8, 32, 2.4, id === 'longsword' ? 6 : 4, '#3a2a1a')}${c(20, id === 'longsword' ? 39 : 37, 1.8, GD)}</g>`;
+  } else if (I.fam === 'dagger') g = `<g transform="rotate(45 20 20)">${p('M18.5 12 L20 9 L21.5 12 L21.5 25 L18.5 25 Z', ST)}${r(15, 24.5, 10, 2, GD, 1)}${r(19, 26.5, 2, 5, '#3a2a1a')}</g>`;
+  else if (I.fam === 'mace') {
+    if (id === 'club') g = `<g transform="rotate(35 20 20)">${p('M18 36 L22 36 L24 8 Q20 3 16 8 Z', '#8a6440')}</g>`;
+    else if (id === 'warhammer') g = `<g transform="rotate(35 20 20)">${r(19, 10, 2.5, 26, WD)}${r(12, 6, 16, 7, ST, 1)}</g>`;
+    else g = `<g transform="rotate(35 20 20)">${r(19, 14, 2.5, 22, WD)}${c(20.2, 10, 6, ST)}${p('M20 2 L22 6 L18 6 Z', ST)}${p('M12 10 L16 8 L16 12 Z', ST)}${p('M28 10 L24 8 L24 12 Z', ST)}</g>`;
+  } else if (I.fam === 'axe') {
+    const big = id === 'battleaxe';
+    g = `<g transform="rotate(30 20 20)">${r(19, 4, 2.5, 33, WD)}${p(big ? 'M21 6 Q34 4 34 18 Q28 15 21 16 Z M19 6 Q6 4 6 18 Q12 15 19 16 Z' : 'M21 6 Q31 5 31 16 Q26 13 21 14 Z', ST)}</g>`;
+  } else if (I.fam === 'spear') g = `<g transform="rotate(40 20 20)">${r(19.2, 9, 1.8, 30, WD)}${p('M20 1 L23 9 L17 9 Z', ST)}${id === 'halberd' ? p('M21 9 Q30 8 30 16 Q25 14 21 15 Z', ST) : ''}</g>`;
+  else if (I.fam === 'bow') g = p(id === 'longbow' ? 'M14 2 Q34 20 14 38' : 'M15 6 Q31 20 15 34', 'none', 'stroke="' + WD + '" stroke-width="3"') + p(id === 'longbow' ? 'M14 2 L14 38' : 'M15 6 L15 34', 'none', 'stroke="#e8e2d0" stroke-width="0.8"');
+  else if (I.fam === 'xbow') g = r(18, 8, 4, 28, WD, 1) + p('M6 14 Q20 6 34 14', 'none', 'stroke="' + DK + '" stroke-width="3"') + p('M6 14 L34 14', 'none', 'stroke="#e8e2d0" stroke-width="0.8"');
+  else if (I.slot === 'off') {
+    if (id === 'buckler') g = c(20, 20, 11, ST) + c(20, 20, 3, DK);
+    else if (id === 'roundshield') g = c(20, 20, 15, '#7a5634') + c(20, 20, 4, ST) + p('M20 5 L20 35 M5 20 L35 20', 'none', 'stroke-width="0.8"');
+    else if (id === 'tower') g = r(9, 3, 22, 34, '#6a2a24', 3) + p('M20 6 L20 34', 'none', 'stroke="' + GD + '" stroke-width="2"');
+    else g = p(id === 'kite' ? 'M8 4 L32 4 L32 14 Q30 30 20 38 Q10 30 8 14 Z' : 'M7 5 L33 5 L33 16 Q31 30 20 36 Q9 30 7 16 Z', id === 'kite' ? '#2f4a6a' : '#6a2a24') + p('M20 8 L20 30 M12 15 L28 15', 'none', 'stroke="' + GD + '" stroke-width="2"');
+  } else if (I.slot === 'trinket') {
+    if (id === 'chainoffice') g = p('M8 6 Q20 26 32 6', 'none', 'stroke="' + ST + '" stroke-width="2.5" stroke-dasharray="2 1.5"') + c(20, 26, 7, GD) + c(20, 26, 3, '#a8322a');
+    else if (id === 'silveramulet') g = p('M10 6 Q20 22 30 6', 'none', 'stroke="' + ST + '" stroke-width="1.5"') + p('M20 18 L26 26 L20 34 L14 26 Z', ST) + c(20, 26, 2, '#2f5f8a');
+    else g = c(20, 22, 9, 'none').replace('fill="none"', `fill="none" stroke="${id === 'copperring' ? '#b56a3a' : GD}" stroke-width="4"`) + (id === 'signet' ? r(15, 9, 10, 7, GD, 1.5) : '');
+  } else {
+    const L0 = {
+      arrows: () => [12, 18, 24].map(x => `<g transform="rotate(-20 ${x} 20)">${r(x - 0.7, 6, 1.4, 28, WD)}${p(`M${x} 2 L${x + 2.5} 7 L${x - 2.5} 7 Z`, ST)}${p(`M${x - 2.5} 34 L${x} 30 L${x + 2.5} 34 L${x} 37 Z`, '#e8e2d0')}</g>`).join(''),
+      bolts: () => [14, 22].map(x => `<g transform="rotate(-20 ${x} 20)">${r(x - 1, 9, 2, 20, WD)}${p(`M${x} 5 L${x + 3} 10 L${x - 3} 10 Z`, ST)}</g>`).join(''),
+      bandage: () => c(20, 20, 12, '#efe6d0') + c(20, 20, 4, '#d8c9a0') + p('M28 28 L36 34', 'none', 'stroke="#efe6d0" stroke-width="5"'),
+      draught: () => p('M16 4 L24 4 L24 12 Q32 18 32 26 Q32 36 20 36 Q8 36 8 26 Q8 18 16 12 Z', '#d8e8e8') + p('M10 24 Q20 20 30 24 Q31 34 20 34 Q9 34 10 24 Z', '#a8322a'),
+      trailbread: () => p('M5 24 Q5 10 20 10 Q35 10 35 24 Q35 30 20 30 Q5 30 5 24 Z', '#c99a5a') + p('M12 16 L15 20 M19 14 L22 19 M26 16 L28 20', 'none'),
+      lockpicks: () => p('M8 34 L28 8 L31 6 L32 9 L30 11', 'none', 'stroke="' + ST + '" stroke-width="2"') + p('M14 34 L32 14 L34 17', 'none', 'stroke="' + DK + '" stroke-width="2"') + r(5, 30, 7, 6, WD, 1),
+      venison: () => p('M8 24 Q8 10 22 10 Q34 12 32 24 Q30 32 18 32 Q8 32 8 24 Z', '#a8443a') + p('M14 20 Q20 16 26 20', 'none', 'stroke="#efe6d0"'),
+      boarmeat: () => p('M6 22 Q8 10 22 12 Q34 14 33 24 Q30 32 16 31 Q6 30 6 22 Z', '#b8584a') + p('M26 14 L34 6', 'none', 'stroke="#efe6d0" stroke-width="3"'),
+      deerhide: () => p('M8 8 L14 12 L26 12 L32 8 L30 18 L34 30 L26 28 L20 34 L14 28 L6 30 L10 18 Z', '#a8743a'),
+      boarhide: () => p('M8 8 L14 12 L26 12 L32 8 L30 18 L34 30 L26 28 L20 34 L14 28 L6 30 L10 18 Z', '#4a3a2e'),
+      antlers: () => p('M18 36 L18 22 L10 14 L8 4 M12 16 L4 12 M18 26 L12 22', 'none', 'stroke="#d9c9a0" stroke-width="2.5"') + p('M22 36 L22 22 L30 14 L32 4 M28 16 L36 12 M22 26 L28 22', 'none', 'stroke="#d9c9a0" stroke-width="2.5"'),
+      trinkets: () => c(14, 24, 6, GD) + c(26, 20, 5, ST) + p('M16 10 L22 14 L18 18 Z', '#2f5f8a')
+    }[id];
+    g = L0 ? L0() : c(20, 20, 10, '#d8c9a0');
+  }
+  return `<svg class="itemicon" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">${g}</svg>`;
+}
 function pageWares(s) {
   const at = UI.waresAt; if (!at) return '<h3>Wares</h3><p>Visit a shop to see what it sells.</p>';
   const name = at === 'market' ? 'The market' : (Sim.empById(at) || {}).name || 'The shop', kind = Sim.shopKind(s, at), here = Sim.atShop(s, at);
   let h = `<h3>${esc(name)}</h3><p class="lead">${here ? 'At the counter.' : 'You are not at the counter: walk back to buy or sell.'} You have ${s.coins}c, and carry ${Sim.carried(s)} of ${Sim.carryCap(s)}.</p>`;
   const stock = Sim.stockOf(s, at);
-  if (stock.length) h += `<h4>For sale</h4>` + stock.map(id => { const I = Sim.ITEMS[id], n = I.bundle || 1, pr = Math.round(Sim.itemPrice(s, id, at, false) * n * 10) / 10; return `<div class="staffrow"><span><b>${esc(I.name)}${n > 1 ? ' ×' + n : ''}</b><br><small>${esc(itemLine({ id }))}</small></span><div class="acts">${B_('Buy · ' + pr + 'c', ['rBuy', at, id], '', !here || s.coins < pr)}</div></div>`; }).join('');
+  if (stock.length) h += `<h4>For sale</h4>` + stock.map(id => { const I = Sim.ITEMS[id], n = I.bundle || 1, pr = Math.round(Sim.itemPrice(s, id, at, false) * n * 10) / 10; return `<div class="staffrow">${itemIcon(id)}<span><b>${esc(I.name)}${n > 1 ? ' ×' + n : ''}</b><br><small>${esc(itemLine({ id }))}</small></span><div class="acts">${B_('Buy · ' + pr + 'c', ['rBuy', at, id], '', !here || s.coins < pr)}</div></div>`; }).join('');
   const sell = (s.player.items || []).filter(it => !Object.values(s.player.equip).includes(it.u) && Sim.buysHere(s, at, it.id));
-  if (sell.length) h += `<h4>They will buy</h4>` + sell.map(it => { const each = Math.round(Sim.itemPrice(s, it.id, at, true) * (it.dur != null ? 0.4 + 0.6 * it.dur / 100 : 1) * 10) / 10; return `<div class="staffrow"><span><b>${esc(itemName(it))}</b></span><div class="acts">${B_('Sell' + (it.n > 1 ? ' all' : '') + ' · ' + Math.round(each * (it.n || 1) * 10) / 10 + 'c', ['rSell', at, it.u, it.n || 1], 'alt', !here)}</div></div>`; }).join('');
+  if (sell.length) h += `<h4>They will buy</h4>` + sell.map(it => { const each = Math.round(Sim.itemPrice(s, it.id, at, true) * (it.dur != null ? 0.4 + 0.6 * it.dur / 100 : 1) * 10) / 10; return `<div class="staffrow">${itemIcon(it.id, it.dye)}<span><b>${esc(itemName(it))}</b></span><div class="acts">${B_('Sell' + (it.n > 1 ? ' all' : '') + ' · ' + Math.round(each * (it.n || 1) * 10) / 10 + 'c', ['rSell', at, it.u, it.n || 1], 'alt', !here)}</div></div>`; }).join('');
   if (['smithy', 'weaponsmith', 'armourer', 'bowyer', 'tanner'].includes(kind)) { const worn = (s.player.items || []).filter(it => it.dur != null && it.dur < 100); if (worn.length) h += `<h4>Mending</h4>` + worn.map(it => B_('Mend ' + esc(itemName(it)) + ' (' + Math.round(it.dur) + '%)', ['rRepair', at, it.u], 'alt', !here)).join(''); }
   if (['smithy', 'weaponsmith', 'armourer', 'bowyer'].includes(kind)) { const gear = (s.player.items || []).filter(it => { const I = Sim.ITEMS[it.id]; return (I.dmg || I.arm) && I.kind !== 'beast' && (it.imp || 0) < 3; }); if (gear.length) h += `<h4>Improve at the forge</h4><p class="why">Each step makes a weapon hit, or armour guard, a tenth better (three steps at most). At your own forge it is cheaper, and your smithing grows.</p>` + gear.map(it => B_('Improve ' + esc(itemName(it)) + (it.imp ? ' (' + ['', 'fine', 'superior'][it.imp] + ')' : ''), ['rImprove', at, it.u], 'alt', !here)).join(''); }
   if (kind === 'tailor' || kind === 'weaver') { const dy = (s.player.items || []).filter(it => Sim.ITEMS[it.id].dye); if (dy.length) { const pick = UI.dyeU && dy.find(x => x.u === UI.dyeU) ? UI.dyeU : dy[0].u; h += `<h4>Dyeing · 3c</h4><div class="bpick">${dy.map(it => `<button type="button" aria-pressed="${it.u === pick}" data-c='${esc(JSON.stringify(['ui', 'dyeU', it.u]))}'>${esc(itemName(it))}</button>`).join('')}</div><div class="bswatch" style="margin-top:8px">${Object.keys(Sim.HERALDRY.tinctures).map(c => `<button type="button" aria-label="${c}" style="background:${Sim.HERALDRY.tinctures[c]}" data-c='${esc(JSON.stringify(['rDye', at, pick, c]))}'></button>`).join('')}</div>`; } }
@@ -16019,8 +16110,12 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0454';
+const BUILD = '2026.11.08.0501';
 const NOTES = [
+  { v: '0.70.4', date: '8 November', title: 'Pictures and regard', items: [
+    'Every item you can buy, sell or wear now has a picture: on the shop counters, in your bag and on what you are wearing.',
+    'Standing must be kept: after two days with nothing done for Hearthmoor it slips each day, faster the higher it is (it never drops below 20). Work, help, serve and settle the village\u2019s business to keep it.',
+    'Business of your office left unanswered by its day now costs you a little standing.'] },
   { v: '0.70.3', date: '8 November', title: 'Over the bridge', items: [
     'You and everyone else now walk across the Stream Bridge, the plank footbridges over the millrace, and the timber bridges where the roads to Ironcrest and Eastwatch cross the river Alder, instead of wading underneath them.'] },
   { v: '0.70.2', date: '8 November', title: 'Every tap counts', items: [

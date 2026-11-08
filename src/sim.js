@@ -378,7 +378,7 @@
   }
   function addStanding(s, n, why) {
     if (n && s.gov) approveHolder(s, 'player', n * 0.5);
-    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) s.rec.standingEarned += n;
+    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) { s.rec.standingEarned += n; v.earnedDay = s.day; }
     if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
   }
   function shopLabel(shop) { return tierOf(shop).name + ', ' + PLOTS[shop.plot].name; }
@@ -4657,13 +4657,21 @@
       ['A decree on weights', 'Merchants want one measure for the whole realm.', [['Decree it', { treasury: 10, standing: 1 }], ['Leave it to the towns', {}]]]]
   };
   const AGENDA_N = { council: [1, 2], elder: [2, 3], lord: [3, 4], seat: [2, 3], crown: [4, 5] };
+  // standing fades unless you keep earning it: after two quiet days it slips, faster the higher it stands
+  function standingDay(s) {
+    const v = s.village; if (!v || v.fadeDay === s.day) return; const first = v.fadeDay == null; v.fadeDay = s.day; if (first) { v.earnedDay = v.earnedDay == null ? s.day : v.earnedDay; return; }
+    const quiet = s.day - (v.earnedDay == null ? s.day : v.earnedDay);
+    if (quiet >= 2 && v.standing > 20) { const n = Math.round((1 + (v.standing - 20) / 30) * 10) / 10; v.standing = Math.max(20, Math.round((v.standing - n) * 10) / 10); if (quiet === 2 || quiet % 4 === 0) event(s, 'Standing \u2212' + n + ': people have not seen you do much for Hearthmoor lately. Work, help, serve, or settle the village\u2019s business to keep their regard.', 'bad'); }
+    // business left unanswered in office counts against you
+    const lapsed = (s.agenda || []).filter(x => x.until < s.day); if (lapsed.length) { addStanding(s, -lapsed.length, lapsed.length === 1 ? 'a matter of your office left unanswered' : lapsed.length + ' matters of your office left unanswered'); s.agenda = s.agenda.filter(x => x.until >= s.day); }
+  }
   function agendaTick(s) {
     const mine = yourOffice(s), office = mine ? mine.office : s.village && s.village.council && s.gov && s.gov.council.includes('player') ? 'council' : null;
     if (!office || !AGENDA[office]) { s.agenda = []; return; }
     if (s.agendaDay === s.day) return; s.agendaDay = s.day;
-    const [lo, hi] = AGENDA_N[office], n = lo + (rand(s) < 0.5 ? 1 : 0);
-    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1); const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
-    for (let i = 0; i < Math.min(n, hi) && pool.length; i++) { const k = pool.splice(Math.floor(rand(s) * pool.length), 1)[0]; s.agenda.push({ id: (s.agendaId = (s.agendaId || 0) + 1), office, k, region: mine && mine.region, until: s.day + 1 }); }
+    const [lo, hi] = AGENDA_N[office], n = lo + (wrand(s) < 0.5 ? 1 : 0);
+    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1);   // lapsed matters were already counted by standingDay const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
+    for (let i = 0; i < Math.min(n, hi) && pool.length; i++) { const k = pool.splice(Math.floor(wrand(s) * pool.length), 1)[0]; s.agenda.push({ id: (s.agendaId = (s.agendaId || 0) + 1), office, k, region: mine && mine.region, until: s.day + 1 }); }
   }
   function agendaDo(s, id, pick) {
     const A = (s.agenda || []).find(x => x.id === id); if (!A) return { ok: false, msg: 'That matter is closed.' };
@@ -5275,6 +5283,8 @@
   const GROUNDS = [{ x: -78, z: 24, r: 22, name: 'the Pine Woods' }, { x: 150, z: 42, r: 26, name: 'the east woods' }, { x: -160, z: -800, r: 28, name: 'the Greenhaven woods' }, { x: 336, z: -520, r: 26, name: 'the Oakbridge woods' }, { x: 560, z: -930, r: 26, name: 'the Ironcrest forest' }];
   // where the bandits of each region make camp, a little off the road
   const CAMPS = { hearthmoor: { x: 196, z: 22, name: 'the camp off the east road' }, oakbridge: { x: 332, z: -566, name: 'the camp in the Oakbridge woods' }, crownmere: { x: 248, z: -664, name: 'the camp below the Crown Road' }, greenhaven: { x: -172, z: -842, name: 'the camp in the western woods' }, ironcrest: { x: 560, z: -904, name: 'the camp on the iron road' }, eastwatch: { x: 702, z: -260, name: 'the camp on the coast road' } };
+  // the animals' wandering has its own dice, so it never shifts anything else in the world
+  function wrand(s) { s.wseed = ((s.wseed == null ? 12345 : s.wseed) * 1103515245 + 12345) % 2147483648; return s.wseed / 2147483648; }
   function setupWild(s) {
     if (!s.wild) s.wild = { game: [], nextId: 1, day: 0, camps: {} };
     const W = s.wild;
@@ -5282,7 +5292,7 @@
       W.day = s.day;
       GROUNDS.forEach((G0, gi) => {
         const here = W.game.filter(a => a.g === gi && !a.dead).length;
-        for (let i = here; i < 3; i++) { const a = rand(s) * Math.PI * 2, r = rand(s) * G0.r; W.game.push({ id: W.nextId++, g: gi, kind: rand(s) < 0.7 ? 'deer' : 'boar', x: G0.x + Math.sin(a) * r, z: G0.z + Math.cos(a) * r, face: rand(s) * 6.3, hp: 1, flee: 0 }); }
+        for (let i = here; i < 3; i++) { const a = wrand(s) * Math.PI * 2, r = wrand(s) * G0.r; W.game.push({ id: W.nextId++, g: gi, kind: wrand(s) < 0.7 ? 'deer' : 'boar', x: G0.x + Math.sin(a) * r, z: G0.z + Math.cos(a) * r, face: wrand(s) * 6.3, hp: 1, flee: 0 }); }
       });
       W.game = W.game.filter(a => !a.dead);
     }
@@ -5299,7 +5309,7 @@
       if (a.kind === 'boar' && d < 5 && !s.fight && !(a.calm > s.t)) { a.charge = true; }
       if (d < scare && a.kind === 'deer') a.flee = 4;
       if (a.flee > 0) { a.flee -= dt; const k = 9 * dt / Math.max(0.1, d); a.x += (a.x - p.x) * k; a.z += (a.z - p.z) * k; a.face = Math.atan2(a.x - p.x, a.z - p.z); a.moving = true; }
-      else { a.moving = rand(s) < 0.02 ? !a.moving : a.moving; if (a.moving) { a.face += (rand(s) - 0.5) * 0.3; a.x += Math.sin(a.face) * dt * 0.9; a.z += Math.cos(a.face) * dt * 0.9; } }
+      else { a.moving = wrand(s) < 0.02 ? !a.moving : a.moving; if (a.moving) { a.face += (wrand(s) - 0.5) * 0.3; a.x += Math.sin(a.face) * dt * 0.9; a.z += Math.cos(a.face) * dt * 0.9; } }
       const gd = Math.hypot(a.x - G0.x, a.z - G0.z); if (gd > G0.r * 1.6) { a.face = Math.atan2(G0.x - a.x, G0.z - a.z); a.flee = 0; }
     }
   }
@@ -8050,7 +8060,7 @@
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
     if (!s.fight) wildStep(s, dt);
-    if (s.people && s.offices) { agendaTick(s); byElectTick(s); }
+    if (s.people && s.offices) { standingDay(s); agendaTick(s); byElectTick(s); }
     if (s.regaliaPending && s.player.items) { const o = s.regaliaPending; s.regaliaPending = null; const give = { elder: ['chainoffice'], lord: ['mantle', 'signet'], seat: ['signet', 'finecoat'], crown: ['regalia', 'crown', 'mantle'] }[o] || [];
       const names = []; for (const id of give) { if (!ITEMS[id]) continue; let it = s.player.items.find(x => x.id === id); if (!it) { it = addItem(s, id, 1); names.push(ITEMS[id].name.toLowerCase()); } if (it && it.u != null) rpgCmd(s, 'rEquip', it.u); }
       if (names.length) event(s, 'You are sworn in, and given the marks of your office: ' + names.join(', ') + '. You wear them now.', 'good'); }
