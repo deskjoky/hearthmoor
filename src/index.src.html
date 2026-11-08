@@ -2713,6 +2713,14 @@ function syncChars(s, t) {
     if (!g) { const fem = Sim.sexOf({ name: w.name }) === 'f'; g = makeChar({ tunic: '#b8a079', skin: SKIN[w.name.length % SKIN.length], apron: APRON[shop.trade], chef: shop.trade === 'bakery', pick: 'w:' + shop.id, fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[w.name.length % 5] }); workerMeshes.set(key, g); }
     placeChar(g, w, t, { moving: w.moving, working: w.task === 'craft' && !w.moving, pack: w.carry ? 1 : 0, hidden: w.indoors, selected: UI.sel === 'w:' + shop.id });
   }
+  // whoever is fetching supplies, walking to the Trading Post and back with the load
+  const runners = new Set();
+  for (const shop of s.shops) {
+    const F = shop.fetch; if (!F || F.x == null) continue; if (F.pid) runners.add(F.pid);
+    const key = shop.id + ':run:' + F.by; seenW.add(key); let g = workerMeshes.get(key);
+    if (!g) { const fem = Sim.sexOf({ name: F.by }) === 'f'; g = makeChar({ tunic: F.who === 'manager' ? '#3e4f6e' : '#a89a7a', skin: SKIN[F.by.length % SKIN.length], fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[F.by.length % 5], hat: F.who === 'manager' ? 'cap' : null, capColor: '#2f3d55' }); workerMeshes.set(key, g); }
+    placeChar(g, F, t, { moving: F.moving !== false, pack: F.phase === 'back' ? 1 : 0 });
+  }
   for (const shop of s.shops) {
     const hs = shop.hands || [], H = Sim.workerHours(shop), hr = Sim.hourOf(s), on = hr >= H.start && hr < H.end;
     hs.forEach((h, i) => {
@@ -2757,7 +2765,7 @@ function syncChars(s, t) {
     const pp = a.pid && s.people[a.pid];
     const icon = a.icon || (pp && !pp.home && Sim.hourOf(s) >= 20 ? 'angry' : null) || (pp && pp.job && pp.job.office === 'elder' && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null)) ? 'wait' : null);
     if (a.kid && pp) { const k = 0.42 + Math.min(16, pp.age) / 16 * 0.55; if (Math.abs(g.scale.x - k) > 0.01) g.scale.setScalar(k); } else if (!a.kid && g.scale.x < 1) g.scale.setScalar(pp && Sim.sexOf(pp) === 'f' ? 1.02 : 1.1);
-    placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors, selected: UI.sel === a.id });
+    placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors || (a.pid && runners.has(a.pid)), selected: UI.sel === a.id });
   }
   for (const [id, g] of agentMeshes) if (!seen.has(id)) { dropChar(g); agentMeshes.delete(id); if (UI.sel === id) UI.sel = null; }
 }
@@ -6540,6 +6548,9 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.69.3', date: '7 November', title: 'The manager goes to market', items: [
+    'Your manager now really walks to the Trading Post, buys what the shop needs, and carries it back on their back to restock storage. You can watch them go.',
+    'They set off on their own as soon as anything runs low, from 6 in the morning until closing, whether or not the worker is in. A note tells you when they leave and what they bought.'] },
   { v: '0.69.2', date: '7 November', title: 'Supplies, properly', items: [
     'Managers now go for supplies even when the worker is away, locked up or not hired yet. Before, the trip only happened while the worker was on shift, so a shop could sit empty all day.',
     'They go any time from 6 in the morning until closing, as soon as anything runs low.'] },

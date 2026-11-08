@@ -1076,22 +1076,36 @@
     return { want, cost: cost(), total: Object.values(want).reduce((a, b) => a + b, 0) };
   }
   // the manager or a fetcher goes to the Trading Post while the bench keeps working
-  function fetchStep(s, shop, low, h, H) {
-    const st = shopStats(s, shop);
-    if (shop.fetch) {
-      if (s.t < shop.fetch.at) return;
-      const Ti = tierOf(shop); for (const g in shop.fetch.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + shop.fetch.carry[g]);
-      shop.fetch = null; return;
+  function fetchStep(s, shop, low, h, H, dt) {
+    const st = shopStats(s, shop), F = shop.fetch, Ti = tierOf(shop);
+    if (F) {
+      if (F.at != null) { if (s.t < F.at) return; for (const g in F.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + F.carry[g]); shop.fetch = null; return; }   // a trip from an older save
+      // the manager (or the employee sent) really walks there and back
+      const sp = 1.25 * (dt || 1);
+      if (F.phase === 'go') {
+        F.why = 'Walking to the Trading Post';
+        if (moveTo(F, P.market.x + 0.8, P.market.z + 0.4, sp)) {
+          const { want, cost, total } = supplyWant(s, shop, F.disc || 1);
+          F.phase = 'back'; F.carry = {}; F.settle = false; F.tx = null;
+          if (total <= 0) { F.why = 'Coming back empty-handed: not enough coin'; shop.fetchWait = s.t + 90; return; }
+          spend(s, cost); st.supplies += cost; F.carry = want;
+          event(s, F.by + ' bought ' + Object.keys(want).filter(g => want[g]).map(g => want[g] + ' ' + g).join(' and ') + ' for your ' + TRADES[shop.trade].name.toLowerCase() + ' (' + cost + 'c) and is carrying it back.', 'info');
+        }
+      } else {
+        F.why = 'Carrying supplies back';
+        const sp0 = plotPt(shop, 'store');
+        if (moveTo(F, sp0.x, sp0.z, sp)) { for (const g in F.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + F.carry[g]); shop.fetch = null; }
+      }
+      return;
     }
     const who = supplier(shop), R = TRADES[shop.trade].recipe;
     if (who && who !== 'worker' && !low) low = Object.keys(R).some(g => shop.stock[g] < R[g] * 2);   // a manager or fetcher goes before storage runs dry
     if (!low || !who || who === 'worker' || h < Math.min(6, H.start) || h >= H.end || shop.fetchWait > s.t) return;
     const by = who === 'manager' ? shop.manager.name : staffOn(shop, 'supply')[0].name;
-    const { want, cost, total } = supplyWant(s, shop, who === 'manager' ? 0.9 : 1);
-    if (total <= 0) { shop.fetchWait = s.t + 90; return; }
-    spend(s, cost); st.supplies += cost;
-    shop.fetch = { at: s.t + (who === 'manager' ? 20 : 35) * crowdMul(shop) ** -0.5, carry: want, by };
-    event(s, by + ' went for ' + Object.keys(want).filter(g => want[g]).map(g => want[g] + ' ' + g).join(' and ') + ' for your ' + TRADES[shop.trade].name.toLowerCase() + ' (' + cost + 'c).', 'info');
+    if (supplyWant(s, shop, who === 'manager' ? 0.9 : 1).total <= 0) { shop.fetchWait = s.t + 90; return; }
+    const sv = plotPt(shop, 'serve');
+    shop.fetch = { phase: 'go', x: sv.x, z: sv.z, face: 0, by, who, pid: who === 'manager' ? shop.manager.pid : null, disc: who === 'manager' ? 0.9 : 1, why: 'Setting off for the Trading Post' };
+    event(s, by + ' set off for the Trading Post to buy ' + recipeText(shop.trade) + ' for your ' + TRADES[shop.trade].name.toLowerCase() + '.', 'info');
   }
   const ROUND_SALE = [1, 0.65, 0.4];
   // how many a hand can sell round the town in a day: enough to clear about 12c over the cost of making them
@@ -7233,7 +7247,7 @@
     if (h >= 6 && h < 21) spawnScheduled(s);
     if (s.valdoria && s.courts && Math.floor(before / 60) !== Math.floor(s.t / 60) && h >= 8 && h < 19) valCutpurse(s);
     updatePlayer(s, dt);
-    for (const shop of s.shops) { fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), hourOf(s), workerHours(shop)); updateWorker(s, shop, dt); }   // supplies are fetched whether or not the worker is in
+    for (const shop of s.shops) { fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), hourOf(s), workerHours(shop), dt); updateWorker(s, shop, dt); }   // supplies are fetched whether or not the worker is in
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
     if (s.towns) syncBodies(s);

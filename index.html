@@ -1735,22 +1735,36 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     return { want, cost: cost(), total: Object.values(want).reduce((a, b) => a + b, 0) };
   }
   // the manager or a fetcher goes to the Trading Post while the bench keeps working
-  function fetchStep(s, shop, low, h, H) {
-    const st = shopStats(s, shop);
-    if (shop.fetch) {
-      if (s.t < shop.fetch.at) return;
-      const Ti = tierOf(shop); for (const g in shop.fetch.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + shop.fetch.carry[g]);
-      shop.fetch = null; return;
+  function fetchStep(s, shop, low, h, H, dt) {
+    const st = shopStats(s, shop), F = shop.fetch, Ti = tierOf(shop);
+    if (F) {
+      if (F.at != null) { if (s.t < F.at) return; for (const g in F.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + F.carry[g]); shop.fetch = null; return; }   // a trip from an older save
+      // the manager (or the employee sent) really walks there and back
+      const sp = 1.25 * (dt || 1);
+      if (F.phase === 'go') {
+        F.why = 'Walking to the Trading Post';
+        if (moveTo(F, P.market.x + 0.8, P.market.z + 0.4, sp)) {
+          const { want, cost, total } = supplyWant(s, shop, F.disc || 1);
+          F.phase = 'back'; F.carry = {}; F.settle = false; F.tx = null;
+          if (total <= 0) { F.why = 'Coming back empty-handed: not enough coin'; shop.fetchWait = s.t + 90; return; }
+          spend(s, cost); st.supplies += cost; F.carry = want;
+          event(s, F.by + ' bought ' + Object.keys(want).filter(g => want[g]).map(g => want[g] + ' ' + g).join(' and ') + ' for your ' + TRADES[shop.trade].name.toLowerCase() + ' (' + cost + 'c) and is carrying it back.', 'info');
+        }
+      } else {
+        F.why = 'Carrying supplies back';
+        const sp0 = plotPt(shop, 'store');
+        if (moveTo(F, sp0.x, sp0.z, sp)) { for (const g in F.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + F.carry[g]); shop.fetch = null; }
+      }
+      return;
     }
     const who = supplier(shop), R = TRADES[shop.trade].recipe;
     if (who && who !== 'worker' && !low) low = Object.keys(R).some(g => shop.stock[g] < R[g] * 2);   // a manager or fetcher goes before storage runs dry
     if (!low || !who || who === 'worker' || h < Math.min(6, H.start) || h >= H.end || shop.fetchWait > s.t) return;
     const by = who === 'manager' ? shop.manager.name : staffOn(shop, 'supply')[0].name;
-    const { want, cost, total } = supplyWant(s, shop, who === 'manager' ? 0.9 : 1);
-    if (total <= 0) { shop.fetchWait = s.t + 90; return; }
-    spend(s, cost); st.supplies += cost;
-    shop.fetch = { at: s.t + (who === 'manager' ? 20 : 35) * crowdMul(shop) ** -0.5, carry: want, by };
-    event(s, by + ' went for ' + Object.keys(want).filter(g => want[g]).map(g => want[g] + ' ' + g).join(' and ') + ' for your ' + TRADES[shop.trade].name.toLowerCase() + ' (' + cost + 'c).', 'info');
+    if (supplyWant(s, shop, who === 'manager' ? 0.9 : 1).total <= 0) { shop.fetchWait = s.t + 90; return; }
+    const sv = plotPt(shop, 'serve');
+    shop.fetch = { phase: 'go', x: sv.x, z: sv.z, face: 0, by, who, pid: who === 'manager' ? shop.manager.pid : null, disc: who === 'manager' ? 0.9 : 1, why: 'Setting off for the Trading Post' };
+    event(s, by + ' set off for the Trading Post to buy ' + recipeText(shop.trade) + ' for your ' + TRADES[shop.trade].name.toLowerCase() + '.', 'info');
   }
   const ROUND_SALE = [1, 0.65, 0.4];
   // how many a hand can sell round the town in a day: enough to clear about 12c over the cost of making them
@@ -7892,7 +7906,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (h >= 6 && h < 21) spawnScheduled(s);
     if (s.valdoria && s.courts && Math.floor(before / 60) !== Math.floor(s.t / 60) && h >= 8 && h < 19) valCutpurse(s);
     updatePlayer(s, dt);
-    for (const shop of s.shops) { fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), hourOf(s), workerHours(shop)); updateWorker(s, shop, dt); }   // supplies are fetched whether or not the worker is in
+    for (const shop of s.shops) { fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), hourOf(s), workerHours(shop), dt); updateWorker(s, shop, dt); }   // supplies are fetched whether or not the worker is in
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
     if (s.towns) syncBodies(s);
@@ -10786,6 +10800,14 @@ function syncChars(s, t) {
     if (!g) { const fem = Sim.sexOf({ name: w.name }) === 'f'; g = makeChar({ tunic: '#b8a079', skin: SKIN[w.name.length % SKIN.length], apron: APRON[shop.trade], chef: shop.trade === 'bakery', pick: 'w:' + shop.id, fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[w.name.length % 5] }); workerMeshes.set(key, g); }
     placeChar(g, w, t, { moving: w.moving, working: w.task === 'craft' && !w.moving, pack: w.carry ? 1 : 0, hidden: w.indoors, selected: UI.sel === 'w:' + shop.id });
   }
+  // whoever is fetching supplies, walking to the Trading Post and back with the load
+  const runners = new Set();
+  for (const shop of s.shops) {
+    const F = shop.fetch; if (!F || F.x == null) continue; if (F.pid) runners.add(F.pid);
+    const key = shop.id + ':run:' + F.by; seenW.add(key); let g = workerMeshes.get(key);
+    if (!g) { const fem = Sim.sexOf({ name: F.by }) === 'f'; g = makeChar({ tunic: F.who === 'manager' ? '#3e4f6e' : '#a89a7a', skin: SKIN[F.by.length % SKIN.length], fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[F.by.length % 5], hat: F.who === 'manager' ? 'cap' : null, capColor: '#2f3d55' }); workerMeshes.set(key, g); }
+    placeChar(g, F, t, { moving: F.moving !== false, pack: F.phase === 'back' ? 1 : 0 });
+  }
   for (const shop of s.shops) {
     const hs = shop.hands || [], H = Sim.workerHours(shop), hr = Sim.hourOf(s), on = hr >= H.start && hr < H.end;
     hs.forEach((h, i) => {
@@ -10830,7 +10852,7 @@ function syncChars(s, t) {
     const pp = a.pid && s.people[a.pid];
     const icon = a.icon || (pp && !pp.home && Sim.hourOf(s) >= 20 ? 'angry' : null) || (pp && pp.job && pp.job.office === 'elder' && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null)) ? 'wait' : null);
     if (a.kid && pp) { const k = 0.42 + Math.min(16, pp.age) / 16 * 0.55; if (Math.abs(g.scale.x - k) > 0.01) g.scale.setScalar(k); } else if (!a.kid && g.scale.x < 1) g.scale.setScalar(pp && Sim.sexOf(pp) === 'f' ? 1.02 : 1.1);
-    placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors, selected: UI.sel === a.id });
+    placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors || (a.pid && runners.has(a.pid)), selected: UI.sel === a.id });
   }
   for (const [id, g] of agentMeshes) if (!seen.has(id)) { dropChar(g); agentMeshes.delete(id); if (UI.sel === id) UI.sel = null; }
 }
@@ -14611,8 +14633,11 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0022';
+const BUILD = '2026.11.08.0025';
 const NOTES = [
+  { v: '0.69.3', date: '7 November', title: 'The manager goes to market', items: [
+    'Your manager now really walks to the Trading Post, buys what the shop needs, and carries it back on their back to restock storage. You can watch them go.',
+    'They set off on their own as soon as anything runs low, from 6 in the morning until closing, whether or not the worker is in. A note tells you when they leave and what they bought.'] },
   { v: '0.69.2', date: '7 November', title: 'Supplies, properly', items: [
     'Managers now go for supplies even when the worker is away, locked up or not hired yet. Before, the trip only happened while the worker was on shift, so a shop could sit empty all day.',
     'They go any time from 6 in the morning until closing, as soon as anything runs low.'] },
