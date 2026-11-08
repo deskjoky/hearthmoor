@@ -459,6 +459,19 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 @media (orientation: landscape) and (max-height: 520px) { .vellum { padding: 14px 22px 12px; } .vellum h2 { font-size: 21px; } .vellum .sv { margin-bottom: 6px; } .vellum .fleur { margin: 2px 0 6px; } }
 @media (prefers-reduced-motion: reduce) { .scroll.unroll .vellum { animation: none; } }
 .card h2 .age { font-size: 16px; color: var(--ink-soft); }
+.agebadge { display: inline-block; font: 700 13px var(--f-body, sans-serif); background: #2f4f6a; color: #f6ead0; border-radius: 999px; padding: 1px 8px; vertical-align: middle; margin-left: 4px; letter-spacing: .02em; }
+.agebadge.kid { background: #3f6a3a; } .agebadge.old { background: #6b5a44; }
+.badges { margin: 2px 0 4px; }
+.wedbadge { display: inline-block; font: 600 12px var(--f-body, sans-serif); border-radius: 999px; padding: 1px 8px; margin-left: 4px; vertical-align: middle; border: 1px solid; }
+.wedbadge.wed { color: #7a2a24; border-color: #7a2a24; background: rgba(122,42,36,.08); }
+.wedbadge.you { color: #fff; background: #7a2a24; border-color: #7a2a24; }
+.wedbadge.court { color: #8a5a00; border-color: #c9a33a; background: rgba(217,176,74,.2); }
+.wedbadge.free { color: #2f5f3a; border-color: #3f6a3a; background: rgba(63,106,58,.1); }
+.badges .wedbadge { margin-left: 0; font-size: 13px; }
+.prow i.pbadges { font-style: normal; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; align-self: center; }
+.prow i.pbadges span.agebadge { color: #f6ead0; font-size: 13px; overflow: visible; margin-left: 0; }
+.prow i.pbadges span.wedbadge { font-size: 12px; overflow: visible; margin-left: 0; white-space: nowrap; }
+.prow i.pbadges span.wedbadge.wed { color: #7a2a24; } .prow i.pbadges span.wedbadge.you { color: #fff; } .prow i.pbadges span.wedbadge.court { color: #8a5a00; } .prow i.pbadges span.wedbadge.free { color: #2f5f3a; }
 .plog { margin: 6px 0 0; padding-left: 16px; font-size: 13px; color: var(--ink-soft); line-height: 1.4; }
 .plist { display: grid; gap: 4px; }
 .prow { display: grid; grid-template-columns: auto auto 1fr auto; gap: 4px 10px; align-items: baseline; width: 100%; text-align: left; border: 1px solid var(--line); background: rgba(255,255,255,.25); border-radius: 5px; padding: 8px 10px; min-height: 40px; }
@@ -13312,7 +13325,7 @@ function stepHoliday(dt, t) { for (let i = 0; i < HOL.flames.length; i++) { cons
 function personCard(s, pr, body) {
   const doing = body && (body.why || body.doing);
   const log = pr.log.slice(0, 3).map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('');
-  return `<h2>${esc(pr.name)}<span class="age">, ${pr.age}</span></h2><div class="sub">${esc(Sim.occupation(s, pr))} · ${esc(Sim.homeText(s, pr))}</div>
+  return `<h2>${esc(pr.name)} ${ageBadge(pr)}</h2><div class="badges">${pr.status === 'here' ? wedBadge(s, pr) : ''}</div><div class="sub">${esc(Sim.occupation(s, pr))} · ${esc(Sim.homeText(s, pr))}</div>
     <div class="why num"><b>Purse:</b> <span class="${pr.purse < 0 ? 'neg' : ''}">${pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c'}</span> · <b>Respect:</b> ${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ' · <b>On the council</b>' : ''} · <b>Mood:</b> ${Math.round(pr.mood)}/100 · ${opinionText(pr.opinion)}${doing ? `<br><b>Doing:</b> ${esc(doing)}` : ''}</div>
     ${pr.status === 'here' && !pr.kid && G.folk ? `<div class="why">${esc(Sim.regardOf(s, pr))}</div>` : ''}${hateLine(s, pr)}${memLines(s, pr)}
     ${log ? `<ul class="plog">${log}</ul>` : ''}
@@ -13772,10 +13785,22 @@ function pageJobs(s) {
   return html;
 }
 function showPerson(id) { const q = G && G.people[id]; if (!q) return; UI.ptown = Sim.townOf(q) || UI.ptown; UI.reveal = '[data-pid="' + id + '"]'; }
+// at a glance: how old someone is, and whether they are married, betrothed to you, widowed or free
+function ageBadge(pr) { return `<span class="agebadge${pr.kid ? ' kid' : pr.age >= 60 ? ' old' : ''}">${pr.kid ? 'child, ' : ''}${pr.age}</span>`; }
+function wedBadge(s, pr) {
+  if (pr.kid) return '';
+  const Y = Sim.you(s), sp = pr.spouse && s.people[pr.spouse], L = Y.love && Y.love[pr.id];
+  if (pr.spouse === Y.pid) return `<span class="wedbadge you">your ${Sim.sexOf(pr) === 'f' ? 'wife' : 'husband'}</span>`;
+  if (sp) return `<span class="wedbadge wed">married${sp.status === 'here' ? ' to ' + esc(sp.name.split(' ')[0]) : ''}</span>`;
+  if (L && L.stage === 'betrothed') return `<span class="wedbadge court">betrothed to you</span>`;
+  if (L && L.stage === 'courting') return `<span class="wedbadge court">courting you</span>`;
+  if (pr.widowed || (pr.log || []).some(l => /^Widowed|husband died|wife died/.test(l.text))) return `<span class="wedbadge free">widowed</span>`;
+  return `<span class="wedbadge free">single</span>`;
+}
 function personRow(s, pr) {
-  const st = pr.status === 'dead' ? 'dead' : pr.status === 'left' ? 'left' : !pr.home ? 'homeless' : !pr.job ? (pr.retired ? 'retired' : 'jobless') : 'ok';
+  const st = pr.status === 'dead' ? 'dead' : pr.status === 'left' ? 'left' : !pr.home ? 'homeless' : !pr.job && !pr.kid ? (pr.retired ? 'retired' : 'jobless') : 'ok';
   const pill = { dead: '<span class="pill">died</span>', left: '<span class="pill">gone</span>', homeless: '<span class="pill bad">homeless</span>', jobless: '<span class="pill warn">out of work</span>', retired: '<span class="pill">retired</span>', ok: '' }[st];
-  return `<button type="button" class="prow ${UI.person === pr.id ? 'open' : ''}" data-pid="${pr.id}" data-c='${esc(JSON.stringify(['ui', 'person', UI.person === pr.id ? null : pr.id]))}'><b>${esc(pr.name)}</b> ${pill}<span>${esc(Sim.occupation(s, pr))}</span><em class="num ${pr.purse < 0 ? 'neg' : ''}">${pr.purse}c</em></button>${UI.person === pr.id ? personDetail(s, pr) : ''}`;
+  return `<button type="button" class="prow ${UI.person === pr.id ? 'open' : ''}" data-pid="${pr.id}" data-c='${esc(JSON.stringify(['ui', 'person', UI.person === pr.id ? null : pr.id]))}'><b>${esc(pr.name)}</b><i class="pbadges">${ageBadge(pr)}${pr.status === 'here' ? wedBadge(s, pr) : ''}${pill}</i><span>${esc(Sim.occupation(s, pr))}</span><em class="num ${pr.purse < 0 ? 'neg' : ''}">${pr.purse}c</em></button>${UI.person === pr.id ? personDetail(s, pr) : ''}`;
 }
 function familyLine(s, pr) {
   const nm = id => s.people[id] ? esc(s.people[id].name) + (s.people[id].status === 'dead' ? ' (died)' : '') : '';
@@ -16314,8 +16339,11 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0522';
+const BUILD = '2026.11.08.0534';
 const NOTES = [
+  { v: '0.71.1', date: '8 November', title: 'Who is who', items: [
+    'Everyone\u2019s age now stands out in a coloured badge (green for children), on their card and in every list of people.',
+    'A second badge shows at a glance whether someone is single, married (and to whom), widowed, courting you, betrothed to you, or your own husband or wife.'] },
   { v: '0.71', date: '8 November', title: 'Hearth and Home', items: [
     'Courtship in stages: meet someone, become friends, ask to court them, be betrothed, and wed. Talk, give gifts and take them on outings: a walk, supper at the tavern, the market, the chapel, or a dance on a holiday.',
     'Everyone has traits (kind, proud, ambitious, pious, merry, thrifty, bookish, bold) and things they love and dislike. Some will suit you and some will turn you down; a noble family expects rank, and brings a dowry and its backing.',
