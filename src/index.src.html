@@ -4064,7 +4064,7 @@ function pageShops(s, only) {
       <input type="range" id="price-${shop.id}" data-shop="${shop.id}" min="1" max="${Math.round(T.wtp * 2.2)}" step="1" value="${shop.price}" aria-label="Price for ${T.many}">
       <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div></div>`;
     if (shop.worker && !shop.manager && !(shop.hands || []).length) html += `<p><label class="checkrow"><input type="checkbox" id="pol-${shop.id}" data-shop="${shop.id}" ${Sim.supplier(shop) === 'worker' ? 'checked' : ''}> ${esc(shop.worker.name)} buys ${Object.keys(T.recipe).join(' and ')} at the Trading Post when storage runs out</label></p><p class="why">The bench stops while they walk there and back. Hire a manager later and they take over the buying, a little cheaper.</p>`;
-    else if (shop.worker) { const who = Sim.supplier(shop) || 'none', opts = [shop.manager ? ['manager', 'Manager'] : null, ['employee', 'An employee'], ['worker', esc(shop.worker.name.split(' ')[0])], ['none', 'Nobody']].filter(Boolean);
+    else if (shop.worker) { const who = Sim.supplier(shop) || 'none', opts = [shop.manager ? ['manager', 'Manager (automatic)'] : null, ['employee', 'An employee'], ['worker', esc(shop.worker.name.split(' ')[0])], shop.manager ? null : ['none', 'Nobody']].filter(Boolean);
       html += `<div class="setting"><span>Who fetches ${Object.keys(T.recipe).join(' and ')}</span><div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${who === v}" data-c='${esc(JSON.stringify(['policy', shop.id, 'supplyBy', v]))}'>${n}</button>`).join('')}</div>${(shop.policy.supplyBy === 'employee' && who !== 'employee') ? '<p class="why">Set an employee to Supplies on the Staff page.</p>' : who === 'manager' ? '<p>The manager buys a little cheaper and the bench never stops.</p>' : who === 'worker' ? '<p>The bench stops while they walk to the Trading Post.</p>' : ''}</div>`; }
     if (shop.manager) html += `<p><label><input type="checkbox" id="res-${shop.id}" data-shop="${shop.id}" ${shop.policy.reserve !== false ? 'checked' : ''}> In autumn and winter, the manager lays in a reserve of ${Object.keys(T.recipe).join(' and ')} (up to ${Ti.cap} each, and no more than about ${60 + shop.manager.budget * 4}c a day)</label></p>`;
     if (next) {
@@ -6540,6 +6540,10 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.69.1', date: '7 November', title: 'Managers buy supplies', items: [
+    'A shop with a manager now always has someone seeing to supplies: the manager goes to the Trading Post on their own, without you choosing anyone.',
+    'They go as soon as storage runs low (under two batches of anything), not only once it is empty, so the bench keeps working.',
+    'You can still hand the job to an employee or your worker instead; \u201cNobody\u201d is no longer offered while you have a manager.'] },
   { v: '0.69', date: '7 November', title: 'Banners', items: [
     'As a lord, design your town\u2019s banner on the Your office page: 16 patterns, 16 emblems and 12 colours for the field, the pattern and the emblem. In Hearthmoor it flies on the Village Hall, the manor and its gate, and on a pole in the square; in other towns, in the square.',
     'As ruler, design the royal banner. It replaces the realm\u2019s banners on every castle, keep and gate, and flies in every town square of Alderwyn.',

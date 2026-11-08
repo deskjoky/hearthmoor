@@ -1062,11 +1062,11 @@
   // who fetches supplies: the manager unless you choose otherwise, else an employee set to it, else the worker if allowed
   function supplier(shop) {
     const by = shop.policy.supplyBy || 'auto';
-    if (by === 'none') return null;
-    if ((by === 'auto' || by === 'manager') && shop.manager) return 'manager';
+    if (by === 'none' && !shop.manager) return null;
+    if (shop.manager && by !== 'employee' && by !== 'worker') return 'manager';   // a manager always sees to supplies unless you hand it to someone else
     if ((by === 'auto' || by === 'manager' || by === 'employee') && staffOn(shop, 'supply').length) return 'employee';
     if (by === 'worker' || shop.policy.supplyRuns) return 'worker';
-    return null;
+    return shop.manager ? 'manager' : null;   // a shop with a manager is never left without supplies
   }
   function supplyWant(s, shop, disc) {
     const Ti = tierOf(shop), r = TRADES[shop.trade].recipe, want = {};
@@ -1083,7 +1083,8 @@
       const Ti = tierOf(shop); for (const g in shop.fetch.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + shop.fetch.carry[g]);
       shop.fetch = null; return;
     }
-    const who = supplier(shop);
+    const who = supplier(shop), R = TRADES[shop.trade].recipe;
+    if (who && who !== 'worker' && !low) low = Object.keys(R).some(g => shop.stock[g] < R[g] * 2);   // a manager or fetcher goes before storage runs dry
     if (!low || !who || who === 'worker' || h < H.start || h >= H.end - 1 || shop.fetchWait > s.t) return;
     const by = who === 'manager' ? shop.manager.name : staffOn(shop, 'supply')[0].name;
     const { want, cost, total } = supplyWant(s, shop, who === 'manager' ? 0.9 : 1);
