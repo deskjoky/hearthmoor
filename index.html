@@ -253,6 +253,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ffloat { position: absolute; left: 0; top: 0; font: 700 16px var(--f-body, sans-serif); color: #f5cf73; text-shadow: 0 1px 2px #000; margin: -10px 0 0 -10px; }
 .ffloat.hurt { color: #ff6b5a; }
 .ffloat.crit { font-size: 22px; color: #fff3a0; }
+@keyframes flashrow { 0%, 40% { box-shadow: 0 0 0 3px rgba(217,176,74,.9); background-color: rgba(217,176,74,.25); } 100% { box-shadow: 0 0 0 0 rgba(217,176,74,0); } }
+.flash { animation: flashrow 1.6s ease-out; }
 .ladder span { color: var(--ink-soft); }
 .ladder span.done { text-decoration: line-through; }
 .ladder span.on { color: var(--ink); font-weight: 700; }
@@ -12785,6 +12787,7 @@ document.addEventListener('click', e => {
   const btn = e.target.closest('[data-c]');
   if (!btn || btn.disabled) return;
   const c = JSON.parse(btn.dataset.c);
+  const box = btn.closest('#page, #waresPage, #pausePage'); UI.anchor = box ? { box: box.id, dc: btn.dataset.c, top: btn.getBoundingClientRect().top, at: performance.now() } : null;
   if (c[0] === 'ui') { uiCmd(c[1], c[2], c[3]); return; }
   if (c[0] === 'goto') UI.sel = null;
   if (c[0] !== 'ui') UI.confirm = null;
@@ -12884,14 +12887,25 @@ function closeOverlay() {
   if (UI.mode === 'play') ['hud', 'sticks'].forEach(id => $(id).hidden = false);
   saveNow(); renderCard(true);
 }
+/* menus keep your place: after a tap, what you tapped stays under your finger; when a tap takes you to someone or something, the page goes straight to it */
+function keepPlace(pg, y) {
+  pg.scrollTop = y; const A = UI.anchor;
+  if (A && A.box === pg.id && performance.now() - A.at < 1500) {
+    let el = null; for (const b of pg.querySelectorAll('[data-c]')) if (b.dataset.c === A.dc) { el = b; break; }
+    if (el) pg.scrollTop += el.getBoundingClientRect().top - A.top;
+  }
+  if (UI.reveal) { const el = pg.querySelector(UI.reveal); UI.reveal = null; if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } }
+}
 function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
 function renderBook(turn) {
   const sec = sectionOf(UI.tab); UI.subOf = UI.subOf || {}; if (sec[2].some(y => y[0] === UI.tab)) UI.subOf[sec[0]] = UI.tab;
   $('tabs').innerHTML = SECTIONS.map(([k, n, pages]) => `<button type="button" class="tab" role="tab" aria-selected="${sec[0] === k}" data-c='${JSON.stringify(['ui', 'tab', (UI.subOf && UI.subOf[k]) || pages[0][0]])}'>${n}</button>`).join('');
+  const key = [UI.tab, JSON.stringify(UI.focus || null), UI.staffSel, UI.court, UI.btown, UI.ptown, UI.tree].join('|');
+  turn = turn && key !== UI.pageKey; UI.pageKey = key;   // only a real change of page goes back to the top
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
   const subs = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}<span class="paused" title="Time stands still while the book is open">Paused</span></nav>`;
   pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
-  pg.scrollTop = y; turnPage(pg, turn);
+  keepPlace(pg, y); turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
 function notesHTML(notes) { return `<ul class="notes">${notes.map(n => `<li>${esc(n.text)}${n.fix ? `<br>${B_(esc(n.fix.label), n.fix.cmd, 'alt')}` : ''}</li>`).join('')}</ul>`; }
@@ -12989,7 +13003,7 @@ function businessTowns(s) {
   if (!t0) { const h = townHere(); t0 = count(h) ? h : (towns.find(count) || h); }
   let html = `<div class="seg towns" role="tablist">${towns.map(t => `<button type="button" role="tab" aria-pressed="${t === t0}" data-c='${JSON.stringify(['ui', 'btown', t])}'>${TOWN_NAMES[t]}${count(t) ? ` <b class="num">${count(t)}</b>` : ''}</button>`).join('')}</div>`;
   const here = mine.filter(x => x.town === t0);
-  html += here.length ? `<div class="grid2">${here.map(x => `<div class="box"><h5>${esc(x.name)}</h5><p>${x.full || x.line}</p><div class="acts">${B_('Manage', ['ui', 'manage', x.ref])}${x.go && x.go !== UI.loc ? B_('Go there', ['goto', x.go], 'alt') : ''}</div></div>`).join('')}</div>` : `<p>You own nothing in ${TOWN_NAMES[t0]} yet.</p>`;
+  html += here.length ? `<div class="grid2">${here.map(x => `<div class="box" data-sbox="${esc(Array.isArray(x.ref) ? x.ref.join(':') : '')}"><h5>${esc(x.name)}</h5><p>${x.full || x.line}</p><div class="acts">${B_('Manage', ['ui', 'manage', x.ref])}${x.go && x.go !== UI.loc ? B_('Go there', ['goto', x.go], 'alt') : ''}</div></div>`).join('')}</div>` : `<p>You own nothing in ${TOWN_NAMES[t0]} yet.</p>`;
   if (t0 === 'hearthmoor') {
     const free = Sim.PLOTS.map((p, i) => i).filter(i => !Sim.shopOnPlot(s, i) && (!Sim.PLOTS[i].grant || s.village.landGranted));
     if (!s.shops.length) html += `<p>Learn a trade by working ${Sim.LEARN_SHIFTS} shifts at one of the shops on the square, then open your own on an empty lot.</p>`;
@@ -13058,7 +13072,8 @@ function pageManage(s) {
   if (F[0] === 'shop') {
     const shop = Sim.shopById(s, F[1]);
     if (!shop) return `<p>That shop is no longer yours.</p><div class="acts">${all}</div>`;
-    return `<h3>${esc(Sim.tierOf(shop).name)}</h3><p class="lead">${esc(Sim.PLOTS[shop.plot].name)} · just this shop.</p><div class="acts">${all}</div>` + pageShops(s, shop.id) + pageStaff(s, shop.id);
+    const jb = (k, n) => `<button type="button" class="alt" data-c='${JSON.stringify(['ui', 'jump', k])}'>${n}</button>`;
+    return `<h3>${esc(Sim.tierOf(shop).name)}</h3><p class="lead">${esc(Sim.PLOTS[shop.plot].name)} · just this shop.</p><div class="acts">${all}</div><div class="acts jumps">Go to: ${jb('manager', 'Manager')}${jb('staff', 'Staff and hiring')}</div>` + pageShops(s, shop.id) + `<div data-jump="staff"></div>` + pageStaff(s, shop.id) + `<div data-jump="manager"></div><h4>Manager</h4>` + managerBox(s, 'shop', shop.id, 'Your ' + TR[shop.trade].name.toLowerCase());
   }
   if (F[0] === 'biz') {
     const b = s.biz[F[1]];
@@ -13094,7 +13109,7 @@ function staffOverview(s) {
   let h = `<h3>Staff</h3><p class="lead">Tap anyone to see how they are doing, change their pay, or let them go.</p>`;
   for (const shop of s.shops) {
     const T = TR[shop.trade], m = shop.manager, hs = shop.hands || [], room = Sim.handRoom(shop);
-    h += `<div class="box"><h5>Your ${esc(T.name.toLowerCase())} <span class="sub">· ${esc(Sim.tierOf(shop).name)}</span></h5>`;
+    h += `<div class="box" data-sbox="shop:${shop.id}"><h5>Your ${esc(T.name.toLowerCase())} <span class="sub">· ${esc(Sim.tierOf(shop).name)}</span></h5>`;
     h += m ? who('Manager: ' + m.name, m.wage + 'c a day · runs the place' + (shop.policy.mgrHire !== false ? ', hires' : ''), { kind: 'mgr', shop: shop.id }) : who('No manager', Sim.tierOf(shop).name === 'Stall' || !(shop.tier > 0) ? 'a stall is too small for one' : 'tap to hire one', { kind: 'mgr', shop: shop.id }, false);
     h += `<div class="staffgrid">`;
     if (shop.worker) h += who(shop.worker.name, 'Worker · ' + (shop.counterBy ? 'at the bench' : 'bench and counter') + ' · mood ' + Math.round(shop.worker.mood), { kind: 'worker', shop: shop.id }, shop.worker.mood < 30);
@@ -13103,7 +13118,7 @@ function staffOverview(s) {
   }
   for (const b of owned) {
     const m = b.manager, st = b.staff || [];
-    h += `<div class="box"><h5>${esc(Sim.empById(b.id).name)}</h5>${who(m ? 'Manager: ' + m.name : 'No manager', m ? m.wage + 'c a day' : 'tap to hire one', { kind: 'bmgr', biz: b.id })}<p class="why">${st.length} on the staff: ${esc(st.map(x => (s.people[x.pid] || {}).name || x.name || '').filter(Boolean).join(', ') || 'nobody')}</p></div>`;
+    h += `<div class="box" data-sbox="biz:${b.id}"><h5>${esc(Sim.empById(b.id).name)}</h5>${who(m ? 'Manager: ' + m.name : 'No manager', m ? m.wage + 'c a day' : 'tap to hire one', { kind: 'bmgr', biz: b.id })}<p class="why">${st.length} on the staff: ${esc(st.map(x => (s.people[x.pid] || {}).name || x.name || '').filter(Boolean).join(', ') || 'nobody')}</p></div>`;
   }
   return h;
 }
@@ -13176,10 +13191,11 @@ function pageJobs(s) {
   html += `<h4>Benches in Hearthmoor</h4><div class="acts">${Sim.EMPLOYERS.map(e => `<button type="button" class="btn alt" data-c='${esc(JSON.stringify(['goto', 'emp:' + e.id]))}'>${esc(e.name)}<small>${esc(TR[e.trade].name.toLowerCase())} · level ${Sim.tradeLevel(s, e.trade)}</small></button>`).join('')}</div>`;
   return html;
 }
+function showPerson(id) { const q = G && G.people[id]; if (!q) return; UI.ptown = Sim.townOf(q) || UI.ptown; UI.reveal = '[data-pid="' + id + '"]'; }
 function personRow(s, pr) {
   const st = pr.status === 'dead' ? 'dead' : pr.status === 'left' ? 'left' : !pr.home ? 'homeless' : !pr.job ? (pr.retired ? 'retired' : 'jobless') : 'ok';
   const pill = { dead: '<span class="pill">died</span>', left: '<span class="pill">gone</span>', homeless: '<span class="pill bad">homeless</span>', jobless: '<span class="pill warn">out of work</span>', retired: '<span class="pill">retired</span>', ok: '' }[st];
-  return `<button type="button" class="prow ${UI.person === pr.id ? 'open' : ''}" data-c='${esc(JSON.stringify(['ui', 'person', UI.person === pr.id ? null : pr.id]))}'><b>${esc(pr.name)}</b> ${pill}<span>${esc(Sim.occupation(s, pr))}</span><em class="num ${pr.purse < 0 ? 'neg' : ''}">${pr.purse}c</em></button>${UI.person === pr.id ? personDetail(s, pr) : ''}`;
+  return `<button type="button" class="prow ${UI.person === pr.id ? 'open' : ''}" data-pid="${pr.id}" data-c='${esc(JSON.stringify(['ui', 'person', UI.person === pr.id ? null : pr.id]))}'><b>${esc(pr.name)}</b> ${pill}<span>${esc(Sim.occupation(s, pr))}</span><em class="num ${pr.purse < 0 ? 'neg' : ''}">${pr.purse}c</em></button>${UI.person === pr.id ? personDetail(s, pr) : ''}`;
 }
 function familyLine(s, pr) {
   const nm = id => s.people[id] ? esc(s.people[id].name) + (s.people[id].status === 'dead' ? ' (died)' : '') : '';
@@ -13912,7 +13928,7 @@ function pageGear(s) {
   { const inv = s.player.inv, goods = Object.keys(inv).filter(g => inv[g] > 0); if (goods.length) h += `<p class="skgroup">Goods</p><p>${goods.map(g => inv[g] + ' ' + g).join(', ')} (one each to carry).</p>`; }
   return h;
 }
-function renderWares() { if (!G) return; const pg = $('waresPage'), y = pg.scrollTop; const at = UI.waresAt; $('waresTitle').textContent = at === 'market' ? 'The market' : (Sim.empById(at) || {}).name || 'The shop'; if (!Sim.atShop(G, at)) { $('waresSheet').hidden = true; closeOverlay(); return; } pg.innerHTML = pageWares(G).replace(/^<h3>[^<]*<\/h3>/, ''); pg.scrollTop = y; }
+function renderWares() { if (!G) return; const pg = $('waresPage'), y = pg.scrollTop; const at = UI.waresAt; $('waresTitle').textContent = at === 'market' ? 'The market' : (Sim.empById(at) || {}).name || 'The shop'; if (!Sim.atShop(G, at)) { $('waresSheet').hidden = true; closeOverlay(); return; } pg.innerHTML = pageWares(G).replace(/^<h3>[^<]*<\/h3>/, ''); keepPlace(pg, y); }
 function pageWares(s) {
   const at = UI.waresAt; if (!at) return '<h3>Wares</h3><p>Visit a shop to see what it sells.</p>';
   const name = at === 'market' ? 'The market' : (Sim.empById(at) || {}).name || 'The shop', kind = Sim.shopKind(s, at), here = Sim.atShop(s, at);
@@ -14465,7 +14481,7 @@ function renderPause(turn) {
   } else if (UI.pauseView === 'stats') html = back + statsHTML(G);
   else if (UI.pauseView === 'save') html = back + saveHTML();
   else html = back + settingsHTML();
-  pg.innerHTML = html; pg.scrollTop = y; turnPage(pg, turn);
+  pg.innerHTML = html; keepPlace(pg, y); turnPage(pg, turn);
 }
 const ICONS = {
   resume: '<path d="M8 5 L19 12 L8 19 Z"/>',
@@ -14670,12 +14686,13 @@ function uiCmd(k, v) {
   if (k === 'wares') { UI.waresAt = v; if (!Sim.atShop(G, v)) { toast('Walk up to the counter first.', 'info', true); return; } UI.overlay = 'wares'; $('waresSheet').hidden = false; ['hud', 'sticks'].forEach(id => $(id).hidden = true); $('toasts').hidden = true; renderWares(); return; }
   if (k === 'closeWares') { $('waresSheet').hidden = true; closeOverlay(); return; }
   if (k === 'fyield') { FIGHT.inp.yield = true; return; }
-  if (k === 'staffSel') { UI.staffSel = v; UI.confirm = null; renderBook(true); return; }
+  if (k === 'jump') { const el = $('page').querySelector('[data-jump="' + v + '"]'); if (el) el.scrollIntoView({ block: 'start', behavior: calm() ? 'auto' : 'smooth' }); return; }
+  if (k === 'staffSel') { const was = UI.staffSel; UI.staffSel = v; UI.confirm = null; if (!v && was) UI.reveal = '[data-sbox="' + (was.biz != null ? 'biz:' + was.biz : 'shop:' + was.shop) + '"]'; renderBook(true); return; }
   if (k === 'bizMenu') { UI.bizMenu = !UI.bizMenu; if (G) hud(G); return; }
   if (k === 'manage') {
     UI.confirm = null; UI.bizMenu = false;
-    if (v) { UI.focus = v; UI.tab = 'manage'; }
-    else { const was = UI.focus; UI.focus = null; UI.tab = 'shops'; if (was && was[0] === 'biz') { const b = G.biz[was[1]]; if (b) UI.btown = b.town || 'hearthmoor'; } else if (was) UI.btown = 'hearthmoor'; }
+    if (v) { UI.focus = v.slice(0, 2); UI.tab = 'manage'; if (v[2]) UI.reveal = '[data-jump="' + v[2] + '"]'; }
+    else { const was = UI.focus; UI.focus = null; UI.tab = 'shops'; if (was) UI.reveal = '[data-sbox="' + was.join(':') + '"]'; if (was && was[0] === 'biz') { const b = G.biz[was[1]]; if (b) UI.btown = b.town || 'hearthmoor'; } else if (was) UI.btown = 'hearthmoor'; }
     if (UI.overlay !== 'book') openBook(); else renderBook(true); return;
   }
   if (k === 'court') { UI.court = v; UI.tab = 'justice'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
@@ -14723,8 +14740,8 @@ function uiCmd(k, v) {
     closeOverlay(); if (UI.inside) Interior.leave();
     toast(a ? q.name + ' is marked: follow the gold light, or the gold mark on the minimap.' : q.name + ' is in ' + TOWN_NAMES[t] + '. The minimap points the way; travel there and the mark will find them.', 'info', true); return; }
   if (k === 'clearWaypoint') { UI.waypoint = null; return; }
-  if (k === 'who') { UI.person = v; UI.tab = 'people'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
-  if (k === 'person') { UI.person = v; if (v && UI.overlay !== 'book') { UI.tab = 'people'; openBook(); } else renderBook(); return; }
+  if (k === 'who') { UI.person = v; UI.tab = 'people'; showPerson(v); if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
+  if (k === 'person') { UI.person = v; if (v && (UI.overlay !== 'book' || UI.tab !== 'people')) showPerson(v); if (v && UI.overlay !== 'book') { UI.tab = 'people'; openBook(); } else renderBook(); return; }
   if (k === 'pview') { UI.pauseView = v; UI.exportText = ''; renderPause(true); return; }
   if (k === 'tview') { UI.titleView = v; UI.confirm = null; UI.importMsg = ''; renderTitle(); return; }
   if (k === 'confirm') { UI.confirm = v; if (UI.mode === 'title') renderTitle(); else if (UI.overlay === 'book') renderBook(); else renderCard(true); return; }
@@ -15568,7 +15585,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0025';
+const BUILD = '2026.11.08.0357';
 const NOTES = [
   { v: '0.69.3', date: '7 November', title: 'The manager goes to market', items: [
     'Your manager now really walks to the Trading Post, buys what the shop needs, and carries it back on their back to restock storage. You can watch them go.',
