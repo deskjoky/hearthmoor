@@ -2066,7 +2066,7 @@
         if (mate) marry(s, p, mate);
       }
       // children, spread out over the years
-      if (p.spouse && sexOf(p) === 'f' && p.age >= 18 && p.age <= 42) {
+      if (p.spouse && sexOf(p) === 'f' && p.age >= 18 && p.age <= 42 && p.spouse !== (s.player && you(s).pid)) {
         const kids = childrenOf(s, p).filter(c => c.status === 'here' && c.kid).length;
         const hh = p.home && houseById(s, p.home), full = hh && hh.tenants.length >= (hh.cap || 4);
         if (rand(s) < (full ? 0.02 : Math.max(0.03, 0.17 - kids * 0.04))) born(s, p, s.people[p.spouse]);
@@ -4697,6 +4697,163 @@
     }
     return null;
   }
+  /* ================= love, marriage and family =================
+     Meet, befriend, court, be betrothed, wed. Everyone has traits and likes; some suit you and some will not have you.
+     Married, your spouse's happiness must be kept. You choose when to try for a child, name them, and choose how they
+     are raised; they grow up in about sixty days and can work for you, marry into other families, and carry on after you. */
+  const TRAITS = { kind: 'Kind', proud: 'Proud', ambitious: 'Ambitious', pious: 'Pious', merry: 'Merry', thrifty: 'Thrifty', bookish: 'Bookish', bold: 'Bold' };
+  const GIFTS = { flowers: { name: 'Flowers', cost: 1 }, sweets: { name: 'Honey cakes', cost: 2 }, wine: { name: 'A flask of wine', cost: 4 }, tools: { name: 'Good tools', cost: 5 }, book: { name: 'A book', cost: 6 }, jewel: { name: 'A silver brooch', cost: 15 } };
+  const OUTINGS = { walk: { name: 'A walk by the stream', cost: 0 }, tavern: { name: 'Supper at the tavern', cost: 3 }, market: { name: 'A stroll round the market', cost: 1 }, chapel: { name: 'Prayers at the chapel', cost: 0 }, dance: { name: 'A dance at the festival', cost: 2, holiday: true } };
+  const STAGES = ['met', 'friends', 'courting', 'betrothed'], STAGE_NAME = { met: 'Acquainted', friends: 'Friends', courting: 'Courting', betrothed: 'Betrothed' };
+  const WEDDINGS = { small: { name: 'A small wedding', cost: 20, standing: 3 }, village: { name: 'A village feast', cost: 60, standing: 6 }, grand: { name: 'A grand wedding', cost: 200, standing: 10 } };
+  const GROW_DAYS = 60, CHILD_AT = 10, YOUTH_AT = 30;
+  const UPBRING = { child: { home: 'Helps at home: steady and close to you', chapel: 'Schooled at the chapel: letters and sums', play: 'Runs free with the village children: bold and well liked' },
+    youth: { apprentice: 'Apprenticed in your trade: grows up a skilled worker', squire: 'Trained as a squire: grows up a fighter', scholar: 'Studies with the priest: grows up learned and respected', home: 'Stays at home: grows up loyal to the family' } };
+  const hashOf = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); };
+  function natureOf(q) {
+    if (!q.traits) { const T = Object.keys(TRAITS), G = Object.keys(GIFTS), O = Object.keys(OUTINGS), h = hashOf(q.id + q.name); const a = T[h % T.length]; let b = T[(h >> 4) % T.length]; if (b === a) b = T[(h + 3) % T.length];
+      q.traits = [a, b]; q.likes = { gift: G[(h >> 7) % G.length], outing: O[(h >> 10) % (O.length - 1)] }; q.dislikes = { gift: G[(h >> 13) % G.length] === q.likes.gift ? G[((h >> 13) + 1) % G.length] : G[(h >> 13) % G.length] }; }
+    return q;
+  }
+  function loveOf(s, q) { const Y = you(s); Y.love = Y.love || {}; return Y.love[q.id] || (Y.love[q.id] = { stage: 'met', since: s.day, seen: s.day }); }
+  // how well you suit them, from -10 to +10: what their traits make of who you are
+  function suits(s, q) {
+    natureOf(q); const F = s.folk || {}, moral = F.moral || 0, renown = F.renown || 0, st = s.village ? s.village.standing : 0, mine = yourOffice(s), rich = s.coins > 400;
+    let k = 0;
+    for (const t of q.traits) k += { kind: moral > 5 ? 3 : moral < -5 ? -4 : 0, proud: renown > 10 || mine ? 3 : st < 30 ? -3 : 0, ambitious: mine ? 4 : rich ? 2 : -2, pious: moral > 8 ? 3 : moral < -3 ? -4 : 1, merry: 2, thrifty: s.coins < 80 ? 1 : 0, bookish: skillLv(s, 'speech') > 30 ? 3 : 0, bold: skillLv(s, 'oneHanded') + skillLv(s, 'twoHanded') > 60 ? 3 : 0 }[t] || 0;
+    if (q.noble || q.royal) k += mine && RANK[mine.office] >= 2 ? 3 : renown > 20 ? 1 : -6;   // a noble family looks for rank
+    return clamp(k, -10, 10);
+  }
+  const fnm = q => q.name.split(' ')[0];
+  function loveCmd(s, name, a, b, c) {
+    const ok = (m, x) => Object.assign({ ok: true, msg: m }, x || {}), fail = m => ({ ok: false, msg: m }), Y = you(s), p = s.player;
+    const near = q => { const body = bodyOf(s, q); return body && dist(p, body) <= 8; };
+    const fond = (q, n) => { Y.court[q.id] = clamp((Y.court[q.id] || 0) + n, 0, 100); return Y.court[q.id]; };
+    switch (name) {
+      case 'lTalk': case 'lGift': case 'lOuting': {
+        const q = s.people[a]; if (!q || q.status !== 'here') return fail('They are not here.'); natureOf(q);
+        const spouse = Y.spouse === q.id, child = (q.parents || []).includes(Y.pid);
+        if (!spouse && !child && !canCourt(s, q) && name !== 'lTalk') return fail('Not with them.');
+        if (!near(q)) return fail('Go and find ' + fnm(q) + ' first.');
+        const key = name + ':' + q.id; Y.lastDo = Y.lastDo || {}; if (Y.lastDo[key] === s.day) return fail('You have done that with ' + fnm(q) + ' today.');
+        let n = 0, msg = '';
+        if (name === 'lTalk') { n = 5; msg = 'You talk with ' + fnm(q) + '.'; }
+        if (name === 'lGift') { const G = GIFTS[b]; if (!G) return fail('No such gift.'); if (s.coins < G.cost) return fail(G.name + ' costs ' + G.cost + 'c.'); spend(s, G.cost);
+          n = q.likes.gift === b ? 14 : q.dislikes.gift === b ? -5 : 6; msg = q.likes.gift === b ? fnm(q) + ' loves it! ' + G.name + ' was just right.' : q.dislikes.gift === b ? fnm(q) + ' smiles thinly. ' + G.name + ' was not to their taste.' : fnm(q) + ' thanks you for ' + G.name.toLowerCase() + '.'; }
+        if (name === 'lOuting') { const O = OUTINGS[b]; if (!O) return fail('No such outing.'); if (O.holiday && !holidayOn(s.day)) return fail('Dances are held on holidays.'); if (s.coins < O.cost) return fail(O.name + ' costs ' + O.cost + 'c.'); spend(s, O.cost);
+          n = q.likes.outing === b ? 16 : 9; if (b === 'dance' && q.traits.includes('merry')) n += 4; if (b === 'chapel' && q.traits.includes('pious')) n += 4; if (b === 'tavern' && q.traits.includes('pious')) n -= 4;
+          msg = O.name + ' with ' + fnm(q) + (q.likes.outing === b ? ': just what they hoped for.' : '.'); }
+        Y.lastDo[key] = s.day;
+        if (spouse) { Y.joy = clamp((Y.joy == null ? 70 : Y.joy) + Math.max(2, n), 0, 100); return ok(msg + ' (' + fnm(q) + '’s happiness ' + Math.round(Y.joy) + ')'); }
+        if (child) { q.opinion = clamp((q.opinion || 0) + Math.max(2, n), -100, 100); q.bond = (q.bond || 0) + 1; return ok(msg); }
+        const L = loveOf(s, q); L.seen = s.day; const f = fond(q, n + Math.round(suits(s, q) / 3) + (n > 0 ? Math.round(rand(s) * 3) : 0)); q.opinion = clamp((q.opinion || 0) + 2, -100, 100);
+        if (L.stage === 'met' && f >= 20) { L.stage = 'friends'; msg += ' You and ' + fnm(q) + ' are friends now.'; }
+        return ok(msg + ' (fondness ' + Math.round(f) + ')');
+      }
+      case 'lCourt': {   // ask to court them
+        const q = s.people[a]; if (!q || !canCourt(s, q)) return fail('Not them.'); const L = loveOf(s, q), f = Y.court[q.id] || 0;
+        if (Y.mourn && Y.mourn > s.day) return fail('You are still in mourning, until day ' + Y.mourn + '.');
+        if (L.stage !== 'friends') return fail(L.stage === 'met' ? 'Become friends first.' : 'You are already courting.');
+        if (f < 45 || suits(s, q) < -5) { fond(q, -8); return fail(fnm(q) + ' says no, kindly. ' + (suits(s, q) < -5 ? (q.noble ? 'Their family expects someone of higher rank.' : 'You are not what they are looking for, as you are now.') : 'They need to know you better.')); }
+        L.stage = 'courting'; L.since = s.day; return ok(fnm(q) + ' says yes. You are courting.');
+      }
+      case 'lPropose': {
+        const q = s.people[a]; if (!q || !canCourt(s, q)) return fail('Not them.'); const L = loveOf(s, q), f = Y.court[q.id] || 0;
+        if (L.stage !== 'courting') return fail('Court them first.'); if (s.day - L.since < 3) return fail('Too soon: court a few days first.');
+        if (f < 75) { fond(q, -10); return fail(fnm(q) + ' is not ready. Keep courting (fondness ' + Math.round(f) + ' of 75).'); }
+        L.stage = 'betrothed'; L.since = s.day; event(s, 'You and ' + q.name + ' are betrothed! Plan the wedding when you are ready.', 'story'); return ok('Betrothed!');
+      }
+      case 'lWed': {   // a: who, b: small | village | grand
+        const q = s.people[a], W = WEDDINGS[b]; if (!q || !W) return fail('No.'); const L = loveOf(s, q); if (L.stage !== 'betrothed') return fail('You are not betrothed.');
+        if (s.coins < W.cost) return fail(W.name + ' costs ' + W.cost + 'c.'); spend(s, W.cost);
+        const noble = q.noble || q.royal, dowry = noble ? 120 + (q.royal ? 300 : 0) : 0;
+        wedYou(s, q); Y.joy = 70 + (b === 'grand' ? 15 : b === 'village' ? 8 : 0); delete Y.love[q.id];
+        addStanding(s, W.standing, W.name.toLowerCase());
+        if (dowry) { earn(s, dowry); for (const pid of q.parents || []) { const pa = s.people[pid]; if (pa) pa.opinion = clamp((pa.opinion || 0) + 40, -100, 100); } if (s.realm && q.noble && s.realm.deeds) s.realm.deeds[q.noble] = (s.realm.deeds[q.noble] || 0) + 2; }
+        event(s, W.name + ': you marry ' + q.name + (b === 'grand' ? ' before half the realm.' : b === 'village' ? ', and the whole village feasts.' : ' with your closest about you.') + (dowry ? ' Their family brings a dowry of ' + dowry + 'c, and its backing.' : ''), 'story');
+        return ok('Married!');
+      }
+      case 'lRole': {   // a: home | shop id
+        const q = Y.spouse && s.people[Y.spouse]; if (!q) return fail('You are not married.');
+        for (const sh of s.shops) sh.hands = (sh.hands || []).filter(h => h.pid !== q.id);
+        if (a === 'home') { Y.spouseRole = 'home'; return ok(fnm(q) + ' will keep the house and raise the children.'); }
+        const sh = shopById(s, +a); if (!sh) return fail('No such shop.');
+        sh.hands.push({ pid: q.id, name: q.name, skill: q.skill || 1, ask: 0, wage: 0, mood: 80, since: s.day, role: 'make', family: true }); Y.spouseRole = 'shop:' + sh.id;
+        return ok(fnm(q) + ' will work at your ' + TRADES[sh.trade].name.toLowerCase() + ', for nothing but the family’s good.');
+      }
+      case 'lTryChild': {
+        const q = Y.spouse && s.people[Y.spouse]; if (!q) return fail('You are not married.'); if (Y.expecting) return fail('A child is already on the way.');
+        if ((Y.joy == null ? 70 : Y.joy) < 50) return fail(fnm(q) + ' is not happy enough to want a child just now. Spend time together.');
+        const mother = Y.sex === 'f' ? s.people[Y.pid] : q, age = mother ? mother.age : 30; if (age > 44) return fail('You are past the age for children.');
+        if (Y.tried === s.day) return fail('Not again today.'); Y.tried = s.day;
+        if (rand(s) < 0.65 - Math.max(0, age - 35) * 0.04) { Y.expecting = { due: s.day + 7 }; event(s, (Y.sex === 'f' ? 'You are' : fnm(q) + ' is') + ' with child! The baby is due on day ' + (s.day + 7) + '.', 'story'); return ok('A child is on the way!'); }
+        return ok('Not this time. Try again another day.');
+      }
+      case 'lName': {   // a: child, b: the name
+        const k = s.people[a], nm = String(b || '').replace(/[^A-Za-z' -]/g, '').trim().slice(0, 18); if (!k || !(k.parents || []).includes(Y.pid)) return fail('Not your child.'); if (!nm) return fail('Choose a name.');
+        k.name = nm.charAt(0).toUpperCase() + nm.slice(1) + ' ' + familyName(s); k.named = true; if (Y.nameDue === k.id) Y.nameDue = null; return ok('You name your child ' + k.name + '.');
+      }
+      case 'lRaise': {   // a: child, b: choice for the stage they are at
+        const k = s.people[a]; if (!k || !(k.parents || []).includes(Y.pid) || !k.kid) return fail('Not now.'); const st = stageOf(s, k), U = UPBRING[st]; if (!U || !U[b]) return fail('Not a choice for a ' + st + '.');
+        k.up = k.up || {}; k.up[st] = b; if (st === 'youth' && b === 'apprentice') k.upTrade = c || (s.shops[0] && s.shops[0].trade) || 'bakery'; return ok(fnm(k) + ': ' + U[b].split(':')[0].toLowerCase() + '.');
+      }
+      case 'lMatch': {   // a: your grown child, b: someone to marry them
+        const k = s.people[a], q = s.people[b]; if (!k || !(k.parents || []).includes(Y.pid) || k.kid || k.spouse) return fail('Choose an unmarried grown child.');
+        if (!q || q.kid || q.spouse || q.status !== 'here' || sexOf(q) === sexOf(k) || sameFamily(k, q)) return fail('Not a fitting match.');
+        const fams = (q.parents || []).map(id => s.people[id]).filter(Boolean), regard = fams.length ? fams.reduce((t, x) => t + (x.opinion || 0), 0) / fams.length : (q.opinion || 0);
+        const need = (q.noble || q.royal ? 40 : 0) - (yourOffice(s) ? RANK[yourOffice(s).office] * 12 : 0) - s.village.standing / 5;
+        if (regard < need) return fail(q.name + '’s family turns the match down. They want more from your house (' + Math.round(regard) + ' of ' + Math.round(need) + ').');
+        if (s.coins < 30) return fail('A wedding costs 30c.'); spend(s, 30); marry(s, k, q);
+        for (const x of fams) x.opinion = clamp((x.opinion || 0) + 25, -100, 100); if (q.noble && s.realm && s.realm.deeds) s.realm.deeds[q.noble] = (s.realm.deeds[q.noble] || 0) + 2;
+        event(s, fnm(k) + ' marries ' + q.name + '. ' + (q.noble ? 'Your house is joined to a noble family.' : 'The two families are joined.'), 'story'); return ok('A match is made.');
+      }
+      case 'lSeparate': {
+        const q = Y.spouse && s.people[Y.spouse]; if (!q) return fail('You are not married.');
+        const share = Math.max(0, Math.floor(s.coins * 0.5)); spend(s, share); q.purse += share;
+        for (const sh of s.shops) sh.hands = (sh.hands || []).filter(h => h.pid !== q.id);
+        q.spouse = null; Y.spouse = null; Y.joy = null; Y.spouseRole = null; Y.expecting = null; q.opinion = clamp((q.opinion || 0) - 70, -100, 100); q.mood = clamp(q.mood - 30, 0, 100);
+        q.home = null; const h = vacancy(s, 99, townOf(q)); if (h) moveIn(s, q, h);
+        const went = []; for (const k of yourKids(s)) if (k.kid && k.status === 'here' && (k.opinion || 0) < 10 && h) { k.home = null; moveIn(s, k, h); k.hh = q.id; went.push(fnm(k)); }
+        plog(s, q, 'Separated from ' + s.name + ', and took half: ' + share + 'c.'); addStanding(s, -10, 'the village judges your separation'); approveHolder(s, 'player', -4);
+        event(s, 'You and ' + q.name + ' separate. ' + fnm(q) + ' takes half of what you have, ' + share + 'c.' + (went.length ? ' ' + went.join(' and ') + (went.length === 1 ? ' chooses' : ' choose') + ' to live with ' + fnm(q) + '.' : ' The children stay with you.'), 'bad');
+        return ok();
+      }
+    }
+    return null;
+  }
+  function stageOf(s, k) { if (!k.kid) return 'grown'; const d = s.day - (k.born == null ? s.day - 60 : k.born); return d < CHILD_AT ? 'baby' : d < YOUTH_AT ? 'child' : 'youth'; }
+  // each morning: the spouse's happiness, births, and your children growing up
+  function familyDay(s) {
+    const Y = you(s); if (!Y || Y.famDay === s.day) return; Y.famDay = s.day;
+    const q = Y.spouse && s.people[Y.spouse];
+    if (q && q.status === 'here') {
+      Y.joy = clamp((Y.joy == null ? 70 : Y.joy) - 3 + (Y.spouseRole === 'home' ? 1 : 0), 0, 100);
+      if (Y.joy < 25 && rand(s) < 0.4) event(s, fnm(q) + ' is unhappy, and you quarrel. Spend time with them before it is too late.', 'bad');
+      Y.lowJoy = Y.joy < 10 ? (Y.lowJoy || 0) + 1 : 0;
+      if (Y.lowJoy >= 5) { event(s, fnm(q) + ' has had enough, and leaves you.', 'bad'); loveCmd(s, 'lSeparate'); }
+    } else if (Y.spouse && (!q || q.status === 'dead')) { Y.spouse = null; Y.joy = null; Y.mourn = s.day + 10; event(s, 'You are widowed. You mourn until day ' + Y.mourn + '; after that, your heart may open again.', 'bad'); }
+    // courtships cool if you stay away
+    for (const id in (Y.love || {})) { const L = Y.love[id], o = s.people[id]; if (!o || o.status !== 'here' || o.spouse) { delete Y.love[id]; continue; } if (s.day - L.seen > 3) Y.court[id] = Math.max(0, (Y.court[id] || 0) - 2); }
+    // a birth
+    if (Y.expecting && s.day >= Y.expecting.due && q) {
+      const mother = Y.sex === 'f' ? s.people[Y.pid] : q, father = Y.sex === 'f' ? q : s.people[Y.pid]; Y.expecting = null;
+      if (mother) { born(s, mother, father); const k = Object.values(s.people).filter(x => (x.parents || []).includes(Y.pid) && x.born === s.day).pop(); if (k) { Y.nameDue = k.id; event(s, 'Your baby is born: a ' + (sexOf(k) === 'f' ? 'daughter' : 'son') + '! Choose a name on the Family page.', 'story'); } }
+    }
+    // your children grow up in about sixty days
+    for (const k of yourKids(s)) {
+      if (!k.kid || k.status !== 'here' || k.born == null) continue;
+      const d = s.day - k.born, age = Math.min(16, Math.floor(d * 16 / GROW_DAYS)); if (age > k.age) k.age = age;
+      if (d === CHILD_AT || d === YOUTH_AT) event(s, fnm(k) + ' is ' + (d === CHILD_AT ? 'a child now' : 'a youth now') + '. Choose how they are raised on the Family page.', 'story');
+      if (d >= GROW_DAYS) {
+        k.kid = false; k.age = Math.max(k.age, 16); const u = k.up || {};
+        k.skill = Math.round(((k.skill || 1) + (u.child === 'chapel' ? 0.1 : 0) + (u.youth === 'apprentice' ? 0.35 : u.youth === 'scholar' ? 0.15 : 0.05)) * 100) / 100;
+        if (u.youth === 'scholar' || u.child === 'chapel') k.rep = (k.rep || 0) + 15; if (u.child === 'play') k.rep = (k.rep || 0) + 8;
+        if (u.youth === 'squire') k.fighter = 1.3; if (u.youth === 'home' || u.child === 'home') k.opinion = clamp((k.opinion || 0) + 25, -100, 100);
+        if (u.youth === 'apprentice' && k.upTrade) { k.trade = k.upTrade; }
+        plog(s, k, 'Came of age.'); event(s, k.name + ' comes of age. ' + (u.youth ? UPBRING.youth[u.youth].split(': ')[1].replace(/^grows up /, 'They grow up ') + '.' : '') + ' They can work for you, marry, stand for office, and one day carry on after you.', 'story');
+      }
+    }
+  }
   function npcCandidates(s, r) {
     const hold = holderOf(s, r.office, r.region), ok = p => p && p.status === 'here' && !p.kid && p.age < 75 && p.id !== r.barred, out = [];
     if (hold && hold !== 'player' && ok(s.people[hold])) out.push(hold);
@@ -6837,6 +6994,8 @@
     if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
     if (/^w[A-Z]/.test(name)) { const r = wildCmd(s, name, a, b, c); if (r) return r; }
     if (/^o[A-Z]/.test(name)) { const r = officeCmd(s, name, a, b, c); if (r) return r; }
+    if (/^l[A-Z]/.test(name)) { const r = loveCmd(s, name, a, b, c); if (r) return r; }
+    if (name === 'separate') return loveCmd(s, 'lSeparate');
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
       case 'goto': {
@@ -7113,7 +7272,7 @@
       }
       case 'hoping': you(s).hoping = !!a; return ok();
       case 'nameHeir': { const q = s.people[a]; if (!q || q.status !== 'here' || q.kid) return fail('Your heir must be grown.'); if (!(q.parents || []).includes(you(s).pid) && q.id !== you(s).spouse && (q.opinion || 0) < 30) return fail(q.name + ' does not know you well enough.'); you(s).heir = q.id; return ok(q.name + ' is now your named heir.'); }
-      case 'handOver': { const h = yourHeirs(s).best; if (!h || h.kid) return fail('There is no grown heir to hand over to.'); succeed(s, h, 'retire'); return ok(); }
+      case 'handOver': { const pick = a && s.people[a], h = pick && pick.status === 'here' && !pick.kid && yourKids(s).includes(pick) ? pick : yourHeirs(s).best; if (!h || h.kid) return fail('There is no grown heir to hand over to.'); succeed(s, h, 'retire'); return ok(); }
       case 'carryOn': { if (!s.pendingDeath) return fail('Not now.'); const h = (a && s.people[a] && s.people[a].status === 'here') ? s.people[a] : yourHeirs(s).best; if (!h) return fail('There is nobody to carry on.'); if (h.kid && !s.ageRate) { h.kid = false; h.age = Math.max(h.age, 16); } succeed(s, h, 'death'); return ok(); }
       case 'beginAgain': { if (!s.pendingDeath) return fail('Not now.'); beginAgain(s, a, b); return ok(); }
       case 'ageRate': if (AGE_RATES[a] == null) return fail('Unknown pace.'); s.ageRate = AGE_RATES[a]; return ok();
@@ -8060,7 +8219,7 @@
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
     if (!s.fight) wildStep(s, dt);
-    if (s.people && s.offices) { standingDay(s); agendaTick(s); byElectTick(s); }
+    if (s.people && s.offices) { standingDay(s); agendaTick(s); byElectTick(s); if (s.people[you(s).pid]) familyDay(s); }
     if (s.regaliaPending && s.player.items) { const o = s.regaliaPending; s.regaliaPending = null; const give = { elder: ['chainoffice'], lord: ['mantle', 'signet'], seat: ['signet', 'finecoat'], crown: ['regalia', 'crown', 'mantle'] }[o] || [];
       const names = []; for (const id of give) { if (!ITEMS[id]) continue; let it = s.player.items.find(x => x.id === id); if (!it) { it = addItem(s, id, 1); names.push(ITEMS[id].name.toLowerCase()); } if (it && it.u != null) rpgCmd(s, 'rEquip', it.u); }
       if (names.length) event(s, 'You are sworn in, and given the marks of your office: ' + names.join(', ') + '. You wear them now.', 'good'); }
@@ -8874,7 +9033,7 @@
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, TRAITS, GIFTS, OUTINGS, STAGE_NAME, WEDDINGS, UPBRING, natureOf, loveOf, suits, stageOf, GROW_DAYS, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,

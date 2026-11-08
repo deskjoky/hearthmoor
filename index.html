@@ -250,6 +250,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ftb { border: 1px solid rgba(60,40,20,.35); background: rgba(255,255,255,.45); color: inherit; border-radius: 6px; padding: 6px 9px; font: inherit; cursor: pointer; }
 .ftb.on { background: #7a2a24; color: #f6ead0; border-color: #7a2a24; }
 #ftOpen { position: fixed; z-index: 7; right: calc(env(safe-area-inset-right, 0px) + 10px); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); border: 0; border-radius: 999px; padding: 8px 14px; background: #7a2a24; color: #f6ead0; font: 600 14px sans-serif; }
+.nameinput { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.7); min-width: 0; flex: 1; }
 .itemicon { flex: 0 0 40px; margin-right: 8px; background: rgba(255,255,255,.4); border: 1px solid var(--line); border-radius: 6px; vertical-align: middle; }
 .staffrow > .itemicon + span { flex: 1; min-width: 0; }
 .fightfx { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
@@ -2783,7 +2784,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
         if (mate) marry(s, p, mate);
       }
       // children, spread out over the years
-      if (p.spouse && sexOf(p) === 'f' && p.age >= 18 && p.age <= 42) {
+      if (p.spouse && sexOf(p) === 'f' && p.age >= 18 && p.age <= 42 && p.spouse !== (s.player && you(s).pid)) {
         const kids = childrenOf(s, p).filter(c => c.status === 'here' && c.kid).length;
         const hh = p.home && houseById(s, p.home), full = hh && hh.tenants.length >= (hh.cap || 4);
         if (rand(s) < (full ? 0.02 : Math.max(0.03, 0.17 - kids * 0.04))) born(s, p, s.people[p.spouse]);
@@ -5414,6 +5415,163 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     }
     return null;
   }
+  /* ================= love, marriage and family =================
+     Meet, befriend, court, be betrothed, wed. Everyone has traits and likes; some suit you and some will not have you.
+     Married, your spouse's happiness must be kept. You choose when to try for a child, name them, and choose how they
+     are raised; they grow up in about sixty days and can work for you, marry into other families, and carry on after you. */
+  const TRAITS = { kind: 'Kind', proud: 'Proud', ambitious: 'Ambitious', pious: 'Pious', merry: 'Merry', thrifty: 'Thrifty', bookish: 'Bookish', bold: 'Bold' };
+  const GIFTS = { flowers: { name: 'Flowers', cost: 1 }, sweets: { name: 'Honey cakes', cost: 2 }, wine: { name: 'A flask of wine', cost: 4 }, tools: { name: 'Good tools', cost: 5 }, book: { name: 'A book', cost: 6 }, jewel: { name: 'A silver brooch', cost: 15 } };
+  const OUTINGS = { walk: { name: 'A walk by the stream', cost: 0 }, tavern: { name: 'Supper at the tavern', cost: 3 }, market: { name: 'A stroll round the market', cost: 1 }, chapel: { name: 'Prayers at the chapel', cost: 0 }, dance: { name: 'A dance at the festival', cost: 2, holiday: true } };
+  const STAGES = ['met', 'friends', 'courting', 'betrothed'], STAGE_NAME = { met: 'Acquainted', friends: 'Friends', courting: 'Courting', betrothed: 'Betrothed' };
+  const WEDDINGS = { small: { name: 'A small wedding', cost: 20, standing: 3 }, village: { name: 'A village feast', cost: 60, standing: 6 }, grand: { name: 'A grand wedding', cost: 200, standing: 10 } };
+  const GROW_DAYS = 60, CHILD_AT = 10, YOUTH_AT = 30;
+  const UPBRING = { child: { home: 'Helps at home: steady and close to you', chapel: 'Schooled at the chapel: letters and sums', play: 'Runs free with the village children: bold and well liked' },
+    youth: { apprentice: 'Apprenticed in your trade: grows up a skilled worker', squire: 'Trained as a squire: grows up a fighter', scholar: 'Studies with the priest: grows up learned and respected', home: 'Stays at home: grows up loyal to the family' } };
+  const hashOf = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); };
+  function natureOf(q) {
+    if (!q.traits) { const T = Object.keys(TRAITS), G = Object.keys(GIFTS), O = Object.keys(OUTINGS), h = hashOf(q.id + q.name); const a = T[h % T.length]; let b = T[(h >> 4) % T.length]; if (b === a) b = T[(h + 3) % T.length];
+      q.traits = [a, b]; q.likes = { gift: G[(h >> 7) % G.length], outing: O[(h >> 10) % (O.length - 1)] }; q.dislikes = { gift: G[(h >> 13) % G.length] === q.likes.gift ? G[((h >> 13) + 1) % G.length] : G[(h >> 13) % G.length] }; }
+    return q;
+  }
+  function loveOf(s, q) { const Y = you(s); Y.love = Y.love || {}; return Y.love[q.id] || (Y.love[q.id] = { stage: 'met', since: s.day, seen: s.day }); }
+  // how well you suit them, from -10 to +10: what their traits make of who you are
+  function suits(s, q) {
+    natureOf(q); const F = s.folk || {}, moral = F.moral || 0, renown = F.renown || 0, st = s.village ? s.village.standing : 0, mine = yourOffice(s), rich = s.coins > 400;
+    let k = 0;
+    for (const t of q.traits) k += { kind: moral > 5 ? 3 : moral < -5 ? -4 : 0, proud: renown > 10 || mine ? 3 : st < 30 ? -3 : 0, ambitious: mine ? 4 : rich ? 2 : -2, pious: moral > 8 ? 3 : moral < -3 ? -4 : 1, merry: 2, thrifty: s.coins < 80 ? 1 : 0, bookish: skillLv(s, 'speech') > 30 ? 3 : 0, bold: skillLv(s, 'oneHanded') + skillLv(s, 'twoHanded') > 60 ? 3 : 0 }[t] || 0;
+    if (q.noble || q.royal) k += mine && RANK[mine.office] >= 2 ? 3 : renown > 20 ? 1 : -6;   // a noble family looks for rank
+    return clamp(k, -10, 10);
+  }
+  const fnm = q => q.name.split(' ')[0];
+  function loveCmd(s, name, a, b, c) {
+    const ok = (m, x) => Object.assign({ ok: true, msg: m }, x || {}), fail = m => ({ ok: false, msg: m }), Y = you(s), p = s.player;
+    const near = q => { const body = bodyOf(s, q); return body && dist(p, body) <= 8; };
+    const fond = (q, n) => { Y.court[q.id] = clamp((Y.court[q.id] || 0) + n, 0, 100); return Y.court[q.id]; };
+    switch (name) {
+      case 'lTalk': case 'lGift': case 'lOuting': {
+        const q = s.people[a]; if (!q || q.status !== 'here') return fail('They are not here.'); natureOf(q);
+        const spouse = Y.spouse === q.id, child = (q.parents || []).includes(Y.pid);
+        if (!spouse && !child && !canCourt(s, q) && name !== 'lTalk') return fail('Not with them.');
+        if (!near(q)) return fail('Go and find ' + fnm(q) + ' first.');
+        const key = name + ':' + q.id; Y.lastDo = Y.lastDo || {}; if (Y.lastDo[key] === s.day) return fail('You have done that with ' + fnm(q) + ' today.');
+        let n = 0, msg = '';
+        if (name === 'lTalk') { n = 5; msg = 'You talk with ' + fnm(q) + '.'; }
+        if (name === 'lGift') { const G = GIFTS[b]; if (!G) return fail('No such gift.'); if (s.coins < G.cost) return fail(G.name + ' costs ' + G.cost + 'c.'); spend(s, G.cost);
+          n = q.likes.gift === b ? 14 : q.dislikes.gift === b ? -5 : 6; msg = q.likes.gift === b ? fnm(q) + ' loves it! ' + G.name + ' was just right.' : q.dislikes.gift === b ? fnm(q) + ' smiles thinly. ' + G.name + ' was not to their taste.' : fnm(q) + ' thanks you for ' + G.name.toLowerCase() + '.'; }
+        if (name === 'lOuting') { const O = OUTINGS[b]; if (!O) return fail('No such outing.'); if (O.holiday && !holidayOn(s.day)) return fail('Dances are held on holidays.'); if (s.coins < O.cost) return fail(O.name + ' costs ' + O.cost + 'c.'); spend(s, O.cost);
+          n = q.likes.outing === b ? 16 : 9; if (b === 'dance' && q.traits.includes('merry')) n += 4; if (b === 'chapel' && q.traits.includes('pious')) n += 4; if (b === 'tavern' && q.traits.includes('pious')) n -= 4;
+          msg = O.name + ' with ' + fnm(q) + (q.likes.outing === b ? ': just what they hoped for.' : '.'); }
+        Y.lastDo[key] = s.day;
+        if (spouse) { Y.joy = clamp((Y.joy == null ? 70 : Y.joy) + Math.max(2, n), 0, 100); return ok(msg + ' (' + fnm(q) + '’s happiness ' + Math.round(Y.joy) + ')'); }
+        if (child) { q.opinion = clamp((q.opinion || 0) + Math.max(2, n), -100, 100); q.bond = (q.bond || 0) + 1; return ok(msg); }
+        const L = loveOf(s, q); L.seen = s.day; const f = fond(q, n + Math.round(suits(s, q) / 3) + (n > 0 ? Math.round(rand(s) * 3) : 0)); q.opinion = clamp((q.opinion || 0) + 2, -100, 100);
+        if (L.stage === 'met' && f >= 20) { L.stage = 'friends'; msg += ' You and ' + fnm(q) + ' are friends now.'; }
+        return ok(msg + ' (fondness ' + Math.round(f) + ')');
+      }
+      case 'lCourt': {   // ask to court them
+        const q = s.people[a]; if (!q || !canCourt(s, q)) return fail('Not them.'); const L = loveOf(s, q), f = Y.court[q.id] || 0;
+        if (Y.mourn && Y.mourn > s.day) return fail('You are still in mourning, until day ' + Y.mourn + '.');
+        if (L.stage !== 'friends') return fail(L.stage === 'met' ? 'Become friends first.' : 'You are already courting.');
+        if (f < 45 || suits(s, q) < -5) { fond(q, -8); return fail(fnm(q) + ' says no, kindly. ' + (suits(s, q) < -5 ? (q.noble ? 'Their family expects someone of higher rank.' : 'You are not what they are looking for, as you are now.') : 'They need to know you better.')); }
+        L.stage = 'courting'; L.since = s.day; return ok(fnm(q) + ' says yes. You are courting.');
+      }
+      case 'lPropose': {
+        const q = s.people[a]; if (!q || !canCourt(s, q)) return fail('Not them.'); const L = loveOf(s, q), f = Y.court[q.id] || 0;
+        if (L.stage !== 'courting') return fail('Court them first.'); if (s.day - L.since < 3) return fail('Too soon: court a few days first.');
+        if (f < 75) { fond(q, -10); return fail(fnm(q) + ' is not ready. Keep courting (fondness ' + Math.round(f) + ' of 75).'); }
+        L.stage = 'betrothed'; L.since = s.day; event(s, 'You and ' + q.name + ' are betrothed! Plan the wedding when you are ready.', 'story'); return ok('Betrothed!');
+      }
+      case 'lWed': {   // a: who, b: small | village | grand
+        const q = s.people[a], W = WEDDINGS[b]; if (!q || !W) return fail('No.'); const L = loveOf(s, q); if (L.stage !== 'betrothed') return fail('You are not betrothed.');
+        if (s.coins < W.cost) return fail(W.name + ' costs ' + W.cost + 'c.'); spend(s, W.cost);
+        const noble = q.noble || q.royal, dowry = noble ? 120 + (q.royal ? 300 : 0) : 0;
+        wedYou(s, q); Y.joy = 70 + (b === 'grand' ? 15 : b === 'village' ? 8 : 0); delete Y.love[q.id];
+        addStanding(s, W.standing, W.name.toLowerCase());
+        if (dowry) { earn(s, dowry); for (const pid of q.parents || []) { const pa = s.people[pid]; if (pa) pa.opinion = clamp((pa.opinion || 0) + 40, -100, 100); } if (s.realm && q.noble && s.realm.deeds) s.realm.deeds[q.noble] = (s.realm.deeds[q.noble] || 0) + 2; }
+        event(s, W.name + ': you marry ' + q.name + (b === 'grand' ? ' before half the realm.' : b === 'village' ? ', and the whole village feasts.' : ' with your closest about you.') + (dowry ? ' Their family brings a dowry of ' + dowry + 'c, and its backing.' : ''), 'story');
+        return ok('Married!');
+      }
+      case 'lRole': {   // a: home | shop id
+        const q = Y.spouse && s.people[Y.spouse]; if (!q) return fail('You are not married.');
+        for (const sh of s.shops) sh.hands = (sh.hands || []).filter(h => h.pid !== q.id);
+        if (a === 'home') { Y.spouseRole = 'home'; return ok(fnm(q) + ' will keep the house and raise the children.'); }
+        const sh = shopById(s, +a); if (!sh) return fail('No such shop.');
+        sh.hands.push({ pid: q.id, name: q.name, skill: q.skill || 1, ask: 0, wage: 0, mood: 80, since: s.day, role: 'make', family: true }); Y.spouseRole = 'shop:' + sh.id;
+        return ok(fnm(q) + ' will work at your ' + TRADES[sh.trade].name.toLowerCase() + ', for nothing but the family’s good.');
+      }
+      case 'lTryChild': {
+        const q = Y.spouse && s.people[Y.spouse]; if (!q) return fail('You are not married.'); if (Y.expecting) return fail('A child is already on the way.');
+        if ((Y.joy == null ? 70 : Y.joy) < 50) return fail(fnm(q) + ' is not happy enough to want a child just now. Spend time together.');
+        const mother = Y.sex === 'f' ? s.people[Y.pid] : q, age = mother ? mother.age : 30; if (age > 44) return fail('You are past the age for children.');
+        if (Y.tried === s.day) return fail('Not again today.'); Y.tried = s.day;
+        if (rand(s) < 0.65 - Math.max(0, age - 35) * 0.04) { Y.expecting = { due: s.day + 7 }; event(s, (Y.sex === 'f' ? 'You are' : fnm(q) + ' is') + ' with child! The baby is due on day ' + (s.day + 7) + '.', 'story'); return ok('A child is on the way!'); }
+        return ok('Not this time. Try again another day.');
+      }
+      case 'lName': {   // a: child, b: the name
+        const k = s.people[a], nm = String(b || '').replace(/[^A-Za-z' -]/g, '').trim().slice(0, 18); if (!k || !(k.parents || []).includes(Y.pid)) return fail('Not your child.'); if (!nm) return fail('Choose a name.');
+        k.name = nm.charAt(0).toUpperCase() + nm.slice(1) + ' ' + familyName(s); k.named = true; if (Y.nameDue === k.id) Y.nameDue = null; return ok('You name your child ' + k.name + '.');
+      }
+      case 'lRaise': {   // a: child, b: choice for the stage they are at
+        const k = s.people[a]; if (!k || !(k.parents || []).includes(Y.pid) || !k.kid) return fail('Not now.'); const st = stageOf(s, k), U = UPBRING[st]; if (!U || !U[b]) return fail('Not a choice for a ' + st + '.');
+        k.up = k.up || {}; k.up[st] = b; if (st === 'youth' && b === 'apprentice') k.upTrade = c || (s.shops[0] && s.shops[0].trade) || 'bakery'; return ok(fnm(k) + ': ' + U[b].split(':')[0].toLowerCase() + '.');
+      }
+      case 'lMatch': {   // a: your grown child, b: someone to marry them
+        const k = s.people[a], q = s.people[b]; if (!k || !(k.parents || []).includes(Y.pid) || k.kid || k.spouse) return fail('Choose an unmarried grown child.');
+        if (!q || q.kid || q.spouse || q.status !== 'here' || sexOf(q) === sexOf(k) || sameFamily(k, q)) return fail('Not a fitting match.');
+        const fams = (q.parents || []).map(id => s.people[id]).filter(Boolean), regard = fams.length ? fams.reduce((t, x) => t + (x.opinion || 0), 0) / fams.length : (q.opinion || 0);
+        const need = (q.noble || q.royal ? 40 : 0) - (yourOffice(s) ? RANK[yourOffice(s).office] * 12 : 0) - s.village.standing / 5;
+        if (regard < need) return fail(q.name + '’s family turns the match down. They want more from your house (' + Math.round(regard) + ' of ' + Math.round(need) + ').');
+        if (s.coins < 30) return fail('A wedding costs 30c.'); spend(s, 30); marry(s, k, q);
+        for (const x of fams) x.opinion = clamp((x.opinion || 0) + 25, -100, 100); if (q.noble && s.realm && s.realm.deeds) s.realm.deeds[q.noble] = (s.realm.deeds[q.noble] || 0) + 2;
+        event(s, fnm(k) + ' marries ' + q.name + '. ' + (q.noble ? 'Your house is joined to a noble family.' : 'The two families are joined.'), 'story'); return ok('A match is made.');
+      }
+      case 'lSeparate': {
+        const q = Y.spouse && s.people[Y.spouse]; if (!q) return fail('You are not married.');
+        const share = Math.max(0, Math.floor(s.coins * 0.5)); spend(s, share); q.purse += share;
+        for (const sh of s.shops) sh.hands = (sh.hands || []).filter(h => h.pid !== q.id);
+        q.spouse = null; Y.spouse = null; Y.joy = null; Y.spouseRole = null; Y.expecting = null; q.opinion = clamp((q.opinion || 0) - 70, -100, 100); q.mood = clamp(q.mood - 30, 0, 100);
+        q.home = null; const h = vacancy(s, 99, townOf(q)); if (h) moveIn(s, q, h);
+        const went = []; for (const k of yourKids(s)) if (k.kid && k.status === 'here' && (k.opinion || 0) < 10 && h) { k.home = null; moveIn(s, k, h); k.hh = q.id; went.push(fnm(k)); }
+        plog(s, q, 'Separated from ' + s.name + ', and took half: ' + share + 'c.'); addStanding(s, -10, 'the village judges your separation'); approveHolder(s, 'player', -4);
+        event(s, 'You and ' + q.name + ' separate. ' + fnm(q) + ' takes half of what you have, ' + share + 'c.' + (went.length ? ' ' + went.join(' and ') + (went.length === 1 ? ' chooses' : ' choose') + ' to live with ' + fnm(q) + '.' : ' The children stay with you.'), 'bad');
+        return ok();
+      }
+    }
+    return null;
+  }
+  function stageOf(s, k) { if (!k.kid) return 'grown'; const d = s.day - (k.born == null ? s.day - 60 : k.born); return d < CHILD_AT ? 'baby' : d < YOUTH_AT ? 'child' : 'youth'; }
+  // each morning: the spouse's happiness, births, and your children growing up
+  function familyDay(s) {
+    const Y = you(s); if (!Y || Y.famDay === s.day) return; Y.famDay = s.day;
+    const q = Y.spouse && s.people[Y.spouse];
+    if (q && q.status === 'here') {
+      Y.joy = clamp((Y.joy == null ? 70 : Y.joy) - 3 + (Y.spouseRole === 'home' ? 1 : 0), 0, 100);
+      if (Y.joy < 25 && rand(s) < 0.4) event(s, fnm(q) + ' is unhappy, and you quarrel. Spend time with them before it is too late.', 'bad');
+      Y.lowJoy = Y.joy < 10 ? (Y.lowJoy || 0) + 1 : 0;
+      if (Y.lowJoy >= 5) { event(s, fnm(q) + ' has had enough, and leaves you.', 'bad'); loveCmd(s, 'lSeparate'); }
+    } else if (Y.spouse && (!q || q.status === 'dead')) { Y.spouse = null; Y.joy = null; Y.mourn = s.day + 10; event(s, 'You are widowed. You mourn until day ' + Y.mourn + '; after that, your heart may open again.', 'bad'); }
+    // courtships cool if you stay away
+    for (const id in (Y.love || {})) { const L = Y.love[id], o = s.people[id]; if (!o || o.status !== 'here' || o.spouse) { delete Y.love[id]; continue; } if (s.day - L.seen > 3) Y.court[id] = Math.max(0, (Y.court[id] || 0) - 2); }
+    // a birth
+    if (Y.expecting && s.day >= Y.expecting.due && q) {
+      const mother = Y.sex === 'f' ? s.people[Y.pid] : q, father = Y.sex === 'f' ? q : s.people[Y.pid]; Y.expecting = null;
+      if (mother) { born(s, mother, father); const k = Object.values(s.people).filter(x => (x.parents || []).includes(Y.pid) && x.born === s.day).pop(); if (k) { Y.nameDue = k.id; event(s, 'Your baby is born: a ' + (sexOf(k) === 'f' ? 'daughter' : 'son') + '! Choose a name on the Family page.', 'story'); } }
+    }
+    // your children grow up in about sixty days
+    for (const k of yourKids(s)) {
+      if (!k.kid || k.status !== 'here' || k.born == null) continue;
+      const d = s.day - k.born, age = Math.min(16, Math.floor(d * 16 / GROW_DAYS)); if (age > k.age) k.age = age;
+      if (d === CHILD_AT || d === YOUTH_AT) event(s, fnm(k) + ' is ' + (d === CHILD_AT ? 'a child now' : 'a youth now') + '. Choose how they are raised on the Family page.', 'story');
+      if (d >= GROW_DAYS) {
+        k.kid = false; k.age = Math.max(k.age, 16); const u = k.up || {};
+        k.skill = Math.round(((k.skill || 1) + (u.child === 'chapel' ? 0.1 : 0) + (u.youth === 'apprentice' ? 0.35 : u.youth === 'scholar' ? 0.15 : 0.05)) * 100) / 100;
+        if (u.youth === 'scholar' || u.child === 'chapel') k.rep = (k.rep || 0) + 15; if (u.child === 'play') k.rep = (k.rep || 0) + 8;
+        if (u.youth === 'squire') k.fighter = 1.3; if (u.youth === 'home' || u.child === 'home') k.opinion = clamp((k.opinion || 0) + 25, -100, 100);
+        if (u.youth === 'apprentice' && k.upTrade) { k.trade = k.upTrade; }
+        plog(s, k, 'Came of age.'); event(s, k.name + ' comes of age. ' + (u.youth ? UPBRING.youth[u.youth].split(': ')[1].replace(/^grows up /, 'They grow up ') + '.' : '') + ' They can work for you, marry, stand for office, and one day carry on after you.', 'story');
+      }
+    }
+  }
   function npcCandidates(s, r) {
     const hold = holderOf(s, r.office, r.region), ok = p => p && p.status === 'here' && !p.kid && p.age < 75 && p.id !== r.barred, out = [];
     if (hold && hold !== 'player' && ok(s.people[hold])) out.push(hold);
@@ -7554,6 +7712,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
     if (/^w[A-Z]/.test(name)) { const r = wildCmd(s, name, a, b, c); if (r) return r; }
     if (/^o[A-Z]/.test(name)) { const r = officeCmd(s, name, a, b, c); if (r) return r; }
+    if (/^l[A-Z]/.test(name)) { const r = loveCmd(s, name, a, b, c); if (r) return r; }
+    if (name === 'separate') return loveCmd(s, 'lSeparate');
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
       case 'goto': {
@@ -7830,7 +7990,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       }
       case 'hoping': you(s).hoping = !!a; return ok();
       case 'nameHeir': { const q = s.people[a]; if (!q || q.status !== 'here' || q.kid) return fail('Your heir must be grown.'); if (!(q.parents || []).includes(you(s).pid) && q.id !== you(s).spouse && (q.opinion || 0) < 30) return fail(q.name + ' does not know you well enough.'); you(s).heir = q.id; return ok(q.name + ' is now your named heir.'); }
-      case 'handOver': { const h = yourHeirs(s).best; if (!h || h.kid) return fail('There is no grown heir to hand over to.'); succeed(s, h, 'retire'); return ok(); }
+      case 'handOver': { const pick = a && s.people[a], h = pick && pick.status === 'here' && !pick.kid && yourKids(s).includes(pick) ? pick : yourHeirs(s).best; if (!h || h.kid) return fail('There is no grown heir to hand over to.'); succeed(s, h, 'retire'); return ok(); }
       case 'carryOn': { if (!s.pendingDeath) return fail('Not now.'); const h = (a && s.people[a] && s.people[a].status === 'here') ? s.people[a] : yourHeirs(s).best; if (!h) return fail('There is nobody to carry on.'); if (h.kid && !s.ageRate) { h.kid = false; h.age = Math.max(h.age, 16); } succeed(s, h, 'death'); return ok(); }
       case 'beginAgain': { if (!s.pendingDeath) return fail('Not now.'); beginAgain(s, a, b); return ok(); }
       case 'ageRate': if (AGE_RATES[a] == null) return fail('Unknown pace.'); s.ageRate = AGE_RATES[a]; return ok();
@@ -8777,7 +8937,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
     if (!s.fight) wildStep(s, dt);
-    if (s.people && s.offices) { standingDay(s); agendaTick(s); byElectTick(s); }
+    if (s.people && s.offices) { standingDay(s); agendaTick(s); byElectTick(s); if (s.people[you(s).pid]) familyDay(s); }
     if (s.regaliaPending && s.player.items) { const o = s.regaliaPending; s.regaliaPending = null; const give = { elder: ['chainoffice'], lord: ['mantle', 'signet'], seat: ['signet', 'finecoat'], crown: ['regalia', 'crown', 'mantle'] }[o] || [];
       const names = []; for (const id of give) { if (!ITEMS[id]) continue; let it = s.player.items.find(x => x.id === id); if (!it) { it = addItem(s, id, 1); names.push(ITEMS[id].name.toLowerCase()); } if (it && it.u != null) rpgCmd(s, 'rEquip', it.u); }
       if (names.length) event(s, 'You are sworn in, and given the marks of your office: ' + names.join(', ') + '. You wear them now.', 'good'); }
@@ -9591,7 +9751,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, TRAITS, GIFTS, OUTINGS, STAGE_NAME, WEDDINGS, UPBRING, natureOf, loveOf, suits, stageOf, GROW_DAYS, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
@@ -13167,16 +13327,11 @@ function relationLine(s, pr) {
   return '';
 }
 function relationActs(s, pr, body) {
-  const Y = Sim.you(s), a = [];
-  if (Sim.canCourt(s, pr)) {
-    const today = Y.lastTalk[pr.id] === s.day;
-    a.push(B_(today ? 'Spent time together today' : 'Spend time together', ['court', pr.id], '', today));
-    a.push(B_('Give a gift · 5c', ['court', pr.id, 'gift'], 'alt', today || s.coins < 5));
-    if ((Y.court[pr.id] || 0) >= 40) a.push(B_('Ask them to marry you · 20c feast', ['propose', pr.id], (Y.court[pr.id] || 0) >= 60 ? '' : 'alt', s.coins < 20));
-  }
-  if (Y.spouse === pr.id) a.push(UI.confirm === 'separate' ? B_('Yes, separate', ['separate'], 'warn') + B_('Stay together', ['ui', 'confirm', null], 'alt') : B_('Separate&hellip;', ['ui', 'confirm', 'separate'], 'alt'));
-  if (!pr.kid && Y.heir !== pr.id && ((pr.parents || []).includes(Y.pid) || Y.spouse === pr.id)) a.push(B_('Name as your heir', ['nameHeir', pr.id], 'alt'));
-  return a.join('');
+  const Y = Sim.you(s), near = body && Math.hypot(body.x - G.player.x, body.z - G.player.z) <= 8;
+  let a = loveActs(s, pr, near);
+  if (pr.status === 'here' && !pr.kid && !Sim.canCourt(s, pr) && Y.spouse !== pr.id && !(pr.parents || []).includes(Y.pid) && near) a += `<div class="acts">${B_('Talk', ['lTalk', pr.id], 'alt')}</div>`;
+  if (!pr.kid && Y.heir !== pr.id && ((pr.parents || []).includes(Y.pid) || Y.spouse === pr.id)) a += B_('Name as your heir', ['nameHeir', pr.id], 'alt');
+  return a;
 }
 function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
@@ -14680,6 +14835,58 @@ function pageTree(s) {
     ${B ? `<div class="why"><b>${esc(B.name)}</b> is ${esc(C.name)}’s <b>${esc(relB || 'no relation by blood or marriage')}</b>.</div>` : ''}${selBox}
     <div class="treewrap">${svg}</div>`;
 }
+/* ----- love and family on screen ----- */
+function whereIs(s, q) { const b = s.agents && s.agents.find(a => a.pid === q.id); const town = TOWN_NAMES[Sim.townOf(q)] || 'Hearthmoor'; return b ? (b.indoors ? 'indoors, ' : '') + esc(b.why || b.doing || 'about') + ' · ' + esc(town) : 'in ' + esc(town); }
+function findBtn(q) { return B_('Find them', ['ui', 'findP', q.id], 'alt'); }
+const joyBar = n => `<div class="bar mood ${n < 30 ? 'low' : ''}"><i style="width:${Math.round(n)}%"></i></div>`;
+function natureLine(s, q, know) { Sim.natureOf(q); const T = q.traits.map(t => Sim.TRAITS[t]).join(', '); return `<small>${esc(T)}${know ? ' · loves ' + esc(Sim.GIFTS[q.likes.gift].name.toLowerCase()) + ' and ' + esc(Sim.OUTINGS[q.likes.outing].name.toLowerCase()) + ' · dislikes ' + esc(Sim.GIFTS[q.dislikes.gift].name.toLowerCase()) : ' · get to know them to learn what they like'}</small>`; }
+function loveActs(s, q, near) {
+  const Y = Sim.you(s), spouse = Y.spouse === q.id, child = (q.parents || []).includes(Y.pid), can = Sim.canCourt(s, q);
+  if (!spouse && !child && !can) return '';
+  const L = can ? (Y.love && Y.love[q.id]) || { stage: 'met' } : null, f = Math.round(Y.court[q.id] || 0), done = k => Y.lastDo && Y.lastDo[k + ':' + q.id] === s.day;
+  let h = '';
+  if (can) h += `<p class="why"><b>${Sim.STAGE_NAME[L.stage]}</b> · fondness ${f}/100 · ${Sim.suits(s, q) >= 3 ? 'you suit each other' : Sim.suits(s, q) <= -5 ? 'you do not suit them, as you are' : 'you might suit'}<br>${natureLine(s, q, L.stage !== 'met')}</p>`;
+  if (!near) return h + `<div class="acts">${findBtn(q)}</div>`;
+  const open = UI.loveOpen === q.id;
+  h += `<div class="acts">${B_(done('lTalk') ? 'Talked today' : 'Talk', ['lTalk', q.id], '', done('lTalk'))}${B_(open === true || UI.loveTab === 'gift' && open ? 'Gifts ▾' : 'A gift ▸', ['ui', 'loveTab', [q.id, 'gift']], 'alt', done('lGift'))}${B_('An outing ▸', ['ui', 'loveTab', [q.id, 'outing']], 'alt', done('lOuting'))}</div>`;
+  if (open && UI.loveTab === 'gift') h += `<div class="acts">${Object.keys(Sim.GIFTS).map(k => B_(esc(Sim.GIFTS[k].name) + ' · ' + Sim.GIFTS[k].cost + 'c', ['lGift', q.id, k], 'alt', s.coins < Sim.GIFTS[k].cost)).join('')}</div>`;
+  if (open && UI.loveTab === 'outing') h += `<div class="acts">${Object.keys(Sim.OUTINGS).map(k => B_(esc(Sim.OUTINGS[k].name) + (Sim.OUTINGS[k].cost ? ' · ' + Sim.OUTINGS[k].cost + 'c' : ''), ['lOuting', q.id, k], 'alt')).join('')}</div>`;
+  if (can && L.stage === 'friends') h += `<div class="acts">${B_('Ask to court them', ['lCourt', q.id])}</div>`;
+  if (can && L.stage === 'courting') h += `<div class="acts">${B_('Ask them to marry you', ['lPropose', q.id], f >= 75 ? '' : 'alt')}</div>`;
+  if (can && L.stage === 'betrothed') h += `<p><b>Plan the wedding:</b></p><div class="acts">${Object.keys(Sim.WEDDINGS).map(k => B_(esc(Sim.WEDDINGS[k].name) + ' · ' + Sim.WEDDINGS[k].cost + 'c', ['lWed', q.id, k], k === 'village' ? '' : 'alt', s.coins < Sim.WEDDINGS[k].cost)).join('')}</div>`;
+  return h;
+}
+function familyPanel(s) {
+  const Y = Sim.you(s), sp = Y.spouse && s.people[Y.spouse], kids = Sim.yourKids(s).filter(k => k.status === 'here' || k.status === 'left');
+  let h = `<h4>Your family</h4>`;
+  if (Y.nameDue && s.people[Y.nameDue]) { const k = s.people[Y.nameDue]; h += `<div class="box flash"><h5>Name your ${Sim.sexOf(k) === 'f' ? 'daughter' : 'son'}</h5><div class="acts"><input id="kidName" class="nameinput" maxlength="18" placeholder="${esc(k.name.split(' ')[0])}" autocomplete="off">${B_('Name them', ['ui', 'nameKid', k.id])}</div></div>`; }
+  if (sp) {
+    const joy = Y.joy == null ? 70 : Y.joy, role = Y.spouseRole && Y.spouseRole.startsWith('shop:') ? 'works at your ' + esc((TR[(Sim.shopById(s, +Y.spouseRole.slice(5)) || {}).trade] || { name: 'shop' }).name.toLowerCase()) : 'keeps the house and the children';
+    h += `<div class="box"><h5>${esc(sp.name)}, ${sp.age} · your ${Sim.sexOf(sp) === 'f' ? 'wife' : 'husband'}</h5><p>${whereIs(s, sp)}</p><p>Happiness ${Math.round(joy)}/100${joy < 30 ? ': unhappy. Spend time together soon, or they may leave.' : joy < 55 ? ': could be happier.' : ': content.'}</p>${joyBar(joy)}
+      <p class="why">${esc(sp.name.split(' ')[0])} ${role}.</p><div class="acts">${findBtn(sp)}${B_('Keep the house', ['lRole', 'home'], Y.spouseRole === 'home' || !Y.spouseRole ? '' : 'alt')}${s.shops.map(x => B_('Work at the ' + esc(TR[x.trade].name.toLowerCase()), ['lRole', x.id], Y.spouseRole === 'shop:' + x.id ? '' : 'alt')).join('')}</div>
+      <div class="acts">${Y.expecting ? `<span class="why">A child is on the way: due on day ${Y.expecting.due}.</span>` : B_('Try for a child', ['lTryChild'], '', joy < 50)}${UI.confirm === 'separate' ? B_('Yes, separate', ['lSeparate'], 'warn') + B_('Stay together', ['ui', 'confirm', null], 'alt') : B_('Separate…', ['ui', 'confirm', 'separate'], 'alt')}</div></div>`;
+  } else {
+    const court = Object.keys(Y.love || {}).map(id => s.people[id]).filter(q => q && Sim.canCourt(s, q));
+    h += `<div class="box"><h5>Unmarried</h5>${Y.mourn > s.day ? `<p>In mourning until day ${Y.mourn}.</p>` : ''}${court.length ? court.map(q => `<div class="staffrow"><span><b>${esc(q.name)}</b>, ${q.age} · ${Sim.STAGE_NAME[Y.love[q.id].stage]} · fondness ${Math.round(Y.court[q.id] || 0)}<br>${natureLine(s, q, Y.love[q.id].stage !== 'met')}<br><small>${whereIs(s, q)}</small></span>${findBtn(q)}</div>`).join('') : '<p>Walk up to someone unmarried and talk with them to begin. Become friends, ask to court them, and in time, ask them to marry you.</p>'}</div>`;
+  }
+  for (const k of kids) {
+    const st = Sim.stageOf(s, k), d = k.born != null ? s.day - k.born : null, U = Sim.UPBRING[st], up = k.up || {};
+    h += `<div class="box" data-pid="${k.id}"><h5>${esc(k.name)}, ${k.age} · ${st === 'grown' ? 'grown' : st}${k.spouse && s.people[k.spouse] ? ' · married to ' + esc(s.people[k.spouse].name) : ''}</h5><p>${k.status === 'left' ? 'Moved away.' : whereIs(s, k)}</p>`;
+    if (st !== 'grown' && d != null) h += `<p class="why">Grows up on day ${k.born + Sim.GROW_DAYS}.${up.child ? ' As a child: ' + esc(Sim.UPBRING.child[up.child].split(':')[0].toLowerCase()) + '.' : ''}${up.youth ? ' As a youth: ' + esc(Sim.UPBRING.youth[up.youth].split(':')[0].toLowerCase()) + '.' : ''}</p>`;
+    if (U && !up[st]) h += `<p><b>How will ${esc(k.name.split(' ')[0])} be raised?</b></p>${Object.keys(U).map(c => `<div class="staffrow"><span><small>${esc(U[c])}</small></span>${B_('Choose', ['lRaise', k.id, c, st === 'youth' && c === 'apprentice' && s.shops[0] ? s.shops[0].trade : null], 'alt')}</div>`).join('')}`;
+    const acts = [k.status === 'here' ? findBtn(k) : ''];
+    if (st === 'grown' && !k.spouse && k.status === 'here') acts.push(B_(UI.matchFor === k.id ? 'Close' : 'Arrange a match…', ['ui', 'matchFor', UI.matchFor === k.id ? null : k.id], 'alt'));
+    if (st === 'grown' && k.status === 'here') acts.push(UI.confirm === 'retire' + k.id ? B_('Yes: retire, and carry on as ' + esc(k.name.split(' ')[0]), ['handOver', k.id], 'warn') + B_('Not yet', ['ui', 'confirm', null], 'alt') : B_('Retire and play as ' + esc(k.name.split(' ')[0]) + '…', ['ui', 'confirm', 'retire' + k.id], 'alt'));
+    h += `<div class="acts">${acts.join('')}</div>`;
+    if (UI.matchFor === k.id) {
+      const sx = Sim.sexOf(k), cands = Sim.living(s).filter(q => !q.kid && !q.spouse && q.status === 'here' && q.age >= 16 && q.age <= k.age + 12 && Sim.sexOf(q) !== sx && !(q.parents || []).some(p => (k.parents || []).includes(p)) && q.id !== Y.pid).sort((a, b) => (b.noble || b.royal ? 100 : 0) + (b.rep || 0) - (a.noble || a.royal ? 100 : 0) - (a.rep || 0)).slice(0, 6);
+      h += cands.map(q => `<div class="staffrow"><span><b>${esc(q.name)}</b>, ${q.age}${q.noble || q.royal ? ' · <i>of a noble house</i>' : ''}<br><small>${esc(Sim.occupation(s, q))} · ${esc(TOWN_NAMES[Sim.townOf(q)] || '')}</small></span>${B_('Propose the match · 30c', ['lMatch', k.id, q.id], q.noble || q.royal ? '' : 'alt')}</div>`).join('') || '<p>No one fitting just now.</p>';
+    }
+    h += `</div>`;
+  }
+  if (!kids.length && sp) h += `<p class="why">No children yet. When you are both ready, try for a child.</p>`;
+  return h;
+}
 function pageFamily(s) {
   const Y = Sim.you(s), H = Sim.yourHeirs(s), sp = Y.spouse && s.people[Y.spouse], kids = Sim.yourKids(s), nm = q => esc(q.name);
   if (s.pendingDeath) {
@@ -14691,14 +14898,7 @@ function pageFamily(s) {
   }
   const ageing = s.ageRate ? (s.ageRate >= 60 ? 'People age slowly, with the calendar: a year every 60 days.' : s.ageRate === 15 ? 'People age a year every season (15 days).' : 'People age a year every ' + s.ageRate + ' days.') : 'Ageing is off in Settings.';
   let h = `<h3>Your Family</h3><div class="acts">${B_('Your family tree', ['ui', 'tree', Y.pid])}</div><p class="lead">${esc(s.name)}, aged ${Y.age}. ${Y.generation > 1 ? 'Generation ' + Y.generation + ' of the family. ' : ''}${ageing}</p>`;
-  h += `<div class="box"><h5>${sp ? 'Married to ' + nm(sp) : 'Unmarried'}</h5>`;
-  if (sp) h += `<p>${nm(sp)}, ${sp.age}: ${esc(Sim.occupation(s, sp))}.</p><div class="setting"><span>Children</span>${seg2('hoping', Y.hoping ? 1 : 0, [[1, 'Hoping for more'], [0, 'Not for now']])}</div>`;
-  else {
-    const court = Object.keys(Y.court).map(id => s.people[id]).filter(q => q && Sim.canCourt(s, q)).sort((a, b) => Y.court[b.id] - Y.court[a.id]);
-    h += court.length ? `<p>Courting:</p>${court.map(q => `<p><b>${nm(q)}</b>, ${q.age}, of ${esc(TOWN_NAMES[Sim.townOf(q)])} · fondness ${Y.court[q.id]}/100${Y.court[q.id] >= 60 ? ' · they would say yes' : ''}</p>`).join('')}` : `<p>Tap someone you like and spend time with them. When they are fond enough of you, ask them to marry you. A wedding feast costs 20c.</p>`;
-  }
-  h += `</div>`;
-  if (kids.length) h += `<h4>Children</h4><div class="plist">${kids.map(c => personRow(s, c)).join('')}</div>`;
+  h += familyPanel(s);
   const pv = Sim.inheritPreview(s, H.best);
   h += `<div class="box"><h5>Who carries on after you</h5><p>${H.best ? `<b>${nm(H.best)}</b>${H.named ? ' (named by you)' : ' (by the rules: your eldest grown child, else your husband or wife, else a brother or sister)'} would inherit ${pv.gets.join(', ')}.` : 'Nobody yet. Without an heir, you would begin again as a newcomer, and your property would go back to the lord and the towns.'}</p>${pv.notes.map(t => `<p>${esc(t)}</p>`).join('')}
     ${H.best && !H.best.kid ? (UI.confirm === 'handover' ? `<div class="acts">${B_('Yes, hand everything to ' + esc(H.best.name.split(' ')[0]), ['handOver'], 'warn')}${B_('Not yet', ['ui', 'confirm', null], 'alt')}</div>` : `<div class="acts">${B_('Retire and carry on as ' + esc(H.best.name.split(' ')[0]) + '&hellip;', ['ui', 'confirm', 'handover'], 'alt')}</div>`) : ''}</div>`;
@@ -15211,6 +15411,10 @@ function uiCmd(k, v) {
   if (k === 'flee') { wildFight({ kind: 'knockout', foes: [{ kit: 'guard', name: 'The watchman' }], title: 'Run for it!', ctx: { caught: true } }); return; }
   if (k === 'jump') { const el = $('page').querySelector('[data-jump="' + v + '"]'); if (el) el.scrollIntoView({ block: 'start', behavior: calm() ? 'auto' : 'smooth' }); return; }
   if (k === 'goHouse') { const h = G.houses.find(x => x.id === v); if (!h) return; const sp = signPos(h), key = 'sign:' + h.id; if (!L[key]) L[key] = { x: sp.x, z: sp.z, r: 1.7, name: h.name + ' (for sale)', sign: h.id, town: h.town && h.town !== 'hearthmoor' ? h.town : undefined }; closeOverlay(); act(['goto', key]); return; }
+  if (k === 'loveTab') { const [id, tab] = v; if (UI.loveOpen === id && UI.loveTab === tab) { UI.loveOpen = null; UI.loveTab = null; } else { UI.loveOpen = id; UI.loveTab = tab; } renderCard(true); if (UI.overlay === 'book') renderBook(); return; }
+  if (k === 'matchFor') { UI.matchFor = v; renderBook(); return; }
+  if (k === 'nameKid') { const el = $('kidName'), nm = el && el.value.trim(); if (!nm) { toast('Type a name first.', 'bad', true); return; } act(['lName', v, nm]); return; }
+  if (k === 'findP') { const q = G.people[v], b = q && G.agents.find(a => a.pid === v); if (!b) { toast(q ? q.name.split(' ')[0] + ' is not anywhere you can walk to just now.' : 'Gone.', 'bad', true); return; } const key = 'who:' + v; L[key] = { x: b.x + 1.2, z: b.z + 1.2, r: 1.6, name: q.name, town: Sim.townOf(q) !== 'hearthmoor' ? Sim.townOf(q) : undefined }; closeOverlay(); act(['goto', key]); UI.sel = b.id; renderCard(true); return; }
   if (k === 'fireSel') { UI.fireSel = v; if (v) { UI.tab = 'office'; if (UI.overlay !== 'book') openBook(); else renderBook(); } else renderBook(); return; }
   if (k === 'staffSel') { const was = UI.staffSel; UI.staffSel = v; UI.confirm = null; if (!v && was) UI.reveal = '[data-sbox="' + (was.biz != null ? 'biz:' + was.biz : 'shop:' + was.shop) + '"]'; renderBook(true); return; }
   if (k === 'bizMenu') { UI.bizMenu = !UI.bizMenu; if (G) hud(G); return; }
@@ -16110,8 +16314,16 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0504';
+const BUILD = '2026.11.08.0522';
 const NOTES = [
+  { v: '0.71', date: '8 November', title: 'Hearth and Home', items: [
+    'Courtship in stages: meet someone, become friends, ask to court them, be betrothed, and wed. Talk, give gifts and take them on outings: a walk, supper at the tavern, the market, the chapel, or a dance on a holiday.',
+    'Everyone has traits (kind, proud, ambitious, pious, merry, thrifty, bookish, bold) and things they love and dislike. Some will suit you and some will turn you down; a noble family expects rank, and brings a dowry and its backing.',
+    'Weddings: small, a village feast, or grand. Married life: keep your spouse happy, or quarrels follow and in time they may leave. Your spouse can keep the house or work in one of your shops.',
+    'Children: try for a child together; about a week later the baby is born and you name them. They grow up in about sixty days, and you choose how they are raised as a child and as a youth: home, chapel, apprenticeship, squire or scholar.',
+    'Grown children can work for you and stand for office; you can arrange their marriages, nobles included; and when you retire you choose which of them to carry on as.',
+    'Separating now splits what you have fairly, and each child chooses who to live with. Widowed, you mourn before your heart can open again.',
+    'Your family at a glance: the Family page shows your spouse and every child, what they are doing and where, with a Find them button.'] },
   { v: '0.70.4', date: '8 November', title: 'Pictures and regard', items: [
     'Every item you can buy, sell or wear now has a picture: on the shop counters, in your bag and on what you are wearing.',
     'Standing must be kept: after two days with nothing done for Hearthmoor it slips each day: about 5 a day near the top, less as it falls (it never drops below 20). Work, help, serve and settle the village\u2019s business to keep it.',
