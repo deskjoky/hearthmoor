@@ -4661,7 +4661,7 @@
   function standingDay(s) {
     const v = s.village; if (!v || v.fadeDay === s.day) return; const first = v.fadeDay == null; v.fadeDay = s.day; if (first) { v.earnedDay = v.earnedDay == null ? s.day : v.earnedDay; return; }
     const quiet = s.day - (v.earnedDay == null ? s.day : v.earnedDay);
-    if (quiet >= 2 && v.standing > 20) { const n = Math.round((1 + (v.standing - 20) / 30) * 10) / 10; v.standing = Math.max(20, Math.round((v.standing - n) * 10) / 10); if (quiet === 2 || quiet % 4 === 0) event(s, 'Standing \u2212' + n + ': people have not seen you do much for Hearthmoor lately. Work, help, serve, or settle the village\u2019s business to keep their regard.', 'bad'); }
+    if (quiet >= 2 && v.standing > 20) { const n = Math.round((1 + (v.standing - 20) / 20) * 10) / 10; v.standing = Math.max(20, Math.round((v.standing - n) * 10) / 10); if (quiet === 2 || quiet % 4 === 0) event(s, 'Standing \u2212' + n + ': people have not seen you do much for Hearthmoor lately. Work, help, serve, or settle the village\u2019s business to keep their regard.', 'bad'); }
     // business left unanswered in office counts against you
     const lapsed = (s.agenda || []).filter(x => x.until < s.day); if (lapsed.length) { addStanding(s, -lapsed.length, lapsed.length === 1 ? 'a matter of your office left unanswered' : lapsed.length + ' matters of your office left unanswered'); s.agenda = s.agenda.filter(x => x.until >= s.day); }
   }
