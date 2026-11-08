@@ -6540,6 +6540,9 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.69.2', date: '7 November', title: 'Supplies, properly', items: [
+    'Managers now go for supplies even when the worker is away, locked up or not hired yet. Before, the trip only happened while the worker was on shift, so a shop could sit empty all day.',
+    'They go any time from 6 in the morning until closing, as soon as anything runs low.'] },
   { v: '0.69.1', date: '7 November', title: 'Managers buy supplies', items: [
     'A shop with a manager now always has someone seeing to supplies: the manager goes to the Trading Post on their own, without you choosing anyone.',
     'They go as soon as storage runs low (under two batches of anything), not only once it is empty, so the bench keeps working.',
