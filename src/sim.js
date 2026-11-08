@@ -4959,6 +4959,7 @@
     // weapons: family decides the skill and the perk that helps
     dagger: I_('Dagger', 'main', 1, 9, { kind: 'weapon', fam: 'dagger', hands: 1, dmg: 4, spd: 1.5, smith: 'steelSmithing' }),
     club: I_('Cudgel', 'main', 3, 3, { kind: 'weapon', fam: 'mace', hands: 1, dmg: 5, spd: 1.0 }),
+    tusks: I_('Tusks', 'main', 0, 0, { kind: 'beast', fam: 'mace', hands: 1, dmg: 8, spd: 1.1, nosale: true }),
     hatchet: I_('Hatchet', 'main', 3, 10, { kind: 'weapon', fam: 'axe', hands: 1, dmg: 6, spd: 1.1, smith: 'steelSmithing', tool: 'wood' }),
     shortsword: I_('Short sword', 'main', 3, 28, { kind: 'weapon', fam: 'sword', hands: 1, dmg: 7, spd: 1.2, smith: 'steelSmithing' }),
     armingsword: I_('Arming sword', 'main', 4, 65, { kind: 'weapon', fam: 'sword', hands: 1, dmg: 9, spd: 1.1, smith: 'fineSmithing' }),
@@ -5125,7 +5126,153 @@
      Fought in real seconds, while the world waits. Tap an enemy to strike, hold to block, swipe to dodge. A strike
      straight after a block or a dodge is a riposte, and hits harder. Most fights end in a knockout; only fights you
      choose to make deadly can kill, and in those you can yield when you are badly hurt. */
+  /* ================= out in the world: hunting, bandit camps, tournaments, and the thief's trade ================= */
+  // the hunting grounds: deer and boar in the woods beyond the towns
+  const GROUNDS = [{ x: -78, z: 24, r: 22, name: 'the Pine Woods' }, { x: 150, z: 42, r: 26, name: 'the east woods' }, { x: -160, z: -800, r: 28, name: 'the Greenhaven woods' }, { x: 336, z: -520, r: 26, name: 'the Oakbridge woods' }, { x: 560, z: -930, r: 26, name: 'the Ironcrest forest' }];
+  // where the bandits of each region make camp, a little off the road
+  const CAMPS = { hearthmoor: { x: 196, z: 22, name: 'the camp off the east road' }, oakbridge: { x: 332, z: -566, name: 'the camp in the Oakbridge woods' }, crownmere: { x: 248, z: -664, name: 'the camp below the Crown Road' }, greenhaven: { x: -172, z: -842, name: 'the camp in the western woods' }, ironcrest: { x: 560, z: -904, name: 'the camp on the iron road' }, eastwatch: { x: 702, z: -260, name: 'the camp on the coast road' } };
+  function setupWild(s) {
+    if (!s.wild) s.wild = { game: [], nextId: 1, day: 0, camps: {} };
+    const W = s.wild;
+    if (W.day !== s.day) {   // each morning, the woods fill up again
+      W.day = s.day;
+      GROUNDS.forEach((G0, gi) => {
+        const here = W.game.filter(a => a.g === gi && !a.dead).length;
+        for (let i = here; i < 3; i++) { const a = rand(s) * Math.PI * 2, r = rand(s) * G0.r; W.game.push({ id: W.nextId++, g: gi, kind: rand(s) < 0.7 ? 'deer' : 'boar', x: G0.x + Math.sin(a) * r, z: G0.z + Math.cos(a) * r, face: rand(s) * 6.3, hp: 1, flee: 0 }); }
+      });
+      W.game = W.game.filter(a => !a.dead);
+    }
+    return W;
+  }
+  function campOpen(s, id) { const W = setupWild(s), C = W.camps[id]; return !!CAMPS[id] && s.bandits && (s.bandits[id] || 0) >= 12 && !(C && C.cleared != null && s.day - C.cleared < 8); }
+  // the animals graze, wander, and run when you come too close (less so if you creep)
+  function wildStep(s, dt) {
+    const W = setupWild(s), p = s.player, sneak = p.sneak ? 0.45 * (1 - skillLv(s, 'sneak') / 200) : 1;
+    for (const a of W.game) {
+      if (a.dead) continue; const G0 = GROUNDS[a.g], d = Math.hypot(a.x - p.x, a.z - p.z);
+      if (d > 120) continue;
+      const scare = (a.kind === 'deer' ? 13 : 8) * sneak * (perk(s, 'stalker') ? 0.6 : 1) * (1 - 0.1 * (perk(s, 'stealthy') || 0) * (p.sneak ? 1 : 0));
+      if (a.kind === 'boar' && d < 5 && !s.fight && !(a.calm > s.t)) { a.charge = true; }
+      if (d < scare && a.kind === 'deer') a.flee = 4;
+      if (a.flee > 0) { a.flee -= dt; const k = 9 * dt / Math.max(0.1, d); a.x += (a.x - p.x) * k; a.z += (a.z - p.z) * k; a.face = Math.atan2(a.x - p.x, a.z - p.z); a.moving = true; }
+      else { a.moving = rand(s) < 0.02 ? !a.moving : a.moving; if (a.moving) { a.face += (rand(s) - 0.5) * 0.3; a.x += Math.sin(a.face) * dt * 0.9; a.z += Math.cos(a.face) * dt * 0.9; } }
+      const gd = Math.hypot(a.x - G0.x, a.z - G0.z); if (gd > G0.r * 1.6) { a.face = Math.atan2(G0.x - a.x, G0.z - a.z); a.flee = 0; }
+    }
+  }
+  const TOURNEY_PRIZE = [40, 80, 160];
+  function tourneyToday(s) { return s.day % 7 === 6 || !!holidayOn(s.day); }
+  function townSquareNear(s) { const p = s.player; for (const t in MARKET_AT) { const L = LOCS[MARKET_AT[t]]; if (L && Math.hypot(p.x - L.x, p.z - L.z) < 16) return t; } return null; }
+  function witnesses(s, x, z, r) { return (s.agents || []).filter(a => !a.indoors && !a.kid && Math.hypot(a.x - x, a.z - z) < r); }
+  function wildCmd(s, name, a, b, c) {
+    const ok = (m, x) => Object.assign({ ok: true, msg: m }, x || {}), fail = m => ({ ok: false, msg: m }), p = s.player, C = setupChar(s); setupBag(s);
+    switch (name) {
+      case 'wSneak': { p.sneak = !p.sneak; return ok(p.sneak ? 'You move quietly, keeping low.' : 'You stand up and walk normally.'); }
+      case 'wHunt': {   // a: the animal. A bow shot from range, or a blade if you got close without being seen
+        const W = setupWild(s), an = W.game.find(x => x.id === a && !x.dead); if (!an) return fail('It is gone.');
+        const d = Math.hypot(an.x - p.x, an.z - p.z), I = weaponOf(s);
+        if (an.kind === 'boar' && (!I || !I.ranged || d < 6)) return ok('The boar turns on you!', { fight: { kind: 'knockout', foes: [{ kit: 'boar', name: 'A wild boar' }], title: 'A wild boar charges', ctx: { boar: an.id } } });
+        if (I && I.ranged) {
+          if (!I.ammo || countItem(s, I.ammo) < 1) return fail('You have no ' + ITEMS[I.ammo || 'arrows'].name.toLowerCase() + '.');
+          if (d > 38) return fail('Too far for a shot. Get closer.');
+          takeId(s, I.ammo);
+          const chance = Math.min(0.95, 0.35 + skillLv(s, 'archery') / 160 + (p.sneak ? 0.1 : 0) + (perk(s, 'eagleEye') ? 0.1 : 0) + (perk(s, 'stalker') ? 0.05 : 0) - d / 120);
+          skillUse(s, 'archery', 3); skillUse(s, 'hunting', 2);
+          if (rand(s) > chance) { an.flee = 5; return ok('Your arrow flies wide. The ' + an.kind + ' bolts.', { shot: an.id, miss: true }); }
+          if (an.kind === 'boar' && I.dmg < 16 && rand(s) < 0.6) { an.calm = 0; return ok('Hit, but the boar only rages. It charges!', { shot: an.id, fight: { kind: 'knockout', foes: [{ kit: 'boar', name: 'A wounded boar', mul: 0.7 }], title: 'The wounded boar charges', ctx: { boar: an.id } } }); }
+          return Object.assign(huntWin(s, an), { shot: an.id });
+        }
+        if (d > 2.5) return fail(p.sneak ? 'Creep closer.' : 'It will hear you coming. Creep up (Sneak) with a blade, or use a bow.');
+        skillUse(s, 'sneak', 3); return huntWin(s, an);
+      }
+      case 'wBoarWon': { const W = setupWild(s), an = W.game.find(x => x.id === a); if (!an) return ok(''); return huntWin(s, an); }
+      case 'wBoarLost': { const W = setupWild(s), an = W.game.find(x => x.id === a); if (an) { an.calm = s.t + 120; const ang = rand(s) * 6.3; an.x += Math.sin(ang) * 12; an.z += Math.cos(ang) * 12; } return ok('The boar leaves you bruised in the bracken and crashes away.'); }
+      case 'wCamp': {   // a: region. Raid the bandit camp
+        if (!campOpen(s, a)) return fail('The camp is empty.');
+        const n = s.bandits[a] || 0, foes = [{ kit: 'banditChief', name: 'The bandit chief' }];
+        for (let i = 0; i < Math.min(4, 1 + Math.floor(n / 14)); i++) foes.push(i % 3 === 2 ? { kit: 'banditArcher', name: 'A bandit archer' } : { kit: 'bandit', name: 'A bandit' });
+        return ok('', { fight: { kind: 'knockout', foes, title: 'You fall on ' + CAMPS[a].name, ctx: { camp: a } } });
+      }
+      case 'wCampWon': {
+        const W = setupWild(s), n = s.bandits[a] || 0, loot = 25 + Math.round(n * 1.5); earn(s, loot);
+        s.bandits[a] = Math.max(0, n - 25); W.camps[a] = { cleared: s.day };
+        const drop = rand(s) < 0.5 ? (rand(s) < 0.5 ? 'waraxe' : 'hatchet') : 'trinkets'; addItem(s, drop, drop === 'trinkets' ? 2 : 1);
+        addStanding(s, 4, 'clearing the bandits'); deed(s, 1, 3, 'clearing a bandit camp'); gainXP(s, 40);
+        const ct = ((s.realm && s.realm.contracts) || []).find(k => k.taken && k.kind === 'clear' && k.region === a && !k.done); if (ct && ct.pay) { earn(s, ct.pay); ct.done = true; }
+        event(s, 'You scatter the bandits at ' + CAMPS[a].name + ' and take their hoard: ' + loot + 'c and ' + ITEMS[drop].name.toLowerCase() + '. The roads of ' + REGIONS[a] + ' are safer.', 'good');
+        return ok('The camp is yours.');
+      }
+      case 'wCampLost': { const lost = Math.min(Math.max(0, s.coins), 30); spend(s, lost); return ok('You come to at the roadside, ' + lost + 'c lighter.'); }
+      case 'wTourney': {   // enter the day's tournament in this town's square: three bouts with blunted blades
+        const t = townSquareNear(s); if (!t) return fail('Tournaments are fought in a town square.');
+        if (!tourneyToday(s)) return fail('No tournament today. They are held every seventh day and on holidays.');
+        if (s.tourney && s.tourney.day === s.day) return fail('You have had your day in the lists. Come back next time.');
+        if (s.coins < 5) return fail('The entry fee is 5c.');
+        spend(s, 5); s.tourney = { day: s.day, town: t, round: 0 };
+        return ok('', { fight: tourneyBout(s) });
+      }
+      case 'wTourneyWon': {
+        const T = s.tourney; if (!T) return ok(''); const prize = TOURNEY_PRIZE[T.round]; earn(s, prize); T.round++; gainXP(s, 15 + T.round * 10); addStanding(s, 1 + T.round, 'the tournament');
+        if (T.round >= 3) { deed(s, 0, 5, 'winning a tournament'); event(s, 'You win the tournament in ' + (REGIONS[T.town] || T.town) + '! ' + prize + 'c, and your name is shouted in the square.', 'good'); T.done = true; return ok('Champion of the lists!'); }
+        return ok('You win the bout and ' + prize + 'c. Next: round ' + (T.round + 1) + '.', { next: tourneyBout(s) });
+      }
+      case 'wTourneyLost': { const T = s.tourney; if (T) T.done = true; return ok('Knocked down in round ' + ((T ? T.round : 0) + 1) + '. The crowd cheers you anyway.'); }
+      case 'wPick': {   // a: the person. Lift their purse
+        const q = s.people[a]; if (!q) return fail('Nobody there.');
+        const ag = (s.agents || []).find(x => x.pid === a); if (!ag || Math.hypot(ag.x - p.x, ag.z - p.z) > 2.2) return fail('Get right up close first.');
+        const eyes = witnesses(s, p.x, p.z, 9).filter(x => x.pid !== a).length, night = hourOf(s) >= 21 || hourOf(s) < 5;
+        const chance = Math.max(0.05, Math.min(0.92, 0.3 + skillLv(s, 'pickpocket') / 140 + (p.sneak ? 0.12 : 0) + 0.1 * (perk(s, 'lightFingers') || 0) + (night ? (perk(s, 'nightThief') ? 0.2 : 0.08) : 0) - eyes * 0.07));
+        skillUse(s, 'pickpocket', 4);
+        if (rand(s) < chance) {
+          const take = Math.max(0, Math.min(q.purse, Math.round((2 + rand(s) * (4 + skillLv(s, 'pickpocket') / 8)) * (perk(s, 'cutpurse') ? 2 : 1)))); q.purse -= take; earn(s, take);
+          const trinket = rand(s) < 0.15; if (trinket) addItem(s, 'trinkets', 1); deed(s, -2, 0, 'picking a pocket');
+          return ok(take ? 'You lift ' + take + 'c' + (trinket ? ' and a trinket' : '') + ' from ' + q.name + '. Nobody saw.' : q.name + '’s purse is empty.');
+        }
+        return caught(s, q, 10 + Math.round(q.purse * 0.1), 'picking ' + q.name + '’s pocket');
+      }
+      case 'wBurgle': {   // a: a house. Pick the lock and help yourself
+        const h = (s.houses || []).find(x => x.id === a); if (!h) return fail('No such house.');
+        if (countItem(s, 'lockpicks') < 1) return fail('You need lockpicks. The market or a tinker sells them.');
+        const owners = (h.tenants || []).map(id => s.people[id]).filter(Boolean), home = owners.filter(q => { const ag = (s.agents || []).find(x => x.pid === q.id); return ag && ag.indoors; });
+        const eyes = witnesses(s, p.x, p.z, 10).length, night = hourOf(s) >= 21 || hourOf(s) < 5;
+        const chance = Math.max(0.05, Math.min(0.9, 0.25 + skillLv(s, 'lockpick') / 120 + 0.08 * (perk(s, 'noviceLocks') || 0) + (p.sneak ? 0.1 : 0) + (night ? 0.15 : -0.1) - eyes * 0.08 - home.length * 0.12));
+        skillUse(s, 'lockpick', 5); skillUse(s, 'sneak', 2);
+        if (rand(s) < chance) {
+          let take = 0; owners.forEach(q => { const t = Math.min(q.purse, Math.round(q.purse * 0.25)); q.purse -= t; take += t; }); take = Math.round(Math.max(take, 3) * (perk(s, 'goldenTouch') ? 1.5 : 1)); earn(s, take);
+          addItem(s, 'trinkets', 1 + Math.floor(rand(s) * 2)); deed(s, -4, 0, 'burgling a house');
+          return ok('The lock gives. You slip in and out with ' + take + 'c and some trinkets.');
+        }
+        if (!perk(s, 'unbreakable') && rand(s) < 0.5 - 0.08 * (perk(s, 'noviceLocks') || 0)) takeId(s, 'lockpicks');
+        if (rand(s) < 0.5 + eyes * 0.1 + home.length * 0.2) return caught(s, owners[0] || null, 20, 'breaking into a house');
+        return ok('The lock holds' + (countItem(s, 'lockpicks') ? '' : ', and your last pick snaps') + '. Nobody noticed. Yet.');
+      }
+      case 'wCaught': {   // a: 'pay' | 'won' | 'lost'
+        const K = s.caught; if (!K) return ok('');
+        if (a === 'pay') { const f = Math.min(K.fine, Math.max(0, s.coins)); spend(s, f); s.caught = null; addStanding(s, -3, 'a fine for thieving'); return ok('You pay ' + f + 'c and the matter is closed. People will talk.'); }
+        if (a === 'won') { s.caught = null; p.wanted = s.day + 3; addStanding(s, -5, 'fleeing the watch'); return ok('You knock the guard down and run. You are wanted for three days.'); }
+        const f = Math.min(K.fine * 2, Math.max(0, s.coins)); spend(s, f); s.caught = null; addStanding(s, -6, 'a night in the cells'); s.t += 8 * 60; return ok('You wake in the cells, ' + f + 'c poorer, and are turned out in the morning.');
+      }
+    }
+    return null;
+  }
+  function caught(s, q, fine, what) {
+    if (q) { q.opinion = clamp((q.opinion || 0) - 30, -100, 100); plog(s, q, 'Caught ' + s.name + ' ' + what + '.'); }
+    s.caught = { fine, what, by: q ? q.name : 'Someone', day: s.day }; deed(s, -3, -2, 'being caught ' + what);
+    return { ok: true, msg: (q ? q.name : 'Someone') + ' shouts “Thief!” and the watch comes running.', caught: true };
+  }
+  function takeId(s, id) { const it = (s.player.items || []).find(x => x.id === id); if (it) takeItem(s, it.u, 1); }
+  function huntWin(s, an) {
+    an.dead = true; skillUse(s, 'hunting', 6); gainXP(s, an.kind === 'boar' ? 14 : 8);
+    const tough = perk(s, 'cleanKill') || 0;
+    if (an.kind === 'deer') { addItem(s, 'venison', 2 + tough); addItem(s, 'deerhide', 1); if (rand(s) < 0.4) addItem(s, 'antlers', 1); }
+    else { addItem(s, 'boarmeat', 3 + tough); addItem(s, 'boarhide', 1); }
+    return { ok: true, msg: 'You bring down the ' + an.kind + '. ' + (an.kind === 'deer' ? 'Venison, a hide' : 'Boar meat and a hide') + ' go in your pack. A butcher, tanner or market will buy them.', kill: an.id };
+  }
+  function tourneyBout(s) {
+    const T = s.tourney, names = ['Wat the Bold', 'Ser Garrow', 'The Grey Champion'];
+    return { kind: 'tourney', foes: [{ kit: 'champion', name: names[T.round], mul: [0.65, 0.9, 1.2][T.round] }], title: 'The tournament: round ' + (T.round + 1) + ' of 3', ctx: { tourney: true } };
+  }
   const FOE_KIT = {
+    boar: { w: 'tusks', a: null, hp: 70, skill: 30, spd: 1.15, mul: 1.0 },
     thug: { w: 'club', a: 'jerkin', hp: 60, skill: 25, spd: 1, mul: 3.0 },
     bandit: { w: 'hatchet', a: 'jerkin', hp: 42, skill: 30, spd: 1, mul: 1.5 },
     banditArcher: { w: 'huntingbow', a: 'gambeson', hp: 32, skill: 30, spd: 1, mul: 1.0 },
@@ -6532,6 +6679,7 @@
     if (/^x[A-Z]/.test(name)) return xCmd(s, name, a, b, c);
     if (/^f[A-Z]/.test(name)) return folkCmd(s, name, a, b, c);
     if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
+    if (/^w[A-Z]/.test(name)) { const r = wildCmd(s, name, a, b, c); if (r) return r; }
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
       case 'goto': {
@@ -7754,6 +7902,7 @@
     if (!s.rpgShops && s.biz) { s.rpgShops = true; const MAP = { i_hammer: 'weaponsmith', i_cooper: 'bowyer', o_cooper: 'bowyer', s_arm1: 'armourer', s_arm2: 'weaponsmith', v_forge: 'armourer' };
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
+    if (!s.fight) wildStep(s, dt);
     { const C = s.char; if (C.hp < C.hpMax) C.hp = Math.min(C.hpMax, C.hp + dt * 0.08); if (C.st < C.stMax) C.st = Math.min(C.stMax, C.st + dt * 2); }
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
     if (s.coins < 0 && -s.coins > (s.rec.maxDebt || 0)) s.rec.maxDebt = -s.coins;
@@ -8563,7 +8712,7 @@
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
