@@ -2896,6 +2896,10 @@ function lookOf(s, a) {
     if (p && !p.kid && (p.noble || p.royal || (j && j.type === 'office' && ['lord', 'steward'].includes(j.office)))) { L.gear = { weapon: 'sword', cloak: '#4a2030' }; L.key += 'n'; }
     else if (j && ((j.type === 'office' && j.office === 'guard') || /watch|guard|soldier/i.test(what))) { L.gear = { armor: 'chain', helm: 'iron', weapon: 'spear' }; L.key += 'g'; }
     else if (p && !p.kid && p.purse > 400 && !(j && j.type === 'biz' && j.role !== 'owner')) { L.gear = { cloak: '#2f3f5a' }; L.key += 'r'; } }
+  // women dress by their time of life: bright colours while young, deep and dark once past the age for children
+  { const p = a.pid && s.people[a.pid]; if (p && pl.fem && !p.kid && !(L.tunic && L.tunic !== undefined && L.key === 'rags') && L.key !== 'tax') {
+    const n = (a.palette || 0) + (parseInt(String(p.id).slice(1), 10) || 0), old = p.age > 44;
+    L.tunic = old ? ['#3a2e3e', '#2f3a34', '#4a3328', '#2b3346', '#3d3a30', '#45302f'][n % 6] : ['#c4473a', '#d9a03a', '#3f8fb8', '#8fbf4a', '#c26a9a', '#e07a3a', '#5aa89a', '#b8c24a'][n % 8]; L.key += old ? 'wo' : 'wy'; } }
   for (const k in L) if (L[k] === undefined) delete L[k];
   return Object.assign(L, { key: L.key + pl.key, fem: pl.fem, hair: L.hat ? null : pl.hair, hairColor: pl.hairColor });
 }
@@ -7276,6 +7280,8 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.71.2', date: '8 November', title: 'Colours of a life', items: [
+    'Young women now wear bright colours: madder red, saffron, sky blue, spring green, rose. Older women, past the age for children, dress in deep, dark shades. Their clothes change as they age.'] },
   { v: '0.71.1', date: '8 November', title: 'Who is who', items: [
     'Everyone\u2019s age now stands out in a coloured badge (green for children), on their card and in every list of people.',
     'A second badge shows at a glance whether someone is single, married (and to whom), widowed, courting you, betrothed to you, or your own husband or wife.'] },
