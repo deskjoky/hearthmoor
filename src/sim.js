@@ -5019,6 +5019,16 @@
       s.char = { level: 1, xp: 0, points: 0, perks: {}, pending: 0, hpMax: 100, stMax: 100, hp: 100, st: 100, carry: 0, skills: sk };
     }
     for (const k in SKILLS) if (!s.char.skills[k]) s.char.skills[k] = { lv: SKILL_START, xp: 0 };
+    if (!s.char.retro) {   // a game begun before levels existed: credit what you had already done
+      const C = s.char; C.retro = true;
+      if ((s.day || 1) > 2 && C.level <= 1) {
+        const R = s.realm, mine = typeof yourOffice === 'function' ? yourOffice(s) : null, rank = { council: 1, elder: 2, lord: 3, seat: 4, crown: 5 };
+        const own = Object.values(s.biz || {}).filter(b => b.owner === 'player').length + (s.shops || []).length;
+        let x = Math.round(s.day * 14 + ((s.rec && s.rec.racesWon) || 0) * 120 + own * 50 + (mine ? rank[mine.office] * 250 : s.village && s.village.council ? 120 : 0));
+        while (C.level < LEVEL_MAX && x >= levelNeed(C.level)) { x -= levelNeed(C.level); C.level++; C.points++; C.pending++; }
+        C.xp = x; if (C.level > 1) event(s, 'Levels have come to Hearthmoor. For all you have done, you begin at level ' + C.level + ', with ' + C.points + ' perk points and ' + C.pending + ' choices of health, stamina or carrying to make (You, Skills).', 'level');
+      }
+    }
     return s.char;
   }
   const skillLv = (s, k) => s.char && s.char.skills[k] ? s.char.skills[k].lv : SKILL_START;
@@ -8035,7 +8045,7 @@
     separate(s);
     checkVillage(s);
     if (s.elect) electionTick(s, before);
-    if (!s.char) setupChar(s); if (!s.player.items) setupBag(s);
+    if (!s.char || !s.char.retro) setupChar(s); if (!s.player.items) setupBag(s);
     if (!s.rpgShops && s.biz) { s.rpgShops = true; const MAP = { i_hammer: 'weaponsmith', i_cooper: 'bowyer', o_cooper: 'bowyer', s_arm1: 'armourer', s_arm2: 'weaponsmith', v_forge: 'armourer' };
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);

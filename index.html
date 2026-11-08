@@ -2252,7 +2252,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     const id = 'p' + (s.nextPid++);
     if (o && o.skill == null) o.skill = Math.round((0.6 + rand(s) * 0.6) * 100) / 100;
     const p = Object.assign({ id, name: 'Someone', age: 30, purse: 20, skill: 0.6 + rand(s) * 0.6, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: [], palette: Math.floor(rand(s) * 10), ate: 0, retired: false }, o);
-    p.id = id; s.people[id] = p; return p;
+    p.id = id; s.people[id] = p; if (p.rep == null) { try { p.rep = Math.round(repTarget(s, p) * 10) / 10; } catch (e) { p.rep = 0; } if (!Number.isFinite(p.rep)) p.rep = 0; }   // newcomers have a standing from the day they arrive
+    return p;
   }
   function addBody(s, p, at) {
     if (s.agents.some(a => a.pid === p.id)) return;
@@ -5733,6 +5734,16 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
       s.char = { level: 1, xp: 0, points: 0, perks: {}, pending: 0, hpMax: 100, stMax: 100, hp: 100, st: 100, carry: 0, skills: sk };
     }
     for (const k in SKILLS) if (!s.char.skills[k]) s.char.skills[k] = { lv: SKILL_START, xp: 0 };
+    if (!s.char.retro) {   // a game begun before levels existed: credit what you had already done
+      const C = s.char; C.retro = true;
+      if ((s.day || 1) > 2 && C.level <= 1) {
+        const R = s.realm, mine = typeof yourOffice === 'function' ? yourOffice(s) : null, rank = { council: 1, elder: 2, lord: 3, seat: 4, crown: 5 };
+        const own = Object.values(s.biz || {}).filter(b => b.owner === 'player').length + (s.shops || []).length;
+        let x = Math.round(s.day * 14 + ((s.rec && s.rec.racesWon) || 0) * 120 + own * 50 + (mine ? rank[mine.office] * 250 : s.village && s.village.council ? 120 : 0));
+        while (C.level < LEVEL_MAX && x >= levelNeed(C.level)) { x -= levelNeed(C.level); C.level++; C.points++; C.pending++; }
+        C.xp = x; if (C.level > 1) event(s, 'Levels have come to Hearthmoor. For all you have done, you begin at level ' + C.level + ', with ' + C.points + ' perk points and ' + C.pending + ' choices of health, stamina or carrying to make (You, Skills).', 'level');
+      }
+    }
     return s.char;
   }
   const skillLv = (s, k) => s.char && s.char.skills[k] ? s.char.skills[k].lv : SKILL_START;
@@ -8749,7 +8760,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
     separate(s);
     checkVillage(s);
     if (s.elect) electionTick(s, before);
-    if (!s.char) setupChar(s); if (!s.player.items) setupBag(s);
+    if (!s.char || !s.char.retro) setupChar(s); if (!s.player.items) setupBag(s);
     if (!s.rpgShops && s.biz) { s.rpgShops = true; const MAP = { i_hammer: 'weaponsmith', i_cooper: 'bowyer', o_cooper: 'bowyer', s_arm1: 'armourer', s_arm2: 'weaponsmith', v_forge: 'armourer' };
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
@@ -13170,9 +13181,9 @@ function renderCard(force) {
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
   const mineHere = Lh && ((Lh.emp && (G.biz && G.biz[Lh.emp] && G.biz[Lh.emp].owner === 'player')) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
-  const tab = html && here && Lh && UI.openLoc !== here && !mineHere && meta.settings.cards !== 'open';
+  const tab = html && here && Lh && UI.openLoc !== here && meta.settings.cards !== 'open';   // your own places too: a small tab first, the full card on a tap
   if (tab) { const m = html.match(/<h2>([\s\S]*?)<\/h2>/); html = `<button type="button" class="cardtab" data-c='["ui","openCard"]'>${m ? m[1] : 'This place'}<small>tap to open</small></button>`; }
-  else if (html && here && Lh && !mineHere) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
+  else if (html && here && Lh) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
   $('card').classList.toggle('tab', !!tab);
   const i = html.search(/<div class="(acts|places)">/);
   const info = i < 0 ? html : html.slice(0, i), rest = i < 0 ? '' : html.slice(i);
@@ -16005,8 +16016,12 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0435';
+const BUILD = '2026.11.08.0439';
 const NOTES = [
+  { v: '0.70.1', date: '8 November', title: 'Quieter streets', items: [
+    'Walking past your own shops, houses and businesses now shows only a small tab with the name. Tap it to open the full card.',
+    'Games begun before levels existed now start at a level earned by what you have already done, with perk points and choices to spend (You, Skills).',
+    'Families who move to town have a reputation from the day they arrive.'] },
   { v: '0.70', date: '8 November', title: 'Steel and Office', items: [
     'Skills and levels: fifteen skills that grow as you use them (one-handed, two-handed, archery, block, light and heavy armour, smithing, crafting, hunting, trade, speech, command, sneak, pickpocket, lockpick). Each has a constellation of perks. Everything you do earns experience; every level brings a perk point and your choice of more health, stamina or carrying.',
     'Gear: a bag you carry by weight and seven slots to dress. Clothes from rags to royal (and dyes), armour from a gambeson to full plate, daggers, swords, maces, axes, spears, halberds, bows and crossbows, and shields. Gear wears and is mended at a smith, and can be improved at a forge three times over.',

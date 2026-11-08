@@ -4285,9 +4285,9 @@ function renderCard(force) {
   if (here && !p.dest && html && insideOf(here)) { const btn = B_('Go inside', ['ui', 'enter', here]); html = html.includes('<div class="acts">') ? html.replace('<div class="acts">', '<div class="acts">' + btn) : html + `<div class="acts">${btn}</div>`; }
   if (here !== UI.lastHere) { UI.lastHere = here; if (UI.openLoc !== here) UI.openLoc = null; }
   const mineHere = Lh && ((Lh.emp && (G.biz && G.biz[Lh.emp] && G.biz[Lh.emp].owner === 'player')) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
-  const tab = html && here && Lh && UI.openLoc !== here && !mineHere && meta.settings.cards !== 'open';
+  const tab = html && here && Lh && UI.openLoc !== here && meta.settings.cards !== 'open';   // your own places too: a small tab first, the full card on a tap
   if (tab) { const m = html.match(/<h2>([\s\S]*?)<\/h2>/); html = `<button type="button" class="cardtab" data-c='["ui","openCard"]'>${m ? m[1] : 'This place'}<small>tap to open</small></button>`; }
-  else if (html && here && Lh && !mineHere) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
+  else if (html && here && Lh) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
   $('card').classList.toggle('tab', !!tab);
   const i = html.search(/<div class="(acts|places)">/);
   const info = i < 0 ? html : html.slice(0, i), rest = i < 0 ? '' : html.slice(i);
@@ -7122,6 +7122,10 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.70.1', date: '8 November', title: 'Quieter streets', items: [
+    'Walking past your own shops, houses and businesses now shows only a small tab with the name. Tap it to open the full card.',
+    'Games begun before levels existed now start at a level earned by what you have already done, with perk points and choices to spend (You, Skills).',
+    'Families who move to town have a reputation from the day they arrive.'] },
   { v: '0.70', date: '8 November', title: 'Steel and Office', items: [
     'Skills and levels: fifteen skills that grow as you use them (one-handed, two-handed, archery, block, light and heavy armour, smithing, crafting, hunting, trade, speech, command, sneak, pickpocket, lockpick). Each has a constellation of perks. Everything you do earns experience; every level brings a perk point and your choice of more health, stamina or carrying.',
     'Gear: a bag you carry by weight and seven slots to dress. Clothes from rags to royal (and dyes), armour from a gambeson to full plate, daggers, swords, maces, axes, spears, halberds, bows and crossbows, and shields. Gear wears and is mended at a smith, and can be improved at a forge three times over.',
