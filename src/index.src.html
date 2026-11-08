@@ -107,7 +107,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .minimap canvas { width: 116px; height: 116px; border-radius: 50%; border: 3px solid #e8d6ae; box-shadow: 0 0 0 1px #5b4630, 0 3px 10px rgba(0,0,0,.45); background: #7d8f55; display: block; }
 .minimap span { font: 400 13px var(--f-display); color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 5px; padding: 1px 8px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .dialog { position: fixed; z-index: 7; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); width: min(560px, calc(100% - 32px)); background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 22px rgba(0,0,0,.5); padding: 12px 14px 10px; }
-.dialog p { margin: 0 0 8px; font: 400 17px/1.45 var(--f-display); color: var(--ink); }
+.dialog { max-height: 30vh; overflow-y: auto; width: min(480px, calc(100% - 32px)) !important; padding: 9px 12px 8px !important; }
+.dialog p { margin: 0 0 6px; font: 400 15px/1.4 var(--f-display); color: var(--ink); }
 .dialog .dacts { display: flex; justify-content: flex-end; align-items: center; gap: 8px; } .dialog .dacts span { margin-right: auto; font-size: 12px; color: var(--ink-soft); }
 .sticks { display: none; } /* the controls work without anything drawn on screen */
 .stick { position: fixed; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(241, 227, 194, .45); background: radial-gradient(circle, rgba(20,14,10,.18), rgba(20,14,10,.38)); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); opacity: .55; transition: opacity .15s; }
@@ -133,7 +134,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .panel { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   padding-left: calc(max(16px, env(safe-area-inset-left, 0px)) + 160px); padding-right: calc(max(16px, env(safe-area-inset-right, 0px)) + 160px); pointer-events: none; }
-.card { pointer-events: auto; max-width: 440px; margin: 0 auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.4); padding: 10px 12px 12px; max-height: 46vh; overflow-y: auto; }
+.card { pointer-events: auto; max-width: 400px; margin: 0 auto; background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -2px 18px rgba(0,0,0,.4); padding: 8px 11px 10px; max-height: 32vh; overflow-y: auto; }
 .card.tab { max-width: 300px; padding: 0; background: rgba(32,26,20,.78); border-color: rgba(232,214,174,.5); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
 .cardtab { display: flex; align-items: baseline; justify-content: center; gap: 8px; width: 100%; border: 0; background: none; color: #f1e3c2; font: 400 16px var(--f-display); padding: 7px 14px; cursor: pointer; }
 .cardtab small { font: 400 11px var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: rgba(241,227,194,.7); }
@@ -621,7 +622,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   .card { max-height: 34vh; }
 }
 @media (orientation: landscape) and (max-height: 520px) {
-  .card { padding: 8px 10px 10px; max-height: 56vh; }
+  .card { padding: 8px 10px 10px; max-height: 36vh; }
   .card .acts .btn { min-height: 40px; }
   .card h2 { font-size: 19px; } .card .sub { font-size: 13px; }
   .btn { min-height: 38px; padding: 6px 10px; font-size: 14px; }
@@ -2989,7 +2990,12 @@ function syncLight(h) {
 
 /* ----- camera and input: twin thumbsticks ----- */
 const focus = new THREE.Vector3(0, 0, 6);
-const cam = { yaw: 0, pitch: 0.78, dist: 20 };
+const cam = { yaw: 0, pitch: 0.3, dist: 7 };
+// the view: low behind your shoulder (the default), or the old high view
+const lowView = () => !meta.settings || meta.settings.view !== 'high';
+const camLim = () => lowView() ? { p0: 0.06, p1: 0.85, d0: 3.5, d1: 16 } : { p0: 0.3, p1: 1.3, d0: 8, d1: 46 };
+function camFit() { const L = camLim(); if (cam.dist > L.d1 || cam.dist < L.d0 || cam.pitch > L.p1 || cam.pitch < L.p0) { if (lowView()) { cam.dist = 7; cam.pitch = 0.3; } else { cam.dist = 20; cam.pitch = 0.78; } } }
+const angD = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 const mapCam = { x: 0, z: -4, dist: 110 }, MAP_C = { x: 0, z: 0 };
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -3009,13 +3015,25 @@ function syncCamera(s, dt, t) {
     camera.position.set(Math.sin(a) * 62, 34, 4 + Math.cos(a) * 62); camera.lookAt(0, 0, -6); return;
   }
   cam.yaw -= keyTurn() * 1.8 * dt * (meta.settings.lookX === 'inverted' ? -1 : 1);
-  cam.pitch = clamp(cam.pitch + keyTilt() * 0.9 * dt, 0.3, 1.3);
+  camFit(); const L = camLim();
+  cam.pitch = clamp(cam.pitch + keyTilt() * 0.9 * dt, L.p0, L.p1);
   focus.x += (s.player.x - focus.x) * Math.min(1, dt * 8); focus.z += (s.player.z - focus.z) * Math.min(1, dt * 8);
-  // closer means a lower, more over-the-shoulder angle; further means a higher, map-like view
   const pitch = cam.pitch;
-  const d = cam.dist;
-  camera.position.set(focus.x + Math.sin(cam.yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d + 1, focus.z + Math.cos(cam.yaw) * Math.cos(pitch) * d);
-  camera.lookAt(focus.x, 1, focus.z);
+  let d = cam.dist;
+  if (lowView()) {
+    // walking forward, the camera swings round behind you, unless you have just turned it yourself
+    const p = s.player, fwd = -stick.move.y + (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
+    if (p.moving && UI.walking && fwd > 0.3 && performance.now() - (UI.lastLook || 0) > 1500 && !FIGHT.on) cam.yaw += angD(cam.yaw, p.face + Math.PI) * Math.min(1, dt * 1.4);
+    // a wall between you and the camera: the camera comes in closer so you are never lost behind it
+    const hx = Math.sin(cam.yaw), hz = Math.cos(cam.yaw), hd = Math.cos(pitch) * d;
+    if (solidCache) for (let r = 0.6; r < hd; r += 0.3) { const x = focus.x + hx * r, z = focus.z + hz * r; if (solidCache.some(o => !o.c && o.hx > 0.9 && o.hz > 0.9 && Math.abs(x - o.x) < o.hx && Math.abs(z - o.z) < o.hz)) { d = Math.max(1.8, (r - 0.4) / Math.cos(pitch)); break; } }
+    UI.camD = UI.camD == null ? d : UI.camD + (d - UI.camD) * Math.min(1, dt * (d < UI.camD ? 14 : 3)); d = UI.camD;
+    camera.position.set(focus.x + Math.sin(cam.yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d + 1.2, focus.z + Math.cos(cam.yaw) * Math.cos(pitch) * d);
+    camera.lookAt(focus.x, 1.4, focus.z);
+  } else {
+    camera.position.set(focus.x + Math.sin(cam.yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d + 1, focus.z + Math.cos(cam.yaw) * Math.cos(pitch) * d);
+    camera.lookAt(focus.x, 1, focus.z);
+  }
 }
 
 // solid things the player walks around
@@ -3172,7 +3190,7 @@ let lookPinch = null;
 function lookDrag(dx, dy) {
   const k = LOOK_SPEED[meta.settings.lookSpeed] || LOOK_SPEED.normal;
   cam.yaw -= dx * k * (meta.settings.lookX === 'inverted' ? -1 : 1);
-  cam.pitch = clamp(cam.pitch + dy * k * 0.8 * (meta.settings.lookY === 'inverted' ? -1 : 1), 0.3, 1.3);
+  cam.pitch = clamp(cam.pitch + dy * k * 0.8 * (meta.settings.lookY === 'inverted' ? -1 : 1), camLim().p0, camLim().p1); UI.lastLook = performance.now();
   $('stickR').classList.add('used');
 }
 window.addEventListener('keydown', e => { if (e.target.closest && e.target.closest('input, textarea')) return; keys.add(e.code);
@@ -3226,7 +3244,7 @@ canvas.addEventListener('pointermove', e => {
   if (d > 10) t.moved = true;
   if (t.look) {
     const mx = e.clientX - t.lx, my = e.clientY - t.ly; t.lx = e.clientX; t.ly = e.clientY;
-    if (look.size === 2 && lookPinch) { const [a, b] = [...look.values()]; cam.dist = clamp(lookPinch.dist * lookPinch.d / Math.max(20, Math.hypot(a.lx - b.lx, a.ly - b.ly)), 8, 46); return; }
+    if (look.size === 2 && lookPinch) { const [a, b] = [...look.values()]; cam.dist = clamp(lookPinch.dist * lookPinch.d / Math.max(20, Math.hypot(a.lx - b.lx, a.ly - b.ly)), camLim().d0, camLim().d1); return; }
     if (t.moved) lookDrag(mx, my);
     return;
   }
@@ -3246,7 +3264,7 @@ function endTouch(e) {
 }
 canvas.addEventListener('pointerup', endTouch);
 canvas.addEventListener('pointercancel', endTouch);
-canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, MAP_C.r === 300 ? 460 : 250); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), 8, 46); }, { passive: false });
+canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, MAP_C.r === 300 ? 460 : 250); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), camLim().d0, camLim().d1); }, { passive: false });
 // on a computer, drag with the right mouse button to look
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -3777,7 +3795,7 @@ const FIGHT = { on: false, meshes: new Map(), inp: { block: false, strike: null,
 const FOE_GEAR = { thug: { weapon: 'mace', armor: 'jerkin' }, bandit: { weapon: 'axe', armor: 'jerkin', cloak: '#4a3a2a' }, banditArcher: { weapon: 'bow', armor: 'gambeson', cloak: '#3f4a30' }, banditChief: { weapon: 'axe', armor: 'studded', shield: 'round', helm: 'leather' }, blade: { weapon: 'dagger', armor: 'studded', cloak: '#1f1d1c' }, duelist: { weapon: 'sword', armor: 'gambeson' }, guard: { weapon: 'spear', armor: 'chain', helm: 'iron' }, knight: { weapon: 'longsword', armor: 'halfplate', helm: 'great' }, champion: { weapon: 'sword', armor: 'chain', shield: 'heater', helm: 'iron' } };
 function beginFight(spec, onEnd) {
   Sim.startFight(G, spec); FIGHT.on = true; FIGHT.onEnd = onEnd; FIGHT.inp = { block: false, strike: null, dodge: null, yield: false }; FIGHT.banner = spec.kind === 'deadly' ? 3 : 1.5; FIGHT.title = spec.title || 'Fight!';
-  FIGHT.prevDist = cam.dist; cam.dist = 10; $('dialog').hidden = true; $('fightFx').hidden = false;
+  FIGHT.prevDist = cam.dist; FIGHT.prevPitch = cam.pitch; if (lowView()) { cam.dist = 8; cam.pitch = 0.5; } else cam.dist = 10; $('dialog').hidden = true; $('fightFx').hidden = false;
   UI.overlay = 'fight'; UI.sel = null; $('panel').hidden = true; $('fightHud').hidden = false; $('toasts').hidden = true; $('sticks').hidden = false;
   if (mini.on) closeMini();
 }
@@ -3820,7 +3838,7 @@ function finishFight() {
   const res = Sim.endFight(G) || 'lost'; FIGHT.on = false; FIGHT.endAt = 0; FIGHT.hinted = true;
   for (const g of FIGHT.meshes.values()) dropChar(g); FIGHT.meshes.clear(); FIGHT.floats.forEach(f => f.el.remove()); FIGHT.floats = [];
   if (playerMesh) removeRig(playerMesh); FIGHT.shots.forEach(s => scene.remove(s.g)); FIGHT.shots = [];
-  cam.dist = FIGHT.prevDist || cam.dist; $('fightHud').hidden = true; if (UI.dialog.length) renderDialog(); $('toasts').hidden = false; UI.overlay = null;
+  cam.dist = FIGHT.prevDist || cam.dist; cam.pitch = FIGHT.prevPitch || cam.pitch; $('fightHud').hidden = true; if (UI.dialog.length) renderDialog(); $('toasts').hidden = false; UI.overlay = null;
   const cb = FIGHT.onEnd; FIGHT.onEnd = null; if (cb) cb(res); renderCard(true);
 }
 // the gestures
@@ -5990,6 +6008,7 @@ function settingsHTML() {
   <div class="setting"><span>Check the sound</span><div class="seg"><button type="button" data-c='["ui","testSound"]'>Play a chord</button></div><p id="sndStatus">${Snd.status()} If you still hear nothing, turn the volume up with the side buttons.</p></div>
   <h4>Camera</h4>
   <div class="setting"><span>Look speed</span>${seg('lookSpeed', st.lookSpeed, [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']])}</div>
+  <div class="setting"><span>Camera</span>${seg('view', st.view || 'low', [['low', 'Behind you'], ['high', 'High, classic']])}<p>Behind you: a low view over your shoulder that follows you as you walk. High: the old view from above.</p></div>
   <div class="setting"><span>Turning left and right</span>${seg('lookX', st.lookX, [['normal', 'Normal'], ['inverted', 'Inverted']])}<p>Normal: drag right and the view turns right.</p></div>
   <div class="setting"><span>Tilting up and down</span>${seg('lookY', st.lookY, [['normal', 'Normal'], ['inverted', 'Inverted']])}<p>Normal: drag up to look out toward the horizon, drag down to look down from above.</p></div>`;
 }
