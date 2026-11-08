@@ -4914,9 +4914,9 @@ function pageProperty(s) {
   if (s.player.hutComfort != null || true) { const lv = s.player.hutComfort || 0; html = html.replace('<h4>Your houses</h4>', `<h4>Your houses</h4><div class="box"><h5>Your hut${s.player.house ? '' : ' \u00b7 your home'}</h5><p>${Sim.COMFORT[lv].name}.</p><div class="acts">${lv < 3 ? B_('Improve to ' + Sim.COMFORT[lv + 1].name.toLowerCase() + '<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', 'hut'], 'alt', s.coins < Sim.COMFORT[lv + 1].cost) : ''}</div></div>`); }
   const [town, pick] = townPick(s);
   const sale = s.houses.filter(h => (h.town || 'hearthmoor') === town && h.owner !== 'player' && !(h.owner && h.owner !== 'office:lord' && h.tenants.includes(h.owner)));
-  html += `<h4>Houses you could buy</h4>${pick}<p>The lord’s houses are for sale at a price. People who own the house they live in will not sell it.</p><div class="grid2">${sale.map(h => {
+  html += `<h4>Houses you could buy</h4>${pick}<p>Pick a town, then a house. Go and see it first, or buy it from here; once it is yours, move in from Your houses above, and your family comes with you. Your shops keep running while you live elsewhere (a manager keeps them going), and coaches run between the towns from each stage post.</p><div class="grid2">${sale.map(h => {
     const ts = h.tenants.map(id => s.people[id].name), price = Sim.housePrice(s, h);
-    return `<div class="box"><h5>${esc(h.name)}</h5><dl class="kv"><dt>Owner</dt><dd>${esc(Sim.landlordName(s, h.owner))}</dd><dt>Tenant</dt><dd>${ts.length ? esc(ts.join(', ')) : 'empty'}</dd><dt>Rent</dt><dd>${h.rent}c a day</dd><dt>Price</dt><dd>${price}c</dd></dl><div class="acts">${B_('Buy for ' + price + 'c', ['buyHouse', h.id], '', s.coins < price)}</div></div>`;
+    return `<div class="box"><h5>${esc(h.name)}</h5><dl class="kv"><dt>Owner</dt><dd>${esc(Sim.landlordName(s, h.owner))}</dd><dt>Tenant</dt><dd>${ts.length ? esc(ts.join(', ')) : 'empty'}</dd><dt>Rent</dt><dd>${h.rent}c a day</dd><dt>Price</dt><dd>${price}c</dd></dl><div class="acts">${B_('Go and see it', ['ui', 'goHouse', h.id], 'alt')}${B_('Buy for ' + price + 'c', ['buyHouse', h.id], '', s.coins < price)}</div></div>`;
   }).join('')}</div>`;
   const bizIn = t => Object.values(s.biz).filter(b => (b.town || 'hearthmoor') === t);
   html += `<h4>${TOWN_NAMES[town]} businesses</h4><div class="grid2">${bizIn(town).map(b => bizBox(s, b)).join('')}</div>`;
@@ -6220,6 +6220,7 @@ function uiCmd(k, v) {
   if (k === 'fyield') { FIGHT.inp.yield = true; return; }
   if (k === 'flee') { wildFight({ kind: 'knockout', foes: [{ kit: 'guard', name: 'The watchman' }], title: 'Run for it!', ctx: { caught: true } }); return; }
   if (k === 'jump') { const el = $('page').querySelector('[data-jump="' + v + '"]'); if (el) el.scrollIntoView({ block: 'start', behavior: calm() ? 'auto' : 'smooth' }); return; }
+  if (k === 'goHouse') { const h = G.houses.find(x => x.id === v); if (!h) return; const sp = signPos(h), key = 'sign:' + h.id; if (!L[key]) L[key] = { x: sp.x, z: sp.z, r: 1.7, name: h.name + ' (for sale)', sign: h.id, town: h.town && h.town !== 'hearthmoor' ? h.town : undefined }; closeOverlay(); act(['goto', key]); return; }
   if (k === 'fireSel') { UI.fireSel = v; if (v) { UI.tab = 'office'; if (UI.overlay !== 'book') openBook(); else renderBook(); } else renderBook(); return; }
   if (k === 'staffSel') { const was = UI.staffSel; UI.staffSel = v; UI.confirm = null; if (!v && was) UI.reveal = '[data-sbox="' + (was.biz != null ? 'biz:' + was.biz : 'shop:' + was.shop) + '"]'; renderBook(true); return; }
   if (k === 'bizMenu') { UI.bizMenu = !UI.bizMenu; if (G) hud(G); return; }
@@ -7121,6 +7122,17 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.70', date: '8 November', title: 'Steel and Office', items: [
+    'Skills and levels: fifteen skills that grow as you use them (one-handed, two-handed, archery, block, light and heavy armour, smithing, crafting, hunting, trade, speech, command, sneak, pickpocket, lockpick). Each has a constellation of perks. Everything you do earns experience; every level brings a perk point and your choice of more health, stamina or carrying.',
+    'Gear: a bag you carry by weight and seven slots to dress. Clothes from rags to royal (and dyes), armour from a gambeson to full plate, daggers, swords, maces, axes, spears, halberds, bows and crossbows, and shields. Gear wears and is mended at a smith, and can be improved at a forge three times over.',
+    'New shops: the clothier, the armourer, the weaponsmith and the bowyer. Go to the counter to buy and sell; each shop sells its own wares. Townsfolk now dress for who they are: guards in mail with spears, nobles with swords, workers in their trade clothes.',
+    'Real-time fights: tap an enemy to strike, hold to block, swipe to dodge. You see every swing: swords and axes arc, maces chop, spears and daggers thrust, bows draw and arrows fly, shields come up. Most fights end in a knockout; only a fight to the death can kill, and then you can yield when badly hurt.',
+    'Out in the world: deer and boar in the woods to hunt (sell the meat and hides), bandit camps off the roads to raid for their hoard, a tournament with blunted blades in every town square each seventh day and on holidays, and the thief\u2019s trade: sneak, pick pockets and pick locks, at the risk of the watch.',
+    'Offices with real power: each office brings its daily business, more the higher you rise. Dismiss anyone below you, right down the chain: name the replacement yourself or call a new vote. You are sworn in with the marks of your office, move into the manor or the castle, and a lord rides with men-at-arms, the crown with a royal guard. The pop-up when you take office now takes you to your powers.',
+    'The Elder walks into Varrow Manor and finds the Lord in his hall, instead of being sent for.',
+    'Moving: every town\u2019s houses for sale are on the Property page. Go and see one, buy it, and move in; your family comes with you and your shops keep running.',
+    'A new camera, low behind your shoulder, that follows you as you walk (the old high view is in Settings). Pop-ups are slimmer so you can see where you are going.',
+    'Menus keep your place: tapping a button no longer jumps to the top, and tapping a person or a business takes you straight to them.'] },
   { v: '0.69.3', date: '7 November', title: 'The manager goes to market', items: [
     'Your manager now really walks to the Trading Post, buys what the shop needs, and carries it back on their back to restock storage. You can watch them go.',
     'They set off on their own as soon as anything runs low, from 6 in the morning until closing, whether or not the worker is in. A note tells you when they leave and what they bought.'] },

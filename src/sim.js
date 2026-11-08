@@ -4808,7 +4808,7 @@
     E.history.unshift({ d: s.day, key: r.key, label, win: win === 'player' ? s.name : s.people[win].name, you: r.you ? pct('player') : null, text: line, cands: rank.map(([c, v]) => ({ name: c === 'player' ? s.name : s.people[c].name, you: c === 'player', votes: Math.round(v), pct: pct(c) })), total: Math.round(res.total), towns: Object.keys(res.byTown).length, yourVote: ballot && s.people[ballot] ? s.people[ballot].name : null }); if (E.history.length > 40) E.history.length = 40;
     const youRan = r.you; r.you = false;
     if (youRan) { s.rec.racesRun = (s.rec.racesRun || 0) + 1; if (win === 'player') s.rec.racesWon = (s.rec.racesWon || 0) + 1; else { s.rec.racesLost = (s.rec.racesLost || 0) + 1; if (hold === 'player') s.rec.votedOut = (s.rec.votedOut || 0) + 1; } }
-    if (win === 'player') gainXP(s, { council: 40, elder: 90, lord: 180, seat: 280, crown: 450 }[r.office] || 0);
+    if (win === 'player') gainXP(s, { council: 80, elder: 220, lord: 450, seat: 650, crown: 1000 }[r.office] || 0);
     if (win === 'player') { const rk = { council: 0, elder: 1, lord: 2, seat: 3, crown: 4 }[r.office]; if (rk > (s.rec.highestRank == null ? -1 : s.rec.highestRank)) { s.rec.highestRank = rk; s.rec.highestTitle = raceLabel(r).replace(/^a seat on the /, 'a seat on the ').replace(/^the /, ''); } }
     if (absent) event(s, 'You were not at ' + venueName(r) + ' when the votes were counted. People noticed.', 'bad');
     if (win === hold && win === 'player') recordPledge(s, r);
