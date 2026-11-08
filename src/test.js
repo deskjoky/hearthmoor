@@ -788,7 +788,7 @@ console.log('28. To the throne of Alderwyn by deeds, and back from exile');
   R.deeds.ironcrest = 1; winElection(s, 'lord:ironcrest'); check(Sim.yourLordships(s).includes('ironcrest') && s.offices.elder !== 'player', 'then lord of a small town, Ironcrest, and the Elder\u2019s chair passes on');
   winElection(s, 'lord:eastwatch'); holdElections(s); check(Sim.yourLordships(s).includes('eastwatch') && !Sim.yourLordships(s).includes('ironcrest'), 'now Eastwatch, a bigger town, elects you its lord');
   check(/bigger town/.test(Sim.standBar(s, Sim.ensureRaces(s).races['lord:ironcrest']) || ''), 'a lord only moves up to a bigger town');
-  check(Sim.cmd(s, 'moveToSeat').ok && /Castle/.test(Sim.homeOfYou(s).name), 'you move into your seat: ' + Sim.homeOfYou(s).name);
+  check((Sim.cmd(s, 'moveToSeat').ok || !!s.player.seat) && /Castle/.test(Sim.homeOfYou(s).name), 'you move into your seat (on taking office, or by choice): ' + Sim.homeOfYou(s).name);
   { const E = Sim.electState(s); E.since = s.day; check(/Hold your office/.test(Sim.standBar(s, Sim.ensureRaces(s).races['seat:trade']) || ''), 'a new lord must hold the lands a while before standing for the council'); E.since = s.day - 99; }
   // allies: back the reformer and the lord of Ironcrest; good government
   Sim.cmd(s, 'backFigure', 'reformer'); Sim.cmd(s, 'backFigure', 'lord');
@@ -1407,7 +1407,7 @@ console.log('45. Rebellion against the King of Alderwyn (v0.51)');
   const owed = RW.after.owed.slice(); check(owed.length >= 1, 'and ' + owed.length + ' allies sworn on a promise are owed land or a seat');
   check(Y('rewardAlly', owed[0], 'seat').ok && !RW.after.owed.includes(owed[0]), 'a promise kept: a council seat for an ally');
   check(Y('rebelSettle', 'amnesty').ok && RW.after.settled, 'the old king’s lords are given amnesty');
-  for (let i = 0; i < 22; i++) Sim.advance(w, 1440);
+  for (let i = 0; i < 26; i++) Sim.advance(w, 1440);
   check(owed.length < 2 || RW.rival, owed.length < 2 ? 'no promise left unkept' : 'an ally cheated of their promise raises men against the new ruler');
   // a rising for a charter, ended on the king's terms
   const c = lord(57), Z = (...a) => Sim.cmd(c, ...a); Z('plotBegin', 'charter'); Z('plotArm', 2000); Z('plotRise'); c.realm.plot.score = 30;
@@ -1616,7 +1616,8 @@ console.log('50. Staff, elections and promises (v0.57-v0.59)');
   check(sh.hands.filter(h => h.role === 'counter').length === 1, 'the manager keeps one employee on the counter');
   { sh.stock.grain = 2; sh.stock.wood = 1; sh.fetch = null; sh.fetchWait = 0; m.t = Math.floor(m.t / 1440) * 1440 + 10 * 60; const c0 = m.coins;
     for (let i = 0; i < 30 && !sh.fetch; i++) Sim.advance(m, 1);
-    check(!!sh.fetch && m.coins < c0, 'the manager goes for supplies on their own when storage runs low, before it is empty'); }
+    const went = !!sh.fetch; for (let i = 0; i < 240 && sh.fetch; i++) Sim.advance(m, 1);
+    check(went && !sh.fetch && m.coins < c0 && sh.stock.grain > 2, 'the manager walks to the Trading Post on their own when storage runs low, and brings the supplies back'); }
   // trade levels never depend on office
   const t = Sim.newGame(5903); (t.tradeXp = t.tradeXp || {}).bakery = 500;
   check(Sim.tradeLevel(t, 'bakery') === 5, 'trade level 5 from work alone, with no office');

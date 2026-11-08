@@ -1537,7 +1537,8 @@
     const id = 'p' + (s.nextPid++);
     if (o && o.skill == null) o.skill = Math.round((0.6 + rand(s) * 0.6) * 100) / 100;
     const p = Object.assign({ id, name: 'Someone', age: 30, purse: 20, skill: 0.6 + rand(s) * 0.6, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: [], palette: Math.floor(rand(s) * 10), ate: 0, retired: false }, o);
-    p.id = id; s.people[id] = p; return p;
+    p.id = id; s.people[id] = p; if (p.rep == null) { try { p.rep = Math.round(repTarget(s, p) * 10) / 10; } catch (e) { p.rep = 0; } if (!Number.isFinite(p.rep)) p.rep = 0; }   // newcomers have a standing from the day they arrive
+    return p;
   }
   function addBody(s, p, at) {
     if (s.agents.some(a => a.pid === p.id)) return;
