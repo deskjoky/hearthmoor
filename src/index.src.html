@@ -2604,13 +2604,14 @@ function dressGear(g, G0) {
   if (G0.armor) { const b = at(RG.breast, ARMOR_COL[G0.armor] || '#8a8f96', 0, 0.44, 0); b.scale.set(1.06, 1.05, 1.06); if (G0.armor === 'fullplate' || G0.armor === 'halfplate') { at(CG.hand, ARMOR_COL[G0.armor], -0.33, 0.62, 0).scale.setScalar(1.6); at(CG.hand, ARMOR_COL[G0.armor], 0.33, 0.62, 0).scale.setScalar(1.6); } }
   if (G0.helm === 'great') at(GG.greathelm, '#b8bcc2', 0, 1.0, 0); else if (G0.helm) at(RG.helm, G0.helm === 'leather' ? '#6b4a2e' : '#8a8f96', 0, 1.02, 0).scale.set(0.95, 0.8, 0.95);
   if (G0.cloak) at(RG.cloak, G0.cloak, 0, 0.44, -0.3);
-  const w = G0.weapon;
+  const n0 = g.children.length, w = G0.weapon;
   if (w === 'sword' || w === 'dagger') { const sw = at(RG.sword, '#b8bcc2', -0.31, 0.26, 0.1); sw.rotation.z = 0.35; if (w === 'dagger') sw.scale.set(1, 0.5, 1); }
   else if (w === 'mace' || w === 'axe') { const h = at(RG.staff, '#6b4a2a', -0.31, 0.3, 0.1); h.scale.set(1, 0.45, 1); h.rotation.z = 0.35; if (w === 'axe') at(GG.axe, '#9aa0a6', -0.38, 0.52, 0.1); else at(RG.knob, '#8a8f96', -0.38, 0.55, 0.1).scale.setScalar(1.6); }
   else if (w === 'spear') { const sp = at(GG.long, '#6b4a2a', 0.36, 0.75, -0.05); at(RG.point, '#b8bcc2', 0.36, 1.6, -0.05); sp.rotation.z = -0.05; }
   else if (w === 'bow' || w === 'xbow') { const b = at(GG.bow, '#6b4a2a', 0.05, 0.55, -0.32); b.rotation.z = Math.PI / 2 + 0.4; }
   else if (w === 'longsword') { const sw = at(RG.sword, '#b8bcc2', 0.05, 0.6, -0.33); sw.scale.set(1, 1.6, 1); sw.rotation.z = 0.6; }
   if (G0.shield) { const geo = G0.shield === 'tower' ? GG.shieldT : G0.shield === 'buckler' || G0.shield === 'round' ? GG.shieldR : GG.shieldB, sh = at(geo, G0.shieldColor || '#7a5634', 0.4, 0.45, 0.02); sh.rotation.z = Math.PI / 2; sh.rotation.y = Math.PI / 2; if (G0.shield === 'buckler') sh.scale.setScalar(0.7); }
+  for (let i = n0; i < g.children.length; i++) g.children[i].userData.hip = 1;
 }
 // what the player is wearing, for the body on screen
 function playerGear(s) {
@@ -2793,6 +2794,14 @@ function syncChars(s, t) {
     if (!g) { const fem = Sim.sexOf({ name: w.name }) === 'f'; g = makeChar({ tunic: '#b8a079', skin: SKIN[w.name.length % SKIN.length], apron: APRON[shop.trade], chef: shop.trade === 'bakery', pick: 'w:' + shop.id, fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[w.name.length % 5] }); workerMeshes.set(key, g); }
     placeChar(g, w, t, { moving: w.moving, working: w.task === 'craft' && !w.moving, pack: w.carry ? 1 : 0, hidden: w.indoors, selected: UI.sel === 'w:' + shop.id });
   }
+  // whoever is fetching supplies, walking to the Trading Post and back with the load
+  const runners = new Set();
+  for (const shop of s.shops) {
+    const F = shop.fetch; if (!F || F.x == null) continue; if (F.pid) runners.add(F.pid);
+    const key = shop.id + ':run:' + F.by; seenW.add(key); let g = workerMeshes.get(key);
+    if (!g) { const fem = Sim.sexOf({ name: F.by }) === 'f'; g = makeChar({ tunic: F.who === 'manager' ? '#3e4f6e' : '#a89a7a', skin: SKIN[F.by.length % SKIN.length], fem, hair: fem ? 'bun' : 'short', hairColor: LOOKS.hairColor[F.by.length % 5], hat: F.who === 'manager' ? 'cap' : null, capColor: '#2f3d55' }); workerMeshes.set(key, g); }
+    placeChar(g, F, t, { moving: F.moving !== false, pack: F.phase === 'back' ? 1 : 0 });
+  }
   for (const shop of s.shops) {
     const hs = shop.hands || [], H = Sim.workerHours(shop), hr = Sim.hourOf(s), on = hr >= H.start && hr < H.end;
     hs.forEach((h, i) => {
@@ -2837,7 +2846,7 @@ function syncChars(s, t) {
     const pp = a.pid && s.people[a.pid];
     const icon = a.icon || (pp && !pp.home && Sim.hourOf(s) >= 20 ? 'angry' : null) || (pp && pp.job && pp.job.office === 'elder' && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null)) ? 'wait' : null);
     if (a.kid && pp) { const k = 0.42 + Math.min(16, pp.age) / 16 * 0.55; if (Math.abs(g.scale.x - k) > 0.01) g.scale.setScalar(k); } else if (!a.kid && g.scale.x < 1) g.scale.setScalar(pp && Sim.sexOf(pp) === 'f' ? 1.02 : 1.1);
-    placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors, selected: UI.sel === a.id });
+    placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors || (a.pid && runners.has(a.pid)), selected: UI.sel === a.id });
   }
   for (const [id, g] of agentMeshes) if (!seen.has(id)) { dropChar(g); agentMeshes.delete(id); if (UI.sel === id) UI.sel = null; }
 }
@@ -3592,10 +3601,177 @@ function pageRenown(s) {
 }
 const ACT_WORD = { slander: 'spread stories about you', undercut: 'started a price war', sabotage: 'smashed up your property', poach: 'lured away your staff', thugs: 'paid thugs to beat you', assassin: 'hired a blade', intrigue: 'whispered against you at court', pirates: 'had your ship robbed', arson: 'set a fire', poison: 'poisoned your family' };
 
+/* ----- fight animation: weapons in the hand, arms that swing, shields that come up, arrows that fly ----- */
+const FG = {
+  grip: flat(new THREE.CylinderGeometry(0.028, 0.028, 0.18, 5)), guard: flat(new THREE.BoxGeometry(0.22, 0.035, 0.06)), blade: flat(new THREE.BoxGeometry(0.06, 1, 0.018)),
+  pommel: flat(new THREE.SphereGeometry(0.04, 5, 3)), haft: flat(new THREE.CylinderGeometry(0.024, 0.024, 1, 5)), maceHead: flat(new THREE.IcosahedronGeometry(0.1, 0)),
+  axeHead: flat(new THREE.BoxGeometry(0.2, 0.16, 0.03)), hammer: flat(new THREE.BoxGeometry(0.2, 0.1, 0.1)), point: flat(new THREE.ConeGeometry(0.045, 0.18, 4)),
+  bow: new THREE.TorusGeometry(0.42, 0.018, 4, 12, Math.PI), string: new THREE.BoxGeometry(0.006, 0.84, 0.006), shaft: new THREE.CylinderGeometry(0.012, 0.012, 0.62, 4),
+  stock: flat(new THREE.BoxGeometry(0.07, 0.5, 0.07)), bar: flat(new THREE.BoxGeometry(0.62, 0.03, 0.03)),
+  trail: new THREE.RingGeometry(0.3, 1.2, 14, 1, Math.PI * 0.3, Math.PI * 0.95)
+};
+const STEEL = '#c9cdd3', WOOD = '#6b4a2a';
+function weaponModel(I) {
+  const g = new THREE.Group(), at = (geo, c, x, y, z) => mesh(geo, c, x, y, z, g);
+  if (!I) return { g, kind: 'punch', len: 0.2 };
+  const f = I.fam, two = I.hands === 2, id = I.id;
+  if (f === 'sword' || f === 'dagger') {
+    const L = f === 'dagger' ? 0.28 : two ? 0.85 : id === 'shortsword' ? 0.5 : 0.66;
+    at(FG.grip, '#3a2a1a', 0, 0, 0).scale.y = two ? 1.6 : 1; at(FG.pommel, STEEL, 0, two ? -0.15 : -0.1, 0); at(FG.guard, STEEL, 0, 0.1, 0);
+    const b = at(FG.blade, I.blunt ? '#9a9ea4' : STEEL, 0, 0.1 + L / 2, 0); b.scale.y = L;
+    return { g, kind: f === 'dagger' ? 'stab' : two ? 'chop2' : 'slash', len: L + 0.1 };
+  }
+  if (f === 'mace') {
+    const L = id === 'club' ? 0.55 : id === 'warhammer' ? 0.85 : 0.6;
+    const h = at(FG.haft, id === 'club' ? '#7a5634' : WOOD, 0, L / 2 - 0.08, 0); h.scale.y = L;
+    if (id === 'club') at(FG.maceHead, '#7a5634', 0, L - 0.1, 0).scale.set(0.8, 1.5, 0.8); else if (id === 'warhammer') at(FG.hammer, STEEL, 0, L - 0.12, 0); else at(FG.maceHead, STEEL, 0, L - 0.1, 0);
+    return { g, kind: two ? 'chop2' : 'slash', len: L };
+  }
+  if (f === 'axe') {
+    const L = two ? 0.95 : id === 'hatchet' ? 0.45 : 0.62;
+    const h = at(FG.haft, WOOD, 0, L / 2 - 0.08, 0); h.scale.y = L; const a = at(FG.axeHead, STEEL, 0.09, L - 0.16, 0); if (two) a.scale.set(1.5, 1.6, 1.2);
+    return { g, kind: two ? 'chop2' : 'slash', len: L };
+  }
+  if (f === 'spear') {
+    const h = at(FG.haft, WOOD, 0, 0.3, 0); h.scale.y = 1.6; at(FG.point, STEEL, 0, 1.18, 0);
+    if (id === 'halberd') { at(FG.axeHead, STEEL, 0.1, 0.95, 0).scale.set(1.3, 1.5, 1); }
+    return { g, kind: 'thrust', len: 1.2 };
+  }
+  if (f === 'xbow') { at(FG.stock, '#5a3d22', 0, 0.15, 0); at(FG.bar, WOOD, 0, 0.38, 0); at(FG.shaft, '#d8c9a0', 0, 0.2, 0.05).scale.y = 0.6; return { g, kind: 'xbow', len: 0.5 }; }
+  if (f === 'bow') {   // the bow goes in the left hand; this is the arrow on the string
+    const arc = mesh(FG.bow, WOOD, 0, 0.42, 0, g); arc.rotation.set(0, Math.PI / 2, Math.PI); const st = mesh(FG.string, '#e8e2d0', 0, 0.42, 0, g); st.rotation.x = Math.PI / 2;
+    return { g, kind: 'bow', len: 0.6 };
+  }
+  return { g, kind: 'punch', len: 0.2 };
+}
+function shieldModel(id) {
+  if (!id) return null; const g = new THREE.Group();
+  if (id === 'buckler' || id === 'roundshield') { const m = mesh(GG.shieldR, '#7a5634', 0, -0.05, 0, g); if (id === 'buckler') m.scale.set(0.6, 1, 0.6); mesh(FG.maceHead, STEEL, 0, -0.08, 0, g).scale.setScalar(0.5); }
+  else { const m = mesh(id === 'tower' ? GG.shieldT : GG.shieldB, id === 'kite' ? '#2f4a6a' : '#6a2a24', 0, -0.05, 0.05, g); m.rotation.x = Math.PI / 2; if (id === 'kite') m.scale.y = 1.25; }
+  return g;
+}
+// put arms, a weapon and a shield on a body for the length of a fight
+function addRig(g, I, shieldId) {
+  const u = g.userData; if (u.rig) return u.rig;
+  g.children.forEach(c => { if (c.userData.hip) c.visible = false; }); u.hl.visible = false; u.hr.visible = false;
+  const arm = side => { const a = new THREE.Group(); a.position.set(0.3 * side, 0.7, 0.02); g.add(a); const h = new THREE.Mesh(CG.hand, u.hr.material); h.position.y = -0.28; a.add(h); const grip = new THREE.Group(); grip.position.y = -0.28; a.add(grip); return { a, grip, rx: -0.8, rz: 0, pz: 0, side }; };
+  const R = { r: arm(1), l: arm(-1), I, anim: null, lastSwing: 0, flinch: 0, state: null, wT: 1 };
+  const W = weaponModel(I); R.kind = W.kind; R.len = W.len;
+  if (W.kind === 'bow') { R.l.grip.add(W.g); R.arrow = mesh(FG.shaft, '#d8c9a0', 0, -0.28, 0, R.r.grip); R.arrow.visible = false; }
+  else { R.r.grip.add(W.g); W.g.rotation.x = W.kind === 'thrust' || W.kind === 'stab' || W.kind === 'xbow' ? Math.PI : 2.44; }
+  const sh = W.kind === 'bow' || W.kind === 'xbow' || W.kind === 'chop2' || W.kind === 'thrust' && I && I.hands === 2 ? null : shieldModel(shieldId);
+  if (sh) { R.l.grip.add(sh); R.shield = sh; }
+  R.trailMat = new THREE.MeshBasicMaterial({ color: '#fff6dc', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
+  R.trail = new THREE.Mesh(FG.trail, R.trailMat); R.trail.position.set(0.3, 0.7, 0.02); R.trail.rotation.y = Math.PI / 2; const sc = (0.3 + R.len) / 1.2; R.trail.scale.set(sc, sc, 1); g.add(R.trail);
+  u.rig = R; return R;
+}
+function removeRig(g) {
+  const u = g.userData, R = u.rig; if (!R) return;
+  [R.r.a, R.l.a, R.trail].forEach(o => g.remove(o)); R.trailMat.dispose();
+  g.children.forEach(c => { if (c.userData.hip) c.visible = true; }); u.hl.visible = true; u.hr.visible = true; g.rotation.x = 0; g.rotation.z = 0; u.rig = null;
+}
+const ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x), lerp = (a, b, k) => a + (b - a) * k;
+// where the arms rest, guard, wind up and finish, for each way of fighting
+const POSE = {
+  slash: { idle: [-0.9, 0.15, -0.7, 0.2], raised: [-2.8, 0.45], end: [-0.25, -0.55] },
+  chop2: { idle: [-1.0, -0.25, -1.0, 0.6], raised: [-2.9, 0.1], end: [-0.3, -0.2] },
+  stab: { idle: [-1.15, -0.1, -0.95, 0.25], raised: [-1.0, 0], end: [-1.6, -0.05] },
+  punch: { idle: [-1.2, -0.15, -1.2, 0.3], raised: [-1.0, 0], end: [-1.6, -0.15] },
+  thrust: { idle: [-1.3, -0.05, -1.3, 0.55], raised: [-1.2, 0], end: [-1.55, -0.05] },
+  bow: { idle: [-1.45, -0.45, -1.5, 0.45] }, xbow: { idle: [-1.5, -0.2, -1.4, 0.5] }
+};
+// a rig's pose this frame: idle guard, block, a wind-up (p from 0 to 1) or a strike animation (q from 0 to 1)
+function poseRig(R, mode, p, dt) {
+  const P0 = POSE[R.kind] || POSE.slash, [irx, irz, ilx, ilz] = P0.idle;
+  let rx = irx, rz = irz, rp = 0, lx = R.shield ? -0.95 : ilx, lz = R.shield ? 0.15 : ilz, lp = 0, lunge = 0, trail = 0, draw = 0;
+  const swingy = R.kind === 'slash' || R.kind === 'chop2', thrusty = R.kind === 'stab' || R.kind === 'punch' || R.kind === 'thrust';
+  if (mode === 'block') {
+    if (R.shield) { lx = -1.45; lz = 0.45; lp = 0.08; }
+    else if (R.kind === 'bow' || R.kind === 'xbow') { rx = -1.9; rz = -0.6; lx = -1.9; lz = 0.6; }
+    else { rx = -2.05; rz = -0.95; lx = -1.8; lz = 0.75; }
+  } else if (mode === 'windup') {
+    const k = ease(p);
+    if (swingy) { rx = lerp(irx, P0.raised[0], k); rz = lerp(irz, P0.raised[1], k); }
+    else if (thrusty) { rx = lerp(irx, P0.raised[0], k); rp = -0.25 * k; }
+    else if (R.kind === 'bow') { rp = -0.32 * k; draw = 1; }
+  } else if (mode === 'strike') {
+    const q = p;
+    if (swingy) {
+      if (q < 0.3) { const k = ease(q / 0.3); rx = lerp(irx, P0.raised[0], k); rz = lerp(irz, P0.raised[1], k); }
+      else if (q < 0.55) { const k = (q - 0.3) / 0.25; rx = lerp(P0.raised[0], P0.end[0], k * k); rz = lerp(P0.raised[1], P0.end[1], k); trail = 0.55; lunge = 0.3 * Math.sin(k * Math.PI / 2); }
+      else { const k = ease((q - 0.55) / 0.45); rx = lerp(P0.end[0], irx, k); rz = lerp(P0.end[1], irz, k); trail = 0.55 * Math.max(0, 1 - (q - 0.55) / 0.12); lunge = 0.3 * (1 - k); }
+    } else if (thrusty) {
+      if (q < 0.3) { const k = ease(q / 0.3); rx = lerp(irx, P0.raised[0], k); rp = -0.25 * k; }
+      else if (q < 0.5) { const k = (q - 0.3) / 0.2; rx = lerp(P0.raised[0], P0.end[0], k); rz = lerp(irz, P0.end[1], k); rp = lerp(-0.25, 0.35, k); lunge = 0.35 * k; }
+      else { const k = ease((q - 0.5) / 0.5); rx = lerp(P0.end[0], irx, k); rp = 0.35 * (1 - k); lunge = 0.35 * (1 - k); }
+    } else if (R.kind === 'bow') { if (q < 0.45) { rp = -0.32 * ease(q / 0.45); draw = 1; } else rp = -0.32 * (1 - ease((q - 0.45) / 0.3)); }
+    else if (R.kind === 'xbow') { const k = q < 0.15 ? q / 0.15 : Math.max(0, 1 - (q - 0.15) / 0.5); rx = irx + 0.35 * k; lx = ilx + 0.3 * k; rp = -0.1 * k; }
+    if (R.kind === 'chop2') { lx = rx; lz = 0.6 + rz * 0.5; lp = rp; }
+    if (R.kind === 'thrust' && !R.shield) { lx = rx; lp = rp; }
+  }
+  // ease the arms toward the pose (fast), except mid-strike, where the swing is exact
+  const k = mode === 'strike' ? 1 : 1 - Math.exp(-dt * 18), A = R.r, L = R.l;
+  A.rx = lerp(A.rx, rx, k); A.rz = lerp(A.rz, rz, k); A.pz = lerp(A.pz, rp, k); L.rx = lerp(L.rx, lx, k); L.rz = lerp(L.rz, lz, k); L.pz = lerp(L.pz, lp, k);
+  A.a.rotation.set(A.rx, 0, A.rz); A.a.position.z = 0.02 + A.pz; L.a.rotation.set(L.rx, 0, L.rz); L.a.position.z = 0.02 + L.pz;
+  R.trailMat.opacity = trail; R.trail.visible = trail > 0.01; if (R.arrow) R.arrow.visible = draw > 0;
+  return lunge;
+}
+function shoot(from, to, bolt) {
+  const g = new THREE.Group(), sh = mesh(FG.shaft, bolt ? '#8a6a3a' : '#d8c9a0', 0, 0, 0, g); sh.rotation.x = Math.PI / 2; if (bolt) sh.scale.y = 0.6;
+  const tip = mesh(FG.point, STEEL, 0, 0, bolt ? 0.2 : 0.32, g); tip.rotation.x = Math.PI / 2; tip.scale.setScalar(0.5);
+  scene.add(g); const d = Math.hypot(to.x - from.x, to.z - from.z);
+  FIGHT.shots.push({ g, x0: from.x, z0: from.z, x1: to.x, z1: to.z, t: 0, dur: Math.max(0.12, d / 28) });
+}
+function fighterLook(g, a, R, mode, p, dt, t) {
+  const lunge = poseRig(R, mode, p, dt);
+  const fx = Math.sin(g.rotation.y), fz = Math.cos(g.rotation.y);
+  g.position.x += fx * lunge; g.position.z += fz * lunge;
+  R.flinch = Math.max(0, R.flinch - dt); g.rotation.x = -0.35 * (R.flinch / 0.25);
+}
+function poseFight(dt, t) {
+  const Fi = G.fight; if (!Fi) return; const P = Fi.p, pl = G.player;
+  // you
+  if (playerMesh) {
+    const I = Sim.weaponOf(G), off = Sim.equipped(G, 'off'), R = addRig(playerMesh, I, off && off.id);
+    if (P.swing > R.lastSwing + 0.05) {
+      R.anim = { q: 0, dur: R.kind === 'bow' ? 0.5 : R.kind === 'xbow' ? 0.4 : Math.min(0.45, Math.max(0.28, 0.42 / ((I && I.spd) || 1.4))) , shot: false };
+    }
+    R.lastSwing = P.swing;
+    let mode = P.block ? 'block' : 'idle', q = 0;
+    if (R.anim) { R.anim.q += dt / R.anim.dur; q = R.anim.q; mode = 'strike';
+      if ((R.kind === 'bow' && q >= 0.45 || R.kind === 'xbow' && q > 0) && !R.anim.shot && !P.whiff) { R.anim.shot = true; const tgt = Fi.foes.filter(f => !f.down).sort((a, b) => Math.hypot(a.x - pl.x, a.z - pl.z) - Math.hypot(b.x - pl.x, b.z - pl.z))[0]; if (tgt) shoot(pl, tgt, R.kind === 'xbow'); }
+      if (q >= 1) { R.anim = null; mode = P.block ? 'block' : 'idle'; } }
+    fighterLook(playerMesh, pl, R, mode, q, dt, t);
+    if (P.dodge > 0) { const k = P.dodge / 0.35; playerMesh.position.y += Math.sin(k * Math.PI) * 0.35; playerMesh.rotation.z = Math.sin(k * Math.PI) * 0.7 * (R.dodgeSide || 1); } else { playerMesh.rotation.z = 0; R.dodgeSide = Math.random() < 0.5 ? 1 : -1; }
+  }
+  // foes and your guard
+  for (const f of Fi.foes.concat(Fi.allies)) {
+    const ally = f.id >= 100, g = ally ? (FIGHT.meshes.get(f.id) || (FIGHT.meshes.set(f.id, makeChar({ tunic: LORD_BLUE, skin: SKIN[2], gear: { armor: 'chain', helm: 'iron' }, hair: 'short' })), FIGHT.meshes.get(f.id))) : foeMesh(f), u = g.userData;
+    if (f.down) { if (u.rig) removeRig(g); placeChar(g, f, t, { moving: false }); g.rotation.x = -Math.PI / 2; g.position.y += 0.18; continue; }
+    const R = addRig(g, Sim.ITEMS[ally ? 'spear' : f.w], ally ? null : f.sh);
+    const mv = u.lx != null && Math.hypot(f.x - u.lx, f.z - u.lz) > dt * 0.4; u.lx = f.x; u.lz = f.z;
+    placeChar(g, f, t, { moving: mv, icon: !ally && f.state === 'windup' ? 'angry' : null });
+    if (!ally && f.state === 'windup') u.icon.scale.setScalar(1.8);
+    // the moment a wind-up ends, the blow falls
+    if (R.state === 'windup' && f.state !== 'windup' && !ally) { R.anim = { q: R.kind === 'bow' ? 0.45 : 0.3, dur: 0.4, shot: false }; if (R.kind === 'bow' || R.kind === 'xbow') shoot(f, pl, R.kind === 'xbow'); }
+    if (f.state === 'windup' && R.state !== 'windup') R.wT = Math.max(0.2, f.t);
+    if (ally && f.t > (f.lastT || 0) + 0.3) R.anim = { q: 0, dur: 0.4 };
+    f.lastT = f.t; R.state = f.state;
+    let mode = f.blocking > 0 && R.shield ? 'block' : 'idle', p = 0;
+    if (f.state === 'windup') { mode = 'windup'; p = 1 - f.t / R.wT; }
+    if (R.anim) { R.anim.q += dt / R.anim.dur; if (R.anim.q >= 1) R.anim = null; else { mode = 'strike'; p = R.anim.q; } }
+    fighterLook(g, f, R, mode, p, dt, t);
+  }
+  // who got hit flinches
+  for (const h of FIGHT.lastHits || []) { const g = h.who === 0 ? playerMesh : FIGHT.meshes.get(h.who); if (g && g.userData.rig) g.userData.rig.flinch = 0.25; }
+  FIGHT.lastHits = null;
+  // arrows in flight
+  FIGHT.shots = FIGHT.shots.filter(s => { s.t += dt; const k = Math.min(1, s.t / s.dur), x = lerp(s.x0, s.x1, k), z = lerp(s.z0, s.z1, k); s.g.position.set(x, standH(x, z) + 0.95 + Math.sin(k * Math.PI) * 0.25, z); s.g.lookAt(s.x1, standH(s.x1, s.z1) + 0.9, s.z1); if (k >= 1) { scene.remove(s.g); return false; } return true; });
+}
 /* ================= real-time fights on screen =================
    Left thumb moves as always. Right thumb: tap an enemy to strike, hold to block, swipe to dodge. On a computer:
    click to strike, hold the right button or Shift to block, Space to dodge. The camera holds still while you fight. */
-const FIGHT = { on: false, meshes: new Map(), inp: { block: false, strike: null, dodge: null, yield: false }, ptr: null, onEnd: null, banner: 0, floats: [] };
+const FIGHT = { on: false, meshes: new Map(), inp: { block: false, strike: null, dodge: null, yield: false }, ptr: null, onEnd: null, banner: 0, floats: [], shots: [], lastHits: null };
 const FOE_GEAR = { thug: { weapon: 'mace', armor: 'jerkin' }, bandit: { weapon: 'axe', armor: 'jerkin', cloak: '#4a3a2a' }, banditArcher: { weapon: 'bow', armor: 'gambeson', cloak: '#3f4a30' }, banditChief: { weapon: 'axe', armor: 'studded', shield: 'round', helm: 'leather' }, blade: { weapon: 'dagger', armor: 'studded', cloak: '#1f1d1c' }, duelist: { weapon: 'sword', armor: 'gambeson' }, guard: { weapon: 'spear', armor: 'chain', helm: 'iron' }, knight: { weapon: 'longsword', armor: 'halfplate', helm: 'great' }, champion: { weapon: 'sword', armor: 'chain', shield: 'heater', helm: 'iron' } };
 function beginFight(spec, onEnd) {
   Sim.startFight(G, spec); FIGHT.on = true; FIGHT.onEnd = onEnd; FIGHT.inp = { block: false, strike: null, dodge: null, yield: false }; FIGHT.banner = spec.kind === 'deadly' ? 3 : 1.5; FIGHT.title = spec.title || 'Fight!';
@@ -3614,23 +3790,13 @@ function stepFight(dt, t) {
   if (keys.has('ShiftLeft') || keys.has('ShiftRight')) FIGHT.inp.block = true; else if (FIGHT.keyBlock) FIGHT.inp.block = false;
   FIGHT.keyBlock = keys.has('ShiftLeft') || keys.has('ShiftRight');
   Sim.fightStep(G, dt, FIGHT.inp); FIGHT.inp.strike = null; FIGHT.inp.dodge = null;
-  const P = Fi.p, pl = G.player;
-  // bodies
-  for (const f of Fi.foes.concat(Fi.allies)) {
-    const g = f.id >= 100 ? (FIGHT.meshes.get(f.id) || (FIGHT.meshes.set(f.id, makeChar({ tunic: LORD_BLUE, skin: SKIN[2], gear: { weapon: 'spear', armor: 'chain', helm: 'iron' }, hair: 'short' })), FIGHT.meshes.get(f.id))) : foeMesh(f), u = g.userData;
-    if (f.down) { g.position.set(f.x, standH(f.x, f.z) + 0.15, f.z); g.rotation.set(-Math.PI / 2, f.face, 0); continue; }
-    g.rotation.x = 0; placeChar(g, f, t, { moving: false, selected: false });
-    if (u.hr) u.hr.rotation.x = f.state === 'windup' ? -2.2 : (f.state === 'recover' && f.t > 1.0 ? 0.8 : 0);
-    if (u.body && u.body.material && u.body.material.emissive) u.body.material.emissive.setRGB(f.state === 'windup' ? 0.35 : 0, 0, 0);
-  }
-  // you: swing, block, dodge
-  const pu = playerMesh.userData;
-  if (pu.hr) pu.hr.rotation.x = P.swing > 0 ? -1.6 + (0.25 - P.swing) * 10 : 0;
-  if (pu.hl) pu.hl.rotation.x = P.block ? -1.2 : 0;
+  const pl = G.player, near = Fi.foes.filter(f => !f.down).sort((a, b) => Math.hypot(a.x - pl.x, a.z - pl.z) - Math.hypot(b.x - pl.x, b.z - pl.z))[0];
+  if (near && !Fi.over) pl.face = Math.atan2(near.x - pl.x, near.z - pl.z);   // you keep your eyes on the nearest enemy
+  FIGHT.lastHits = Fi.hits.slice();
   // floating numbers for blows struck
-  for (const h of Fi.hits) { const who = h.who === 0 ? pl : Fi.foes.find(f => f.id === h.who); if (!who) continue; const el = document.createElement('div'); el.className = 'ffloat' + (h.who === 0 ? ' hurt' : '') + (h.crit ? ' crit' : ''); el.textContent = h.d >= 1 ? Math.round(h.d) : ''; $('fightFx').appendChild(el); FIGHT.floats.push({ el, x: who.x, z: who.z, y: 2, life: 0.9 }); }
+  for (const h of Fi.hits) { const who = h.who === 0 ? pl : Fi.foes.find(f => f.id === h.who); if (!who) continue; const el = document.createElement('div'); el.className = 'ffloat' + (h.who === 0 ? ' hurt' : '') + (h.crit ? ' crit' : ''); el.textContent = h.d >= 1 ? Math.round(h.d) : ''; $('fightFx').appendChild(el); el.style.opacity = 0; FIGHT.floats.push({ el, x: who.x, z: who.z, y: 2, life: 0.9, wait: h.who === 0 ? 0 : (Sim.weaponOf(G) || {}).ranged ? 0.35 : 0.13 }); }
   const v = new THREE.Vector3(), W = window.innerWidth, H = window.innerHeight;
-  FIGHT.floats = FIGHT.floats.filter(fl => { fl.life -= dt; fl.y += dt * 1.2; if (fl.life <= 0) { fl.el.remove(); return false; } v.set(fl.x, standH(fl.x, fl.z) + fl.y, fl.z).project(camera); fl.el.style.transform = `translate(${(v.x + 1) / 2 * W}px, ${(1 - v.y) / 2 * H}px)`; fl.el.style.opacity = Math.min(1, fl.life * 2); return true; });
+  FIGHT.floats = FIGHT.floats.filter(fl => { if (fl.wait > 0) { fl.wait -= dt; return true; } fl.life -= dt; fl.y += dt * 1.2; if (fl.life <= 0) { fl.el.remove(); return false; } v.set(fl.x, standH(fl.x, fl.z) + fl.y, fl.z).project(camera); fl.el.style.transform = `translate(${(v.x + 1) / 2 * W}px, ${(1 - v.y) / 2 * H}px)`; fl.el.style.opacity = Math.min(1, fl.life * 2); return true; });
   renderFightHud();
   if (Fi.over && !FIGHT.endAt) FIGHT.endAt = t + 1.6;
   if (FIGHT.endAt && t >= FIGHT.endAt) finishFight();
@@ -3651,7 +3817,7 @@ function renderFightHud() {
 function finishFight() {
   const res = Sim.endFight(G) || 'lost'; FIGHT.on = false; FIGHT.endAt = 0; FIGHT.hinted = true;
   for (const g of FIGHT.meshes.values()) dropChar(g); FIGHT.meshes.clear(); FIGHT.floats.forEach(f => f.el.remove()); FIGHT.floats = [];
-  const pu = playerMesh.userData; if (pu.hr) pu.hr.rotation.x = 0; if (pu.hl) pu.hl.rotation.x = 0;
+  if (playerMesh) removeRig(playerMesh); FIGHT.shots.forEach(s => scene.remove(s.g)); FIGHT.shots = [];
   cam.dist = FIGHT.prevDist || cam.dist; $('fightHud').hidden = true; if (UI.dialog.length) renderDialog(); $('toasts').hidden = false; UI.overlay = null;
   const cb = FIGHT.onEnd; FIGHT.onEnd = null; if (cb) cb(res); renderCard(true);
 }
@@ -6517,6 +6683,7 @@ function frame(now) {
   if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); }
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
+  if (FIGHT.on && G && G.fight) poseFight(dt, t);
   if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
   if (bench) bench.frame(now);
   requestAnimationFrame(frame);
@@ -6808,6 +6975,9 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.69.3', date: '7 November', title: 'The manager goes to market', items: [
+    'Your manager now really walks to the Trading Post, buys what the shop needs, and carries it back on their back to restock storage. You can watch them go.',
+    'They set off on their own as soon as anything runs low, from 6 in the morning until closing, whether or not the worker is in. A note tells you when they leave and what they bought.'] },
   { v: '0.69.2', date: '7 November', title: 'Supplies, properly', items: [
     'Managers now go for supplies even when the worker is away, locked up or not hired yet. Before, the trip only happened while the worker was on shift, so a shop could sit empty all day.',
     'They go any time from 6 in the morning until closing, as soon as anything runs low.'] },
