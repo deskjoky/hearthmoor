@@ -4566,8 +4566,130 @@
   }
   function sample(s, arr, n) { if (arr.length <= n) return arr; const a = arr.slice(); for (let i = 0; i < n; i++) { const j = i + Math.floor(erand(s) * (a.length - i)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a.slice(0, n); }
   // who else stands: the holder, and one or two of the best placed
+  /* ================= the chain of command: dismissing those below you, and each office's daily business ================= */
+  // every post you have the power to empty: an Elder over the council and the village officers; the Lord of Hearthmoor over the
+  // Elder too and the manor's people; the crown over every lord, every royal councillor, and everyone beneath them. Only in Alderwyn.
+  function postsBelow(s) {
+    const mine = yourOffice(s); if (!mine) return [];
+    const R = s.realm, out = [], add = (office, ref, title, pid) => { if (pid && pid !== 'player' && s.people[pid]) out.push({ office, ref, title, pid, key: office + ':' + ref, cd: s.fireCd && s.fireCd[office + ':' + ref] > s.day ? s.fireCd[office + ':' + ref] : null }); };
+    const crown = mine.office === 'crown', hmLord = mine.office === 'lord' && mine.region === 'hearthmoor', elder = mine.office === 'elder';
+    if (crown) {
+      for (const id of lordRegions(s)) add('lord', id, 'Lord of ' + REGIONS[id], regionLord(s, id));
+      for (const k of Object.keys(COUNCIL)) add('seat', k, COUNCIL[k], R.council[k]);
+    }
+    if (crown || hmLord) { add('elder', 'hearthmoor', 'Village Elder of Hearthmoor', s.offices.elder); for (const k of ['steward', 'taxman', 'guard']) add('officer', k, OFFICES[k].title, s.offices[k]); }
+    if (crown || hmLord || elder) {
+      for (const k of ['keeper', 'watch']) add('officer', k, OFFICES[k].title, s.offices[k]);
+      for (const id of (s.gov ? s.gov.council : [])) add('council', id, 'Village councillor', id);
+    }
+    return out;
+  }
+  // who could take the post if you name them yourself
+  function fireCands(s, P) {
+    if (P.office === 'officer' || P.office === 'council') {
+      const onCouncil = new Set(s.gov ? s.gov.council : []);
+      return villagers(s).filter(p => p.id !== P.pid && !p.kid && p.age >= 20 && p.age < 70 && p.status === 'here' && !isHousehold(p) && !onCouncil.has(p.id) && (!p.job || p.job.type !== 'office'))
+        .sort((a, b) => (b.rep || 0) - (a.rep || 0)).slice(0, 5).map(p => p.id);
+    }
+    const E = ensureRaces(s), r = E.races[P.office === 'elder' ? 'elder' : P.office + ':' + P.ref]; if (!r) return [];
+    return npcCandidates(s, r).filter(id => id !== P.pid && id !== 'player' && s.people[id]).slice(0, 5);
+  }
+  function dismiss(s, P, mode, pick) {
+    const q = s.people[P.pid], R = s.realm, E = electState(s);
+    // empty the post
+    if (P.office === 'council') { s.gov.council = s.gov.council.filter(id => id !== P.pid); if (mode === 'appoint') { s.gov.council.push(pick); plog(s, s.people[pick], 'Named to the village council by ' + s.name + '.'); } }
+    else if (P.office === 'officer') { if (q.job && q.job.office === P.ref) q.job = null; s.offices[P.ref] = null; if (mode === 'appoint') appointOfficer(s, P.ref, s.people[pick]); }
+    else {
+      const race = E.races[P.office === 'elder' ? 'elder' : P.office + ':' + P.ref];
+      const who = mode === 'appoint' ? pick : fireCands(s, P)[0];   // a vote: someone acts in the post until the vote
+      if (who) seat(s, P.office, P.office === 'elder' ? null : P.ref, who);
+      if (P.office === 'elder' && q.job && q.job.office === 'elder') q.job = null;
+      if (mode === 'vote' && race) { race.poll = s.day + 3; race.barred = P.pid; race.open = true; }
+    }
+    if (mode === 'vote' && (P.office === 'council' || P.office === 'officer')) (s.byElect = s.byElect || []).push({ office: P.office, ref: P.ref, day: s.day + 3 });
+    // and the cost of it
+    q.opinion = clamp((q.opinion || 0) - 50, -100, 100); plog(s, q, 'Dismissed as ' + P.title + ' by ' + s.name + '.');
+    if (s.folk && rand(s) < (P.office === 'council' || P.office === 'officer' ? 0.35 : 0.6)) { q.hate = Math.min(100, (q.hate || 0) + 45); }
+    addStanding(s, mode === 'appoint' ? -6 : -2, mode === 'appoint' ? 'overruling the vote' : 'dismissing ' + q.name);
+    if (R && isRuler(s)) R.favour = clamp(R.favour - (mode === 'appoint' ? 3 : 1), 0, 100);
+    (s.fireCd = s.fireCd || {})[P.key] = s.day + 4;
+    event(s, 'You dismiss ' + q.name + ' as ' + P.title + '. ' + (mode === 'appoint' ? s.people[pick].name + ' takes the post on your word.' : 'A new vote will be held in three days.') + (q.hate >= 45 ? ' ' + q.name.split(' ')[0] + ' will not forget it.' : ''), 'info');
+  }
+  function byElectTick(s) {
+    const B = s.byElect; if (!B || !B.length) return;
+    s.byElect = B.filter(b => {
+      if (s.day < b.day) return true;
+      const P = { office: b.office, ref: b.ref, pid: null }, c = fireCands(s, P)[0]; if (!c) return false;
+      if (b.office === 'council') { if (s.gov && s.gov.council.length < COUNCIL_SEATS) { s.gov.council.push(c); plog(s, s.people[c], 'Elected to the village council in a by-election.'); } }
+      else if (!s.offices[b.ref]) appointOfficer(s, b.ref, s.people[c]);
+      event(s, s.people[c].name + ' wins the vote and takes the post.', 'info'); return false;
+    });
+  }
+  /* each morning an office brings its business: a few decisions, more the higher you rise */
+  const AGENDA = {
+    council: [
+      ['A motion to mend the well', 'A councillor moves to spend from the chest on the well.', [['Vote for it', { chest: -10, standing: 2 }], ['Vote against', { standing: -1 }]]],
+      ['A complaint about short weights', 'A widow says a stall at the market sells short. The council can look into it.', [['Look into it', { standing: 2 }], ['Let it be', { standing: -1 }]]],
+      ['Market day', 'Traders ask the council to hold a second market day each week.', [['Agree', { chest: 6, standing: 1 }], ['Refuse', {}]]]],
+    elder: [
+      ['A family without a roof', 'A family of four is sleeping by the well.', [['House them from the chest', { chest: -12, standing: 3 }], ['They must find their own way', { standing: -2 }]]],
+      ['The watch asks for men', 'The watchmen say they cannot cover the lanes at night.', [['Pay for another night man', { chest: -8, standing: 1, bandits: -2 }], ['Make do', {}]]],
+      ['A quarrel over a fence', 'Two neighbours each say the fence is on their land.', [['Split the difference', { standing: 1 }], ['Favour the older claim', { standing: 0 }]]],
+      ['A curfew?', 'After a fight at the tavern, some want a curfew after ten.', [['Proclaim a curfew', { standing: -1, bandits: -1 }], ['No curfew', { standing: 1 }]]],
+      ['Tithe for the granary', 'The keeper wants the chest to buy grain while it is cheap.', [['Buy grain', { chest: -15, standing: 2 }], ['Wait', {}]]]],
+    lord: [
+      ['Bandits on the road', 'Carters say the bandits grow bold on your roads.', [['Send riders (25c)', { coins: -25, bandits: -8, standing: 2 }], ['Let the roads look after themselves', { bandits: 3, standing: -2 }]]],
+      ['A village asks for a bridge', 'The ford floods each spring. They ask you to pay for a bridge.', [['Pay for it (60c)', { coins: -60, standing: 5 }], ['Not this year', { standing: -2 }]]],
+      ['The tax roll', 'Your steward says the shopkeepers can bear a little more.', [['Raise it a little', { coins: 20, standing: -3 }], ['Leave it', {}]]],
+      ['A case for your court', 'A miller is accused of grinding short. He swears it is a lie.', [['Fine him', { coins: 8, standing: 1 }], ['Let him go', { standing: -1 }]]],
+      ['A request for knighthood', 'A loyal man-at-arms asks to be knighted.', [['Knight him (15c)', { coins: -15, standing: 2 }], ['Not yet', {}]]]],
+    seat: [
+      ['A report for the council', 'Your clerks have a report on your office’s business.', [['Read it closely', { favour: 2 }], ['Skim it', {}]]],
+      ['A lord’s accounts', 'A lord’s accounts do not add up. You could call him before the council.', [['Call him to an inquiry', { favour: 3, standing: -1 }], ['Let it pass', { favour: -1 }]]],
+      ['An envoy from the guilds', 'The guilds want a word on tariffs.', [['Hear them out', { favour: 1, standing: 1 }], ['Send them away', {}]]]],
+    crown: [
+      ['A lord oversteps', 'A lord has been seizing carts on the king’s road.', [['Rebuke him', { favour: 3, standing: 2 }], ['Ignore it', { favour: -2 }]]],
+      ['The army’s pay', 'The captains say the levies’ pay is late.', [['Pay from the treasury (60c)', { treasury: -60, favour: 3 }], ['Make them wait', { favour: -3 }]]],
+      ['A royal tour', 'Your herald proposes a tour of the towns.', [['Go on tour (40c)', { treasury: -40, favour: 4, standing: 3 }], ['Stay at court', {}]]],
+      ['A plea from the poor', 'A hard winter: the poor of Crownmere ask for bread.', [['Feed them (50c)', { treasury: -50, standing: 4 }], ['Refuse', { standing: -3 }]]],
+      ['Valdoria’s envoy', 'An envoy from Valdoria brings gifts and questions.', [['Receive him warmly', { favour: 2 }], ['Keep him waiting', { favour: -1 }]]],
+      ['A decree on weights', 'Merchants want one measure for the whole realm.', [['Decree it', { treasury: 10, standing: 1 }], ['Leave it to the towns', {}]]]]
+  };
+  const AGENDA_N = { council: [1, 2], elder: [2, 3], lord: [3, 4], seat: [2, 3], crown: [4, 5] };
+  function agendaTick(s) {
+    const mine = yourOffice(s), office = mine ? mine.office : s.village && s.village.council && s.gov && s.gov.council.includes('player') ? 'council' : null;
+    if (!office || !AGENDA[office]) { s.agenda = []; return; }
+    if (s.agendaDay === s.day) return; s.agendaDay = s.day;
+    const [lo, hi] = AGENDA_N[office], n = lo + (rand(s) < 0.5 ? 1 : 0);
+    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1); const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
+    for (let i = 0; i < Math.min(n, hi) && pool.length; i++) { const k = pool.splice(Math.floor(rand(s) * pool.length), 1)[0]; s.agenda.push({ id: (s.agendaId = (s.agendaId || 0) + 1), office, k, region: mine && mine.region, until: s.day + 1 }); }
+  }
+  function agendaDo(s, id, pick) {
+    const A = (s.agenda || []).find(x => x.id === id); if (!A) return { ok: false, msg: 'That matter is closed.' };
+    const T = AGENDA[A.office][A.k], fx = T[2][pick] && T[2][pick][1]; if (!fx) return { ok: false, msg: 'No such choice.' };
+    const R = s.realm;
+    if (fx.coins && fx.coins < 0 && s.coins < -fx.coins) return { ok: false, msg: 'You do not have ' + (-fx.coins) + 'c.' };
+    if (fx.chest) s.village.chest += fx.chest; if (fx.coins) (fx.coins > 0 ? earn : spend)(s, Math.abs(fx.coins));
+    if (fx.treasury && R) R.treasury += fx.treasury; if (fx.favour && R) R.favour = clamp(R.favour + fx.favour, 0, 100);
+    if (fx.standing) addStanding(s, fx.standing, T[0].toLowerCase());
+    if (fx.bandits && s.bandits) { const rg = A.region && s.bandits[A.region] != null ? A.region : 'hearthmoor'; s.bandits[rg] = Math.max(0, s.bandits[rg] + fx.bandits); }
+    s.agenda = s.agenda.filter(x => x !== A); gainXP(s, 4); skillUse(s, 'command', 2);
+    return { ok: true, msg: T[0] + ': ' + T[2][pick][0].replace(/ \(\d+c\)$/, '') + '.' };
+  }
+  function officeCmd(s, name, a, b, c) {
+    switch (name) {
+      case 'oFire': {   // a: post key, b: 'appoint' | 'vote', c: who (when appointing)
+        const P = postsBelow(s).find(x => x.key === a); if (!P) return { ok: false, msg: 'That post is not yours to empty.' };
+        if (P.cd) return { ok: false, msg: 'You dismissed someone from that post too recently. Wait until day ' + P.cd + '.' };
+        if (b === 'appoint' && !fireCands(s, P).includes(c)) return { ok: false, msg: 'They cannot take the post.' };
+        dismiss(s, P, b === 'appoint' ? 'appoint' : 'vote', c); return { ok: true, msg: s.people[P.pid].name + ' is dismissed.' };
+      }
+      case 'oAgenda': return agendaDo(s, a, b);
+    }
+    return null;
+  }
   function npcCandidates(s, r) {
-    const hold = holderOf(s, r.office, r.region), ok = p => p && p.status === 'here' && !p.kid && p.age < 75, out = [];
+    const hold = holderOf(s, r.office, r.region), ok = p => p && p.status === 'here' && !p.kid && p.age < 75 && p.id !== r.barred, out = [];
     if (hold && hold !== 'player' && ok(s.people[hold])) out.push(hold);
     let pool = [];
     if (r.office === 'council') pool = villagers(s).filter(p => p.job && p.job.role === 'owner' && !(s.gov && s.gov.council.includes(p.id)));
@@ -4626,7 +4748,7 @@
       else if (g && who !== hold) { g.council = g.council.filter(id => id !== hold).concat(who); plog(s, s.people[who], 'Elected to the village council.'); }
       return;
     }
-    if (who === 'player') { const E = electState(s); E.since = s.day; if (office !== 'crown') E.handbook = { office, region, day: s.day }; }
+    if (who === 'player') { const E = electState(s); E.since = s.day; if (office !== 'crown') E.handbook = { office, region, day: s.day }; s.moveInPending = office === 'lord' || office === 'crown' ? (office === 'crown' ? 'crownmere' : region) : null; s.regaliaPending = office; }
     if (office === 'seat') { const old = R.council[region], q0 = old && old !== 'player' && s.people[old]; if (q0) { q0.retired = true; plog(s, q0, 'Voted out as ' + COUNCIL[region] + '.'); } R.council[region] = who; if (who !== 'player' && s.people[who]) plog(s, s.people[who], 'Elected ' + COUNCIL[region] + '.'); return; }
     if (office === 'elder') { appoint(s, 'elder', who); if (s.gov) { s.gov.council = s.gov.council.filter(id => id !== who); s.gov.approval.elder = 60; } if (who === 'player') { s.rec.everElder = true; if (s.village.step === 8) s.village.step = 9; } return; }
     if (office === 'lord') {
@@ -4981,6 +5103,7 @@
     kite: I_('Kite shield', 'off', 9, 125, { kind: 'shield', blk: 0.65, smith: 'fineSmithing' }),
     tower: I_('Tower shield', 'off', 14, 190, { kind: 'shield', blk: 0.75, smith: 'armourSmithing' }),
     // trinkets
+    chainoffice: I_('Chain of office', 'trinket', 1, 40, { kind: 'trinket', fine: 4, office: true, say: 'The Elder\u2019s chain: silver links and the village seal.' }),
     copperring: I_('Copper ring', 'trinket', 0.1, 8, { kind: 'trinket', fine: 0.5 }),
     silveramulet: I_('Silver amulet', 'trinket', 0.2, 60, { kind: 'trinket', fine: 1, charm: 1 }),
     signet: I_('Signet ring', 'trinket', 0.1, 120, { kind: 'trinket', fine: 1.5, charm: 2 }),
@@ -5118,6 +5241,16 @@
         const it = itemByU(s, b); if (!it || it.dur == null) return fail('That needs no mending.'); if (it.dur >= 100) return fail('It is in good repair.');
         const own = s.biz[a] && s.biz[a].owner === 'player', cost = own ? 0 : Math.max(1, Math.round(ITEMS[it.id].price * 0.25 * (1 - it.dur / 100) * (perk(s, 'steelSmithing') ? 0.7 : 1) * 10) / 10);
         if (s.coins < cost) return fail('Mending it costs ' + cost + 'c.'); spend(s, cost); it.dur = 100; skillUse(s, 'smithing', own ? 4 : 1); return ok(cost ? 'Mended for ' + cost + 'c.' : 'You mend it yourself at your own forge.');
+      }
+      case 'rImprove': {   // a: shop, b: item u. Temper a blade or harden armour at the forge: up to three times better
+        const k = shopKind(s, a); if (!['smithy', 'weaponsmith', 'armourer', 'bowyer'].includes(k)) return fail('Only at a forge.'); if (!atShop(s, a)) return fail('Bring it to the forge.');
+        const it = itemByU(s, b), I = it && ITEMS[it.id]; if (!I || !(I.dmg || I.arm) || I.kind === 'beast') return fail('Only weapons and armour can be improved.');
+        const n = it.imp || 0; if (n >= 3) return fail('It is as fine as it can be made.');
+        const need = [15, 40, 65][n], own = s.biz[a] && s.biz[a].owner === 'player', cost = Math.round(I.price * (0.3 + n * 0.25) * (own ? 0.4 : 1));
+        if (own && skillLv(s, 'smithing') < need) return fail('You need smithing ' + need + ' to improve it further yourself.');
+        if (s.coins < cost) return fail('That costs ' + cost + 'c in iron, coal and time.');
+        spend(s, cost); it.imp = n + 1; it.dur = 100; skillUse(s, 'smithing', own ? 10 : 2); if (own) gainXP(s, 6);
+        return ok((own ? 'You work it at your own forge: ' : 'The smith works it: ') + I.name.toLowerCase() + ' is now ' + ['', 'fine', 'superior', 'masterwork'][n + 1] + ' (' + cost + 'c).');
       }
     }
     return fail('Unknown command: ' + name);
@@ -5292,7 +5425,9 @@
     const foes = spec.foes.map((f, i) => { const K = FOE_KIT[f.kit] || FOE_KIT.thug, W = ITEMS[f.w || K.w], A = ITEMS[f.a || K.a], S = (f.s !== undefined ? f.s : K.s) ? ITEMS[f.s || K.s] : null, a = ang0 + (i - (n - 1) / 2) * 0.9, r = W && W.ranged ? 9 : 5.5;
       const hp = Math.round((f.hp || K.hp) * (f.mul || 1));
       return { id: i + 1, name: f.name || 'A foe', pid: f.pid || null, kit: f.kit, w: f.w || K.w, a: f.a || K.a, sh: S ? (f.s || K.s) : null, x: px + Math.sin(a) * r, z: pz + Math.cos(a) * r, face: a + Math.PI, hp, hpMax: hp, skill: (f.skill || K.skill) * (f.mul || 1), spd: (f.spd || K.spd), arm: A ? A.arm || 0 : 0, blk: S ? S.blk : 0, ranged: !!(W && W.ranged), reach: (W && W.reach) || 1, state: 'close', t: 0.6 + i * 0.4, down: false, blocking: 0 }; });
-    const allies = []; if (perk(s, 'bodyguard') && spec.kind !== 'tourney') allies.push({ id: 100, name: 'Your guard', x: px - 1.2, z: pz - 1.2, face: 0, hp: 120, hpMax: 120, dmg: 9, spd: 1, t: 1, down: false });
+    const allies = [], mo = yourOffice(s), ent = spec.kind === 'tourney' ? 0 : isRuler(s) ? 3 : mo && mo.office === 'lord' ? 2 : 0;
+    for (let i = 0; i < ent; i++) allies.push({ id: 101 + i, name: isRuler(s) ? 'A royal guard' : 'Your man-at-arms', x: px + (i - 1) * 1.4, z: pz - 1.6, face: 0, hp: 110, hpMax: 110, dmg: 8, spd: 0.95, t: 1 + i * 0.4, down: false });
+    if (perk(s, 'bodyguard') && spec.kind !== 'tourney') allies.push({ id: 100, name: 'Your guard', x: px - 1.2, z: pz - 1.2, face: 0, hp: 120, hpMax: 120, dmg: 9, spd: 1, t: 1, down: false });
     const C = s.char; if (C.hp < C.hpMax * 0.4) C.hp = Math.round(C.hpMax * 0.4);   // no one starts a fight already half dead
     s.fight = { kind: spec.kind || 'knockout', ctx: spec.ctx || null, foes, allies, p: { cd: 0, dodge: 0, block: false, riposte: 0, stagger: 0, swing: 0, lastHit: 0 }, log: [], over: null, time: 0, title: spec.title || 'A fight', hits: [] };
     return s.fight;
@@ -6680,6 +6815,7 @@
     if (/^f[A-Z]/.test(name)) return folkCmd(s, name, a, b, c);
     if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
     if (/^w[A-Z]/.test(name)) { const r = wildCmd(s, name, a, b, c); if (r) return r; }
+    if (/^o[A-Z]/.test(name)) { const r = officeCmd(s, name, a, b, c); if (r) return r; }
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
       case 'goto': {
@@ -7903,6 +8039,11 @@
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
     if (!s.fight) wildStep(s, dt);
+    if (s.people && s.offices) { agendaTick(s); byElectTick(s); }
+    if (s.regaliaPending && s.player.items) { const o = s.regaliaPending; s.regaliaPending = null; const give = { elder: ['chainoffice'], lord: ['mantle', 'signet'], seat: ['signet', 'finecoat'], crown: ['regalia', 'crown', 'mantle'] }[o] || [];
+      const names = []; for (const id of give) { if (!ITEMS[id]) continue; let it = s.player.items.find(x => x.id === id); if (!it) { it = addItem(s, id, 1); names.push(ITEMS[id].name.toLowerCase()); } if (it && it.u != null) rpgCmd(s, 'rEquip', it.u); }
+      if (names.length) event(s, 'You are sworn in, and given the marks of your office: ' + names.join(', ') + '. You wear them now.', 'good'); }
+    if (s.moveInPending && s.realm) { const id = s.moveInPending; s.moveInPending = null; const r = cmd(s, 'moveToSeat', id); if (r && r.ok) event(s, 'You move into ' + seatName(s, id) + ' with your household. Your old home is still yours: rent it out or sell it from the Property page.', 'good'); }
     { const C = s.char; if (C.hp < C.hpMax) C.hp = Math.min(C.hpMax, C.hp + dt * 0.08); if (C.st < C.stMax) C.st = Math.min(C.stMax, C.st + dt * 2); }
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
     if (s.coins < 0 && -s.coins > (s.rec.maxDebt || 0)) s.rec.maxDebt = -s.coins;
@@ -8712,7 +8853,7 @@
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,

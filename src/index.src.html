@@ -2782,6 +2782,13 @@ const horseMesh = makeHorse();
 function syncChars(s, t) {
   const p = s.player, carry = Sim.carried(s), riding = !!(p.riding && p.horse);
   const moving = !!UI.walking || (!!p.dest && !!p.moving);
+  // a lord rides with two men-at-arms, the crown with a royal guard
+  { const mo = Sim.yourOffice(s), n = UI.inside || FIGHT.on ? 0 : Sim.isRuler(s) ? 4 : mo && mo.office === 'lord' ? 2 : 0; UI.escort = UI.escort || [];
+    while (UI.escort.length > n) dropChar(UI.escort.pop().g);
+    while (UI.escort.length < n) { const i = UI.escort.length, g = makeChar({ tunic: Sim.isRuler(s) ? '#7a2a24' : LORD_BLUE, skin: SKIN[(i * 3 + 1) % SKIN.length], gear: { weapon: 'spear', armor: 'chain', helm: 'iron', cloak: Sim.isRuler(s) ? '#7a2a24' : null }, hair: 'short' }); UI.escort.push({ g, x: p.x, z: p.z, face: 0, moving: false }); }
+    UI.escort.forEach((e, i) => { const back = 1.8 + Math.floor(i / 2) * 1.1, side = (i % 2 ? 1 : -1) * 0.9, tx = p.x - Math.sin(p.face) * back + Math.cos(p.face) * side, tz = p.z - Math.cos(p.face) * back - Math.sin(p.face) * side, d = Math.hypot(tx - e.x, tz - e.z);
+      if (d > 30) { e.x = tx; e.z = tz; } const k = Math.min(1, 0.12 + d * 0.02); e.moving = d > 0.3; if (e.moving) { e.x += (tx - e.x) * k; e.z += (tz - e.z) * k; e.face = Math.atan2(tx - e.x, tz - e.z) || p.face; } else e.face = p.face;
+      placeChar(e.g, e, t, { moving: e.moving }); }); }
   placeChar(playerMesh, p, t, { moving: moving && !riding, working: !riding && (!!p.action || p.working), pack: 0.62 + Math.min(0.5, carry / 40), selected: UI.sel === 'player' });
   horseMesh.visible = riding;
   if (riding) {
@@ -3320,6 +3327,7 @@ function act(c) {
   if (c[0] === 'open') UI.loc = 'plot' + c[1];
   const r = Sim.cmd(G, c[0], c[1], c[2], c[3]);
   if (/^w[A-Z]/.test(c[0])) wildResult(r);
+  if (c[0] === 'oFire' && r.ok) UI.fireSel = null;
   // a message is shown when it is a sentence; short codes ('caught', 'landed') and result objects are for the code, not the player
   if (typeof r.msg === 'string' && /\s/.test(r.msg)) toast(r.msg, r.ok ? 'info' : 'bad', true);
   if (c[0] === 'cargoSell' && r.ok && r.msg && typeof r.msg === 'object') toast('Sold ' + c[2] + ' ' + c[1] + ' for ' + r.msg.gross + 'c' + (r.msg.tax ? ', less ' + r.msg.tax + 'c duty' : '') + ': ' + (r.msg.profit >= 0 ? r.msg.profit + 'c profit' : -r.msg.profit + 'c loss') + ' on what it cost.', 'info', true);
@@ -3478,7 +3486,7 @@ function cardHTML(s) {
   if (here === 'manor') {
     const v = s.village;
     const elderIn = s.offices.elder === 'player' || !!Sim.yourOffice(s), mineM = s.offices.lord === 'player';
-    if (mineM || elderIn) return `<h2>Varrow Manor</h2><div class="sub">${mineM ? 'Your manor, and your seat as lord of Hearthmoor.' : 'As ' + (s.offices.elder === 'player' ? 'Elder' : 'one who holds office') + ', the gate opens to you: no need to wait on the steward. ' + esc(Sim.lordTitle(s)) + ' will see you.'}</div>${walking}<div class="acts">${mineM ? '' : B_('See the Lord', ['gate'])}</div>`;
+    if (mineM || elderIn) return `<h2>Varrow Manor</h2><div class="sub">${mineM ? 'Your manor, and your seat as lord of Hearthmoor.' : 'As ' + (s.offices.elder === 'player' ? 'Elder' : 'one who holds office') + ', the gate opens to you. Go inside: ' + esc(Sim.lordTitle(s)) + ' receives visitors in the main hall from 8 in the morning to 8 at night.'}</div>${walking}<div class="acts"></div>`;
     const info = v.step >= 8 ? 'The gate stands open to you now. The steward will send for you.' : v.step === 7 ? 'You carry the steward\u2019s letter. The guard is expecting you.' : `The seat of ${esc(Sim.lordTitle(s))}, on its rise above the village, who holds Hearthmoor for ${esc(Sim.REALM.king)}. The gate is barred to shopkeepers and hired hands.`;
     return `<h2>Varrow Manor</h2><div class="sub">${info}</div>${walking}<div class="acts">${B_(v.step === 7 ? 'Present the letter' : 'Speak to the guard', ['gate'], v.step === 7 ? '' : 'alt')}</div>`;
   }
@@ -4238,7 +4246,7 @@ function personCard(s, pr, body) {
     ${pr.status === 'here' && !pr.kid && G.folk ? `<div class="why">${esc(Sim.regardOf(s, pr))}</div>` : ''}${hateLine(s, pr)}${memLines(s, pr)}
     ${log ? `<ul class="plog">${log}</ul>` : ''}
     ${relationLine(s, pr)}
-    <div class="acts">${body && pr.status === 'here' && Math.hypot(body.x - G.player.x, body.z - G.player.z) < 2.4 ? B_(G.player.sneak ? 'Pick their pocket' : 'Pick their pocket (better sneaking)', ['wPick', pr.id], 'alt') : ''}${enemyActs(s, pr, body)}${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+    <div class="acts">${(() => { const P = Sim.postsBelow(G).find(x => x.pid === pr.id); return P && !P.cd ? B_('Dismiss as ' + esc(P.title), ['ui', 'fireSel', P.key], 'warn') : ''; })()}${UI.inside && pr.id === Sim.regionLord(G, 'hearthmoor') && G.offices.elder === 'player' ? B_('Speak with the Lord', ['gate']) : ''}${body && pr.status === 'here' && Math.hypot(body.x - G.player.x, body.z - G.player.z) < 2.4 ? B_(G.player.sneak ? 'Pick their pocket' : 'Pick their pocket (better sneaking)', ['wPick', pr.id], 'alt') : ''}${enemyActs(s, pr, body)}${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
 }
 function relationLine(s, pr) {
   const Y = Sim.you(s), f = Y.court[pr.id];
@@ -4345,6 +4353,7 @@ function hud(s) {
   const inv = s.player.inv, chips = [];
   rankWatch(s);
   { const r = rankOf(s); chips.push(`<span class="chip num rank r-${r.key}">${esc(r.title)}</span>`); }
+  if ((s.agenda || []).length) chips.push(`<button type="button" class="chip btn lvl" data-c='["page","office"]'>Business <b>${s.agenda.length}</b></button>`);
   chips.push(`<button type="button" class="chip btn${s.player.sneak ? ' lvl' : ''}" data-c='["wSneak"]'>${s.player.sneak ? 'Sneaking' : 'Sneak'}</button>`);
   { const C = s.char; if (C) chips.push(`<button type="button" class="chip btn${C.pending || C.points ? ' lvl' : ''}" data-c='["page","skills"]'>Lv <b>${C.level}</b>${C.pending || C.points ? ' \u2605' : ''}</button>`); }
   if (s.folk) { const F = s.folk, mn = Sim.moralName(F.moral); if (mn || F.fame >= 10) chips.push(`<span class="chip num btn renown" data-c='["page","renown"]' role="button" tabindex="0">${mn ? esc(mn.replace(/^the /, '')) + ' · ' : ''}${esc(Sim.fameName(F.fame))}</span>`); const n = F.nem.length; if (n) chips.push(`<span class="chip num btn foes" data-c='["page","renown"]' role="button" tabindex="0">${n === 1 ? '1 enemy' : n + ' enemies'}${F.ambush ? ' · watch your back' : ''}</span>`); if (Sim.isRuler(s) && F.aud.length) chips.push(`<span class="chip num btn" data-c='["ui","throne"]' role="button" tabindex="0">Petitioners <b>${F.aud.length}</b></span>`); }
@@ -5365,6 +5374,21 @@ function bannerMaker(s, scope) {
     <p><b>Field</b></p>${sw('field')}<p><b>Second colour</b> <small>(the pattern)</small></p>${sw('second')}<p><b>Emblem colour</b></p>${sw('mark')}
     <div class="acts">${B_(same ? 'Flying now' : cur ? 'Raise this banner' : 'Raise your banner', ['setBanner', scope, { div: d.div, charge: d.charge, field: d.field, second: d.second, mark: d.mark }], '', same)}${B_('Surprise me', ['ui', 'bset', ['random']], 'alt')}</div></div></div>`;
 }
+function agendaHTML(s) {
+  const A = s.agenda || []; if (!A.length) return `<h4>Today’s business</h4><p class="why">Nothing waits on you today. New matters come each morning.</p>`;
+  return `<h4>Today’s business</h4>` + A.map(x => { const T = Sim.AGENDA[x.office][x.k]; return `<div class="box"><h5>${esc(T[0])}</h5><p>${esc(T[1])}</p><div class="acts">${T[2].map((o, i) => B_(esc(o[0]), ['oAgenda', x.id, i], i ? 'alt' : '')).join('')}</div><p class="why">Settle it by the end of day ${x.until}, or it is settled without you.</p></div>`; }).join('');
+}
+function chainHTML(s) {
+  const P = Sim.postsBelow(s); if (!P.length) return '';
+  let h = `<h4>Those who answer to you</h4><p class="why">You can dismiss anyone below you. Name the replacement yourself, and the voters resent being overruled; call a new vote, and it costs you less. Either way the dismissed may bear a grudge, and the post cannot be emptied again for a few days.</p>`;
+  for (const x of P) {
+    const q = s.people[x.pid], open = UI.fireSel === x.key;
+    h += `<div class="box" data-sbox="post:${esc(x.key)}"><div class="staffrow"><span><b>${esc(q.name)}</b><br><small>${esc(x.title)}</small></span>${x.cd ? `<small class="why">again from day ${x.cd}</small>` : B_(open ? 'Keep them' : 'Dismiss', ['ui', 'fireSel', open ? null : x.key], open ? 'alt' : 'warn')}</div>`;
+    if (open) { const C = Sim.fireCands(s, x); h += `<p><b>Who takes the post?</b></p><div class="acts">${B_('Call a new vote', ['oFire', x.key, 'vote'], 'alt')}</div>${C.length ? `<p class="why">Or name someone yourself:</p>` + C.map(id => `<div class="staffrow"><span>${esc(s.people[id].name)} <small>· respect ${Math.round(s.people[id].rep || 0)}</small></span>${B_('Appoint', ['oFire', x.key, 'appoint', id], 'warn')}</div>`).join('') : ''}`; }
+    h += `</div>`;
+  }
+  return h;
+}
 function pageOffice(s) {
   const mine = Sim.yourOffice(s), v = s.village, E = Sim.electState(s);
   const office = mine ? mine.office : v.council ? 'council' : null;
@@ -5376,6 +5400,7 @@ function pageOffice(s) {
   if (B) h += `<details class="box"><summary><b>What this office means</b></summary><h5>What you can do</h5><ul>${B.can.map(i => `<li>${esc(i)}</li>`).join('')}</ul><h5>What is asked of you</h5><ul>${B.must.map(i => `<li>${esc(i)}</li>`).join('')}</ul></details>`;
   const pend = E.pledges.filter(pl => pl.state === 'given');
   if (pend.length) h += pend.map(pl => `<div class="why"><b>Your promise:</b> ${esc(pl.text)}, by day ${pl.due}. ${esc(pl.how || '')}</div>`).join('');
+  h += agendaHTML(s) + chainHTML(s);
   if (office === 'council' || office === 'elder') h += villagePowers(s);
   if (office === 'lord') { h += bannerMaker(s, mine.region); h += `<h4>Your lands: ${esc(Sim.REGIONS[mine.region])}</h4><div class="box">${regionControls(s, mine.region)}</div><div class="acts">${B_('Courts and the watch', ['ui', 'tab', 'justice'], 'alt')}${B_('Give up ' + esc(Sim.REGIONS[mine.region]), ['renounceLordship', mine.region], 'alt')}</div>`; }
   if (office === 'seat' || office === 'crown') h += crownPowers(s);
@@ -5383,7 +5408,7 @@ function pageOffice(s) {
   return h;
 }
 /* ---------- you: skills and perks, your gear, and shops' wares ---------- */
-function itemName(it) { const I = Sim.ITEMS[it.id]; return (it.dye ? it.dye.charAt(0).toUpperCase() + it.dye.slice(1) + ' ' + I.name.charAt(0).toLowerCase() + I.name.slice(1) : I.name) + (it.n != null && it.n > 1 ? ' ×' + it.n : ''); }
+function itemName(it) { const I = Sim.ITEMS[it.id]; return (it.imp ? ['', 'Fine ', 'Superior ', 'Masterwork '][it.imp] : '') + (it.dye ? it.dye.charAt(0).toUpperCase() + it.dye.slice(1) + ' ' + I.name.charAt(0).toLowerCase() + I.name.slice(1) : I.name) + (it.n != null && it.n > 1 ? ' ×' + it.n : ''); }
 function itemLine(it) {
   const I = Sim.ITEMS[it.id], bits = [];
   if (I.dmg) bits.push('harm ' + I.dmg + (I.hands === 2 ? ', two hands' : '') + (I.reach ? ', long reach' : '') + (I.ranged ? ', ranged' : '') + (I.blunt ? ', blunted' : ''));
@@ -5443,6 +5468,7 @@ function pageWares(s) {
   const sell = (s.player.items || []).filter(it => !Object.values(s.player.equip).includes(it.u) && Sim.buysHere(s, at, it.id));
   if (sell.length) h += `<h4>They will buy</h4>` + sell.map(it => { const each = Math.round(Sim.itemPrice(s, it.id, at, true) * (it.dur != null ? 0.4 + 0.6 * it.dur / 100 : 1) * 10) / 10; return `<div class="staffrow"><span><b>${esc(itemName(it))}</b></span><div class="acts">${B_('Sell' + (it.n > 1 ? ' all' : '') + ' · ' + Math.round(each * (it.n || 1) * 10) / 10 + 'c', ['rSell', at, it.u, it.n || 1], 'alt', !here)}</div></div>`; }).join('');
   if (['smithy', 'weaponsmith', 'armourer', 'bowyer', 'tanner'].includes(kind)) { const worn = (s.player.items || []).filter(it => it.dur != null && it.dur < 100); if (worn.length) h += `<h4>Mending</h4>` + worn.map(it => B_('Mend ' + esc(itemName(it)) + ' (' + Math.round(it.dur) + '%)', ['rRepair', at, it.u], 'alt', !here)).join(''); }
+  if (['smithy', 'weaponsmith', 'armourer', 'bowyer'].includes(kind)) { const gear = (s.player.items || []).filter(it => { const I = Sim.ITEMS[it.id]; return (I.dmg || I.arm) && I.kind !== 'beast' && (it.imp || 0) < 3; }); if (gear.length) h += `<h4>Improve at the forge</h4><p class="why">Each step makes a weapon hit, or armour guard, a tenth better (three steps at most). At your own forge it is cheaper, and your smithing grows.</p>` + gear.map(it => B_('Improve ' + esc(itemName(it)) + (it.imp ? ' (' + ['', 'fine', 'superior'][it.imp] + ')' : ''), ['rImprove', at, it.u], 'alt', !here)).join(''); }
   if (kind === 'tailor' || kind === 'weaver') { const dy = (s.player.items || []).filter(it => Sim.ITEMS[it.id].dye); if (dy.length) { const pick = UI.dyeU && dy.find(x => x.u === UI.dyeU) ? UI.dyeU : dy[0].u; h += `<h4>Dyeing · 3c</h4><div class="bpick">${dy.map(it => `<button type="button" aria-pressed="${it.u === pick}" data-c='${esc(JSON.stringify(['ui', 'dyeU', it.u]))}'>${esc(itemName(it))}</button>`).join('')}</div><div class="bswatch" style="margin-top:8px">${Object.keys(Sim.HERALDRY.tinctures).map(c => `<button type="button" aria-label="${c}" style="background:${Sim.HERALDRY.tinctures[c]}" data-c='${esc(JSON.stringify(['rDye', at, pick, c]))}'></button>`).join('')}</div>`; } }
   if (!stock.length && !sell.length) h += `<p>They have nothing for you.</p>`;
   return h;
@@ -6194,6 +6220,7 @@ function uiCmd(k, v) {
   if (k === 'fyield') { FIGHT.inp.yield = true; return; }
   if (k === 'flee') { wildFight({ kind: 'knockout', foes: [{ kit: 'guard', name: 'The watchman' }], title: 'Run for it!', ctx: { caught: true } }); return; }
   if (k === 'jump') { const el = $('page').querySelector('[data-jump="' + v + '"]'); if (el) el.scrollIntoView({ block: 'start', behavior: calm() ? 'auto' : 'smooth' }); return; }
+  if (k === 'fireSel') { UI.fireSel = v; if (v) { UI.tab = 'office'; if (UI.overlay !== 'book') openBook(); else renderBook(); } else renderBook(); return; }
   if (k === 'staffSel') { const was = UI.staffSel; UI.staffSel = v; UI.confirm = null; if (!v && was) UI.reveal = '[data-sbox="' + (was.biz != null ? 'biz:' + was.biz : 'shop:' + was.shop) + '"]'; renderBook(true); return; }
   if (k === 'bizMenu') { UI.bizMenu = !UI.bizMenu; if (G) hud(G); return; }
   if (k === 'manage') {
@@ -6654,7 +6681,7 @@ const Interior = (function () {
     for (const a of s.agents) {
       const p = a.pid && s.people[a.pid]; if (!p || p.status !== 'here') continue;
       if (d.kind === 'home') { if (p.home === 'you' && (a.indoors || near(a, 12))) out.push({ a, p, role: night ? 'bed' : 'home' }); continue; }
-      if (d.kind === 'castle') { if ((p.home === 'seat:' + d.seat && hr >= 8 && hr < 20) || (d.lead === 'nobody' && p.home === 'you' && (a.indoors || near(a, 30)))) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
+      if (d.kind === 'castle') { if (((p.home === 'seat:' + d.seat || (d.seat === 'hearthmoor' && p.home === 'manor')) && hr >= 8 && hr < 20) || (d.lead === 'nobody' && p.home === 'you' && (a.indoors || near(a, 30)))) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
       const staff = p.job && p.job.type === 'biz' && p.job.biz === d.bizId;
       if (staff && near(a, 16) && !night) out.push({ a, p, role: 'staff' });
       else if (!staff && !a.moving && near(a, 9) && out.length < 12) out.push({ a, p, role: 'guest' });
@@ -6762,7 +6789,7 @@ const Interior = (function () {
 function insideOf(key) {
   const s = G, Lh = L[key]; if (!Lh) return null;
   const door = { x: s.player.x, z: s.player.z };
-  const KEEPS = { cmcastle: ['crownmere', 'great', 'The Great Hall of Crownmere Castle', '#2b4a7a', '#d9b04a'], ickeep: ['ironcrest', 'hall', 'The hall of Stane Keep', '#3a3a3a', '#c9a24a'], ewkeep: ['eastwatch', 'hall', 'The hall of Eastwatch Castle', '#2f5d7a', '#e9e1cc'], oakkeep: ['oakbridge', 'hall', 'The hall of Oakbridge Keep', '#2f6b3a', '#efe9d8'] };
+  const KEEPS = { manor: ['hearthmoor', 'hall', 'The hall of Varrow Manor', '#2f4f3a', '#c9a24a'], cmcastle: ['crownmere', 'great', 'The Great Hall of Crownmere Castle', '#2b4a7a', '#d9b04a'], ickeep: ['ironcrest', 'hall', 'The hall of Stane Keep', '#3a3a3a', '#c9a24a'], ewkeep: ['eastwatch', 'hall', 'The hall of Eastwatch Castle', '#2f5d7a', '#e9e1cc'], oakkeep: ['oakbridge', 'hall', 'The hall of Oakbridge Keep', '#2f6b3a', '#efe9d8'] };
   if (KEEPS[key]) { const [rg, size, title, banner, trim] = KEEPS[key], R = s.realm, lord = R ? Sim.regionLord(s, rg) : null, lp = lord && lord !== 'player' ? s.people[lord] : null, Lk = L[key];
     return { kind: 'castle', size, title, note: lord === 'player' ? 'Your hall.' : lp ? (rg === 'crownmere' ? 'King ' + lp.name.split(' ')[0] + ' holds court here.' : lp.name + '\u2019s hall.') : '', x: Lk.x, z: Lk.z, door, seat: rg, lead: lord, banner, trim }; }
   if (key === 'home') return { kind: 'home', size: 'hut', title: 'Your hut', note: s.player.house ? 'Your old hut, still yours.' : 'Small and draughty, but yours.', x: Lh.x, z: Lh.z, door, comfort: s.player.hutComfort || 0 };
@@ -7654,7 +7681,7 @@ function showHandbook(o) {
   $('vellum').innerHTML = `<div class="wax" aria-hidden="true">H</div><h2 id="scrollTitle">${esc(B.title)}</h2><p class="sv">${esc(where)} &middot; day ${o.day}</p><div class="fleur" aria-hidden="true">&#10086; &#10086; &#10086;</div>
     <h3>What you can do</h3><ul>${B.can.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
     <h3>What is asked of you</h3><ul>${B.must.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
-    <div class="acts"><button type="button" class="btn" data-c='["ui","closeBook"]'>I accept the charge</button></div>`;
+    <div class="acts"><button type="button" class="btn" data-c='["ui","closeBook"]'>I accept the charge</button><button type="button" class="btn alt" data-c='["page","office"]'>Open your office</button></div><p class="sv">Every power above is on your office page (Power, Office). Some, like holding court, are done in person.</p>`;
   const sc = $('scroll'); sc.hidden = false; Snd.play('scroll');
   const el = sc.querySelector('.scroll'); el.classList.remove('unroll'); void el.offsetWidth; el.classList.add('unroll');
 }
