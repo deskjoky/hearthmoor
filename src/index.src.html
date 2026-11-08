@@ -3848,7 +3848,7 @@ function renderFightHud() {
   if (!Fi.over && Fi.kind === 'deadly' && C.hp <= C.hpMax * 0.3) h += `<button type="button" class="fyield" data-c='["ui","fyield"]'>Yield</button>`;
   if (Fi.log.length) h += `<div class="flog">${esc(Fi.log[Fi.log.length - 1])}</div>`;
   if (!FIGHT.hinted) h += `<div class="fhint">Tap an enemy to strike · hold to block · swipe to dodge</div>`;
-  $('fightHud').innerHTML = h;
+  if (FIGHT.lastHud !== h) { FIGHT.lastHud = h; $('fightHud').innerHTML = h; }
 }
 function finishFight() {
   const res = Sim.endFight(G) || 'lost'; FIGHT.on = false; FIGHT.endAt = 0; FIGHT.hinted = true;
@@ -4367,13 +4367,13 @@ function hud(s) {
   const mine = myBusinesses(s);
   if (mine.length) chips.push(`<span class="chip num btn" data-c='["ui","bizMenu"]' role="button" tabindex="0" aria-expanded="${!!UI.bizMenu}">${mine.length === 1 ? 'Your business' : 'Businesses <b>' + mine.length + '</b>'} ${UI.bizMenu ? '\u25b4' : '\u25be'}</span>`);
   const bm = UI.bizMenu && mine.length && !UI.overlay ? mine.map(x => `<div class="bizrow"><div class="bi"><span class="nm">${esc(x.name)}</span>${x.line}</div>${x.go && x.go !== UI.loc ? `<button type="button" data-c='${esc(JSON.stringify(['goto', x.go]))}'>Go</button>` : ''}<button type="button" class="go" data-c='${esc(JSON.stringify(['ui', 'manage', x.ref]))}'>Manage</button></div>`).join('') : '';
-  if ($('bizmenu').innerHTML !== bm) $('bizmenu').innerHTML = bm;
+  if (UI.last_bizmenu !== bm) { UI.last_bizmenu = bm; $('bizmenu').innerHTML = bm; }   // compare with what we drew, not the browser's copy of it
   $('bizmenu').hidden = !bm;
   const html = chips.map(c => c.startsWith('<span') ? c : `<span class="chip num">${c}</span>`).join('');
-  if ($('subhud').innerHTML !== html) $('subhud').innerHTML = html;
+  if (UI.last_subhud !== html) { UI.last_subhud = html; $('subhud').innerHTML = html; }   // compare with what we drew, not the browser's copy of it
   const g = s.village.step >= Sim.STEPS.length ? null : (s.village.step > 0 ? Sim.GOALS.find(x => x.ch === 2 && !x.done(s)) : null) || Sim.GOALS.find(x => !x.done(s));
   const gt = g ? `<em>Next:</em> ${esc(Sim.stepText(s, g.text))}` : '<em>Chapter Two complete.</em> The lord knows your name. More in the next chapter.';
-  if ($('goal').innerHTML !== gt) $('goal').innerHTML = gt;
+  if (UI.last_goal !== gt) { UI.last_goal = gt; $('goal').innerHTML = gt; }   // compare with what we drew, not the browser's copy of it
   const h = Sim.hourOf(s);
   $('night').hidden = !(h >= 21 || h < 5.5) || !!UI.overlay;
   $('toasts').style.top = Math.round($('hud').getBoundingClientRect().bottom + 6) + 'px';
@@ -7122,6 +7122,8 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.70.2', date: '8 November', title: 'Every tap counts', items: [
+    'Fixed: since 0.70, the row of chips under the top bar was redrawn many times a second, so a tap could land just as a button was replaced and be lost. Buttons react to the first tap again.'] },
   { v: '0.70.1', date: '8 November', title: 'Quieter streets', items: [
     'Walking past your own shops, houses and businesses now shows only a small tab with the name. Tap it to open the full card.',
     'Games begun before levels existed now start at a level earned by what you have already done, with perk points and choices to spend (You, Skills).',
