@@ -315,7 +315,7 @@
     if (kind !== 'coin' && s.people && chronicleWorthy(s, text, kind)) { const C = s.chronicle = s.chronicle || []; const last = C[C.length - 1]; if (!(last && last.d === s.day && last.x === text)) { C.push({ d: s.day, m: Math.round(s.t % 1440), k: kind || 'info', x: text }); if (C.length > 900) C.splice(0, C.length - 900); } }
     if (s.events.length > 40) s.events.splice(0, s.events.length - 40);
   }
-  const carried = s => GOODS.reduce((a, g) => a + s.player.inv[g], 0);
+  const carried = s => Math.round((GOODS.reduce((a, g) => a + s.player.inv[g], 0) + (s.player.items ? itemsWeight(s) : 0)) * 10) / 10;
   // lookups stay fast as towns grow: an index per array, rebuilt only when the array changes
   const IDX = new WeakMap();
   function indexOf(arr, key) {
@@ -358,7 +358,7 @@
   function levelGate(s, t) { const l = tradeLevel(s, t); return l < xpLevel(s, t) ? 'Level ' + (l + 1) + ' needs ' + RANK_NAME[LEVEL_RANK[l]] + '.' : null; }
   function levelProgress(s, t) { const l = tradeLevel(s, t), x = tradeXp(s, t); if (l >= WORK_LEVELS.length) return { level: l, have: x, need: null, frac: 1 }; const a = WORK_LEVELS[l - 1], b = WORK_LEVELS[l]; return { level: l, have: Math.min(x, b) - a, need: b - a, frac: Math.min(1, (x - a) / (b - a)), gate: levelGate(s, t) }; }
   function barsFor(level) { return { bars: level <= 1 ? 2 : level <= 3 ? 3 : 4, colours: 3 }; }   // three buttons from the first item, like Fable 3's pie-making at its hardest
-  function roundPay(s, t, perfect, chain, own) { return Math.round(WORK_PAY[tradeLevel(s, t) - 1] * clamp(chain || 1, 1, CHAIN_MAX) * (perfect ? 1 + PERFECT_BONUS : 1) * (own ? 1 + BENCH_CUT : 1) * 1000) / 1000; }
+  function roundPay(s, t, perfect, chain, own) { return Math.round(WORK_PAY[tradeLevel(s, t) - 1] * clamp(chain || 1, 1, CHAIN_MAX) * (perfect ? 1 + PERFECT_BONUS : 1) * (own ? 1 + BENCH_CUT : 1) * (1 + 0.15 * perk(s, 'masterCraftsman')) * 1000) / 1000; }
   function learned(s, trade) { return tradeLevel(s, trade) >= 2; }
   // your very first shop is a starter stall at a one-time price; after that a lot and a counter cost what a business does
   const STARTER_PRICE = 70;
@@ -671,6 +671,7 @@
     for (const p of living(s)) if (p.job && p.job.type === 'manage' && !managerOf(s, p.job.kind, p.job.ref)) { p.job = null; plog(s, p, 'The business they managed changed hands.'); }
     for (const shop of s.shops) {
       const m = shop.manager; if (!m) continue;
+      skillUse(s, 'command', 0.6);
       managerStaffing(s, shop);
       assignRoles(s, shop);
       const mp = s.people[m.pid]; if (!mp || mp.status !== 'here') { shop.manager = null; report(s, 'Your ' + TRADES[shop.trade].name.toLowerCase() + ' has lost its manager.'); continue; }
@@ -989,7 +990,8 @@
   }
   /* a manager on the floor lends a hand at the bench and the counter: up to half again as fast */
   const mgrBoost = shop => shop && shop.manager ? 1 + 0.25 * Math.min(1.3, shop.manager.skill || 1) : 1;
-  function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop) * handBoost(shop) * crowdMul(shop); }
+  function workerSpeed(w, shop) { return w.skill * (w.mood < 30 ? 0.7 : 1) * mgrBoost(shop) * handBoost(shop) * crowdMul(shop) * (FOREMAN.on ? 1.1 : 1); }
+  const FOREMAN = { on: false };   // set each tick from your perks, since worker speed is worked out without the game state
   /* ---------- hands: extra staff for a bigger shop ----------
      A stall is one pair of hands. A timber building has room for a second, a stone one for a third, and
      from the timber building up, a manager. Hands help at the bench and the counter, and each one takes
@@ -1062,11 +1064,11 @@
   // who fetches supplies: the manager unless you choose otherwise, else an employee set to it, else the worker if allowed
   function supplier(shop) {
     const by = shop.policy.supplyBy || 'auto';
-    if (by === 'none') return null;
-    if ((by === 'auto' || by === 'manager') && shop.manager) return 'manager';
+    if (by === 'none' && !shop.manager) return null;
+    if (shop.manager && by !== 'employee' && by !== 'worker') return 'manager';   // a manager always sees to supplies unless you hand it to someone else
     if ((by === 'auto' || by === 'manager' || by === 'employee') && staffOn(shop, 'supply').length) return 'employee';
     if (by === 'worker' || shop.policy.supplyRuns) return 'worker';
-    return null;
+    return shop.manager ? 'manager' : null;   // a shop with a manager is never left without supplies
   }
   function supplyWant(s, shop, disc) {
     const Ti = tierOf(shop), r = TRADES[shop.trade].recipe, want = {};
@@ -1083,7 +1085,8 @@
       const Ti = tierOf(shop); for (const g in shop.fetch.carry) shop.stock[g] = Math.min(Ti.cap, shop.stock[g] + shop.fetch.carry[g]);
       shop.fetch = null; return;
     }
-    const who = supplier(shop);
+    const who = supplier(shop), R = TRADES[shop.trade].recipe;
+    if (who && who !== 'worker' && !low) low = Object.keys(R).some(g => shop.stock[g] < R[g] * 2);   // a manager or fetcher goes before storage runs dry
     if (!low || !who || who === 'worker' || h < H.start || h >= H.end - 1 || shop.fetchWait > s.t) return;
     const by = who === 'manager' ? shop.manager.name : staffOn(shop, 'supply')[0].name;
     const { want, cost, total } = supplyWant(s, shop, who === 'manager' ? 0.9 : 1);
@@ -1192,9 +1195,9 @@
       a.left -= dt;
       if (a.left <= 0) {
         const g = GATHER[a.good];
-        const n = Math.min(g.n, CARRY - carried(s));
+        const n = Math.min(g.n, carryCap(s) - carried(s));
         p.inv[a.good] += n; s.rec.gathered[a.good] += n;
-        if (carried(s) >= CARRY) { p.action = null; event(s, 'Your arms are full (' + CARRY + ' items). Store or sell what you carry.', 'info'); }
+        if (carried(s) >= carryCap(s)) { p.action = null; event(s, 'Your arms are full (' + carryCap(s) + '). Store or sell what you carry.', 'info'); }
         else a.left = g.min;
       }
     }
@@ -1205,7 +1208,7 @@
   function beginAction(s, then) {
     const p = s.player;
     if (then.type === 'gather') {
-      if (carried(s) >= CARRY) { event(s, 'Your arms are full. Store or sell what you carry first.', 'bad'); return; }
+      if (carried(s) >= carryCap(s)) { event(s, 'Your arms are full. Store or sell what you carry first.', 'bad'); return; }
       p.action = { type: 'gather', good: then.good, left: GATHER[then.good].min };
     } else if (then.type === 'craft') { p.action = { type: 'craft', shop: then.shop }; p.face = Math.PI; }
     else if (then.type === 'store') storeGoods(s, shopById(s, then.shop));
@@ -1792,6 +1795,9 @@
     butcher: { rate: 0.35, qty: 1.2, price: 4, inputs: { grain: 0.6 }, perWorker: 7 },
     chandler: { rate: 0.2, qty: 1.3, price: 3, inputs: { wood: 0.3 }, perWorker: 10 },
     tailor: { rate: 0.05, qty: 1, price: 12, inputs: {}, perWorker: 2.5 },
+    armourer: { rate: 0.03, qty: 1, price: 30, inputs: { ore: 2, wood: 0.5 }, perWorker: 1 },
+    weaponsmith: { rate: 0.04, qty: 1, price: 22, inputs: { ore: 1.5, wood: 1 }, perWorker: 1.2 },
+    bowyer: { rate: 0.05, qty: 1, price: 10, inputs: { wood: 1.5 }, perWorker: 2.5 },
     weaver: { rate: 0.07, qty: 1, price: 8, inputs: {}, perWorker: 4 },
     potter: { rate: 0.1, qty: 1.2, price: 4, inputs: { wood: 0.4 }, perWorker: 7 },
     cooper: { rate: 0.05, qty: 1, price: 8, inputs: { wood: 1.5 }, perWorker: 3.5 },
@@ -2939,7 +2945,7 @@
       T('o_ironside', 'smithy', 'Ironside Smithy', 'Maud Ironside', onStreet(3, 0.24, 1), 'guild'),
       T('o_joinery', 'joinery', 'Oakbridge Joinery', 'Piran', onStreet(3, 0.6, 1), 'guild'),
       T('o_wheel', 'wheelwright', 'Hobbes the Wheelwright', 'Hobbes', onStreet(3, 0.68, -1), 'guild'),
-      T('o_cooper', 'cooper', "Cooper's Yard", 'Edwin Cooper', onStreet(3, 0.8, 1), 'guild'),
+      T('o_cooper', 'bowyer', "The Fletcher's Yard", 'Edwin Cooper', onStreet(3, 0.8, 1), 'guild'),
       T('o_weavers', 'weaver', "Weavers' Hall", 'Isolde Weaver', onRing(guildSq, -1.57), 'guild'),
       T('o_potter', 'potter', 'The Pottery', 'Ansel', onRing(guildSq, 1.57), 'guild'),
       T('o_anchor', 'tavern', 'The Oak and Anchor', 'Mother Brisk', onStreet(6, 0.12, -1), 'riverside'),
@@ -3178,7 +3184,7 @@
     const biz = [];
     names.forEach(([t, n, b], i) => { if (mSlots[i]) biz.push(T('c_m' + i, t, n, b, mSlots[i], 'market')); });
     const gSlots = ring(guildSq, 10, 0.2, clearOf([Math.PI + 0.2, 0, -Math.PI / 2]));
-    [['smithy', 'The Royal Armoury', 'Ralph Steel'], ['joinery', 'Master Joiners', 'Piers Wright'], ['mason', 'The Masons’ Lodge', 'Hugh Mason'], ['weaver', 'The Weavers’ Guild', 'Alys Weaver'], ['cooper', 'Guild Coopers', 'Edwin Hoop'], ['wheelwright', 'Royal Wheelwrights', 'Wat Wheeler'], ['tanner', 'The Glovers', 'Nesta Glove'], ['carter', 'The Kingsway Carriers', 'Garrick Cart']]
+    [['armourer', 'The Royal Armoury', 'Ralph Steel'], ['joinery', 'Master Joiners', 'Piers Wright'], ['mason', 'The Masons’ Lodge', 'Hugh Mason'], ['weaver', 'The Weavers’ Guild', 'Alys Weaver'], ['cooper', 'Guild Coopers', 'Edwin Hoop'], ['wheelwright', 'Royal Wheelwrights', 'Wat Wheeler'], ['tanner', 'The Glovers', 'Nesta Glove'], ['carter', 'The Kingsway Carriers', 'Garrick Cart']]
       .forEach(([t, n, b], i) => { if (gSlots[i]) biz.push(T('c_g' + i, t, n, b, gSlots[i], 'guild')); });
     const cSlots = ring(courtSq, 8, 0.3, clearOf([Math.atan2(10, 16), Math.PI, Math.atan2(-30, 50)]));
     [['goldsmith', 'The King’s Jeweller', 'Maud Silver'], ['tailor', 'Court Tailors', 'Philippa Lace'], ['tavern', 'The Crown and Sceptre', 'Lord Ralph Moreton'], ['apothecary', 'The Royal Physician', 'Master Leofric']]
@@ -3321,10 +3327,10 @@
     marks: [{ x: 640, z: -1300, r: 14 }, { x: 792, z: -1256, r: 15 }, { x: 806, z: -1294, r: 12 }, { x: 690, z: -1372, r: 7 }, { x: 728, z: -1368, r: 7 }],
     biz: [
       ['i_tavern', 'tavern', 'The Pick and Lantern', 'Bertrand Coale', 0, 0.78, 1, 'square'], ['i_forge', 'smithy', 'Stane Forge', 'Oswin Stane', 2, 0.35, 1, 'smelters'],
-      ['i_hammer', 'smithy', 'Hammerfall Smithy', 'Gilda Hammond', 2, 0.6, -1, 'smelters'], ['i_bake', 'bakery', 'Ironcrest Ovens', 'Mabel Crane', 0, 0.45, -1, 'gate'],
+      ['i_hammer', 'weaponsmith', 'Hammerfall Blades', 'Gilda Hammond', 2, 0.6, -1, 'smelters'], ['i_bake', 'bakery', 'Ironcrest Ovens', 'Mabel Crane', 0, 0.45, -1, 'gate'],
       ['i_butcher', 'butcher', 'Highfold Butchers', 'Rufus Highfold', 3, 0.4, 1, 'west'], ['i_carter', 'carter', 'Ore Carters', 'Dunstan Wray', 1, 0.55, 1, 'mine'],
       ['i_mason', 'mason', 'Quarrymasters', 'Hilde Quarry', 1, 0.3, -1, 'mine'], ['i_chand', 'chandler', 'Lamp and Wick', 'Eda Lampton', 3, 0.7, -1, 'west'],
-      ['i_apoth', 'apothecary', 'Miners’ Remedies', 'Silas Fenwick', 4, 0.5, 1, 'upper'], ['i_cooper', 'cooper', 'Crag Coopers', 'Ned Cragg', 5, 0.5, 1, 'gate']
+      ['i_apoth', 'apothecary', 'Miners’ Remedies', 'Silas Fenwick', 4, 0.5, 1, 'upper'], ['i_cooper', 'bowyer', 'Crag Bowyers', 'Ned Cragg', 5, 0.5, 1, 'gate']
     ],
     spots: { ic_mine: { x: 708, z: -1360, rx: 14, rz: 5 }, ic_smelt: { x: 790, z: -1262, rx: 8, rz: 6 }, ic_char: { x: 812, z: -1300, rx: 9, rz: 6 }, ic_haul: { x: 712, z: -1330, rx: 5, rz: 10 }, ic_watch: { x: 700, z: -1182, rx: 6, rz: 3 } },
     board: { x: 708, z: -1250 }, entry: { x: 700, z: -1176 },
@@ -3462,7 +3468,7 @@
       ],
       plazas: [{ id: 'parade', name: 'the Parade Ground', x: 2232, z: -735, r0: 3, r1: 12, w: 4 }],
       marks: [{ x: 2240, z: -800, r: 20 }],
-      biz: [['s_gate', 'tavern', 'The Iron Gate', 'Fernan Torres', 0, 0.3, 1, 'gate'], ['s_arm1', 'smithy', 'The King’s Armourers', 'Gonzalo Puig', 2, 0.5, 1, 'armourers'], ['s_arm2', 'smithy', 'Shield and Sword', 'Urraca Serra', 2, 0.8, -1, 'armourers'], ['s_bake', 'bakery', 'Garrison Ovens', 'Juana Rius', 0, 0.55, -1, 'gate'], ['s_butch', 'butcher', 'Rampart Butchers', 'Diego Soler', 1, 0.25, 1, 'ramparts'], ['s_mason', 'mason', 'Stonewatch Masons', 'Alvaro Castell', 3, 0.6, 1, 'quarry'], ['s_tan', 'tanner', 'Saddlers and Tanners', 'Mencia Oliver', 1, 0.8, -1, 'ramparts'], ['s_cart', 'carter', 'Pass Carters', 'Bernat Prats', 0, 0.12, -1, 'gate'], ['s_apoth', 'apothecary', 'The Surgeon’s House', 'Elvira Mirall', 1, 0.7, 1, 'ramparts']],
+      biz: [['s_gate', 'tavern', 'The Iron Gate', 'Fernan Torres', 0, 0.3, 1, 'gate'], ['s_arm1', 'armourer', 'The King’s Armourers', 'Gonzalo Puig', 2, 0.5, 1, 'armourers'], ['s_arm2', 'weaponsmith', 'Shield and Sword', 'Urraca Serra', 2, 0.8, -1, 'armourers'], ['s_bake', 'bakery', 'Garrison Ovens', 'Juana Rius', 0, 0.55, -1, 'gate'], ['s_butch', 'butcher', 'Rampart Butchers', 'Diego Soler', 1, 0.25, 1, 'ramparts'], ['s_mason', 'mason', 'Stonewatch Masons', 'Alvaro Castell', 3, 0.6, 1, 'quarry'], ['s_tan', 'tanner', 'Saddlers and Tanners', 'Mencia Oliver', 1, 0.8, -1, 'ramparts'], ['s_cart', 'carter', 'Pass Carters', 'Bernat Prats', 0, 0.12, -1, 'gate'], ['s_apoth', 'apothecary', 'The Surgeon’s House', 'Elvira Mirall', 1, 0.7, 1, 'ramparts']],
       spots: { sw_garrison: { x: 2232, z: -735, rx: 10, rz: 8 }, sw_quarry: { x: 2180, z: -830, rx: 10, rz: 6 }, sw_wall: { x: 2300, z: -735, rx: 3, rz: 20 }, sw_watch: { x: gate.x, z: gate.z - 8, rx: 3, rz: 2 } },
       board: { x: 2240, z: -724 }, entry: { x: gate.x, z: gate.z + 6 },
       extra: { wall, gate, keep: { x: 2240, z: -800, face: 0 } }
@@ -3487,7 +3493,7 @@
     biz: [
       ['v_crown', 'tavern', 'The Crown of Valdor', 'Beatriz Montoro', 0, 0.62, 1, 'mayor'], ['v_pilg', 'tavern', 'The Pilgrim’s Rest', 'Anselmo Ribas', 1, 0.5, -1, 'catedral'],
       ['v_oven1', 'bakery', 'The Queen’s Ovens', 'Fermín Lozano', 0, 0.4, -1, 'mayor'], ['v_oven2', 'bakery', 'Saint Eulalia’s Bakery', 'Rosa Quintana', 3, 0.55, 1, 'mercado'],
-      ['v_butch', 'butcher', 'Plaza Butchers', 'Damián Ortega', 3, 0.3, -1, 'mercado'], ['v_forge', 'smithy', 'The Royal Armoury', 'Hernán Vela', 4, 0.45, 1, 'nueva'],
+      ['v_butch', 'butcher', 'Plaza Butchers', 'Damián Ortega', 3, 0.3, -1, 'mercado'], ['v_forge', 'armourer', 'The Royal Armoury', 'Hernán Vela', 4, 0.45, 1, 'nueva'],
       ['v_gold1', 'goldsmith', 'The Silver Scales', 'Íñigo Salazar', 2, 0.35, 1, 'plateros'], ['v_gold2', 'goldsmith', 'House of Medrano', 'Leonor Medrano', 2, 0.7, -1, 'plateros'],
       ['v_silk', 'weaver', 'The Royal Silk Works', 'Elena Cuesta', 5, 0.5, 1, 'monjas'], ['v_tailor', 'tailor', 'Court Tailors', 'Gaspar Ferrán', 0, 0.82, 1, 'mayor'],
       ['v_apoth', 'apothecary', 'The Lemon Tree Apothecary', 'Sol Arriaga', 4, 0.75, -1, 'nueva'], ['v_chand', 'chandler', 'Cathedral Candles', 'Tomasa Gil', 1, 0.3, 1, 'catedral'],
@@ -3608,8 +3614,8 @@
     s.rec.walked += d;
     return mins;
   }
-  Object.assign(BIZ_BASE, { butcher: 28, chandler: 22, tailor: 24, wheelwright: 24, cooper: 22, weaver: 24, tanner: 24, potter: 20, carter: 26, boatwright: 24, goldsmith: 34, apothecary: 26, mason: 26 });
-  const TRADE_NAMES = { bakery: 'Bakery', tavern: 'Tavern', smithy: 'Smithy', joinery: 'Joinery', mill: 'Milling', butcher: 'Butchery', chandler: 'Chandlery', tailor: 'Tailoring', wheelwright: 'Wheelwright', cooper: 'Cooperage', dairy: 'Dairy', estate: 'Farming estate', weaver: 'Weaving', tanner: 'Tannery', potter: 'Pottery', carter: 'Carting', boatwright: 'Boatbuilding', goldsmith: 'Goldsmithing', apothecary: 'Apothecary', mason: 'Masonry' };
+  Object.assign(BIZ_BASE, { armourer: 40, weaponsmith: 36, bowyer: 26, butcher: 28, chandler: 22, tailor: 24, wheelwright: 24, cooper: 22, weaver: 24, tanner: 24, potter: 20, carter: 26, boatwright: 24, goldsmith: 34, apothecary: 26, mason: 26 });
+  const TRADE_NAMES = { armourer: 'Armoury', weaponsmith: 'Weaponsmith', bowyer: 'Bowyer', bakery: 'Bakery', tavern: 'Tavern', smithy: 'Smithy', joinery: 'Joinery', mill: 'Milling', butcher: 'Butchery', chandler: 'Chandlery', tailor: 'Tailoring', wheelwright: 'Wheelwright', cooper: 'Cooperage', dairy: 'Dairy', estate: 'Farming estate', weaver: 'Weaving', tanner: 'Tannery', potter: 'Pottery', carter: 'Carting', boatwright: 'Boatbuilding', goldsmith: 'Goldsmithing', apothecary: 'Apothecary', mason: 'Masonry' };
   const tradeName = t => TRADE_NAMES[t] || (TRADES[t] && TRADES[t].name) || t;
   const townOf = p => (p && p.town) || 'hearthmoor';
   const townSpots = town => { const L = LAYOUT[town]; if (!L) return null; const q = L.plazas[0]; return { well: { x: q.x, z: q.z }, plaza: { x: q.x + 2, z: q.z + 6 }, board: L.board || { x: q.x - 9, z: q.z - 4 }, center: L.C }; };
@@ -4637,7 +4643,7 @@
     const E = ensureRaces(s);
     // pledges fall due
     for (const pl of E.pledges) if (pl.state === 'given' && PLEDGES[pl.id] && PLEDGES[pl.id].ok(s, pl)) {
-      pl.state = 'kept'; E.kept++; deed(s, 3, 3, 'a kept election promise');
+      pl.state = 'kept'; E.kept++; deed(s, 3, 3, 'a kept election promise'); gainXP(s, 30); skillUse(s, 'speech', 6);
       for (const q of living(s)) if ((pl.region ? townOf(q) === pl.region : pl.office === 'elder' ? !q.town || q.town === 'hearthmoor' : true) && erand(s) < 0.4) q.opinion = clamp((q.opinion || 0) + 4, -100, 100);
       event(s, 'You kept your word: ' + pl.text.toLowerCase() + '. People notice.', 'good');
     }
@@ -4667,6 +4673,7 @@
     E.history.unshift({ d: s.day, key: r.key, label, win: win === 'player' ? s.name : s.people[win].name, you: r.you ? pct('player') : null, text: line, cands: rank.map(([c, v]) => ({ name: c === 'player' ? s.name : s.people[c].name, you: c === 'player', votes: Math.round(v), pct: pct(c) })), total: Math.round(res.total), towns: Object.keys(res.byTown).length, yourVote: ballot && s.people[ballot] ? s.people[ballot].name : null }); if (E.history.length > 40) E.history.length = 40;
     const youRan = r.you; r.you = false;
     if (youRan) { s.rec.racesRun = (s.rec.racesRun || 0) + 1; if (win === 'player') s.rec.racesWon = (s.rec.racesWon || 0) + 1; else { s.rec.racesLost = (s.rec.racesLost || 0) + 1; if (hold === 'player') s.rec.votedOut = (s.rec.votedOut || 0) + 1; } }
+    if (win === 'player') gainXP(s, { council: 40, elder: 90, lord: 180, seat: 280, crown: 450 }[r.office] || 0);
     if (win === 'player') { const rk = { council: 0, elder: 1, lord: 2, seat: 3, crown: 4 }[r.office]; if (rk > (s.rec.highestRank == null ? -1 : s.rec.highestRank)) { s.rec.highestRank = rk; s.rec.highestTitle = raceLabel(r).replace(/^a seat on the /, 'a seat on the ').replace(/^the /, ''); } }
     if (absent) event(s, 'You were not at ' + venueName(r) + ' when the votes were counted. People noticed.', 'bad');
     if (win === hold && win === 'player') recordPledge(s, r);
@@ -4748,6 +4755,488 @@
     if (crossed(7)) for (const r of Object.values(E.races)) if (r.open && r.you) { if (s.day === r.poll) alertRace(s, r, 'today'); else if (s.day === r.poll - 1) alertRace(s, r, 'tomorrow'); }
     if (crossed(12)) for (const r of Object.values(E.races)) if (r.open && r.poll === s.day) { if (r.you) r.present = atVenue(s, r); pollRace(s, r); }
   }
+  /* ================= the character: skills, levels, perks, the bag and what you wear =================
+     Fifteen skills rise as you use them, from 15 to 100. Each time a skill rises, you gain experience equal to its
+     new level; deeds, elections and kept promises add more. Every level brings a perk point, spent in a skill's own
+     constellation, and a choice of more health, more stamina or more to carry. */
+  const SKILLS = {
+    oneHanded: { name: 'One-Handed', group: 'combat', say: 'Swords, axes, maces and daggers in one hand.' },
+    twoHanded: { name: 'Two-Handed', group: 'combat', say: 'Longswords, war hammers, battleaxes, spears and halberds.' },
+    archery: { name: 'Archery', group: 'combat', say: 'Bows and crossbows.' },
+    block: { name: 'Block', group: 'combat', say: 'Turning blows aside with a shield or your weapon.' },
+    lightArmor: { name: 'Light Armour', group: 'combat', say: 'Padded, leather and studded armour.' },
+    heavyArmor: { name: 'Heavy Armour', group: 'combat', say: 'Mail, brigandine and plate.' },
+    smithing: { name: 'Smithing', group: 'craft', say: 'Working iron: making, improving and mending weapons and armour.' },
+    crafting: { name: 'Crafting', group: 'craft', say: 'The work of every bench: baking, brewing, joinery and the rest.' },
+    hunting: { name: 'Hunting', group: 'craft', say: 'Tracking and taking deer and boar, and dressing the kill.' },
+    trade: { name: 'Trade', group: 'life', say: 'Buying and selling at a good price.' },
+    speech: { name: 'Speech', group: 'life', say: 'Persuading, campaigning, bribing and making amends.' },
+    command: { name: 'Command', group: 'life', say: 'Leading staff, guards and soldiers, and holding office.' },
+    sneak: { name: 'Sneak', group: 'shadow', say: 'Moving unseen, and striking from the shadows.' },
+    pickpocket: { name: 'Pickpocket', group: 'shadow', say: 'Lifting purses without being caught.' },
+    lockpick: { name: 'Lockpick', group: 'shadow', say: 'Opening locked doors and chests.' }
+  };
+  const SKILL_GROUPS = { combat: 'Combat', craft: 'Craft', life: 'Way of life', shadow: 'Shadows' };
+  // perks: skill, the skill level each rank needs, what it needs first, and what it does
+  const P_ = (skill, name, req, after, say) => ({ skill, name, req: Array.isArray(req) ? req : [req], after: after || [], say });
+  const PERKS = {
+    // one-handed
+    armsman: P_('oneHanded', 'Armsman', [0, 20, 40, 60, 80], [], 'One-handed weapons strike 15% harder per rank.'),
+    fightingStance: P_('oneHanded', 'Fighting Stance', 20, ['armsman'], 'Strikes cost a quarter less stamina.'),
+    bladesman: P_('oneHanded', 'Bladesman', [30, 60], ['armsman'], 'Swords and daggers land a critical blow more often (15% per rank).'),
+    boneBreaker: P_('oneHanded', 'Bone Breaker', [30, 60], ['armsman'], 'Maces ignore a quarter of the enemy’s armour per rank.'),
+    hackAndSlash: P_('oneHanded', 'Hack and Slash', [30, 60], ['armsman'], 'Axes leave wounds that keep bleeding.'),
+    savageStrike: P_('oneHanded', 'Savage Strike', 50, ['fightingStance'], 'A riposte (a strike straight after you block or dodge) hits a quarter harder.'),
+    dualFury: P_('oneHanded', 'Duelist', 70, ['savageStrike'], 'In a duel, your first strike always lands.'),
+    // two-handed
+    barbarian: P_('twoHanded', 'Barbarian', [0, 20, 40, 60, 80], [], 'Two-handed weapons strike 15% harder per rank.'),
+    championsStance: P_('twoHanded', 'Champion’s Stance', 20, ['barbarian'], 'Two-handed strikes cost a quarter less stamina.'),
+    deepWounds: P_('twoHanded', 'Deep Wounds', [30, 60], ['barbarian'], 'Longswords land critical blows more often.'),
+    skullcrusher: P_('twoHanded', 'Skullcrusher', [30, 60], ['barbarian'], 'War hammers ignore a quarter of armour per rank.'),
+    reach: P_('twoHanded', 'Long Reach', 40, ['barbarian'], 'Spears and halberds keep enemies at bay: they close in more slowly.'),
+    devastatingBlow: P_('twoHanded', 'Devastating Blow', 60, ['championsStance'], 'A two-handed riposte hits half again as hard.'),
+    warmaster: P_('twoHanded', 'Warmaster', 80, ['devastatingBlow'], 'Your swings strike every enemy in front of you.'),
+    // archery
+    overdraw: P_('archery', 'Overdraw', [0, 20, 40, 60, 80], [], 'Bows strike 15% harder per rank.'),
+    eagleEye: P_('archery', 'Eagle Eye', 30, ['overdraw'], 'Your aim drifts less: more arrows find their mark.'),
+    quickShot: P_('archery', 'Quick Shot', 50, ['eagleEye'], 'Draw a third faster.'),
+    huntersDiscipline: P_('archery', 'Hunter’s Discipline', 40, ['overdraw'], 'Recover twice as many arrows.'),
+    powerShot: P_('archery', 'Power Shot', 60, ['eagleEye'], 'Arrows stagger whoever they hit.'),
+    ranger: P_('archery', 'Ranger', 70, ['quickShot'], 'Move at full pace with a bow drawn.'),
+    // block
+    shieldWall: P_('block', 'Shield Wall', [0, 20, 40, 60, 80], [], 'Blocking turns aside 10% more of a blow per rank.'),
+    quickReflexes: P_('block', 'Quick Reflexes', 30, ['shieldWall'], 'You see a heavy blow coming: the moment to block lasts longer.'),
+    deflectArrows: P_('block', 'Deflect Arrows', 30, ['shieldWall'], 'A raised shield stops arrows entirely.'),
+    powerBash: P_('block', 'Shield Bash', 40, ['quickReflexes'], 'A swipe toward the enemy while blocking bashes them off balance.'),
+    disarmingBash: P_('block', 'Disarming Bash', 70, ['powerBash'], 'A bash can knock the weapon from their hand.'),
+    blockRunner: P_('block', 'Block Runner', 60, ['deflectArrows'], 'Move at full pace with your shield raised.'),
+    // light armour
+    agileDefender: P_('lightArmor', 'Agile Defender', [0, 20, 40, 60, 80], [], 'Light armour guards 15% better per rank.'),
+    customFit: P_('lightArmor', 'Custom Fit', 30, ['agileDefender'], 'A full set of light armour guards a quarter better.'),
+    unhindered: P_('lightArmor', 'Unhindered', 50, ['customFit'], 'Light armour weighs nothing and never slows you.'),
+    windWalker: P_('lightArmor', 'Wind Walker', 60, ['unhindered'], 'Stamina comes back half again as fast in light armour.'),
+    deftMovement: P_('lightArmor', 'Deft Movement', 80, ['windWalker'], 'One blow in ten misses you outright.'),
+    // heavy armour
+    juggernaut: P_('heavyArmor', 'Juggernaut', [0, 20, 40, 60, 80], [], 'Heavy armour guards 15% better per rank.'),
+    wellFitted: P_('heavyArmor', 'Well Fitted', 30, ['juggernaut'], 'A full set of heavy armour guards a quarter better.'),
+    towerOfStrength: P_('heavyArmor', 'Tower of Strength', 50, ['wellFitted'], 'Heavy blows no longer stagger you.'),
+    conditioning: P_('heavyArmor', 'Conditioning', 70, ['towerOfStrength'], 'Heavy armour weighs nothing and never slows you.'),
+    strongBack: P_('heavyArmor', 'Strong Back', [20, 50], ['juggernaut'], 'Carry 10 more per rank.'),
+    // smithing
+    steelSmithing: P_('smithing', 'Steel Smithing', 0, [], 'Make and improve iron and steel weapons and armour; repairs cost less.'),
+    fineSmithing: P_('smithing', 'Fine Smithing', 30, ['steelSmithing'], 'Make mail, longswords and fine bows; improve gear twice as much.'),
+    armourSmithing: P_('smithing', 'Armourer', 50, ['fineSmithing'], 'Make brigandine and plate.'),
+    masterSmith: P_('smithing', 'Master Smith', 80, ['armourSmithing'], 'Everything you make is masterwork: a fifth stronger.'),
+    // crafting
+    quickHands: P_('crafting', 'Quick Hands', [0, 30, 60], [], 'The work minigame gives you longer to press each bar, per rank.'),
+    steadyChain: P_('crafting', 'Steady Chain', 30, ['quickHands'], 'Your chain survives one slip per item.'),
+    masterCraftsman: P_('crafting', 'Master Craftsman', [40, 70], ['quickHands'], 'Each good item pays 15% more per rank.'),
+    foreman: P_('crafting', 'Foreman', 50, ['steadyChain'], 'Your workers work a tenth faster.'),
+    // hunting
+    tracker: P_('hunting', 'Tracker', 0, [], 'Game shows on your map when you are in the woods.'),
+    cleanKill: P_('hunting', 'Clean Kill', [20, 50], ['tracker'], 'More meat and a better hide from every kill.'),
+    stalker: P_('hunting', 'Stalker', 30, ['tracker'], 'Animals let you come closer before they bolt.'),
+    butcher: P_('hunting', 'Butcher’s Eye', 40, ['cleanKill'], 'Meat and hides sell for a third more.'),
+    woodsman: P_('hunting', 'Woodsman', 60, ['stalker'], 'Stamina comes back twice as fast in the woods.'),
+    // trade
+    haggling: P_('trade', 'Haggling', [0, 20, 40, 60, 80], [], 'Buy for 5% less and sell for 5% more per rank.'),
+    bulkBuyer: P_('trade', 'Bulk Buyer', 30, ['haggling'], 'Supplies at the Trading Post cost a tenth less.'),
+    investor: P_('trade', 'Investor', 50, ['bulkBuyer'], 'Your businesses earn 5% more.'),
+    fence: P_('trade', 'Fence', 40, ['haggling'], 'Sell stolen goods to any tavern keeper.'),
+    merchantPrince: P_('trade', 'Merchant Prince', 70, ['investor'], 'Any shop will buy anything you carry.'),
+    // speech
+    persuasion: P_('speech', 'Persuasion', [0, 25, 50], [], 'Campaign speeches win a fifth more per rank.'),
+    bribery: P_('speech', 'Bribery', 30, ['persuasion'], 'Bribes and hush money cost a third less.'),
+    silverTongue: P_('speech', 'Silver Tongue', 40, ['persuasion'], 'Amends cost half, and grudges fade faster.'),
+    intimidation: P_('speech', 'Intimidation', 50, ['bribery'], 'Some fights can be ended with words before they start.'),
+    orator: P_('speech', 'Orator', 70, ['silverTongue'], 'Make two promises in a campaign instead of one.'),
+    // command
+    leadership: P_('command', 'Leadership', [0, 30], [], 'Your staff’s mood rises faster.'),
+    thriftySteward: P_('command', 'Thrifty Steward', 30, ['leadership'], 'Managers ask a fifth less.'),
+    bodyguard: P_('command', 'Bodyguard', 40, ['leadership'], 'A guard of your household stands with you in a fight.'),
+    rallyingCry: P_('command', 'Rallying Cry', 60, ['bodyguard'], 'Allies in a fight strike a quarter harder.'),
+    statesman: P_('command', 'Statesman', 70, ['thriftySteward'], 'Hold office with grace: approval falls more slowly.'),
+    // sneak
+    stealthy: P_('sneak', 'Stealthy', [0, 20, 40, 60, 80], [], 'Crouched, you are 10% harder to notice per rank.'),
+    muffled: P_('sneak', 'Muffled Movement', 30, ['stealthy'], 'Armour makes no noise.'),
+    backstab: P_('sneak', 'Backstab', 30, ['stealthy'], 'A strike from hiding deals three times the harm.'),
+    assassin: P_('sneak', 'Assassin’s Blade', 60, ['backstab'], 'Daggers from hiding deal ten times the harm.'),
+    shadowWarrior: P_('sneak', 'Shadow Warrior', 80, ['muffled'], 'Crouch mid-fight and the enemy loses sight of you.'),
+    // pickpocket
+    lightFingers: P_('pickpocket', 'Light Fingers', [0, 20, 40, 60, 80], [], 'Pickpocketing is 10% likelier to work per rank.'),
+    nightThief: P_('pickpocket', 'Night Thief', 30, ['lightFingers'], 'A quarter likelier after dark.'),
+    cutpurse: P_('pickpocket', 'Cutpurse', 40, ['lightFingers'], 'Lift twice the coin.'),
+    misdirection: P_('pickpocket', 'Misdirection', 60, ['cutpurse'], 'If caught, they often don’t know it was you.'),
+    perfectTouch: P_('pickpocket', 'Perfect Touch', 90, ['misdirection'], 'Take anything they carry.'),
+    // lockpick
+    noviceLocks: P_('lockpick', 'Nimble Picks', [0, 25, 50, 75], [], 'Harder locks open; picks break less, per rank.'),
+    waxKey: P_('lockpick', 'Wax Key', 40, ['noviceLocks'], 'Remember a lock you opened: it opens at once next time.'),
+    goldenTouch: P_('lockpick', 'Golden Touch', 60, ['waxKey'], 'Find more coin in what you open.'),
+    unbreakable: P_('lockpick', 'Unbreakable', 90, ['goldenTouch'], 'Your picks never break.')
+  };
+  const SKILL_START = 15, SKILL_MAX = 100, LEVEL_MAX = 100;
+  const skillNeed = lv => 20 + lv * 3.5;   // use-points from one skill level to the next
+  const levelNeed = lv => 30 + lv * 9;     // experience from one character level to the next
+  function setupChar(s) {
+    if (!s.char) {
+      const sk = {}; for (const k in SKILLS) sk[k] = { lv: SKILL_START, xp: 0 };
+      s.char = { level: 1, xp: 0, points: 0, perks: {}, pending: 0, hpMax: 100, stMax: 100, hp: 100, st: 100, carry: 0, skills: sk };
+    }
+    for (const k in SKILLS) if (!s.char.skills[k]) s.char.skills[k] = { lv: SKILL_START, xp: 0 };
+    return s.char;
+  }
+  const skillLv = (s, k) => s.char && s.char.skills[k] ? s.char.skills[k].lv : SKILL_START;
+  const perk = (s, id) => (s.char && s.char.perks[id]) || 0;
+  // use a skill: it rises, and each rise is experience toward your level
+  function skillUse(s, k, pts) {
+    if (!(pts > 0) || !SKILLS[k]) return; const C = setupChar(s), S = C.skills[k];
+    if (S.lv >= SKILL_MAX) return;
+    S.xp += pts;
+    while (S.lv < SKILL_MAX && S.xp >= skillNeed(S.lv)) { S.xp -= skillNeed(S.lv); S.lv++; event(s, SKILLS[k].name + ' rises to ' + S.lv + '.', 'skill'); gainXP(s, S.lv); }
+  }
+  function gainXP(s, n) {
+    if (!(n > 0)) return; const C = setupChar(s); if (C.level >= LEVEL_MAX) return;
+    C.xp += n;
+    while (C.level < LEVEL_MAX && C.xp >= levelNeed(C.level)) { C.xp -= levelNeed(C.level); C.level++; C.points++; C.pending++; event(s, 'You reach level ' + C.level + '. A perk point to spend, and a choice: more health, stamina or carrying.', 'level'); }
+  }
+  function canTakePerk(s, id) {
+    const P = PERKS[id]; if (!P) return 'No such perk.'; const C = setupChar(s), r = C.perks[id] || 0;
+    if (r >= P.req.length) return 'You have it already.';
+    if (C.points < 1) return 'No perk points to spend.';
+    if (skillLv(s, P.skill) < P.req[r]) return SKILLS[P.skill].name + ' ' + P.req[r] + ' needed.';
+    for (const a of P.after) if (!C.perks[a]) return 'Needs ' + PERKS[a].name + ' first.';
+    return null;
+  }
+  /* ---------- items ---------- */
+  // slot, weight, price (stored coin), kind, and what it does. arm: armour; dmg: harm; spd: strikes a second; blk: share of a blow a shield turns
+  const I_ = (name, slot, w, price, o) => Object.assign({ name, slot, w, price }, o || {});
+  const ITEMS = {
+    // clothes
+    rags: I_('Ragged clothes', 'body', 1, 0, { kind: 'clothes', fine: -1, warm: 0 }),
+    tunic: I_('Peasant tunic', 'body', 1.5, 6, { kind: 'clothes', fine: 0, warm: 1, dye: true }),
+    doublet: I_('Townsman’s doublet', 'body', 2, 25, { kind: 'clothes', fine: 1, warm: 1, dye: true }),
+    finecoat: I_('Merchant’s fine coat', 'body', 2.5, 80, { kind: 'clothes', fine: 2, warm: 2, dye: true }),
+    silks: I_('Noble’s silks', 'body', 2, 240, { kind: 'clothes', fine: 3, warm: 1, dye: true }),
+    regalia: I_('Royal regalia', 'body', 4, 0, { kind: 'clothes', fine: 4, warm: 2, dye: true, rulerOnly: true }),
+    hose: I_('Wool hose', 'legs', 1, 3, { kind: 'clothes', warm: 1, dye: true }),
+    boots: I_('Leather boots', 'legs', 1.5, 12, { kind: 'clothes', warm: 1, fine: 0.5 }),
+    fineboots: I_('Riding boots', 'legs', 1.5, 40, { kind: 'clothes', warm: 1, fine: 1 }),
+    strawhat: I_('Straw hat', 'head', 0.5, 2, { kind: 'clothes' }),
+    woolcap: I_('Wool cap', 'head', 0.5, 4, { kind: 'clothes', warm: 1, dye: true }),
+    featheredcap: I_('Feathered cap', 'head', 0.5, 35, { kind: 'clothes', fine: 1, dye: true }),
+    circlet: I_('Silver circlet', 'head', 0.5, 140, { kind: 'clothes', fine: 2 }),
+    crown: I_('The crown of Alderwyn', 'head', 2, 0, { kind: 'clothes', fine: 3, rulerOnly: true }),
+    woolcloak: I_('Wool cloak', 'cloak', 2, 12, { kind: 'clothes', warm: 2, dye: true }),
+    furcloak: I_('Fur-lined cloak', 'cloak', 3, 55, { kind: 'clothes', warm: 3, fine: 1, dye: true }),
+    mantle: I_('Velvet mantle', 'cloak', 2.5, 170, { kind: 'clothes', warm: 2, fine: 2, dye: true }),
+    // armour
+    gambeson: I_('Padded gambeson', 'body', 5, 35, { kind: 'armor', arm: 8, light: true, warm: 2 }),
+    jerkin: I_('Leather jerkin', 'body', 6, 60, { kind: 'armor', arm: 12, light: true }),
+    studded: I_('Studded leather', 'body', 8, 110, { kind: 'armor', arm: 16, light: true }),
+    chain: I_('Chain shirt', 'body', 14, 200, { kind: 'armor', arm: 22, heavy: true, smith: 'fineSmithing' }),
+    brigandine: I_('Brigandine', 'body', 16, 300, { kind: 'armor', arm: 26, heavy: true, smith: 'armourSmithing' }),
+    halfplate: I_('Half plate', 'body', 20, 480, { kind: 'armor', arm: 32, heavy: true, smith: 'armourSmithing' }),
+    fullplate: I_('Full plate', 'body', 26, 850, { kind: 'armor', arm: 40, heavy: true, smith: 'armourSmithing' }),
+    leathercap: I_('Leather cap', 'head', 1, 14, { kind: 'armor', arm: 3, light: true }),
+    ironhelm: I_('Iron helm', 'head', 3, 45, { kind: 'armor', arm: 6, heavy: true, smith: 'steelSmithing' }),
+    greathelm: I_('Great helm', 'head', 5, 130, { kind: 'armor', arm: 9, heavy: true, smith: 'armourSmithing' }),
+    leathergreaves: I_('Leather greaves', 'legs', 2, 22, { kind: 'armor', arm: 4, light: true }),
+    mailchausses: I_('Mail chausses', 'legs', 5, 75, { kind: 'armor', arm: 7, heavy: true, smith: 'fineSmithing' }),
+    plategreaves: I_('Plate greaves', 'legs', 7, 170, { kind: 'armor', arm: 10, heavy: true, smith: 'armourSmithing' }),
+    // weapons: family decides the skill and the perk that helps
+    dagger: I_('Dagger', 'main', 1, 9, { kind: 'weapon', fam: 'dagger', hands: 1, dmg: 4, spd: 1.5, smith: 'steelSmithing' }),
+    club: I_('Cudgel', 'main', 3, 3, { kind: 'weapon', fam: 'mace', hands: 1, dmg: 5, spd: 1.0 }),
+    hatchet: I_('Hatchet', 'main', 3, 10, { kind: 'weapon', fam: 'axe', hands: 1, dmg: 6, spd: 1.1, smith: 'steelSmithing', tool: 'wood' }),
+    shortsword: I_('Short sword', 'main', 3, 28, { kind: 'weapon', fam: 'sword', hands: 1, dmg: 7, spd: 1.2, smith: 'steelSmithing' }),
+    armingsword: I_('Arming sword', 'main', 4, 65, { kind: 'weapon', fam: 'sword', hands: 1, dmg: 9, spd: 1.1, smith: 'fineSmithing' }),
+    mace: I_('Flanged mace', 'main', 5, 55, { kind: 'weapon', fam: 'mace', hands: 1, dmg: 10, spd: 0.9, smith: 'steelSmithing' }),
+    waraxe: I_('War axe', 'main', 5, 60, { kind: 'weapon', fam: 'axe', hands: 1, dmg: 10, spd: 0.95, smith: 'steelSmithing' }),
+    longsword: I_('Longsword', 'main', 7, 140, { kind: 'weapon', fam: 'sword', hands: 2, dmg: 14, spd: 0.85, smith: 'fineSmithing' }),
+    warhammer: I_('War hammer', 'main', 10, 150, { kind: 'weapon', fam: 'mace', hands: 2, dmg: 17, spd: 0.7, smith: 'armourSmithing' }),
+    battleaxe: I_('Battleaxe', 'main', 9, 140, { kind: 'weapon', fam: 'axe', hands: 2, dmg: 16, spd: 0.75, smith: 'fineSmithing' }),
+    spear: I_('Spear', 'main', 5, 30, { kind: 'weapon', fam: 'spear', hands: 2, dmg: 11, spd: 0.9, reach: 1.5, smith: 'steelSmithing' }),
+    halberd: I_('Halberd', 'main', 10, 130, { kind: 'weapon', fam: 'spear', hands: 2, dmg: 16, spd: 0.7, reach: 1.7, smith: 'armourSmithing' }),
+    bluntsword: I_('Blunted sword', 'main', 3, 18, { kind: 'weapon', fam: 'sword', hands: 1, dmg: 4, spd: 1.2, blunt: true }),
+    huntingbow: I_('Hunting bow', 'main', 3, 32, { kind: 'weapon', fam: 'bow', hands: 2, dmg: 7, spd: 0.8, ranged: true, ammo: 'arrows' }),
+    longbow: I_('Longbow', 'main', 4, 115, { kind: 'weapon', fam: 'bow', hands: 2, dmg: 11, spd: 0.65, ranged: true, ammo: 'arrows', smith: 'fineSmithing' }),
+    crossbow: I_('Crossbow', 'main', 7, 145, { kind: 'weapon', fam: 'xbow', hands: 2, dmg: 15, spd: 0.4, ranged: true, ammo: 'bolts', smith: 'fineSmithing' }),
+    // shields
+    buckler: I_('Buckler', 'off', 2, 18, { kind: 'shield', blk: 0.35 }),
+    roundshield: I_('Round shield', 'off', 5, 40, { kind: 'shield', blk: 0.5 }),
+    heater: I_('Heater shield', 'off', 7, 85, { kind: 'shield', blk: 0.6, smith: 'steelSmithing' }),
+    kite: I_('Kite shield', 'off', 9, 125, { kind: 'shield', blk: 0.65, smith: 'fineSmithing' }),
+    tower: I_('Tower shield', 'off', 14, 190, { kind: 'shield', blk: 0.75, smith: 'armourSmithing' }),
+    // trinkets
+    copperring: I_('Copper ring', 'trinket', 0.1, 8, { kind: 'trinket', fine: 0.5 }),
+    silveramulet: I_('Silver amulet', 'trinket', 0.2, 60, { kind: 'trinket', fine: 1, charm: 1 }),
+    signet: I_('Signet ring', 'trinket', 0.1, 120, { kind: 'trinket', fine: 1.5, charm: 2 }),
+    // stacked things
+    arrows: I_('Arrows', null, 0.05, 0.25, { kind: 'ammo', stack: true, bundle: 10 }),
+    bolts: I_('Crossbow bolts', null, 0.08, 0.4, { kind: 'ammo', stack: true, bundle: 10 }),
+    bandage: I_('Bandage', null, 0.2, 2, { kind: 'use', stack: true, heal: 25 }),
+    draught: I_('Healing draught', null, 0.5, 18, { kind: 'use', stack: true, heal: 70 }),
+    trailbread: I_('Trail bread', null, 0.3, 1, { kind: 'use', stack: true, heal: 8, stam: 40 }),
+    lockpicks: I_('Lockpicks', null, 0.05, 0.4, { kind: 'tool', stack: true, bundle: 5 }),
+    venison: I_('Venison', null, 1, 4, { kind: 'loot', stack: true, meat: true }),
+    boarmeat: I_('Boar meat', null, 1, 5, { kind: 'loot', stack: true, meat: true }),
+    deerhide: I_('Deer hide', null, 2, 7, { kind: 'loot', stack: true, hide: true }),
+    boarhide: I_('Boar hide', null, 2.5, 9, { kind: 'loot', stack: true, hide: true }),
+    antlers: I_('Antlers', null, 1, 6, { kind: 'loot', stack: true }),
+    trinkets: I_('Stolen trinkets', null, 0.2, 6, { kind: 'loot', stack: true, stolen: true })
+  };
+  const SLOTS = { head: 'Head', body: 'Body', legs: 'Legs and feet', cloak: 'Cloak', main: 'Main hand', off: 'Off hand', trinket: 'Trinket' };
+  // what each kind of shop sells
+  const STOCK = {
+    tailor: ['tunic', 'doublet', 'finecoat', 'silks', 'hose', 'fineboots', 'woolcap', 'featheredcap', 'woolcloak', 'furcloak', 'mantle', 'gambeson'],
+    weaver: ['tunic', 'hose', 'woolcap', 'strawhat', 'woolcloak'],
+    tanner: ['boots', 'leathercap', 'jerkin', 'studded', 'leathergreaves'],
+    smithy: ['dagger', 'hatchet', 'shortsword', 'mace', 'spear', 'ironhelm', 'buckler', 'roundshield'],
+    weaponsmith: ['dagger', 'club', 'hatchet', 'shortsword', 'armingsword', 'mace', 'waraxe', 'longsword', 'warhammer', 'battleaxe', 'spear', 'halberd', 'bluntsword'],
+    armourer: ['gambeson', 'jerkin', 'studded', 'chain', 'brigandine', 'halfplate', 'fullplate', 'leathercap', 'ironhelm', 'greathelm', 'leathergreaves', 'mailchausses', 'plategreaves', 'buckler', 'roundshield', 'heater', 'kite', 'tower'],
+    bowyer: ['huntingbow', 'longbow', 'crossbow', 'arrows', 'bolts'],
+    goldsmith: ['copperring', 'silveramulet', 'signet', 'circlet'],
+    apothecary: ['bandage', 'draught'],
+    market: ['tunic', 'hose', 'strawhat', 'bandage', 'trailbread', 'arrows', 'huntingbow', 'club'],
+    tavern: ['trailbread', 'lockpicks']
+  };
+  const BUYS = { butcher: ['venison', 'boarmeat'], tanner: ['deerhide', 'boarhide'], market: ['venison', 'boarmeat', 'deerhide', 'boarhide', 'antlers'] };
+  function setupBag(s) {
+    const p = s.player; if (!p.items) p.items = []; if (!p.equip) p.equip = {}; if (!s.nextItem) s.nextItem = 1;
+    if (!p.items.length && !Object.keys(p.equip).length) { const a = addItem(s, 'tunic'), b = addItem(s, 'hose'); p.equip.body = a.u; p.equip.legs = b.u; }
+    return p;
+  }
+  function addItem(s, id, n, extra) {
+    const p = s.player; p.items = p.items || []; const I = ITEMS[id]; if (!I) return null; n = n || 1;
+    if (I.stack) { const have = p.items.find(x => x.id === id); if (have) { have.n += n; return have; } const it = { u: s.nextItem++, id, n }; p.items.push(it); return it; }
+    let it = null; for (let i = 0; i < n; i++) { it = Object.assign({ u: s.nextItem++, id, dur: 100 }, extra || {}); p.items.push(it); } return it;
+  }
+  function takeItem(s, u, n) {
+    const p = s.player, it = p.items.find(x => x.u === u); if (!it) return false;
+    if (it.n != null && (n || 1) < it.n) { it.n -= (n || 1); return true; }
+    p.items = p.items.filter(x => x !== it); for (const k in p.equip) if (p.equip[k] === u) delete p.equip[k]; return true;
+  }
+  const itemByU = (s, u) => (s.player.items || []).find(x => x.u === u);
+  const equipped = (s, slot) => { const u = s.player.equip && s.player.equip[slot]; return u ? itemByU(s, u) : null; };
+  const countItem = (s, id) => (s.player.items || []).filter(x => x.id === id).reduce((a, x) => a + (x.n != null ? x.n : 1), 0);
+  // weight: goods weigh 1 each; worn armour weighs nothing with the right perk
+  function itemsWeight(s) {
+    let w = 0; for (const it of (s.player.items || [])) { const I = ITEMS[it.id]; if (!I) continue; const worn = Object.values(s.player.equip || {}).includes(it.u);
+      if (worn && I.kind === 'armor' && ((I.light && perk(s, 'unhindered')) || (I.heavy && perk(s, 'conditioning')))) continue; w += I.w * (it.n != null ? it.n : 1); }
+    return Math.round(w * 10) / 10;
+  }
+  function carryCap(s) { const C = setupChar(s); return 25 + C.carry * 5 + perk(s, 'strongBack') * 10 + (s.player.horse ? 15 : 0); }
+  // what you wear: armour, how fine you look, how warm, and whether heavy armour slows you
+  function gearStats(s) {
+    let arm = 0, fine = 0, warm = 0, heavyW = 0, lightN = 0, heavyN = 0;
+    for (const slot in SLOTS) { const it = equipped(s, slot); if (!it) continue; const I = ITEMS[it.id], q = 0.5 + 0.5 * (it.dur / 100);
+      if (I.arm) { let a = I.arm * q * (1 + (it.imp || 0) * 0.1); if (I.light) { a *= 1 + 0.15 * perk(s, 'agileDefender'); lightN++; } if (I.heavy) { a *= 1 + 0.15 * perk(s, 'juggernaut'); heavyN++; heavyW += I.w; } arm += a; }
+      fine += I.fine || 0; warm += I.warm || 0; }
+    if (lightN >= 3 && perk(s, 'customFit')) arm *= 1.25; if (heavyN >= 3 && perk(s, 'wellFitted')) arm *= 1.25;
+    const slow = perk(s, 'conditioning') ? 0 : Math.min(0.3, heavyW * 0.008);
+    return { arm: Math.round(arm), fine, warm, slow };
+  }
+  function shopKind(s, at) { if (at === 'market') return 'market'; const b = s.biz && s.biz[at]; return b && !b.closed ? b.trade : null; }
+  // price you pay, or are paid: haggling and your clothes help; dearer in rich towns
+  function itemPrice(s, id, at, selling) {
+    const I = ITEMS[id], b = s.biz && s.biz[at], town = b ? (b.town || 'hearthmoor') : 'hearthmoor', w = 0.85 + 0.15 * (WEALTH[town] || 1.4);
+    const hag = 1 - 0.05 * perk(s, 'haggling') - Math.max(0, gearStats(s).fine) * 0.01;
+    if (!selling) return Math.max(1, Math.round(I.price * w * hag * 10) / 10);
+    return Math.max(0, Math.round(I.price * 0.4 * (1 + 0.05 * perk(s, 'haggling')) * (I.meat || I.hide ? 1 + perk(s, 'butcher') * 0.33 : 1) * 10) / 10);
+  }
+  // are you at that shop's counter (or the Trading Post)?
+  function atShop(s, at) {
+    if (at === 'market') return atLoc(s, 'market') || Object.keys(MARKET_AT).some(t => t !== 'hearthmoor' && LOCS[MARKET_AT[t]] && dist(s.player, LOCS[MARKET_AT[t]]) < (LOCS[MARKET_AT[t]].r || 6) + 4);
+    const e = empById(at); if (!e) return false; const f = e.front || (e.x != null ? { x: e.x, z: e.z } : null);
+    return !!f && Math.hypot(s.player.x - f.x, s.player.z - f.z) < 7;
+  }
+  function stockOf(s, at) { const k = shopKind(s, at); return k ? (STOCK[k] || []) : []; }
+  function buysHere(s, at, id) {
+    const k = shopKind(s, at), I = ITEMS[id]; if (!k || !I || I.price <= 0 || I.rulerOnly) return false;
+    if (I.stolen) return k === 'tavern' && perk(s, 'fence') > 0;
+    return perk(s, 'merchantPrince') > 0 || (STOCK[k] || []).includes(id) || (BUYS[k] || []).includes(id);
+  }
+  function rpgCmd(s, name, a, b, c) {
+    const C = setupChar(s), p = setupBag(s);
+    switch (name) {
+      case 'rLevel': {   // a: 'hp' | 'st' | 'carry'
+        if (C.pending < 1) return fail('No level-up waiting.');
+        if (a === 'hp') { C.hpMax += 10; C.hp += 10; } else if (a === 'st') { C.stMax += 10; C.st += 10; } else if (a === 'carry') C.carry++; else return fail('Choose health, stamina or carrying.');
+        C.pending--; return ok();
+      }
+      case 'rPerk': { const no = canTakePerk(s, a); if (no) return fail(no); C.perks[a] = (C.perks[a] || 0) + 1; C.points--; event(s, 'Perk taken: ' + PERKS[a].name + (PERKS[a].req.length > 1 ? ' (rank ' + C.perks[a] + ')' : '') + '. ' + PERKS[a].say, 'good'); return ok(); }
+      case 'rEquip': {
+        const it = itemByU(s, a); if (!it) return fail('You do not have that.'); const I = ITEMS[it.id]; if (!I.slot) return fail('That is not something to wear or hold.');
+        if (I.rulerOnly && !isRuler(s)) return fail('Only the crown wears that.');
+        p.equip[I.slot] = it.u;
+        if (I.slot === 'main' && I.hands === 2) delete p.equip.off;
+        if (I.slot === 'off') { const m = equipped(s, 'main'); if (m && ITEMS[m.id].hands === 2) delete p.equip.main; }
+        return ok();
+      }
+      case 'rUnequip': { if (!p.equip[a]) return fail('Nothing there.'); delete p.equip[a]; return ok(); }
+      case 'rDrop': { const it = itemByU(s, a); if (!it) return fail('You do not have that.'); takeItem(s, a, it.n || 1); return ok('You leave ' + ITEMS[it.id].name.toLowerCase() + ' behind.'); }
+      case 'rUse': {
+        const it = itemByU(s, a); if (!it) return fail('You have none.'); const I = ITEMS[it.id]; if (I.kind !== 'use') return fail('That is not to be used.');
+        if (C.hp >= C.hpMax && (!I.stam || C.st >= C.stMax)) return fail('You are well already.');
+        C.hp = Math.min(C.hpMax, C.hp + (I.heal || 0)); C.st = Math.min(C.stMax, C.st + (I.stam || 0)); takeItem(s, a, 1); return ok();
+      }
+      case 'rBuy': {   // a: shop (biz id or 'market'), b: item id
+        const I = ITEMS[b]; if (!I || !stockOf(s, a).includes(b)) return fail('They do not sell that here.');
+        if (!atShop(s, a)) return fail('Buy it at the counter.');
+        const n = I.bundle || 1, price = itemPrice(s, b, a, false) * n;
+        if (s.coins < price) return fail('That costs ' + price + 'c.');
+        if (carried(s) + I.w * n > carryCap(s)) return fail('You cannot carry any more. (' + carried(s) + ' of ' + carryCap(s) + ')');
+        spend(s, price); const bz = s.biz && s.biz[a], q = bz && bz.owner !== 'player' && s.people && s.people[bz.owner]; if (q) q.purse += price * 0.5;
+        addItem(s, b, n); skillUse(s, 'trade', price / 6); return ok('Bought: ' + I.name.toLowerCase() + (n > 1 ? ' (' + n + ')' : '') + ' for ' + price + 'c.');
+      }
+      case 'rSell': {   // a: shop, b: item u, c: how many (stacks)
+        const it = itemByU(s, b); if (!it) return fail('You do not have that.'); if (!buysHere(s, a, it.id)) return fail('They will not buy that here.');
+        if (!atShop(s, a)) return fail('Sell it at the counter.');
+        const n = it.n != null ? Math.min(it.n, c || it.n) : 1, each = itemPrice(s, it.id, a, true) * (it.dur != null ? 0.4 + 0.6 * it.dur / 100 : 1), got = Math.round(each * n * 10) / 10;
+        takeItem(s, b, n); earn(s, got); skillUse(s, 'trade', got / 5); return ok('Sold for ' + got + 'c.');
+      }
+      case 'rDye': {   // a: shop (a tailor or weaver), b: item u, c: colour
+        const k = shopKind(s, a); if (k !== 'tailor' && k !== 'weaver') return fail('A tailor or weaver does the dyeing.'); if (!atShop(s, a)) return fail('Bring it to the counter.');
+        const it = itemByU(s, b); if (!it || !ITEMS[it.id].dye) return fail('That cannot be dyed.'); if (!HERALDRY.tinctures[c]) return fail('No such colour.');
+        const cost = 3; if (s.coins < cost) return fail('Dyeing costs ' + cost + 'c.'); spend(s, cost); it.dye = c; return ok('Dyed ' + c + '.');
+      }
+      case 'rRepair': {   // a: shop (a smith of any kind, or your own smithy), b: item u
+        const k = shopKind(s, a); if (!['smithy', 'weaponsmith', 'armourer', 'bowyer', 'tanner'].includes(k)) return fail('Take it to a smith.'); if (!atShop(s, a)) return fail('Bring it to the counter.');
+        const it = itemByU(s, b); if (!it || it.dur == null) return fail('That needs no mending.'); if (it.dur >= 100) return fail('It is in good repair.');
+        const own = s.biz[a] && s.biz[a].owner === 'player', cost = own ? 0 : Math.max(1, Math.round(ITEMS[it.id].price * 0.25 * (1 - it.dur / 100) * (perk(s, 'steelSmithing') ? 0.7 : 1) * 10) / 10);
+        if (s.coins < cost) return fail('Mending it costs ' + cost + 'c.'); spend(s, cost); it.dur = 100; skillUse(s, 'smithing', own ? 4 : 1); return ok(cost ? 'Mended for ' + cost + 'c.' : 'You mend it yourself at your own forge.');
+      }
+    }
+    return fail('Unknown command: ' + name);
+  }
+  /* ================= real-time fights =================
+     Fought in real seconds, while the world waits. Tap an enemy to strike, hold to block, swipe to dodge. A strike
+     straight after a block or a dodge is a riposte, and hits harder. Most fights end in a knockout; only fights you
+     choose to make deadly can kill, and in those you can yield when you are badly hurt. */
+  const FOE_KIT = {
+    thug: { w: 'club', a: 'jerkin', hp: 60, skill: 25, spd: 1, mul: 3.0 },
+    bandit: { w: 'hatchet', a: 'jerkin', hp: 42, skill: 30, spd: 1, mul: 1.5 },
+    banditArcher: { w: 'huntingbow', a: 'gambeson', hp: 32, skill: 30, spd: 1, mul: 1.0 },
+    banditChief: { w: 'waraxe', a: 'studded', s: 'roundshield', hp: 80, skill: 40, spd: 0.95, mul: 1.4 },
+    blade: { w: 'dagger', a: 'studded', hp: 90, skill: 60, spd: 1.35, mul: 5.0 },
+    duelist: { w: 'armingsword', a: 'gambeson', hp: 95, skill: 50, spd: 1.1, mul: 3.8 },
+    guard: { w: 'spear', a: 'chain', hp: 85, skill: 45, spd: 0.95, mul: 2.8 },
+    knight: { w: 'longsword', a: 'halfplate', s: null, hp: 120, skill: 60, spd: 0.9, mul: 3.4 },
+    champion: { w: 'bluntsword', a: 'chain', s: 'heater', hp: 90, skill: 55, spd: 1.05, mul: 1.8 }
+  };
+
+  const weaponOf = s => { const it = equipped(s, 'main'); return it ? ITEMS[it.id] : null; };
+  const skillFor = I => !I ? 'oneHanded' : I.ranged ? 'archery' : I.hands === 2 ? 'twoHanded' : 'oneHanded';
+  function startFight(s, spec) {
+    setupChar(s); setupBag(s);
+    const n = spec.foes.length, px = s.player.x, pz = s.player.z, ang0 = (spec.face != null ? spec.face : rand(s) * Math.PI * 2);
+    const foes = spec.foes.map((f, i) => { const K = FOE_KIT[f.kit] || FOE_KIT.thug, W = ITEMS[f.w || K.w], A = ITEMS[f.a || K.a], S = (f.s !== undefined ? f.s : K.s) ? ITEMS[f.s || K.s] : null, a = ang0 + (i - (n - 1) / 2) * 0.9, r = W && W.ranged ? 9 : 5.5;
+      const hp = Math.round((f.hp || K.hp) * (f.mul || 1));
+      return { id: i + 1, name: f.name || 'A foe', pid: f.pid || null, kit: f.kit, w: f.w || K.w, a: f.a || K.a, sh: S ? (f.s || K.s) : null, x: px + Math.sin(a) * r, z: pz + Math.cos(a) * r, face: a + Math.PI, hp, hpMax: hp, skill: (f.skill || K.skill) * (f.mul || 1), spd: (f.spd || K.spd), arm: A ? A.arm || 0 : 0, blk: S ? S.blk : 0, ranged: !!(W && W.ranged), reach: (W && W.reach) || 1, state: 'close', t: 0.6 + i * 0.4, down: false, blocking: 0 }; });
+    const allies = []; if (perk(s, 'bodyguard') && spec.kind !== 'tourney') allies.push({ id: 100, name: 'Your guard', x: px - 1.2, z: pz - 1.2, face: 0, hp: 120, hpMax: 120, dmg: 9, spd: 1, t: 1, down: false });
+    const C = s.char; if (C.hp < C.hpMax * 0.4) C.hp = Math.round(C.hpMax * 0.4);   // no one starts a fight already half dead
+    s.fight = { kind: spec.kind || 'knockout', ctx: spec.ctx || null, foes, allies, p: { cd: 0, dodge: 0, block: false, riposte: 0, stagger: 0, swing: 0, lastHit: 0 }, log: [], over: null, time: 0, title: spec.title || 'A fight', hits: [] };
+    return s.fight;
+  }
+  function foeDamage(s, f) {   // what a foe's blow does to you before blocking
+    const W = ITEMS[f.w], K = FOE_KIT[f.kit] || {}; return (W ? W.dmg : 5) * (1 + f.skill / 120) * (K.mul || 1.5);
+  }
+  function hitFoe(s, f, riposte) {
+    const Fi = s.fight, I = weaponOf(s), it = equipped(s, 'main'), sk = skillFor(I), lv = skillLv(s, sk);
+    let d = (I ? I.dmg : 3) * (1 + lv / 100);
+    if (I && I.ranged) d *= 1 + 0.15 * perk(s, 'overdraw'); else if (I && I.hands === 2) d *= 1 + 0.15 * perk(s, 'barbarian'); else d *= 1 + 0.15 * perk(s, 'armsman');
+    if (riposte) d *= I && I.hands === 2 ? (perk(s, 'devastatingBlow') ? 1.5 : 1.2) : (perk(s, 'savageStrike') ? 1.25 : 1.15);
+    const critP = I && (I.fam === 'sword' || I.fam === 'dagger') ? 0.05 + 0.15 * perk(s, 'bladesman') + (I.hands === 2 ? 0.15 * perk(s, 'deepWounds') : 0) : 0.05;
+    const crit = rand(s) < critP; if (crit) d *= 1.6;
+    if (Fi.sneak && perk(s, 'backstab')) { d *= I && I.fam === 'dagger' && perk(s, 'assassin') ? 10 : 3; Fi.sneak = false; }
+    let arm = f.arm; if (I && I.fam === 'mace') arm *= 1 - 0.25 * (I.hands === 2 ? perk(s, 'skullcrusher') : perk(s, 'boneBreaker'));
+    d *= 30 / (30 + arm);
+    if (f.blocking > 0 && f.blk) { d *= 1 - f.blk; Fi.log.push(f.name + ' takes it on the shield.'); }
+    if (it && it.imp) d *= 1 + it.imp * 0.1;
+    if (I && I.fam === 'axe' && perk(s, 'hackAndSlash')) f.bleed = (f.bleed || 0) + 3 * perk(s, 'hackAndSlash');
+    d = Math.max(1, Math.round(d)); f.hp -= d; f.stagger = 0.35; Fi.hits.push({ who: f.id, d, crit });
+    if (it && it.dur != null) it.dur = Math.max(0, it.dur - 0.4);
+    skillUse(s, sk, 1.2 + (riposte ? 0.6 : 0));
+    if (f.hp <= 0 && !f.down) { f.down = true; f.hp = 0; skillUse(s, sk, 6); gainXP(s, Fi.kind === 'tourney' ? 6 : 10); Fi.log.push(f.name + (Fi.kind === 'deadly' && !f.spare ? ' falls.' : ' is down.')); }
+    return d;
+  }
+  function hurtYou(s, raw, f, ranged) {
+    const Fi = s.fight, P = Fi.p, C = s.char, G0 = gearStats(s), off = equipped(s, 'off'), S = off ? ITEMS[off.id] : null;
+    if (P.dodge > 0) { Fi.log.push('You slip aside.'); skillUse(s, 'lightArmor', 0.5); P.riposte = 0.9; return 0; }
+    if (perk(s, 'deftMovement') && G0.arm && rand(s) < 0.1) { Fi.log.push('It glances off.'); return 0; }
+    let d = raw;
+    if (P.block) {
+      const b = ranged && S && perk(s, 'deflectArrows') ? 1 : Math.min(0.95, (S ? S.blk : 0.25) * (1 + 0.1 * perk(s, 'shieldWall')));
+      d *= 1 - b; C.st -= 8 * (1 - 0.3 * Math.min(1, perk(s, 'shieldWall') / 3)); skillUse(s, 'block', 1.5); P.riposte = 0.9;
+      if (C.st < 0) { C.st = 0; P.block = false; P.guardBroken = 1.2; Fi.log.push('Your guard breaks.'); }
+      if (off && off.dur != null) off.dur = Math.max(0, off.dur - 0.5);
+    }
+    d *= 40 / (40 + G0.arm);
+    d = Math.round(d * 10) / 10; C.hp -= d; Fi.hits.push({ who: 0, d });
+    for (const sl of ['body', 'head', 'legs']) { const it = equipped(s, sl); if (it && it.dur != null && ITEMS[it.id].arm) it.dur = Math.max(0, it.dur - 0.3); }
+    const heavy = ['body', 'head', 'legs'].some(sl => { const it = equipped(s, sl); return it && ITEMS[it.id].heavy; }), light = ['body', 'head', 'legs'].some(sl => { const it = equipped(s, sl); return it && ITEMS[it.id].light; });
+    if (heavy) skillUse(s, 'heavyArmor', d / 6); if (light) skillUse(s, 'lightArmor', d / 6);
+    if (!perk(s, 'towerOfStrength') || !heavy) P.stagger = raw > 12 ? 0.3 : 0.15;
+    return d;
+  }
+  // one frame of the fight. inp: { strike: foe id or 0 for the nearest, block: true/false, dodge: {x, z} }
+  function fightStep(s, dt, inp) {
+    const Fi = s.fight; if (!Fi || Fi.over) return Fi; inp = inp || {}; dt = Math.min(0.1, dt);
+    const C = s.char, P = Fi.p, pl = s.player, I = weaponOf(s), live = Fi.foes.filter(f => !f.down);
+    Fi.time += dt; Fi.hits = [];
+    P.cd -= dt; P.dodge -= dt; P.riposte -= dt; P.stagger -= dt; P.swing -= dt; if (P.guardBroken) P.guardBroken -= dt;
+    // stamina comes back unless you are blocking
+    const regen = (P.block ? 3 : 14) * (perk(s, 'windWalker') ? 1.5 : 1); C.st = Math.min(C.stMax, C.st + regen * dt);
+    P.block = !!inp.block && !(P.guardBroken > 0) && C.st > 0;
+    if (inp.dodge && P.dodge < -0.25 && C.st >= 15) { const m = Math.hypot(inp.dodge.x, inp.dodge.z) || 1; pl.x += inp.dodge.x / m * 2.4; pl.z += inp.dodge.z / m * 2.4; P.dodge = 0.35; C.st -= 15; }
+    if (inp.strike != null && P.cd <= 0 && P.stagger <= 0 && live.length) {
+      const near = live.slice().sort((a, b) => dist(a, pl) - dist(b, pl)), tgt = live.find(f => f.id === inp.strike) || near[0];
+      const reach = I && I.ranged ? 30 : 1.5 + ((I && I.reach) || 1) * 0.6, cost = (I ? 6 + I.w * 1.1 : 5) * (I && I.hands === 2 ? (perk(s, 'championsStance') ? 0.75 : 1) : (perk(s, 'fightingStance') ? 0.75 : 1));
+      if (tgt && C.st >= cost * 0.5) {
+        pl.face = Math.atan2(tgt.x - pl.x, tgt.z - pl.z);
+        if (dist(tgt, pl) <= reach) {
+          if (I && I.ranged) {
+            const ammo = (s.player.items || []).find(x => x.id === I.ammo);
+            if (!ammo || !(ammo.n > 0)) Fi.log.push('You have no ' + (I.ammo === 'bolts' ? 'bolts' : 'arrows') + '.');
+            else { takeItem(s, ammo.u, 1); const pHit = clamp(0.55 + skillLv(s, 'archery') / 250 + (perk(s, 'eagleEye') ? 0.12 : 0) - dist(tgt, pl) / 70, 0.15, 0.95); if (rand(s) < pHit) { hitFoe(s, tgt, P.riposte > 0); if (perk(s, 'powerShot')) tgt.stagger = 0.6; if (rand(s) < 0.3 * (perk(s, 'huntersDiscipline') ? 2 : 1)) Fi.arrowsBack = (Fi.arrowsBack || 0) + 1; } else Fi.log.push('The shot goes wide.'); }
+            P.cd = 1 / ((I.spd || 1) * (perk(s, 'quickShot') ? 1.33 : 1));
+          } else {
+            const targets = perk(s, 'warmaster') && I && I.hands === 2 ? live.filter(f => dist(f, pl) <= reach + 0.3) : [tgt];
+            for (const f of targets) hitFoe(s, f, P.riposte > 0);
+            P.cd = 1 / ((I ? I.spd : 1.4)); P.riposte = 0;
+          }
+          C.st -= cost; P.swing = 0.25;
+        } else P.wantClose = tgt.id;
+      }
+    }
+    // your foes
+    for (const f of Fi.foes) {
+      if (f.down) continue;
+      if (f.bleed) { f.hp -= f.bleed * dt * 0.5; f.bleed = Math.max(0, f.bleed - dt); if (f.hp <= 0) { f.down = true; f.hp = 0; Fi.log.push(f.name + ' falls.'); continue; } }
+      f.stagger = (f.stagger || 0) - dt; f.blocking -= dt; f.t -= dt;
+      const d = dist(f, pl), want = f.ranged ? 9 : 1.2 + f.reach * 0.5;
+      f.face = Math.atan2(pl.x - f.x, pl.z - f.z);
+      if (f.state === 'windup') { if (f.t <= 0) { f.state = 'recover'; f.t = (1.5 + rand(s) * 0.9) / f.spd; if (d <= want + 0.8 || f.ranged) { if (!f.ranged || rand(s) < 0.75) { const dmg = hurtYou(s, foeDamage(s, f), f, f.ranged); if (dmg > 0) Fi.log.push(f.name + (f.ranged ? '’s arrow strikes you.' : ' strikes you.')); } else Fi.log.push('An arrow whistles past.'); } } continue; }
+      if (f.stagger > 0) continue;
+      // move: close in, or keep your distance with a bow; spread out around you
+      let mx = 0, mz = 0; const sp = (f.ranged ? 2.2 : 3.0) * (I && I.reach > 1 && perk(s, 'reach') ? 0.75 : 1);
+      if (f.ranged ? Math.abs(d - want) > 2 : d > want) { const k = (d > want ? 1 : -1) * sp * dt / Math.max(0.1, d); mx += (pl.x - f.x) * k; mz += (pl.z - f.z) * k; }
+      for (const o of Fi.foes) if (o !== f && !o.down) { const dd = dist(o, f); if (dd < 1.2 && dd > 0.01) { mx += (f.x - o.x) / dd * dt * 1.5; mz += (f.z - o.z) / dd * dt * 1.5; } }
+      f.x += mx; f.z += mz;
+      if (f.state === 'recover' && f.t <= 0) f.state = 'close';
+      if (f.state === 'close' && f.t <= 0 && (f.ranged || d <= want + 0.4) && Fi.foes.filter(o => !o.down && o.state === 'windup').length < 2) { f.state = 'windup'; f.t = (f.ranged ? 0.9 : 0.6) / f.spd * (perk(s, 'quickReflexes') ? 1.35 : 1); }
+      if (f.blk && P.swing > 0.2 && rand(s) < 0.35 * dt * 10) f.blocking = 0.5;
+    }
+    // your guard, if you have one
+    for (const a of Fi.allies) { if (a.down) continue; const tgt = Fi.foes.filter(f => !f.down).sort((x, y) => dist(x, a) - dist(y, a))[0]; if (!tgt) break; const d = dist(a, tgt); if (d > 1.6) { a.x += (tgt.x - a.x) / d * 3 * dt; a.z += (tgt.z - a.z) / d * 3 * dt; } a.face = Math.atan2(tgt.x - a.x, tgt.z - a.z); a.t -= dt; if (a.t <= 0 && d <= 1.8) { a.t = 1.2; tgt.hp -= a.dmg * (perk(s, 'rallyingCry') ? 1.25 : 1) * 30 / (30 + tgt.arm); if (tgt.hp <= 0) { tgt.down = true; tgt.hp = 0; Fi.log.push(tgt.name + ' is down.'); } } }
+    // how it ends
+    if (!Fi.foes.some(f => !f.down)) { Fi.over = 'won'; if (Fi.arrowsBack && I && I.ammo) addItem(s, I.ammo, Fi.arrowsBack); }
+    else if (C.hp <= 0) { C.hp = 0; Fi.over = Fi.kind === 'deadly' ? 'dead' : 'lost'; }
+    else if (inp.yield && Fi.kind === 'deadly' && C.hp <= C.hpMax * 0.3) Fi.over = 'yielded';
+    if (Fi.log.length > 6) Fi.log.splice(0, Fi.log.length - 6);
+    return Fi;
+  }
+  // after a fight: what is left of you
+  function endFight(s) { const Fi = s.fight; if (!Fi) return null; const C = s.char; if (Fi.over === 'lost' || Fi.over === 'yielded') C.hp = Math.max(C.hp, Math.round(C.hpMax * 0.25)); C.st = C.stMax; s.fight = null; return Fi.over; }
   /* heraldry: a lord designs the banner of their town, and the crown the royal banner of Alderwyn */
   const HERALDRY = {
     divisions: { plain: 'Plain', pale: 'Halved', fess: 'Halved across', bend: 'Diagonal', saltirePer: 'Quartered across', quarterly: 'Quartered', chief: 'Chief', bordure: 'Border', palePale: 'Centre stripe', fessBand: 'Band', cross: 'Cross', saltire: 'Saltire', chevron: 'Chevron', paly: 'Stripes', barry: 'Bars', chequy: 'Chequered' },
@@ -4765,7 +5254,7 @@
     const town = r.office === 'elder' ? 'hearthmoor' : r.region, pop = living(s).filter(p => townOf(p) === town && !p.kid).length;
     return Math.round((r.office === 'elder' ? 120 : 400) * Math.pow(Math.max(40, pop) / 80, 0.6) / 10) * 10;
   }
-  function speechGain(s) { const F = s.folk; return Math.round((3 + Math.min(3, ((F && F.fame) || 0) / 20)) * 10) / 10; }
+  function speechGain(s) { const F = s.folk; return Math.round((3 + Math.min(3, ((F && F.fame) || 0) / 20)) * (1 + 0.2 * perk(s, 'persuasion')) * (1 + Math.max(0, gearStats(s).fine) * 0.05) * 10) / 10; }
   /* ---------- rebellion: a lord, or an exile, rises against the King of Alderwyn ----------
      Choose the cause (the crown for yourself, or a charter forced from the king). Win lords and councillors to it in secret,
      by promises you will owe, or by fear that may turn to betrayal; buy arms. Every step risks discovery: once the king
@@ -6027,6 +6516,7 @@
     if (/^j[A-Z]/.test(name)) return justiceCmd(s, name, a, b, c);
     if (/^x[A-Z]/.test(name)) return xCmd(s, name, a, b, c);
     if (/^f[A-Z]/.test(name)) return folkCmd(s, name, a, b, c);
+    if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
       case 'goto': {
@@ -6043,7 +6533,7 @@
       case 'gather': {
         const g = GATHER[a];
         if (!g) return fail('Unknown resource');
-        if (carried(s) >= CARRY) return fail('Your arms are full. Store or sell first.');
+        if (carried(s) >= carryCap(s)) return fail('Your arms are full. Store or sell first.');
         const L = LOCS[g.loc];
         const here = dist(p, L) < L.r;
         let spot;
@@ -6068,11 +6558,14 @@
         const W = workPlace(s, w.at); if (!W) { s.work = null; return fail('The work there has stopped.'); }
         if (s.workLast != null && s.t - s.workLast < 0.05) return fail('Too quick.');   // the minigame on screen sets the pace; this only stops a double press, whatever the world speed
         s.workLast = s.t; if (!w.chain) w.chain = 1;
+        if (!a && perk(s, 'steadyChain') && !w.slip && w.chain > 1) { w.slip = true; return { ok: true, msg: { pay: 0, failed: true, kept: true, lost: 0, chain: w.chain, level: tradeLevel(s, w.trade) } }; }
+        if (a) w.slip = false;
         if (!a) { const lost = w.chain; w.chain = 1; w.lastPay = 0; return { ok: true, msg: { pay: 0, failed: true, lost, chain: 1, level: tradeLevel(s, w.trade) } }; }
         const lv0 = tradeLevel(s, w.trade), pay = roundPay(s, w.trade, !!b, w.chain, W.own), at = w.chain;
         earn(s, pay); s.stats.jobPay += pay; s.rec.wagesEarned += pay; s.rec.workRounds = (s.rec.workRounds || 0) + 1;
         if (!W.own && s.people && s.people[W.owner]) s.people[W.owner].purse += Math.round(pay * BENCH_CUT * 100) / 100;   // the bench's tenth, paid by the buyer
         s.tradeXp = s.tradeXp || {}; s.tradeXp[w.trade] = (s.tradeXp[w.trade] || 0) + 1;
+        skillUse(s, ['smithy', 'weaponsmith', 'armourer'].includes(w.trade) ? 'smithing' : 'crafting', 0.8 + (b ? 0.4 : 0)); gainXP(s, 0.5);
         w.earned = Math.round((w.earned + pay) * 1000) / 1000; w.rounds++; w.lastPay = pay; w.chain = Math.min(CHAIN_MAX, w.chain + 1); w.best = Math.max(w.best || 1, at);
         const lv = tradeLevel(s, w.trade), up = lv > lv0;
         if (up) event(s, 'Your ' + tradeName(w.trade).toLowerCase() + ' work has reached level ' + lv + '. Each item now pays more' + (lv === 2 && TRADE_KEYS.includes(w.trade) ? ', and you know the trade well enough to open a ' + tradeName(w.trade).toLowerCase() + ' of your own' : '') + '.', 'good');
@@ -6140,15 +6633,15 @@
         if (!GOODS.includes(a)) return fail('They do not trade that.');
         const n = b || 1;
         if (name === 'buy') {
-          const cost = buyPrice(s, mt, a, n);
+          const cost = Math.round(buyPrice(s, mt, a, n) * (1 - 0.05 * perk(s, 'haggling')) * (perk(s, 'bulkBuyer') ? 0.9 : 1) * 10) / 10;
           if (s.goods[mt][a] < n) return fail('The market has only ' + s.goods[mt][a] + ' ' + a + '.');
           if (s.coins < cost) return fail('You need ' + cost + 'c for that.');
-          if (carried(s) + n > CARRY) return fail('You can carry ' + CARRY + ' items at most.');
-          spend(s, cost); s.stats.marketBuys += cost; p.inv[a] += n; s.goods[mt][a] -= n;
+          if (carried(s) + n > carryCap(s)) return fail('You can carry ' + carryCap(s) + ' at most.');
+          spend(s, cost); s.stats.marketBuys += cost; p.inv[a] += n; s.goods[mt][a] -= n; skillUse(s, 'trade', cost / 8);
           return ok('Bought ' + n + ' ' + a + ' for ' + cost + 'c.');
         }
         if (p.inv[a] < n || n <= 0) return fail('You have only ' + p.inv[a] + ' ' + a + '.');
-        p.inv[a] -= n; const got = sellPrice(s, mt, a, n); s.goods[mt][a] += n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
+        p.inv[a] -= n; const got = Math.round(sellPrice(s, mt, a, n) * (1 + 0.05 * perk(s, 'haggling')) * 10) / 10; skillUse(s, 'trade', got / 6); s.goods[mt][a] += n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
         return ok('Sold ' + n + ' ' + a + ' for ' + got + 'c.');
       }
       case 'setPrice': if (shop) shop.price = clamp(Math.round(b), 1, TRADES[shop.trade].wtp * 3); return ok();
@@ -6821,14 +7314,14 @@
         const r = electState(s).races[a]; if (!r || !r.you || !r.open) return fail('You are not standing.');
         if (r.speech === s.day) return fail('You have spoken today. Speak again tomorrow.');
         if (!inTown(s, r)) return fail('Speak to the crowds in ' + (TOWNS[raceVenue(r).town] ? TOWNS[raceVenue(r).town].name : 'the town') + ', where the votes are.');
-        const g = speechGain(s); r.speech = s.day; r.boost += g;
+        const g = speechGain(s); r.speech = s.day; r.boost += g; skillUse(s, 'speech', 4);
         event(s, 'You speak to the crowds for ' + raceLabel(r) + '. They listen.', 'info'); return ok();
       }
       case 'pledge': {
         const r = electState(s).races[a]; if (!r || !r.you || !r.open) return fail('You are not standing.');
         if (r.pledge != null) return fail('You have made your promise. Keep it if you win.');
         if (!pledgesFor(s, r).some(x => x.id === b)) return fail('You cannot promise that.');
-        r.pledge = b; r.boost += 6; event(s, 'You promise to ' + PLEDGES[b].text.toLowerCase() + ' if elected.', 'info'); return ok();
+        r.pledge = b; r.boost += 6; skillUse(s, 'speech', 3); event(s, 'You promise to ' + PLEDGES[b].text.toLowerCase() + ' if elected.', 'info'); return ok();
       }
       case 'claimCrown': {
         const R = s.realm; if (!R) return fail('Not yet.'); if (isRuler(s)) return fail('The crown is already yours.');
@@ -7177,7 +7670,8 @@
         const q = s.people[c]; { const no = refuses(s, q); if (no) return fail(no); }
         if (q.job && q.job.type === 'biz') { const ob = s.biz[q.job.biz]; if (ob) ob.staff = ob.staff.filter(x => x.pid !== q.id); }
         q.job = { type: 'manage', kind: a, ref: b }; q.opinion = clamp((q.opinion || 0) + 15, -100, 100);
-        o.manager = { pid: q.id, name: q.name, skill: cand.skill, wage: cand.ask, budget: 10, staffTarget: a === 'biz' ? Math.max(1, o.staff.length) : 0, since: s.day, honest: charOf(q) };
+        skillUse(s, 'command', 3);
+        o.manager = { pid: q.id, name: q.name, skill: cand.skill, wage: Math.max(1, Math.round(cand.ask * (perk(s, 'thriftySteward') ? 0.8 : 1))), budget: 10, staffTarget: a === 'biz' ? Math.max(1, o.staff.length) : 0, since: s.day, honest: charOf(q) };
         plog(s, q, 'Became manager of ' + managedName(s, a, b) + ' for ' + s.name + ' at ' + cand.ask + 'c a day.');
         if (a === 'shop') { // the manager takes over supplies and sets everyone's job; the worker keeps the bench and an employee the counter
           o.policy.supplyBy = 'auto'; o.policy.mgrRoles = true; assignRoles(s, o); const hs = o.hands || [];
@@ -7241,6 +7735,11 @@
     separate(s);
     checkVillage(s);
     if (s.elect) electionTick(s, before);
+    if (!s.char) setupChar(s); if (!s.player.items) setupBag(s);
+    if (!s.rpgShops && s.biz) { s.rpgShops = true; const MAP = { i_hammer: 'weaponsmith', i_cooper: 'bowyer', o_cooper: 'bowyer', s_arm1: 'armourer', s_arm2: 'weaponsmith', v_forge: 'armourer' };
+      for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
+    FOREMAN.on = !!(s.char.perks.foreman);
+    { const C = s.char; if (C.hp < C.hpMax) C.hp = Math.min(C.hpMax, C.hp + dt * 0.08); if (C.st < C.stMax) C.st = Math.min(C.stMax, C.st + dt * 2); }
     if (s.coins > s.rec.peakCoins) s.rec.peakCoins = s.coins;
     if (s.coins < 0 && -s.coins > (s.rec.maxDebt || 0)) s.rec.maxDebt = -s.coins;
   }
@@ -7491,7 +7990,7 @@
   }
   // what everyone says about you
   function deed(s, dm, df, why) {
-    const F = setupFolk(s);
+    const F = setupFolk(s); gainXP(s, Math.abs(dm) * 2 + Math.max(0, df || 0) * 3);
     F.moral = Math.round(clamp(F.moral + dm, -100, 100) * 100) / 100; F.renown = Math.round(clamp(F.renown + (df || 0), -20, 60) * 100) / 100;
     if (Math.abs(dm) >= 2 || (df || 0) >= 2) { F.deeds.unshift({ day: s.day, why, dm: Math.round(dm * 10) / 10, df: Math.round((df || 0) * 10) / 10 }); if (F.deeds.length > 25) F.deeds.length = 25; }
   }
@@ -7758,9 +8257,9 @@
   }
   // what it takes to make good: the harm they remember, measured in what they live on, not in what you own
   function dailyMeans(s, p) { return Math.max(3, income(s, p) || 0, Math.min(60, (p.purse || 0) / 20)); }
-  function amendsCost(s, p) { const harm = (p.mem || []).filter(m => m.w < 0).reduce((a, m) => a + -m.w, 0) || (p.hate || 0); return Math.round(Math.max(20, harm * dailyMeans(s, p) * 0.35)); }
+  function amendsCost(s, p) { const harm = (p.mem || []).filter(m => m.w < 0).reduce((a, m) => a + -m.w, 0) || (p.hate || 0); return Math.round(Math.max(20, harm * dailyMeans(s, p) * 0.35) * (perk(s, 'silverTongue') ? 0.5 : 1)); }
   // a bribe answers to who they are and what they risk: their means, their station, and how far the grudge has gone
-  function bribeCost(s, p) { const station = p.royal || p.noble ? 3 : p.job && p.job.type === 'office' ? 2 : 1; return Math.round(dailyMeans(s, p) * 12 * station * (1 + hateIdx(p.hate) * 0.25)); }
+  function bribeCost(s, p) { const station = p.royal || p.noble ? 3 : p.job && p.job.type === 'office' ? 2 : 1; return Math.round(dailyMeans(s, p) * 12 * station * (1 + hateIdx(p.hate) * 0.25) * (perk(s, 'bribery') ? 0.67 : 1)); }
   function powerOf(s) { const R = s.realm; let n = 0; if (isRuler(s)) n = 5; else if (R && Object.keys(COUNCIL).some(k => R.council[k] === 'player')) n = 4; else if (R && yourLordships(s).length) n = 3; else if (s.offices && (s.offices.elder === 'player' || s.offices.lord === 'player')) n = 2; else if (s.coins > 500) n = 1; return n + setupFolk(s).fame / 30; }
   function threatOdds(s, p) { const theirs = (p.noble || p.royal ? 3 : p.job && p.job.type === 'office' ? 2 : 0) + temperOf(p); return clamp(0.35 + (powerOf(s) - theirs) * 0.15, 0.1, 0.9); }
   function authOver(s, p) {
@@ -7900,6 +8399,14 @@
           F.scene = { kind: 'won', pid: S.pid, day: s.day }; return ok(q.name + ' is down, your blade at their throat.');
         }
         F.losses++; F.scene = null;
+        if (S.lethal && c === 'yield') {   // you threw down your blade in time: you live, but it costs you
+          F.ambush = null; const lost = Math.round(Math.min(Math.max(0, s.coins) * 0.4, 400)); spend(s, lost);
+          const m = s.player.equip && s.player.equip.main, w = m && itemByU(s, m), wn = w && ITEMS[w.id] ? ITEMS[w.id].name.toLowerCase() : null;
+          if (w) { delete s.player.equip.main; s.player.items = s.player.items.filter(x => x !== w); }
+          if (q) { q.hate = Math.max(30, q.hate - 20); if (q.nem) humbled(s, q, 25); }
+          deed(s, 0, -4, 'yielding a fight'); s.player.hurt = s.day + 3;
+          return ok('You yield. They spare you, but take ' + lost + 'c' + (wn ? ' and your ' + wn : '') + '.');
+        }
         if (S.lethal) { F.ambush = null; s.pendingDeath = { day: s.day, age: s.you.age, how: 'killed by a blade ' + (q ? q.name : 'an enemy') + ' paid for' }; event(s, 'You have been killed, aged ' + s.you.age + ', by a blade ' + (q ? q.name : 'an enemy') + ' paid for. Your story passes on.', 'story'); return ok(); }
         const lost = Math.round(Math.min(Math.max(0, s.coins) * 0.2, 150)); spend(s, lost); F.ambush = null;
         if (q) { q.hate = Math.max(40, q.hate - 12); if (q.nem) humbled(s, q, 15); }
@@ -8041,7 +8548,7 @@
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
-    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
+    elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
     HOLIDAYS, holidayOn, yearDay, bdayOf, calendar, seasonOf, SEASON_FX, MONTHS, YEAR_DAYS, MONTH_DAYS, AGE_RATES, newGame, step, advance, cmd, rate, serialize, deserialize, hourOf, clock, hm, carried, skillLabel, dist,
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,

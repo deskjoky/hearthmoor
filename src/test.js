@@ -1612,8 +1612,11 @@ console.log('50. Staff, elections and promises (v0.57-v0.59)');
   check(sh.hands.length === 2 && sh.hands.some(h => h.role === 'counter'), 'the first employee takes the counter');
   sh.manager = { pid: null, name: 'Test Manager', skill: 1, wage: 10, budget: 10 }; sh.policy.mgrRoles = true;
   Sim.cmd(m, 'policy', sh.id, 'supplyBy', 'none'); Sim.assignRoles(m, sh);
-  check(sh.policy.supplyBy === 'none' && Sim.supplier(sh) === null, 'a manager setting jobs leaves "nobody fetches supplies" alone');
+  check(sh.policy.supplyBy === 'none' && Sim.supplier(sh) === 'manager', 'a manager always sees to supplies, even if they were set to nobody');
   check(sh.hands.filter(h => h.role === 'counter').length === 1, 'the manager keeps one employee on the counter');
+  { sh.stock.grain = 2; sh.stock.wood = 1; sh.fetch = null; sh.fetchWait = 0; m.t = Math.floor(m.t / 1440) * 1440 + 10 * 60; const c0 = m.coins;
+    for (let i = 0; i < 30 && !sh.fetch; i++) Sim.advance(m, 1);
+    check(!!sh.fetch && m.coins < c0, 'the manager goes for supplies on their own when storage runs low, before it is empty'); }
   // trade levels never depend on office
   const t = Sim.newGame(5903); (t.tradeXp = t.tradeXp || {}).bakery = 500;
   check(Sim.tradeLevel(t, 'bakery') === 5, 'trade level 5 from work alone, with no office');

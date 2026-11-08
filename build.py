@@ -27,6 +27,8 @@ open('index.html', 'w').write(head + page[:end] + '\n</head>\n<body>\n' + page[e
 # a test copy that keeps the debug hook
 test = src.replace('/*BUILD*/', 'test').replace('<script>/*SIM*/</script>', '<script>\n' + sim + '\n</script>').replace('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', 'vendor/three.min.js')
 open('dist/test.html', 'w').write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + test + '</body></html>')
+# the fight test: its own page, its own throwaway village, never saves
+open('dist/fighttest.html', 'w').write(body.replace('<title>Hearthmoor</title>', '<title>Hearthmoor Fight Test</title>', 1).replace('<script>\n' + sim, '<script>window.FIGHT_TEST = true;</script>\n<script>\n' + sim, 1))
 json.dump({'build': BUILD}, open('version.json', 'w'))
 print('built', BUILD)
 # refuse a build whose scripts do not parse: a syntax error means a blank title screen for the player
