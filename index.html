@@ -9843,6 +9843,7 @@ function standH(x, z) {
     const L = B.half * 2, t = ((x - B.ax) * (B.bx - B.ax) + (z - B.az) * (B.bz - B.az)) / (L * L), c = Math.abs((x - B.ax) * (B.bz - B.az) - (z - B.az) * (B.bx - B.ax)) / L;
     if (t > -0.02 && t < 1.02 && c < B.w / 2 + 0.3) return Math.max(g, deckH0(t));
   }
+  { const d = deckAt(x, z); if (d != null) return Math.max(g, d); }
   if (z < -434 && z > -538 && Math.abs(x - 440) < 30) { const rx = O.riverX(z); if (x > rx - 11.2 && x < rx - 6) return Math.max(g, OAK_Y + 0.13); }
   return g;
 }
@@ -10395,17 +10396,19 @@ function hut(x, z, opts) {
 })();
 
 /* ----- the bridges ----- */
+const DECKS = [];   // { x, z, ry, hl (half length, along local z), hw (half width, local x), y (the top of the deck) }
+function deckAt(x, z) { for (const D of DECKS) { const dx = x - D.x, dz = z - D.z; if (Math.abs(dx) > D.r || Math.abs(dz) > D.r) continue; const c = Math.cos(D.ry), s = Math.sin(D.ry), lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) <= D.hw + 0.25 && Math.abs(lz) <= D.hl + 0.2) return D.y; } return null; }
 (function bridges() {
   // the road bridge over the stream
   const y = Math.max(groundH(44.5, 4), groundH(54, 4)) + 0.45, f = new THREE.Matrix4().makeTranslation(49.3, y, 4);
-  box(f, '#6b4a2e', 0, 0, 0, 10, 0.3, 3.8);
+  box(f, '#6b4a2e', 0, 0, 0, 10, 0.3, 3.8); DECKS.push({ x: 49.3, z: 4, ry: Math.PI / 2, hl: 5, hw: 1.9, y: y + 0.15, r: 6 });
   for (let x = -4.6; x <= 4.6; x += 0.8) box(f, '#5b4029', x, 0.02, 0, 0.12, 0.32, 3.82);
   [-1.85, 1.85].forEach(z => { box(f, BEAMS, 0, 0.75, z, 10, 0.14, 0.14); for (let x = -4.8; x <= 4.8; x += 1.6) box(f, BEAMS, x, 0.45, z, 0.16, 0.9, 0.16); });
   [-3, 3].forEach(x => box(f, '#6c675e', x, -1.1, 0, 1, 2, 3.4));
   // a plank footbridge where the manor lane crosses the millrace, and one where the mill lane crosses the tail-race
   [[2, -42, 0], [-24.4, -30.4, 0.6]].forEach(([x, z, ry]) => {
     const g = fr(x, z, ry, 0.25);
-    box(g, '#7a5a3a', 0, 0, 0, 2.6, 0.16, 3.2);
+    box(g, '#7a5a3a', 0, 0, 0, 2.6, 0.16, 3.2); DECKS.push({ x, z, ry, hl: 1.6, hw: 1.3, y: groundH(x, z) + 0.33, r: 3 });
     [-1.2, 1.2].forEach(a => box(g, BEAMS, a, 0.5, 0, 0.1, 0.1, 3.2));
   });
 })();
@@ -11014,7 +11017,7 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
     parts.push({ geo: ribbon(R, i => 3.8 + 0.4 * Math.sin(i * 0.9), yOf, 2), color: dirt });
     if (cross) {
       const f = M4(cross.x, deckY, cross.z, cross.ry);
-      box(f, '#6b4a2e', 0, 0, 0, 5.6, 0.35, 34); [-2.7, 2.7].forEach(x => { box(f, BEAMS, x, 0.75, 0, 0.14, 0.14, 34); for (let z = -16; z <= 16; z += 2.7) box(f, BEAMS, x, 0.4, z, 0.14, 0.8, 0.14); });
+      box(f, '#6b4a2e', 0, 0, 0, 5.6, 0.35, 34); DECKS.push({ x: cross.x, z: cross.z, ry: cross.ry, hl: 17, hw: 2.8, y: deckY + 0.18, r: 18 }); [-2.7, 2.7].forEach(x => { box(f, BEAMS, x, 0.75, 0, 0.14, 0.14, 34); for (let z = -16; z <= 16; z += 2.7) box(f, BEAMS, x, 0.4, z, 0.14, 0.8, 0.14); });
       for (const z of [-9, 0, 9]) box(f, '#8b877c', 0, -2.2, z, 4.6, 4.2, 1.6);
     }
   }
@@ -16016,8 +16019,10 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0443';
+const BUILD = '2026.11.08.0454';
 const NOTES = [
+  { v: '0.70.3', date: '8 November', title: 'Over the bridge', items: [
+    'You and everyone else now walk across the Stream Bridge, the plank footbridges over the millrace, and the timber bridges where the roads to Ironcrest and Eastwatch cross the river Alder, instead of wading underneath them.'] },
   { v: '0.70.2', date: '8 November', title: 'Every tap counts', items: [
     'Fixed: since 0.70, the row of chips under the top bar was redrawn many times a second, so a tap could land just as a button was replaced and be lost. Buttons react to the first tap again.'] },
   { v: '0.70.1', date: '8 November', title: 'Quieter streets', items: [
