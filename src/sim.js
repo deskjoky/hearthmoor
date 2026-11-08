@@ -1087,7 +1087,7 @@
     }
     const who = supplier(shop), R = TRADES[shop.trade].recipe;
     if (who && who !== 'worker' && !low) low = Object.keys(R).some(g => shop.stock[g] < R[g] * 2);   // a manager or fetcher goes before storage runs dry
-    if (!low || !who || who === 'worker' || h < H.start || h >= H.end - 1 || shop.fetchWait > s.t) return;
+    if (!low || !who || who === 'worker' || h < Math.min(6, H.start) || h >= H.end || shop.fetchWait > s.t) return;
     const by = who === 'manager' ? shop.manager.name : staffOn(shop, 'supply')[0].name;
     const { want, cost, total } = supplyWant(s, shop, who === 'manager' ? 0.9 : 1);
     if (total <= 0) { shop.fetchWait = s.t + 90; return; }
@@ -1290,7 +1290,6 @@
       const c = staffOn(shop, 'counter')[0];
       shop.counterBy = c && h >= H.start && h < H.end && !(h >= H.lunch + 0.5 && h < H.lunch + 1) ? c.name : null;
     }
-    fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), h, H);
     if (w.task === 'supply' && h >= 6 && h < H.end) { supplyRun(s, shop, w, dt); st.workerMin += dt; return; }
     if (h < H.start - 1 || h >= H.end + 1) {
       w.task = 'sleep';
@@ -7727,7 +7726,7 @@
     if (h >= 6 && h < 21) spawnScheduled(s);
     if (s.valdoria && s.courts && Math.floor(before / 60) !== Math.floor(s.t / 60) && h >= 8 && h < 19) valCutpurse(s);
     updatePlayer(s, dt);
-    for (const shop of s.shops) updateWorker(s, shop, dt);
+    for (const shop of s.shops) { fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), hourOf(s), workerHours(shop)); updateWorker(s, shop, dt); }   // supplies are fetched whether or not the worker is in
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
     if (s.towns) syncBodies(s);
