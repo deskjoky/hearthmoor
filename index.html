@@ -9902,9 +9902,139 @@ const hemi = new THREE.HemisphereLight(0xcfe0e6, 0x3d3424, 0.75);
 const sun = new THREE.DirectionalLight(0xffe2b0, 0.9);
 sun.position.set(-20, 30, 12);
 scene.add(hemi, sun);
+/* ================= the new look, stage one: light, shadow, surface, sky, water, grass =================
+   Every surface is still coloured by its makers, but now it is lit by a sun that casts shadows, carries a
+   grain you can see up close, and sits under a real sky. Nothing here loads a file: it is all made in code. */
+const GFX = { time: { value: 0 }, sunDir: { value: new THREE.Vector3(-0.6, 0.7, 0.3) }, sunCol: { value: new THREE.Color(1, 0.9, 0.7) }, skyTop: { value: new THREE.Color('#4a7fc0') }, skyHor: { value: new THREE.Color('#a3b5b1') }, night: { value: 0 }, noise: { value: null }, quality: 2 };
+// one tiling texture of noise, three kinds in its three channels: fine grain, soft blotches, long streaks
+GFX.noise.value = (function () {
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N; const cx = cv.getContext('2d'), im = cx.createImageData(N, N), d = im.data;
+  let sd = 9871; const rr = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+  const lattice = n => { const a = new Float32Array(n * n); for (let i = 0; i < a.length; i++) a[i] = rr(); return a; };
+  const value = (lat, n, x, y) => { const xi = Math.floor(x) % n, yi = Math.floor(y) % n, xf = x - Math.floor(x), yf = y - Math.floor(y), x1 = (xi + 1) % n, y1 = (yi + 1) % n, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf); return (lat[yi * n + xi] * (1 - u) + lat[yi * n + x1] * u) * (1 - v) + (lat[y1 * n + xi] * (1 - u) + lat[y1 * n + x1] * u) * v; };
+  const fbm = (lats, x, y) => { let t = 0, a = 0.5, tot = 0; for (const [lat, n] of lats) { t += a * value(lat, n, x * n / N, y * n / N); tot += a; a *= 0.5; } return t / tot; };
+  const A = [[lattice(64), 64], [lattice(128), 128], [lattice(256), 256]], B = [[lattice(8), 8], [lattice(16), 16], [lattice(32), 32], [lattice(64), 64]], C1 = lattice(64), C2 = lattice(8);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const o = (y * N + x) * 4;
+    d[o] = 255 * fbm(A, x, y); d[o + 1] = 255 * fbm(B, x, y); d[o + 2] = 255 * (0.65 * value(C1, 64, x * 64 / N, y * 4 / N * 64 / 64) + 0.35 * value(C2, 8, x * 8 / N, y * 8 / N)); d[o + 3] = 255; }
+  cx.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+})();
+// teach a plain material to show grain, weathering and a little relief, in world space, so no model needs unwrapping
+function surface(m, kind) {
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uNoise = GFX.noise; sh.uniforms.uSun = GFX.sunDir; sh.uniforms.uTime = GFX.time; sh.uniforms.uSkyTop = GFX.skyTop; sh.uniforms.uSunCol = GFX.sunCol;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp; varying vec3 vWn;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n vec4 wp4 = vec4(transformed, 1.0);\n #ifdef USE_INSTANCING\n wp4 = instanceMatrix * wp4;\n #endif\n vWp = (modelMatrix * wp4).xyz;\n vec3 wn3 = objectNormal;\n #ifdef USE_INSTANCING\n wn3 = mat3(instanceMatrix) * wn3;\n #endif\n vWn = normalize(mat3(modelMatrix) * wn3);');
+    const body = kind === 'ground' ? `
+      float gA = texture2D(uNoise, vWp.xz * 0.31).r, gB = texture2D(uNoise, vWp.xz * 0.083).g, gC = texture2D(uNoise, vWp.xz * 0.0131).g;
+      float relief = (texture2D(uNoise, (vWp.xz + uSun.xz * 0.1) * 0.31).r - gA) * 0.9;
+      vec3 c = gl_FragColor.rgb; float fade = 1.0 - smoothstep(18.0, 60.0, distance(cameraPosition, vWp));
+      c *= mix(1.0, 0.82 + 0.36 * gA, 0.4 + 0.6 * fade); c *= 0.84 + 0.32 * gB;
+      c = mix(c, c * vec3(1.22, 1.1, 0.62), smoothstep(0.52, 0.78, gC) * 0.45); c = mix(c, c * vec3(0.72, 0.86, 0.7), smoothstep(0.5, 0.2, gC) * 0.4);
+      c *= 1.0 + relief * fade; gl_FragColor.rgb = c;`
+      : kind === 'water' ? `
+      vec2 p = vWp.xz; float t = uTime;
+      vec2 n = vec2(texture2D(uNoise, p * 0.11 + vec2(t * 0.021, t * 0.013)).r - texture2D(uNoise, p * 0.11 + vec2(0.31 - t * 0.017, 0.2 + t * 0.019)).r, texture2D(uNoise, p * 0.09 + vec2(0.5 + t * 0.015, -t * 0.022)).g - texture2D(uNoise, p * 0.13 - vec2(t * 0.02, 0.4 + t * 0.011)).g);
+      n += 0.5 * vec2(texture2D(uNoise, p * 0.47 + t * 0.05).r - 0.5, texture2D(uNoise, p * 0.47 - t * 0.04 + 0.37).r - 0.5);
+      vec3 N3 = normalize(vec3(n.x * 1.6, 1.0, n.y * 1.6)), V = normalize(cameraPosition - vWp);
+      float fres = pow(1.0 - max(dot(V, N3), 0.0), 3.0); vec3 R = reflect(-V, N3);
+      vec3 sky = mix(uSkyTop * 0.55 + 0.2, uSkyTop, clamp(R.y, 0.0, 1.0));
+      float glint = pow(max(dot(R, normalize(uSun)), 0.0), 220.0) * 1.6 + pow(max(dot(R, normalize(uSun)), 0.0), 24.0) * 0.18;
+      vec3 deep = gl_FragColor.rgb * vec3(0.55, 0.8, 0.85);
+      gl_FragColor.rgb = mix(deep, sky, 0.25 + 0.6 * fres) + uSunCol * glint; gl_FragColor.a = mix(0.8, 0.97, fres);`
+      : `
+      vec3 w = abs(vWn); w = w * w; w /= (w.x + w.y + w.z);
+      float fade = 1.0 - smoothstep(14.0, 55.0, distance(cameraPosition, vWp));
+      float fine = texture2D(uNoise, vWp.zy * 0.47).r * w.x + texture2D(uNoise, vWp.xz * 0.47).r * w.y + texture2D(uNoise, vWp.xy * 0.47).r * w.z;
+      float fine2 = texture2D(uNoise, (vWp.zy + uSun.zy * 0.08) * 0.47).r * w.x + texture2D(uNoise, (vWp.xz + uSun.xz * 0.08) * 0.47).r * w.y + texture2D(uNoise, (vWp.xy + uSun.xy * 0.08) * 0.47).r * w.z;
+      float blot = texture2D(uNoise, vWp.zy * 0.09).g * w.x + texture2D(uNoise, vWp.xz * 0.09).g * w.y + texture2D(uNoise, vWp.xy * 0.09).g * w.z;
+      float streak = texture2D(uNoise, vec2((vWp.x + vWp.z) * 0.9, vWp.y * 0.07)).b;
+      vec3 c = gl_FragColor.rgb; c *= mix(1.0, 0.86 + 0.28 * fine, fade); c *= 0.88 + 0.24 * blot; c *= mix(1.0, 0.84 + 0.3 * streak, (1.0 - w.y) * (0.4 + 0.6 * fade));
+      c *= 1.0 + (fine2 - fine) * 0.9 * fade;
+      c *= mix(0.86, 1.0, smoothstep(-0.2, 0.5, vWn.y));   // undersides and overhangs sit a little darker
+      gl_FragColor.rgb = c;`;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec3 uSun; uniform float uTime; uniform vec3 uSkyTop; uniform vec3 uSunCol; varying vec3 vWp; varying vec3 vWn;')
+      .replace('#include <fog_fragment>', '{' + body + '}\n#include <fog_fragment>');
+  };
+  m.customProgramCacheKey = () => 'gfx-' + (kind || 'plain');
+  return m;
+}
+/* the sky: a dome that follows you, with a sun, drifting clouds, and stars at night */
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { uTop: GFX.skyTop, uHor: GFX.skyHor, uSun: GFX.sunDir, uSunCol: GFX.sunCol, uTime: GFX.time, uNight: GFX.night, uNoise: GFX.noise, uCloud: { value: 0.5 } },
+  vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.9999; }',
+  fragmentShader: `uniform vec3 uTop, uHor, uSun, uSunCol; uniform float uTime, uNight, uCloud; uniform sampler2D uNoise; varying vec3 vD;
+    void main(){ vec3 d = normalize(vD); float h = max(d.y, 0.0);
+      vec3 c = mix(uHor, uTop, pow(h, 0.55));
+      vec3 s = normalize(uSun); float sd = max(dot(d, s), 0.0);
+      c += uSunCol * (pow(sd, 900.0) * 3.0 + pow(sd, 60.0) * 0.35 + pow(sd, 6.0) * 0.12) * (1.0 - uNight * 0.75);
+      // clouds: two layers of drifting noise on a flat ceiling
+      vec2 uv = d.xz / (d.y + 0.12) * 0.11 + vec2(uTime * 0.0012, uTime * 0.0005);
+      float n = texture2D(uNoise, uv).g * 0.6 + texture2D(uNoise, uv * 2.3 + 0.3).g * 0.3 + texture2D(uNoise, uv * 6.1).r * 0.1;
+      float cl = smoothstep(1.0 - uCloud * 0.62, 1.05 - uCloud * 0.3, n) * smoothstep(0.0, 0.14, d.y);
+      float lit = 0.72 + 0.28 * texture2D(uNoise, uv * 2.3 + s.xz * 0.02 + 0.3).g;
+      vec3 cc = mix(uHor * 1.05 + 0.08, vec3(1.0), 0.55) * lit * (1.0 - uNight * 0.82) + uSunCol * pow(sd, 8.0) * 0.25;
+      c = mix(c, cc, cl * 0.9);
+      // stars
+      vec2 su = d.xz / (abs(d.y) + 0.35) * 3.1; float st = texture2D(uNoise, su).r * texture2D(uNoise, su * 1.7 + 0.5).r;
+      c += vec3(0.9, 0.95, 1.0) * smoothstep(0.55, 0.7, st) * uNight * (1.0 - cl) * smoothstep(0.0, 0.2, d.y);
+      c = mix(uHor, c, smoothstep(-0.02, 0.08, d.y));
+      gl_FragColor = vec4(c, 1.0); }`
+});
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(2900, 32, 16), skyMat); skyDome.frustumCulled = false; skyDome.renderOrder = -10; scene.add(skyDome);
+/* shadows: the sun's shadow follows you about */
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = sun.shadow.camera.bottom = -46; sun.shadow.camera.right = sun.shadow.camera.top = 46; sun.shadow.camera.near = 1; sun.shadow.camera.far = 260; sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05; scene.add(sun.target);
+function gfxShadowSweep(root) { root.traverse(o => { if (!o.isMesh || o.userData.sh) return; o.userData.sh = 1; const m = o.material; if (m === skyMat || !m || Array.isArray(m)) return; const soft = m.transparent || m.isShaderMaterial || m.isMeshBasicMaterial || m.isPointsMaterial; o.receiveShadow = !soft; o.castShadow = !soft && m !== groundMat && !o.userData.noShadow; }); }
+/* grass: tufts that grow round you wherever the country is open, and lean with the wind */
+const GRASS = { n: 7000, R: 25, cell: 0.58, mesh: null, at: null, queue: null };
+(function () {
+  const blade = (ry, lean) => { const g = new THREE.PlaneGeometry(0.095, 0.3, 1, 2); g.translate(0, 0.15, 0); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i) / 0.3; p.setX(i, p.getX(i) * (1 - y * 0.9) + lean * y * y * 0.09); } g.rotateY(ry); return g; };
+  const parts = [blade(0, 1), blade(1.1, -1), blade(2.2, 0.6), blade(0.6, -0.4), blade(1.7, 0.2), blade(2.7, -0.8)].map((g, i) => { g.translate(Math.sin(i * 2.4) * (0.06 + i * 0.022), 0, Math.cos(i * 2.4) * (0.06 + i * 0.022)); g.scale(1, 0.7 + (i * 0.37 % 1) * 0.6, 1); return g; });
+  let tot = 0; parts.forEach(g => tot += g.index.count); const pos = new Float32Array(tot * 3), nor = new Float32Array(tot * 3), uv = new Float32Array(tot * 2); let o = 0;
+  for (const g0 of parts) { const g = g0.toNonIndexed(), p = g.attributes.position, u = g.attributes.uv, put = i => { pos[o * 3] = p.getX(i); pos[o * 3 + 1] = p.getY(i); pos[o * 3 + 2] = p.getZ(i); nor[o * 3 + 1] = 1; uv[o * 2] = u.getX(i); uv[o * 2 + 1] = u.getY(i); o++; }; for (let i = 0; i < p.count; i++) put(i); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  const m = new THREE.MeshLambertMaterial({ color: '#667c3a', side: THREE.DoubleSide });
+  m.onBeforeCompile = sh => { sh.uniforms.uTime = GFX.time; sh.uniforms.uNoise = GFX.noise;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; varying float vH; varying vec3 vGp;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vH = uv.y; vec3 ip = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; vGp = ip; float ph = ip.x * 0.31 + ip.z * 0.27; float sw = (sin(uTime * 1.7 + ph) * 0.6 + sin(uTime * 3.1 + ph * 1.9) * 0.25) * uv.y * uv.y; transformed.x += sw * 0.07; transformed.z += sw * 0.04;');
+    sh.fragmentShader = sh.fragmentShader.replace(': vLightBack', ': vLightFront').replace(': vIndirectBack', ': vIndirectFront').replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; varying float vH; varying vec3 vGp;')
+      .replace('#include <fog_fragment>', '{ float gC = texture2D(uNoise, vGp.xz * 0.0131).g, gB = texture2D(uNoise, vGp.xz * 0.137).g; vec3 c = gl_FragColor.rgb * (0.62 + 0.6 * vH) * (0.8 + 0.4 * gB); c = mix(c, c * vec3(1.25, 1.1, 0.6), smoothstep(0.52, 0.78, gC) * 0.5); gl_FragColor.rgb = c; }\n#include <fog_fragment>'); };
+  GRASS.mat = m; GRASS.mesh = new THREE.InstancedMesh(g, m, GRASS.n); GRASS.mesh.frustumCulled = false; GRASS.mesh.count = 0; GRASS.mesh.userData.sh = 1; GRASS.mesh.receiveShadow = true; scene.add(GRASS.mesh);
+})();
+const hash2 = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return (h ^ (h >>> 16)) / 4294967296; };
+function gfxGrass(fx, fz) {
+  const G0 = GRASS, ci = Math.round(fx / 6), cj = Math.round(fz / 6);
+  if (!G0.queue && G0.at === ci + ',' + cj) return;
+  if (!G0.queue) { G0.at = ci + ',' + cj; G0.queue = { cx: ci * 6, cz: cj * 6, k: 0, n: 0, m4: new THREE.Matrix4(), list: [] }; const half = Math.ceil(G0.R / G0.cell); for (let i = -half; i <= half; i++) for (let j = -half; j <= half; j++) if (i * i + j * j <= half * half) G0.queue.list.push(i, j); }
+  const Q = G0.queue, L0 = Q.list, end = Math.min(L0.length, Q.k + 5000), q4 = new THREE.Quaternion(), e3 = new THREE.Euler(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3();
+  if (!Q.buf) Q.buf = [];
+  for (; Q.k < end; Q.k += 2) {
+    const gi = Math.round(Q.cx / G0.cell) + L0[Q.k], gj = Math.round(Q.cz / G0.cell) + L0[Q.k + 1], h = hash2(gi, gj); if (h > 0.62) continue;
+    const x = (gi + hash2(gi + 91, gj) - 0.5) * G0.cell, z = (gj + hash2(gi, gj + 57) - 0.5) * G0.cell; if (!wildClear(x, z)) continue;
+    const y = groundH(x, z); if (y > 11) continue; Q.buf.push(x, y, z, h);
+  }
+  if (Q.k >= L0.length) {
+    const B = Q.buf, n = Math.min(G0.n, B.length / 4);
+    for (let i = 0; i < n; i++) { const h = B[i * 4 + 3]; e3.set(0, h * 40, 0); q4.setFromEuler(e3); const sc = 0.8 + (h * 7.3 % 1) * 0.7; s3.set(sc, sc * (0.7 + (h * 3.1 % 1) * 0.9), sc); v3.set(B[i * 4], B[i * 4 + 1] - 0.03, B[i * 4 + 2]); Q.m4.compose(v3, q4, s3); G0.mesh.setMatrixAt(i, Q.m4); }
+    G0.mesh.count = n; G0.mesh.instanceMatrix.needsUpdate = true; G0.queue = null;
+  }
+}
+// each frame: the clock for wind and water, the sky and the shadow follow you
+let gfxSweepT = 0;
+function gfxFrame(dt, t) {
+  GFX.quality = meta.settings && meta.settings.gfx === 'low' ? 0 : 2; if (sun.castShadow !== GFX.quality > 0) sun.castShadow = GFX.quality > 0;
+  GFX.time.value = t; skyDome.position.copy(camera.position);
+  const cx = Math.round(focus.x / 3) * 3, cz = Math.round(focus.z / 3) * 3, cy = standH(cx, cz), d = GFX.sunDir.value;
+  sun.target.position.set(cx, cy, cz); sun.position.set(cx + d.x * 120, cy + d.y * 120, cz + d.z * 120); sun.target.updateMatrixWorld();
+  gfxSweepT -= dt; if (gfxSweepT <= 0) { gfxSweepT = 1.2; gfxShadowSweep(scene); }
+  GFX.frame = (GFX.frame || 0) + 1; sun.shadow.autoUpdate = false; if (GFX.frame % 2 === 0 || GFX.shadowAt !== cx + ',' + cz) { sun.shadow.needsUpdate = true; GFX.shadowAt = cx + ',' + cz; }   // shadows redraw every other frame: half the cost, and you cannot tell
+  if (GFX.quality > 0 && !UI.inside && UI.overlay !== 'map') gfxGrass(focus.x, focus.z);
+  GRASS.mesh.visible = GFX.quality > 0 && !UI.inside && UI.overlay !== 'map';
+}
 
 const mats = {};
-const mat = c => mats[c] || (mats[c] = new THREE.MeshLambertMaterial({ color: c }));
+const mat = c => mats[c] || (mats[c] = surface(new THREE.MeshLambertMaterial({ color: c })));
 function flat(g) { g = g.index ? g.toNonIndexed() : g; g.computeVertexNormals(); return g; }
 function mesh(geo, color, x, y, z, parent) { const m = new THREE.Mesh(geo, typeof color === 'object' ? color : mat(color)); m.position.set(x || 0, y || 0, z || 0); (parent || scene).add(m); return m; }
 function mergeColored(parts) {
@@ -9924,8 +10054,8 @@ function mergeColored(parts) {
   out.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return out;
 }
-const vc = new THREE.MeshLambertMaterial({ vertexColors: true });
-const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });   // the land itself, so snow and harvest colour can lie on the ground more than on walls and roofs
+const vc = surface(new THREE.MeshLambertMaterial({ vertexColors: true }));
+const groundMat = surface(new THREE.MeshLambertMaterial({ vertexColors: true }), 'ground');   // the land itself, so snow and harvest colour can lie on the ground more than on walls and roofs
 const M = (x, y, z, ry, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry || 0, 0)), new THREE.Vector3(sx || 1, sy || sx || 1, sz || sx || 1));
 let seed = 1337;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -10078,15 +10208,17 @@ const FARMS = [{ x: 150, z: 26, w: 46, d: 26 }, { x: 190, z: 14, w: 22, d: 18 },
 const C_DRY = new THREE.Color('#b5a462');
 function buildTile(i, j) {
   const x0 = i * TILE, z0 = j * TILE;
-  const g = new THREE.PlaneGeometry(TILE, TILE, TILE_RES, TILE_RES).toNonIndexed();
-  g.rotateX(-Math.PI / 2); g.translate(x0 + TILE / 2, 0, z0 + TILE / 2);
+  const gi = new THREE.PlaneGeometry(TILE, TILE, TILE_RES, TILE_RES);
+  gi.rotateX(-Math.PI / 2); gi.translate(x0 + TILE / 2, 0, z0 + TILE / 2);
+  { const p0 = gi.attributes.position, n0 = gi.attributes.normal, W = TILE_RES + 1; for (let k = 0; k < p0.count; k++) p0.setY(k, groundH(p0.getX(k), p0.getZ(k)));
+    gi.computeVertexNormals();   // smooth hills; and along the tile's edges, the true slope, so neighbours meet without a seam
+    for (let k = 0; k < p0.count; k++) { const a = k % W, b = (k / W) | 0; if (a && b && a < W - 1 && b < W - 1) continue; const x = p0.getX(k), z = p0.getZ(k), e = 1.3, nx = groundH(x - e, z) - groundH(x + e, z), nz = groundH(x, z - e) - groundH(x, z + e), l = Math.hypot(nx, 2 * e, nz); n0.setXYZ(k, nx / l, 2 * e / l, nz / l); } }
+  const g = gi.toNonIndexed();
   const p = g.attributes.position, r = tileRand(i, j);
-  for (let k = 0; k < p.count; k++) p.setY(k, groundH(p.getX(k), p.getZ(k)));
-  g.computeVertexNormals();
   const col = new Float32Array(p.count * 3);
   for (let k = 0; k < p.count; k += 3) {
     const x = (p.getX(k) + p.getX(k + 1) + p.getX(k + 2)) / 3, z = (p.getZ(k) + p.getZ(k + 1) + p.getZ(k + 2)) / 3, y = (p.getY(k) + p.getY(k + 1) + p.getY(k + 2)) / 3;
-    C_TMP.copy(GREENS[Math.floor(r() * GREENS.length)]);
+    { const gv = (0.5 + 0.5 * Math.sin(x * 0.19 + 1.7) * Math.cos(z * 0.23 - 0.6)) * 0.7 + 0.3 * (0.5 + 0.5 * Math.sin((x + z) * 0.071)), gk = gv * (GREENS.length - 1), g0 = Math.floor(gk); r(); C_TMP.copy(GREENS[g0]).lerp(GREENS[Math.min(GREENS.length - 1, g0 + 1)], gk - g0); }
     let wet = Math.min(segDist(x, z, STREAM), inVillage(x, z) ? Math.min(segDist(x, z, RACE) + 1, segDist(x, z, TAIL) + 1) : 99);
     if (Math.abs(x - 470) < 300) wet = Math.min(wet, segDist(x, z, RIVER) - 6);
     if (x < -100 && z < -300) wet = Math.min(wet, segDist(x, z, GREEN) - 3);
@@ -10129,7 +10261,7 @@ function updateTiles(px, pz, budget) {
 function tileSolidsNear(px, pz) { const out = []; const ci = Math.floor(px / TILE), cj = Math.floor(pz / TILE); for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { const t = tiles.get((ci + di) + ',' + (cj + dj)); if (t) out.push(...t.solids); } return out; }
 
 /* ----- water: the stream, the millrace, the pond and the tail-race ----- */
-const waterMat = new THREE.MeshLambertMaterial({ color: '#4f7d8c', emissive: new THREE.Color('#0f2a33'), transparent: true, opacity: 0.88 });
+const waterMat = surface(new THREE.MeshLambertMaterial({ color: '#3f7486', emissive: new THREE.Color('#0c2630'), transparent: true, opacity: 0.9 }), 'water');
 function ribbon(pts, width, yOf, step) {
   const pos = [];
   const sample = [];
@@ -12076,10 +12208,12 @@ function syncLight(h) {
   tmpC.copy(SKY.night).lerp(SKY.day, k).lerp(SKY.dusk, Math.min(0.55, dusk * 0.55));
   const HL = HOL.id && HOL_LOOK[HOL.id]; if (HL) tmpC.lerp(holC.set(HL.tint), HL.amt);
   scene.fog.color.copy(tmpC); renderer.setClearColor(tmpC);
-  hemi.intensity = 0.25 + k * 0.6; sun.intensity = 0.1 + k * 0.85;
-  sun.color.set(dusk > 0.3 ? '#ffb36b' : '#ffe2b0');
+  hemi.intensity = 0.44 + k * 0.28; sun.intensity = 0.24 + k * 0.94;
+  sun.color.set(k < 0.12 ? '#8fa6d6' : dusk > 0.3 ? '#ffb36b' : '#ffe6bc');
   const ang = ((h - 6) / 15) * Math.PI;
-  sun.position.set(Math.cos(ang) * -30, 10 + Math.sin(Math.max(0.1, ang)) * 25, 14);
+  GFX.sunDir.value.set(Math.cos(ang) * -30, 5 + Math.sin(Math.max(0.1, ang)) * 29, 14).normalize();
+  GFX.skyHor.value.copy(tmpC).lerp(holC.set('#cfe0ee'), k * 0.35); GFX.skyTop.value.set('#060a16').lerp(holC.set('#3f78c4'), k).lerp(holC.set('#3a4a80'), Math.min(0.5, dusk * 0.5)); if (HL) GFX.skyTop.value.lerp(holC.set(HL.tint), HL.amt * 0.6);
+  GFX.night.value = 1 - k; GFX.sunCol.value.copy(sun.color).multiplyScalar(0.25 + 0.75 * k); skyMat.uniforms.uCloud.value = HOL.season === 'winter' ? 0.72 : 0.46;
   windowMat.emissiveIntensity = Math.max(0, 1 - k * 1.4) * 1.1 * (HL && HL.glow ? HL.glow : 1);
   scene.fog.near = 55 - (1 - k) * 22; scene.fog.far = 200 - (1 - k) * 70; if (HL && HL.fog) { scene.fog.near *= HL.fog; scene.fog.far *= HL.fog + 0.2; }
 }
@@ -13356,12 +13490,12 @@ function renderCard(force) {
   let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
   if (!UI.inside && (UI.sel == null || G.caught)) { const wc = wildCard(G); if (wc) { html = wc; UI.sel = null; } }
   if (!UI.inside && UI.sel == null && !G.caught) { const bb = burgleBtn(G); if (bb) html = (html || '<h2>A house</h2><p>Someone lives here.</p>') + `<div class="acts">${bb}</div>`; }
-  if (!UI.inside && UI.sel == null && Sim.townSquareNear(G)) html = (html || '') + tourneyBox(G);
   // a place you merely walk past shows only its name; tap the tab to open it
   const p = G.player, here = UI.sel == null && !UI.inside ? ((p.dest && UI.loc) || nearLoc(p) || where(G) || UI.loc) : null, Lh = here && L[here];
   // an election venue: put your name forward, speak, or call an early vote, in person
   if (here && html && !p.dest) { const ek = Lh && (Lh.emp || Lh.biz), wid = here === 'market' || Object.values(Sim.MARKET_AT).includes(here) ? 'market' : ek && G.biz && G.biz[ek] ? ek : null;
     if (wid && (Sim.stockOf(G, wid).length || (wid !== 'market' && ['butcher', 'tanner'].includes(Sim.shopKind(G, wid))))) html += `<div class="acts">${B_('Browse wares' + (Sim.stockOf(G, wid).length ? ' (' + Sim.stockOf(G, wid).length + ')' : ''), ['ui', 'wares', wid], 'alt')}</div>`; }
+  if (here && html && !UI.inside && (here === 'market' || Object.values(Sim.MARKET_AT).includes(here)) && Sim.townSquareNear(G)) html += tourneyBox(G);   // the tournament is offered on the square's own card, never as a pop-up of its own
   if (here && html && !p.dest) { const vb = venueBox(G, here); if (vb) { const i = html.indexOf('</h2>'); html = i >= 0 ? html.slice(0, i + 5) + vb + html.slice(i + 5) : html + vb; } }
   // a town's market square: buy and sell here too
   { const mt = here && Object.keys(Sim.MARKET_AT).find(t => Sim.MARKET_AT[t] === here); if (mt && html && !p.dest) { const cs = ((G.realm && G.realm.contracts) || []).filter(c => c.taken && c.region === mt && c.kind !== 'clear'); if (cs.length) html += `<div class="acts">${cs.map(c => B_('Deliver for ' + esc(c.who) + ' (' + (c.delivered || 0) + '/' + c.qty + ')', ['fulfil', c.n])).join('')}</div>`; if (mt !== 'hearthmoor') html += `<div class="acts">${marketActs(G, mt)}</div>${marketTable(G)}`; } }
@@ -15336,6 +15470,7 @@ function settingsHTML() {
   <div class="setting"><span>Check the sound</span><div class="seg"><button type="button" data-c='["ui","testSound"]'>Play a chord</button></div><p id="sndStatus">${Snd.status()} If you still hear nothing, turn the volume up with the side buttons.</p></div>
   <h4>Camera</h4>
   <div class="setting"><span>Look speed</span>${seg('lookSpeed', st.lookSpeed, [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']])}</div>
+  <div class="setting"><span>Graphics</span>${seg('gfx', st.gfx || 'high', [['high', 'High'], ['low', 'Low']])}<p>High: sun shadows and long grass, for a recent phone. Low: neither, if the game runs slowly or the phone gets warm.</p></div>
   <div class="setting"><span>Camera</span>${seg('view', st.view || 'low', [['low', 'Behind you'], ['high', 'High, classic']])}<p>Behind you: a low view over your shoulder that follows you as you walk. High: the old view from above.</p></div>
   <div class="setting"><span>Turning left and right</span>${seg('lookX', st.lookX, [['normal', 'Normal'], ['inverted', 'Inverted']])}<p>Normal: drag right and the view turns right.</p></div>
   <div class="setting"><span>Tilting up and down</span>${seg('lookY', st.lookY, [['normal', 'Normal'], ['inverted', 'Inverted']])}<p>Normal: drag up to look out toward the horizon, drag down to look down from above.</p></div>`;
@@ -16055,6 +16190,7 @@ function frame(now) {
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
   if (FIGHT.on && G && G.fight) poseFight(dt, t);
+  gfxFrame(dt, t);
   if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
   if (bench) bench.frame(now);
   requestAnimationFrame(frame);
@@ -16344,8 +16480,16 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.08.0543';
+const BUILD = '2026.11.10.2246';
 const NOTES = [
+  { v: '0.80', date: '10 November', title: 'A new light', items: [
+    'The first stage of all-new graphics. The sun now casts real shadows that move through the day: long at dawn and dusk, short at noon.',
+    'Every surface has a grain you can see up close: wood, plaster, stone, thatch and earth, with weathering down the walls.',
+    'The land rolls smoothly instead of in flat facets, and its greens flow into one another. Long grass grows in the open country and leans with the wind.',
+    'A real sky: a sun, drifting clouds, and stars at night. Water ripples, reflects the sky and glints in the sun.',
+    'Settings has a new Graphics choice: High (shadows and grass) or Low, if your phone runs warm.',
+    'Still to come in the next stages: all-new people with real bodies and animation, then buildings, then trees and the wider land.',
+    'Fixed: the tournament no longer pops up on its own as you pass a square; it is offered on the square\u2019s card.'] },
   { v: '0.71.3', date: '8 November', title: 'Men and women', items: [
     'Lists of people now show at a glance who is a man and who is a woman: blue badges with \u2642 for men and boys, rose badges with \u2640 for women and girls, with their age.'] },
   { v: '0.71.2', date: '8 November', title: 'Colours of a life', items: [
