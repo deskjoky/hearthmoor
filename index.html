@@ -9948,8 +9948,8 @@ function surface(m, kind) {
       float fine2 = texture2D(uNoise, (vWp.zy + uSun.zy * 0.08) * 0.47).r * w.x + texture2D(uNoise, (vWp.xz + uSun.xz * 0.08) * 0.47).r * w.y + texture2D(uNoise, (vWp.xy + uSun.xy * 0.08) * 0.47).r * w.z;
       float blot = texture2D(uNoise, vWp.zy * 0.09).g * w.x + texture2D(uNoise, vWp.xz * 0.09).g * w.y + texture2D(uNoise, vWp.xy * 0.09).g * w.z;
       float streak = texture2D(uNoise, vec2((vWp.x + vWp.z) * 0.9, vWp.y * 0.07)).b;
-      vec3 c = gl_FragColor.rgb; c *= mix(1.0, 0.86 + 0.28 * fine, fade); c *= 0.88 + 0.24 * blot; c *= mix(1.0, 0.84 + 0.3 * streak, (1.0 - w.y) * (0.4 + 0.6 * fade));
-      c *= 1.0 + (fine2 - fine) * 0.9 * fade;
+      vec3 c = gl_FragColor.rgb; c *= mix(1.0, 0.91 + 0.18 * fine, fade); c *= 0.9 + 0.2 * blot; c *= mix(1.0, 0.84 + 0.3 * streak, (1.0 - w.y) * (0.4 + 0.6 * fade));
+      c *= 1.0 + (fine2 - fine) * 0.5 * fade;
       c *= mix(0.86, 1.0, smoothstep(-0.2, 0.5, vWn.y));   // undersides and overhangs sit a little darker
       gl_FragColor.rgb = c;`;
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec3 uSun; uniform float uTime; uniform vec3 uSkyTop; uniform vec3 uSunCol; varying vec3 vWp; varying vec3 vWn;')
@@ -11819,20 +11819,6 @@ const RG = {
 /* gear on a body: armour over the tunic, a helm, a cloak, a weapon at the hip or on the back, a shield */
 const GG = { shieldR: flat(new THREE.CylinderGeometry(0.27, 0.27, 0.05, 10)), shieldB: flat(new THREE.BoxGeometry(0.4, 0.52, 0.05)), shieldT: flat(new THREE.BoxGeometry(0.48, 0.78, 0.05)), bow: new THREE.TorusGeometry(0.36, 0.02, 4, 10, Math.PI), axe: flat(new THREE.BoxGeometry(0.17, 0.13, 0.03)), greathelm: flat(new THREE.CylinderGeometry(0.25, 0.25, 0.3, 8)), long: flat(new THREE.CylinderGeometry(0.025, 0.025, 1.6, 5)) };
 const ARMOR_COL = { gambeson: '#c9b98f', jerkin: '#6b4a2e', studded: '#4f3a26', chain: '#8a8f96', brigandine: '#5a2a2a', halfplate: '#b8bcc2', fullplate: '#cfd3d8' };
-function dressGear(g, G0) {
-  if (!G0) return; const at = (geo, c, x, y, z) => mesh(geo, c, x, y, z, g);
-  if (G0.armor) { const b = at(RG.breast, ARMOR_COL[G0.armor] || '#8a8f96', 0, 0.44, 0); b.scale.set(1.06, 1.05, 1.06); if (G0.armor === 'fullplate' || G0.armor === 'halfplate') { at(CG.hand, ARMOR_COL[G0.armor], -0.33, 0.62, 0).scale.setScalar(1.6); at(CG.hand, ARMOR_COL[G0.armor], 0.33, 0.62, 0).scale.setScalar(1.6); } }
-  if (G0.helm === 'great') at(GG.greathelm, '#b8bcc2', 0, 1.0, 0); else if (G0.helm) at(RG.helm, G0.helm === 'leather' ? '#6b4a2e' : '#8a8f96', 0, 1.02, 0).scale.set(0.95, 0.8, 0.95);
-  if (G0.cloak) at(RG.cloak, G0.cloak, 0, 0.44, -0.3);
-  const n0 = g.children.length, w = G0.weapon;
-  if (w === 'sword' || w === 'dagger') { const sw = at(RG.sword, '#b8bcc2', -0.31, 0.26, 0.1); sw.rotation.z = 0.35; if (w === 'dagger') sw.scale.set(1, 0.5, 1); }
-  else if (w === 'mace' || w === 'axe') { const h = at(RG.staff, '#6b4a2a', -0.31, 0.3, 0.1); h.scale.set(1, 0.45, 1); h.rotation.z = 0.35; if (w === 'axe') at(GG.axe, '#9aa0a6', -0.38, 0.52, 0.1); else at(RG.knob, '#8a8f96', -0.38, 0.55, 0.1).scale.setScalar(1.6); }
-  else if (w === 'spear') { const sp = at(GG.long, '#6b4a2a', 0.36, 0.75, -0.05); at(RG.point, '#b8bcc2', 0.36, 1.6, -0.05); sp.rotation.z = -0.05; }
-  else if (w === 'bow' || w === 'xbow') { const b = at(GG.bow, '#6b4a2a', 0.05, 0.55, -0.32); b.rotation.z = Math.PI / 2 + 0.4; }
-  else if (w === 'longsword') { const sw = at(RG.sword, '#b8bcc2', 0.05, 0.6, -0.33); sw.scale.set(1, 1.6, 1); sw.rotation.z = 0.6; }
-  if (G0.shield) { const geo = G0.shield === 'tower' ? GG.shieldT : G0.shield === 'buckler' || G0.shield === 'round' ? GG.shieldR : GG.shieldB, sh = at(geo, G0.shieldColor || '#7a5634', 0.4, 0.45, 0.02); sh.rotation.z = Math.PI / 2; sh.rotation.y = Math.PI / 2; if (G0.shield === 'buckler') sh.scale.setScalar(0.7); }
-  for (let i = n0; i < g.children.length; i++) g.children[i].userData.hip = 1;
-}
 // what the player is wearing, for the body on screen
 function playerGear(s) {
   if (!s || !s.player || !s.player.equip) return null; const e = sl => Sim.equipped(s, sl), I = it => it && Sim.ITEMS[it.id], T = Sim.HERALDRY.tinctures;
@@ -11843,50 +11829,6 @@ function playerGear(s) {
     weapon: fam, shield: oI ? off.id.replace('roundshield', 'round') : null, tunic: bI && bI.kind === 'clothes' && body.dye ? T[body.dye] : bI && bI.kind === 'clothes' && bI.fine >= 2 ? '#5a1f3a' : null };
 }
 const gearKey = s => { const e = s && s.player && s.player.equip; if (!e) return ''; return Object.keys(e).sort().map(k => { const it = Sim.itemByU(s, e[k]); return it ? it.id + (it.dye || '') : ''; }).join('|'); };
-function dressRank(g, rank, opt) {
-  const u = { hr: null };
-  if (!rank || rank === 'newcomer' || rank === 'hand') return;
-  const gold = '#d9aa3a', at = (geo, c, x, y, z, parent) => mesh(geo, c, x, y, z, parent || g);
-  const chain = c => { const ch = at(RG.chain, c, 0, 0.7, 0.05); ch.rotation.x = Math.PI / 2 - 0.35; at(RG.medal, c, 0, 0.56, 0.27).rotation.x = Math.PI / 2 - 0.2; };
-  if (rank === 'merchant') { at(RG.pouch, '#6b4a2a', 0.2, 0.3, 0.24); return; }
-  if (rank === 'guard') { at(RG.helm, '#8a8f96', 0, 1.02, 0).scale.set(0.95, 0.8, 0.95); at(RG.bands, '#7a2a24', 0, 0.5, 0.3).scale.set(2.6, 2.4, 1); const hr = g.userData.hr; if (hr) { mesh(RG.staff, '#6b4a2a', 0, 0.45, 0.02, hr); mesh(RG.point, '#b8bcc2', 0, 1.18, 0.02, hr); } return; }
-  if (rank === 'exile') { mesh(CG.hood, '#4a4440', 0, 1.12, -0.02, g); at(RG.cloak, '#4a4440', 0, 0.42, -0.3); return; }
-  if (rank === 'councillor') { chain('#c9c6bc'); at(RG.pouch, '#6b4a2a', 0.2, 0.3, 0.24); return; }
-  if (rank === 'elder') {
-    at(RG.robe, '#3f5a3a', 0, 0.25, 0); chain('#c9c6bc');
-    const hr = g.userData.hr; if (hr) { const st = mesh(RG.staff, '#7a5634', 0, 0.35, 0.02, hr); mesh(RG.knob, '#7a5634', 0, 1.02, 0.02, hr); st.userData.staff = 1; }
-    return;
-  }
-  if (rank === 'lord') {
-    at(RG.cloak, '#5a2230', 0, 0.42, -0.31); at(RG.collar, '#5a2230', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
-    at(RG.velvet, '#2a2238', 0, 1.1, 0); const pl = at(RG.plume, '#efe6d2', 0.12, 1.26, -0.06); pl.rotation.z = -0.5;
-    return;
-  }
-  if (rank === 'c_trade') {   // Master of Trade: deep blue cloak, fat purse, chain of office with a coin, a merchant's hat
-    at(RG.cloak, '#22406a', 0, 0.42, -0.31); at(RG.collar, '#22406a', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
-    at(RG.pouch, '#8a5a2a', 0.22, 0.32, 0.24).scale.set(1.5, 1.5, 1.4); at(RG.pouch, '#8a5a2a', -0.22, 0.32, 0.24).scale.set(1.2, 1.2, 1.2);
-    at(RG.velvet, '#22406a', 0, 1.1, 0).scale.set(1.15, 1, 1.15); return;
-  }
-  if (rank === 'c_treasury') {   // Lord Treasurer: dark green and gold, the great chain, and the treasury key
-    at(RG.cloak, '#1f4a3a', 0, 0.4, -0.31).scale.set(1.1, 1.05, 1); at(RG.collar, '#c9a24a', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold); chain(gold);
-    at(RG.velvet, '#1f4a3a', 0, 1.1, 0); const hr = g.userData.hr; if (hr) { const k = mesh(RG.staff, gold, 0, 0.08, 0.06, hr); k.scale.set(1, 0.25, 1); mesh(RG.knob, gold, 0, 0.26, 0.06, hr); }
-    return;
-  }
-  if (rank === 'c_war') {   // Marshal: a steel breastplate, crimson cloak, a sword at the hip, a plumed steel helm
-    at(RG.cloak, '#7a1f22', 0, 0.42, -0.31); at(RG.breast, '#9aa0a6', 0, 0.48, 0.05); at(RG.sword, '#c9cdd2', -0.33, 0.28, 0.05).rotation.z = 0.15;
-    at(RG.helm, '#9aa0a6', 0, 1.06, 0); const pl = at(RG.plume, '#b0203a', 0, 1.3, -0.02); pl.scale.set(1.3, 1.2, 1.3); return;
-  }
-  if (rank === 'c_law') {   // Lord Justice: black robe to the floor, white bands at the throat, a black cap and the white rod of justice
-    at(RG.robe, '#1c1a1e', 0, 0.25, 0); at(RG.cloak, '#1c1a1e', 0, 0.42, -0.31); at(RG.collar, '#f3efe4', 0, 0.72, 0).rotation.x = Math.PI / 2; at(RG.bands, '#f3efe4', 0, 0.58, 0.29);
-    at(RG.velvet, '#1c1a1e', 0, 1.1, 0); const hr = g.userData.hr; if (hr) { mesh(RG.staff, '#efe6d2', 0, 0.35, 0.02, hr); } return;
-  }
-  if (rank === 'ruler') {
-    at(RG.cloak, '#8e1f22', 0, 0.4, -0.31).scale.set(1.15, 1.05, 1); at(RG.collar, '#f3efe4', 0, 0.72, 0).rotation.x = Math.PI / 2; chain(gold);
-    at(RG.circlet, gold, 0, 1.11, 0);
-    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; at(RG.point, gold, Math.sin(a) * 0.225, 1.2, Math.cos(a) * 0.225); }
-    at(RG.jewel, '#b0203a', 0, 1.12, 0.24);
-  }
-}
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 const ICON = { wait: mat('#e6ab3a'), happy: mat('#6fa34a'), angry: mat('#c2412d') };
@@ -11926,31 +11868,165 @@ function hairGeo(style, color) {
   if (extra === 'beard') parts.push(P(CG.knot, color, 0, -0.12, 0.14, 1.6, 1.3, 0.9));
   const g = parts.length ? mergeColored(parts) : null; HAIR_CACHE.set(key, g); return g;
 }
+/* ================= people, stage two: real bodies =================
+   A figure has hips, a torso, a head with a face, and arms and legs that bend at elbow and knee.
+   Everything is smooth and shaded; clothes are part of the body, gear is hung from it. */
+function mergeSm(parts) {   // like mergeColored, but keeps each part's smooth shading
+  let total = 0; const gs = parts.map(p => { let g = p.geo.clone(); g = g.index ? g.toNonIndexed() : g; if (p.m) g.applyMatrix4(p.m); total += g.attributes.position.count; return [g, new THREE.Color(p.color)]; });
+  const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), col = new Float32Array(total * 3); let o = 0;
+  for (const [g, c] of gs) { const n = g.attributes.position.count; pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); for (let i = 0; i < n; i++) { col[(o + i) * 3] = c.r; col[(o + i) * 3 + 1] = c.g; col[(o + i) * 3 + 2] = c.b; } o += n; }
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); out.setAttribute('color', new THREE.BufferAttribute(col, 3)); return out;
+}
+const lathe = (pts, seg, sx, sz) => { const g = new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(Math.max(0.0005, p[0]), p[1])), seg || 10); if (sx || sz) { g.scale(sx || 1, 1, sz || 1); g.computeVertexNormals(); } return g; };
+const ball = (r, sx, sy, sz, w, h) => { const g = new THREE.SphereGeometry(r, w || 10, h || 7); g.scale(sx || 1, sy || 1, sz || 1); g.computeVertexNormals(); return g; };
+const FIG = {
+  torso: lathe([[0, -0.03], [0.116, -0.01], [0.124, 0.08], [0.15, 0.2], [0.156, 0.27], [0.12, 0.335], [0.05, 0.365], [0.042, 0.41]], 12, 1, 0.66),
+  torsoF: lathe([[0, -0.03], [0.1, -0.01], [0.102, 0.07], [0.136, 0.19], [0.14, 0.27], [0.108, 0.335], [0.045, 0.365], [0.038, 0.41]], 12, 1, 0.7),
+  skirt: lathe([[0.17, -0.21], [0.15, -0.1], [0.12, 0.0]], 12, 1, 0.72), robe: lathe([[0.25, -0.62], [0.2, -0.32], [0.122, 0.0]], 12, 1, 0.82), dress: lathe([[0.27, -0.61], [0.21, -0.32], [0.105, 0.0]], 12, 1, 0.84),
+  belt: lathe([[0.121, -0.025], [0.13, 0], [0.121, 0.025]], 12, 1, 0.7),
+  upper: lathe([[0, -0.255], [0.035, -0.245], [0.043, -0.1], [0.05, -0.01], [0, 0.03]], 8), fore: lathe([[0, -0.215], [0.027, -0.21], [0.04, -0.05], [0.038, 0], [0, 0.012]], 8), hand: ball(0.034, 0.75, 1.25, 1, 8, 6),
+  thigh: lathe([[0, -0.31], [0.05, -0.3], [0.062, -0.15], [0.072, -0.01], [0, 0.03]], 8), shin: lathe([[0, -0.3], [0.033, -0.29], [0.047, -0.1], [0.05, 0], [0, 0.012]], 8), foot: ball(0.05, 0.85, 0.6, 1.9, 8, 6),
+  skull: ball(0.095, 0.92, 1.15, 1, 14, 10), jaw: ball(0.07, 0.9, 0.9, 0.95, 10, 7), neck: new THREE.CylinderGeometry(0.036, 0.042, 0.11, 8), nose: new THREE.ConeGeometry(0.016, 0.042, 6), ear: ball(0.02, 0.5, 1, 0.8, 6, 5), eye: ball(0.012, 1, 1, 0.5, 6, 5), bit: new THREE.BoxGeometry(1, 1, 1),
+  hairCap: (function () { const g = new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, 0, 1.78); g.scale(0.97, 1.17, 1.05); g.rotateX(-0.36); g.translate(0, 0.012, -0.006); g.computeVertexNormals(); return g; })(),
+  capHat: (function () { const g = new THREE.SphereGeometry(0.106, 12, 6, 0, Math.PI * 2, 0, 1.5); g.scale(0.96, 1.12, 1.04); g.translate(0, 0.02, -0.004); g.computeVertexNormals(); return g; })(),
+  cloak: (function () { const g = new THREE.LatheGeometry([[0.25, -0.62], [0.2, -0.3], [0.16, 0.0], [0.11, 0.07]].map(p => new THREE.Vector2(p[0], p[1])), 8, Math.PI * 0.5 + 0.35, Math.PI - 0.7); g.rotateY(Math.PI); g.scale(1, 1, 0.72); g.computeVertexNormals(); return g; })(),
+  pauldron: ball(0.066, 1, 0.8, 1, 8, 6), pack: ball(0.13, 1, 1.15, 0.75, 8, 6),
+  brim: new THREE.CylinderGeometry(0.2, 0.21, 0.012, 14), strawTop: lathe([[0.1, 0], [0.09, 0.05], [0.04, 0.085], [0, 0.09]], 10), chef: lathe([[0.08, 0], [0.085, 0.09], [0.11, 0.13], [0.07, 0.17], [0, 0.175]], 10),
+  hood: (function () { const g = new THREE.SphereGeometry(0.118, 12, 8, 0, Math.PI * 2, 0, 2.1); g.scale(1, 1.2, 1.12); g.rotateX(-0.5); g.translate(0, 0.0, -0.012); g.computeVertexNormals(); return g; })(),
+  great: lathe([[0.1, -0.11], [0.104, 0.07], [0.09, 0.115], [0, 0.125]], 10)
+};
+const FIG_CACHE = new Map();
+const figGeo = (key, make) => { let g = FIG_CACHE.get(key); if (!g) { g = make(); FIG_CACHE.set(key, g); } return g; };
+const MX = (x, y, z, rx, ry, rz, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x || 0, y || 0, z || 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx || 1, sy || sx || 1, sz || sx || 1));
+function headGeo(skin) { return figGeo('head' + skin, () => mergeSm([
+  { geo: FIG.skull, color: skin }, { geo: FIG.jaw, color: skin, m: MX(0, -0.045, 0.012) }, { geo: FIG.neck, color: shade(skin, 0.94), m: MX(0, -0.125, -0.008) },
+  { geo: FIG.nose, color: shade(skin, 0.96), m: MX(0, -0.012, 0.094, Math.PI / 2 - 0.5) }, { geo: FIG.ear, color: shade(skin, 0.93), m: MX(-0.086, -0.004, 0) }, { geo: FIG.ear, color: shade(skin, 0.93), m: MX(0.086, -0.004, 0) },
+  { geo: FIG.eye, color: '#efe9de', m: MX(-0.034, 0.012, 0.0815, 0, 0, 0, 1.1) }, { geo: FIG.eye, color: '#efe9de', m: MX(0.034, 0.012, 0.0815, 0, 0, 0, 1.1) },
+  { geo: FIG.eye, color: '#3a2a1e', m: MX(-0.034, 0.012, 0.0875, 0, 0, 0, 0.55) }, { geo: FIG.eye, color: '#3a2a1e', m: MX(0.034, 0.012, 0.0875, 0, 0, 0, 0.55) },
+  { geo: FIG.bit, color: shade(skin, 0.68), m: MX(0, -0.052, 0.083, 0, 0, 0, 0.034, 0.006, 0.012) }])); }
+function hairGeo2(style, color) { return figGeo('hair' + style + color, () => {
+  const [base, extra] = style.split('+'), P = [], brow = c => { P.push({ geo: FIG.bit, color: c, m: MX(-0.034, 0.036, 0.086, 0, 0, 0.08, 0.032, 0.007, 0.012) }, { geo: FIG.bit, color: c, m: MX(0.034, 0.036, 0.086, 0, 0, -0.08, 0.032, 0.007, 0.012) }); };
+  brow(shade(color, 0.8));
+  if (base === 'coif') P.push({ geo: FIG.capHat, color: '#efe8d8', m: MX(0, 0, 0, -0.2, 0, 0, 1.03) }, { geo: FIG.bit, color: '#efe8d8', m: MX(0, -0.07, -0.01, 0, 0, 0, 0.19, 0.03, 0.17) }, { geo: FIG.bit, color: color, m: MX(0, 0.062, 0.078, 0, 0, 0, 0.12, 0.02, 0.02) });
+  else if (base === 'bald') P.push({ geo: new THREE.TorusGeometry(0.088, 0.018, 5, 12, Math.PI), color, m: MX(0, -0.01, -0.005, Math.PI / 2 + 0.1, 0, Math.PI) });
+  else P.push({ geo: FIG.hairCap, color, m: MX(0, 0, 0, 0, 0, 0, 1, base === 'cropped' ? 0.985 : 1, 1) });
+  if (base === 'long') P.push({ geo: ball(0.09, 1.02, 1.9, 0.5), color: shade(color, 0.94), m: MX(0, -0.1, -0.058) });
+  if (base === 'braid') P.push({ geo: new THREE.CylinderGeometry(0.022, 0.014, 0.3, 6), color: shade(color, 0.92), m: MX(0, -0.2, -0.085, 0.15) }, { geo: ball(0.03), color, m: MX(0, -0.05, -0.09) });
+  if (base === 'bun') P.push({ geo: ball(0.046), color: shade(color, 0.95), m: MX(0, 0.055, -0.1) });
+  if (extra === 'beard') P.push({ geo: ball(0.062, 1, 1.15, 0.7), color: shade(color, 0.92), m: MX(0, -0.078, 0.04) }, { geo: FIG.bit, color: shade(color, 0.9), m: MX(0, -0.04, 0.086, 0, 0, 0, 0.05, 0.012, 0.012) });
+  return mergeSm(P); }); }
+// the trunk of the body, by sex and colours: torso, belt and the skirt of the tunic (or the long dress)
+function trunkGeo(fem, col, long) { return figGeo('trunk' + fem + col + long, () => mergeSm([
+  { geo: fem ? FIG.torsoF : FIG.torso, color: col }, { geo: FIG.belt, color: fem ? shade(col, 0.6) : '#3b2a1c', m: fem ? MX(0, 0.0, 0, 0, 0, 0, 0.9, 1, 1) : null },
+  { geo: fem ? FIG.dress : long ? FIG.robe : FIG.skirt, color: shade(col, fem ? 0.9 : 0.92) }])); }
+const limbGeo = (kind, c1, c2) => figGeo(kind + c1 + c2, () => kind === 'fore' ? mergeSm([{ geo: FIG.fore, color: c1 }, { geo: FIG.hand, color: c2, m: MX(0, -0.235, 0) }]) : kind === 'shin' ? mergeSm([{ geo: FIG.shin, color: c1 }, { geo: FIG.foot, color: c2, m: MX(0, -0.305, 0.04) }]) : mergeSm([{ geo: kind === 'thigh' ? FIG.thigh : FIG.upper, color: c1 }]));
 function makeChar(opt) {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(bodyGeo(!!opt.fem, opt.tunic), vc); body.position.set(0, 0.36, 0); g.add(body);
-  const head = mesh(CG.head, opt.skin, 0, 0.92, 0, g);
-  const hl = mesh(CG.hand, opt.skin, -0.33, 0.42, 0, g), hr = mesh(CG.hand, opt.skin, 0.33, 0.42, 0, g);
-  const sh = new THREE.Mesh(CG.shadow, shadowMat); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; g.add(sh);
+  const g = new THREE.Group(), m = new THREE.Group(); m.scale.setScalar(0.93); g.add(m);
+  const G0 = opt.gear || {}, fem = !!opt.fem, skin = opt.skin || SKIN[0], robeRank = ['elder', 'c_law'].includes(opt.rank);
+  const armor = G0.armor, plate = armor === 'halfplate' || armor === 'fullplate', col = armor ? ARMOR_COL[armor] || '#8a8f96' : robeRank ? (opt.rank === 'elder' ? '#3f5a3a' : '#1c1a1e') : opt.tunic || TUNIC[0];
+  const sleeve = armor === 'chain' || plate ? col : shade(col, 0.86), legCol = armor === 'fullplate' ? '#cfd3d8' : armor === 'chain' ? '#7d828a' : fem ? shade(col, 0.7) : '#4a3f33', boot = plate ? '#8a8f96' : '#2a1f16';
+  const add = (geo, parent, x, y, z) => { const o = new THREE.Mesh(geo, vc); o.position.set(x || 0, y || 0, z || 0); parent.add(o); return o; }, grp = (parent, x, y, z) => { const o = new THREE.Group(); o.position.set(x || 0, y || 0, z || 0); parent.add(o); return o; };
+  const hips = grp(m, 0, 0.7, 0), torso = grp(hips, 0, 0, 0), body = add(trunkGeo(fem, col, robeRank && !fem), torso);
+  const headG = grp(torso, 0, 0.5, 0.004), head = add(headGeo(skin), headG);
+  const sw = fem ? 0.148 : 0.165, arm = side => { const sh = grp(torso, sw * side, 0.285, 0); add(limbGeo('upper', sleeve, ''), sh); const el = grp(sh, 0, -0.25, 0); add(limbGeo('fore', sleeve, skin), el); const hand = grp(el, 0, -0.235, 0); return { sh, el, hand }; };
+  const aL = arm(-1), aR = arm(1);
+  const leg = side => { const hp = grp(hips, 0.075 * side, -0.03, 0); if (!fem && !robeRank) add(limbGeo('thigh', legCol, ''), hp); const kn = grp(hp, 0, -0.31, 0); add(limbGeo('shin', fem || robeRank ? boot : legCol, boot), kn); return { hp, kn }; };
+  const lL = leg(-1), lR = leg(1);
+  const sh = new THREE.Mesh(CG.shadow, shadowMat); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; sh.scale.setScalar(0.7); g.add(sh);
   const hit = new THREE.Mesh(CG.hit, hitMat); hit.position.y = 0.9; g.add(hit);
-  const icon = new THREE.Mesh(CG.icon, ICON.wait); icon.position.y = 1.6; icon.visible = false; g.add(icon);
+  const icon = new THREE.Mesh(CG.icon, ICON.wait); icon.position.y = 1.62; icon.visible = false; g.add(icon);
+  const hatOn = (geo, c, y, parent) => { const o = mesh(geo, c, 0, y || 0, 0, parent || headG); return o; };
   const h = opt.hat;
-  if (h === 'straw') { mesh(CG.brim, '#d8b85a', 0, 1.08, 0, g); mesh(CG.crown, '#d8b85a', 0, 1.2, 0, g); }
-  else if (h === 'cap') mesh(CG.cap, opt.capColor, 0, 1.0, 0, g);
-  else if (h === 'hood') mesh(CG.hood, opt.capColor, 0, 1.12, -0.02, g);
-  else if (h === 'bun') mesh(CG.cap, '#b9b4ab', 0, 1.0, -0.05, g);
-  if (opt.apron) mesh(CG.apron, opt.apron, 0, 0.42, 0.29, g);
-  if (opt.chef) mesh(CG.chef, '#f3efe4', 0, 1.2, 0, g);
+  if (h === 'straw') { hatOn(FIG.brim, '#d8b85a', 0.075); hatOn(FIG.strawTop, '#d8b85a', 0.078); }
+  else if (h === 'cap') hatOn(FIG.capHat, opt.capColor || '#5b4936', 0);
+  else if (h === 'hood') hatOn(FIG.hood, opt.capColor || '#5b4936', 0);
+  else if (h === 'bun') hatOn(FIG.capHat, '#d9d4c8', 0).scale.setScalar(1.02);
+  if (opt.chef) hatOn(FIG.chef, '#f3efe4', 0.085);
+  if (opt.apron) { const a = mesh(FIG.bit, opt.apron, 0, -0.03, fem ? 0.1 : 0.094, hips); a.scale.set(0.2, 0.42, 0.016); a.rotation.x = -0.1; mesh(FIG.bit, opt.apron, 0, 0.2, 0.099, torso).scale.set(0.15, 0.14, 0.014); }
   if (opt.player) { const r = new THREE.Mesh(CG.ring, mat('#e8b84a')); r.rotation.x = Math.PI / 2; r.position.y = 0.05; g.add(r); }
-  if (opt.hair) { const hg = hairGeo(opt.hair === 'beard' ? 'short+beard' : opt.hair, opt.hairColor || '#5a3a22'); if (hg) head.add(new THREE.Mesh(hg, vc)); }
-  const pack = mesh(CG.pack, '#c7b07c', 0, 0.62, -0.32, g); pack.visible = false;
+  if (opt.hair && !(G0.helm === 'great')) headG.add(new THREE.Mesh(hairGeo2(opt.hair === 'beard' ? 'short+beard' : opt.hair, opt.hairColor || '#5a3a22'), vc));
+  else if (!opt.hair) headG.add(new THREE.Mesh(hairGeo2('none', opt.hairColor || '#5a3a22'), vc));
+  const pack = mesh(FIG.pack, '#b89f6c', 0, 0.17, -0.16, torso); pack.visible = false;
   const sel = new THREE.Mesh(CG.ring, mat('#f3efe4')); sel.rotation.x = Math.PI / 2; sel.position.y = 0.06; sel.scale.setScalar(1.25); sel.visible = false; g.add(sel);
-  g.userData = { body, head, hl, hr, icon, pack, sel, pick: opt.pick, phase: Math.random() * 6 };
+  g.userData = { fig: true, fem, body, head, headG, torso, hips, hl: aL.hand, hr: aR.hand, aL, aR, lL, lR, icon, pack, sel, blob: sh, pick: opt.pick, phase: Math.random() * 6, robe: fem || robeRank };
   if (opt.rank) dressRank(g, opt.rank, opt);
   if (opt.gear) dressGear(g, opt.gear);
   g.scale.setScalar(opt.fem ? 1.02 : 1.1);
   hit.userData.owner = g; pickables.push(hit);
   scene.add(g); return g;
+}
+/* gear on a body: a helm, a cloak, pauldrons, a weapon at the hip, on the back or in the hand, a shield slung behind */
+function dressGear(g, G0) {
+  if (!G0) return; const u = g.userData, tag = o => { o.userData.hip = 1; return o; };
+  if (G0.armor === 'halfplate' || G0.armor === 'fullplate') { const c = ARMOR_COL[G0.armor]; mesh(FIG.pauldron, c, -0.165, 0.3, 0, u.torso); mesh(FIG.pauldron, c, 0.165, 0.3, 0, u.torso); const bp = mesh(FIG.torso, shade(c, 1.06), 0, 0.01, 0.006, u.torso); bp.scale.set(1.04, 0.99, 1.06); }
+  if (G0.armor === 'studded' || G0.armor === 'brigandine') for (let i = 0; i < 6; i++) mesh(FIG.eye, '#c9cdd3', (i % 3 - 1) * 0.06, 0.12 + Math.floor(i / 3) * 0.1, 0.098, u.torso);
+  if (G0.helm === 'great') { mesh(FIG.great, '#b8bcc2', 0, 0, 0, u.headG); mesh(FIG.bit, '#1c1a1a', 0, 0.012, 0.1, u.headG).scale.set(0.13, 0.014, 0.02); }
+  else if (G0.helm) { const c = G0.helm === 'leather' ? '#6b4a2e' : '#9aa0a8'; mesh(FIG.capHat, c, 0, 0.004, 0, u.headG).scale.setScalar(1.05); if (G0.helm !== 'leather') mesh(FIG.bit, c, 0, 0.0, 0.1, u.headG).scale.set(0.016, 0.085, 0.012); }
+  if (G0.cloak) { u.cloak = mesh(FIG.cloak, G0.cloak, 0, 0.3, -0.02, u.torso); }
+  const w = G0.weapon, S = '#b8bcc2', Wd = '#6b4a2a';
+  if (w === 'sword' || w === 'dagger') { const k = w === 'dagger' ? 0.5 : 1, sw = tag(mesh(FIG.bit, '#3a2a1c', -0.125, -0.2 * k - 0.02, 0.02, u.hips)); sw.scale.set(0.03, 0.48 * k, 0.02); sw.rotation.set(0.35, 0, 0.12); const hl = tag(mesh(FIG.bit, S, -0.135, 0.06, 0.1 * k + 0.0, u.hips)); hl.scale.set(0.09, 0.016, 0.02); }
+  else if (w === 'mace' || w === 'axe') { const hf = tag(mesh(FIG.bit, Wd, -0.13, -0.16, 0.02, u.hips)); hf.scale.set(0.022, 0.36, 0.022); hf.rotation.set(0.3, 0, 0.1); const hd = tag(mesh(w === 'axe' ? GG.axe : FIG.pauldron, '#9aa0a6', -0.15, -0.33, -0.03, u.hips)); hd.scale.setScalar(w === 'axe' ? 0.8 : 0.75); }
+  else if (w === 'spear') { const sp = tag(mesh(FIG.bit, Wd, 0, 0.42, 0.02, u.hr)); sp.scale.set(0.022, 1.55, 0.022); tag(mesh(RG.point, S, 0, 1.24, 0.02, u.hr)).scale.setScalar(0.8); u.staff = true; }
+  else if (w === 'bow' || w === 'xbow') { const b = tag(mesh(GG.bow, Wd, 0.03, 0.16, -0.13, u.torso)); b.rotation.set(0, 0, Math.PI / 2 + 0.5); b.scale.setScalar(0.85); }
+  else if (w === 'longsword') { const sw = tag(mesh(FIG.bit, '#3a2a1c', 0.02, 0.13, -0.125, u.torso)); sw.scale.set(0.035, 0.72, 0.02); sw.rotation.z = 0.55; const hl = tag(mesh(FIG.bit, S, -0.17, 0.44, -0.125, u.torso)); hl.scale.set(0.12, 0.018, 0.02); hl.rotation.z = 0.55; }
+  if (G0.shield) { const geo = G0.shield === 'tower' ? GG.shieldT : G0.shield === 'buckler' || G0.shield === 'round' ? GG.shieldR : GG.shieldB, sh = tag(mesh(geo, G0.shieldColor || '#7a5634', 0, 0.14, -0.15, u.torso)); sh.rotation.x = geo === GG.shieldR ? Math.PI / 2 : 0; sh.scale.setScalar(G0.shield === 'buckler' ? 0.5 : 0.72); }
+}
+/* what you wear says what you are */
+function dressRank(g, rank, opt) {
+  if (!rank || rank === 'newcomer' || rank === 'hand') return;
+  const u = g.userData, gold = '#d9aa3a', T = u.torso, H = u.headG, P = u.hips;
+  const chain = (c, n) => { const ch = mesh(RG.chain, c, 0, 0.3 - (n || 0) * 0.03, 0.03, T); ch.scale.set(0.62 + (n || 0) * 0.08, 0.62 + (n || 0) * 0.08, 0.7); ch.rotation.x = Math.PI / 2 - 0.5; const md = mesh(RG.medal, c, 0, 0.2 - (n || 0) * 0.04, 0.105, T); md.rotation.x = Math.PI / 2 - 0.15; md.scale.setScalar(0.7); };
+  const cloak = c => { u.cloak = mesh(FIG.cloak, c, 0, 0.3, -0.02, T); }, collar = c => { const o = mesh(RG.collar, c, 0, 0.335, 0, T); o.rotation.x = Math.PI / 2; o.scale.set(0.6, 0.45, 0.5); };
+  const cap = (c, k) => { const o = mesh(RG.velvet, c, 0, 0.1, 0, H); o.scale.set(0.5 * (k || 1), 0.6, 0.5 * (k || 1)); return o; }, plume = (c, k) => { const o = mesh(RG.plume, c, 0.05, 0.2, -0.03, H); o.rotation.z = -0.5; o.scale.setScalar(0.6 * (k || 1)); };
+  const pouch = (x, k) => mesh(RG.pouch, '#6b4a2a', x, -0.07, 0.1, P).scale.setScalar(0.6 * (k || 1));
+  const staff = (c, knob, len) => { const st = mesh(FIG.bit, c, 0, 0.36, 0.02, u.hr); st.scale.set(0.024, len || 1.3, 0.024); if (knob) mesh(RG.knob, c, 0, 0.36 + (len || 1.3) / 2, 0.02, u.hr).scale.setScalar(0.75); u.staff = true; };
+  const helm = c => { mesh(FIG.capHat, c, 0, 0.004, 0, H).scale.setScalar(1.05); mesh(FIG.bit, c, 0, 0, 0.1, H).scale.set(0.016, 0.085, 0.012); };
+  if (rank === 'merchant') { pouch(0.09); return; }
+  if (rank === 'guard') { helm('#9aa0a8'); const sp = mesh(FIG.bit, '#6b4a2a', 0, 0.42, 0.02, u.hr); sp.scale.set(0.022, 1.55, 0.022); mesh(RG.point, '#b8bcc2', 0, 1.24, 0.02, u.hr).scale.setScalar(0.8); u.staff = true; mesh(FIG.bit, '#7a2a24', 0, 0.16, 0.1, T).scale.set(0.16, 0.2, 0.012); return; }
+  if (rank === 'exile') { mesh(FIG.hood, '#4a4440', 0, 0, 0, H); cloak('#4a4440'); return; }
+  if (rank === 'councillor') { chain('#c9c6bc'); pouch(0.09); return; }
+  if (rank === 'elder') { chain('#c9c6bc'); staff('#7a5634', true); return; }
+  if (rank === 'lord') { cloak('#5a2230'); collar('#5a2230'); chain(gold); cap('#2a2238'); plume('#efe6d2'); return; }
+  if (rank === 'c_trade') { cloak('#22406a'); collar('#22406a'); chain(gold); pouch(0.1, 1.4); pouch(-0.1, 1.15); cap('#22406a', 1.15); return; }
+  if (rank === 'c_treasury') { cloak('#1f4a3a'); collar('#c9a24a'); chain(gold); chain(gold, 1); cap('#1f4a3a'); const k = mesh(FIG.bit, gold, 0, 0.02, 0.04, u.hr); k.scale.set(0.02, 0.2, 0.02); mesh(RG.knob, gold, 0, 0.13, 0.04, u.hr).scale.setScalar(0.6); return; }
+  if (rank === 'c_war') { cloak('#7a1f22'); const bp = mesh(FIG.torso, '#9aa0a6', 0, 0.01, 0.006, T); bp.scale.set(1.04, 0.99, 1.06); mesh(FIG.pauldron, '#9aa0a6', -0.165, 0.3, 0, T); mesh(FIG.pauldron, '#9aa0a6', 0.165, 0.3, 0, T); const sw = mesh(FIG.bit, '#c9cdd2', -0.125, -0.22, 0.02, P); sw.scale.set(0.03, 0.48, 0.02); sw.rotation.set(0.35, 0, 0.12); helm('#9aa0a6'); plume('#b0203a', 1.3); return; }
+  if (rank === 'c_law') { cloak('#1c1a1e'); collar('#f3efe4'); mesh(FIG.bit, '#f3efe4', 0, 0.3, 0.1, T).scale.set(0.05, 0.08, 0.012); cap('#1c1a1e'); staff('#efe6d2', false, 1.2); return; }
+  if (rank === 'ruler') {
+    cloak('#8e1f22'); collar('#f3efe4'); chain(gold);
+    const cr = mesh(RG.circlet, gold, 0, 0.085, 0, H); cr.scale.set(0.42, 0.5, 0.44); cr.material = mat(gold); cr.material.side = THREE.DoubleSide;
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; mesh(RG.point, gold, Math.sin(a) * 0.097, 0.125, Math.cos(a) * 0.1, H).scale.setScalar(0.5); }
+    mesh(RG.jewel, '#b0203a', 0, 0.09, 0.104, H).scale.setScalar(0.6);
+  }
+}
+/* how a body moves: a walk with swinging arms and bending knees, work at the bench, and the small motions of standing */
+function animChar(g, t, opts) {
+  const u = g.userData; if (!u.fig) return;
+  const ph = t * 8.6 + u.phase, s = Math.sin(ph), c = Math.cos(ph), L = u.lL, R = u.lR, A = u.aL, B = u.aR, lerpTo = (o, k, v, r) => { o[k] += (v - o[k]) * (r || 0.3); };
+  let hipY = 0.7, lean = 0, twist = 0, lh = 0, lk = 0, rh = 0, rk = 0, ash = 0, ael = -0.12, bsh = 0, bel = -0.12, headY = 0, headX = 0, tz = 0;
+  if (opts.riding) { lh = -1.25; rh = -1.25; lk = 1.3; rk = 1.3; ash = -0.5; bsh = -0.5; ael = -0.7; bel = -0.7; hipY = 0.7; }
+  else if (opts.moving) {
+    const amp = u.robe ? 0.34 : 0.62;
+    lh = -s * amp; rh = s * amp; lk = Math.max(0, c) * 0.95 * (u.robe ? 0.5 : 1) + 0.06; rk = Math.max(0, -c) * 0.95 * (u.robe ? 0.5 : 1) + 0.06;
+    ash = s * 0.5; bsh = -s * 0.5; ael = -0.28 - Math.max(0, s) * 0.3; bel = -0.28 - Math.max(0, -s) * 0.3;
+    hipY = 0.7 + Math.abs(c) * 0.022 - 0.014; lean = 0.07; twist = s * 0.09; headY = -twist * 0.6;
+  } else if (opts.working) {
+    const w = Math.sin(t * 7 + u.phase);
+    lean = 0.22 + Math.max(0, -w) * 0.08; bsh = -1.25 + w * 0.75; bel = -0.75 + w * 0.35; ash = -0.75; ael = -0.6; headX = 0.12; lk = 0.08; rk = 0.08; hipY = 0.69;
+  } else {
+    const b = Math.sin(t * 1.5 + u.phase);
+    ash = 0.03 + b * 0.02; bsh = 0.03 - b * 0.02; ael = -0.14; bel = -0.14; tz = Math.sin(t * 0.45 + u.phase) * 0.025; headY = Math.sin(t * 0.37 + u.phase * 2) * 0.32; headX = Math.sin(t * 0.23 + u.phase) * 0.05; u.torso.scale.y = 1 + b * 0.008;
+  }
+  if (opts.pack && !opts.riding) lean += 0.1;
+  u.hips.position.y += (hipY - u.hips.position.y) * 0.4; u.hips.rotation.z = tz;
+  lerpTo(u.torso.rotation, 'x', lean); u.torso.rotation.y = twist; u.headG.rotation.y += (headY - u.headG.rotation.y) * 0.08; u.headG.rotation.x += (headX - lean * 0.6 - u.headG.rotation.x) * 0.15;
+  lerpTo(L.hp.rotation, 'x', lh, 0.5); lerpTo(R.hp.rotation, 'x', rh, 0.5); lerpTo(L.kn.rotation, 'x', lk, 0.5); lerpTo(R.kn.rotation, 'x', rk, 0.5);
+  L.hp.rotation.z = opts.riding ? -0.45 : 0; R.hp.rotation.z = opts.riding ? 0.45 : 0;
+  if (u.cloak) u.cloak.rotation.x = opts.moving ? 0.16 + Math.abs(s) * 0.07 : 0.03 + lean * 0.4;
+  if (u.rig) return;   // in a fight, the arms belong to the fight
+  if (u.staff && !opts.working) { bsh = -0.42; bel = -0.75; }   // a staff or spear is planted, not swung
+  lerpTo(A.sh.rotation, 'x', ash, 0.4); lerpTo(A.el.rotation, 'x', ael, 0.4); lerpTo(B.sh.rotation, 'x', bsh, 0.4); lerpTo(B.el.rotation, 'x', bel, 0.4);
+  A.sh.rotation.z = -0.07; B.sh.rotation.z = 0.07; A.sh.position.z = 0; B.sh.position.z = 0;
+  u.hr.rotation.x = u.staff ? -(B.sh.rotation.x + B.el.rotation.x) - lean : 0;
 }
 function dropChar(g) { scene.remove(g); const h = g.children.find(c => c.material === hitMat); const i = pickables.indexOf(h); if (i >= 0) pickables.splice(i, 1); }
 const ROLE = { field: { hat: 'straw' }, forest: { hat: 'cap', capColor: '#8e3b2a' }, pit: { hat: 'cap', capColor: '#4a4744' }, market: { hat: 'cap', capColor: '#2f5d55' }, well: { hat: 'bun' } };
@@ -11973,15 +12049,9 @@ function placeChar(g, a, t, opts) {
   animChar(g, t, opts);
   u.icon.visible = !!opts.icon;
   if (opts.icon) { u.icon.material = ICON[opts.icon]; u.icon.position.y = 1.6 + (calm() ? 0 : Math.sin(t * 4) * 0.06); u.icon.rotation.y = calm() ? 0 : t * 2; }
-  u.pack.visible = !!opts.pack; if (opts.pack) u.pack.scale.setScalar(opts.pack);
+  u.pack.visible = !!opts.pack; if (opts.pack) u.pack.scale.setScalar(opts.pack); if (u.blob) u.blob.visible = GFX.quality === 0;
   u.sel.visible = !!opts.selected;
   g.visible = !opts.hidden;
-}
-function animChar(g, t, opts) {
-  const u = g.userData, ph = t * 10 + u.phase;
-  if (opts.moving) { const b = Math.abs(Math.sin(ph)) * 0.06; u.body.position.y = 0.36 + b; u.head.position.y = 0.92 + b; u.hl.position.set(-0.33, 0.42, Math.sin(ph) * 0.18); u.hr.position.set(0.33, 0.42, -Math.sin(ph) * 0.18); }
-  else if (opts.working) { const w = Math.sin(t * 7 + u.phase); u.body.position.y = 0.36; u.head.position.y = 0.92 + Math.max(0, w) * 0.04; u.hl.position.set(-0.28, 0.5 + Math.max(0, w) * 0.25, 0.22); u.hr.position.set(0.28, 0.5 + Math.max(0, -w) * 0.25, 0.22); }
-  else { u.body.position.y = 0.36; u.head.position.y = 0.92; u.hl.position.set(-0.33, 0.42, 0); u.hr.position.set(0.33, 0.42, 0); }
 }
 // your horse: a bay mare, saddled, legs stepping as she goes
 function makeHorse() {
@@ -12006,7 +12076,7 @@ function syncChars(s, t) {
     UI.escort.forEach((e, i) => { const back = 1.8 + Math.floor(i / 2) * 1.1, side = (i % 2 ? 1 : -1) * 0.9, tx = p.x - Math.sin(p.face) * back + Math.cos(p.face) * side, tz = p.z - Math.cos(p.face) * back - Math.sin(p.face) * side, d = Math.hypot(tx - e.x, tz - e.z);
       if (d > 30) { e.x = tx; e.z = tz; } const k = Math.min(1, 0.12 + d * 0.02); e.moving = d > 0.3; if (e.moving) { e.x += (tx - e.x) * k; e.z += (tz - e.z) * k; e.face = Math.atan2(tx - e.x, tz - e.z) || p.face; } else e.face = p.face;
       placeChar(e.g, e, t, { moving: e.moving }); }); }
-  placeChar(playerMesh, p, t, { moving: moving && !riding, working: !riding && (!!p.action || p.working), pack: 0.62 + Math.min(0.5, carry / 40), selected: UI.sel === 'player' });
+  placeChar(playerMesh, p, t, { riding, moving: moving && !riding, working: !riding && (!!p.action || p.working), pack: carry > 0.5 ? 0.62 + Math.min(0.5, carry / 40) : 0, selected: UI.sel === 'player' });
   horseMesh.visible = riding;
   if (riding) {
     horseMesh.position.copy(playerMesh.position); horseMesh.rotation.y = playerMesh.rotation.y;
@@ -12908,22 +12978,23 @@ function shieldModel(id) {
 // put arms, a weapon and a shield on a body for the length of a fight
 function addRig(g, I, shieldId) {
   const u = g.userData; if (u.rig) return u.rig;
-  g.children.forEach(c => { if (c.userData.hip) c.visible = false; }); u.hl.visible = false; u.hr.visible = false;
-  const arm = side => { const a = new THREE.Group(); a.position.set(0.3 * side, 0.7, 0.02); g.add(a); const h = new THREE.Mesh(CG.hand, u.hr.material); h.position.y = -0.28; a.add(h); const grip = new THREE.Group(); grip.position.y = -0.28; a.add(grip); return { a, grip, rx: -0.8, rz: 0, pz: 0, side }; };
-  const R = { r: arm(1), l: arm(-1), I, anim: null, lastSwing: 0, flinch: 0, state: null, wT: 1 };
+  g.traverse(c => { if (c.userData.hip) c.visible = false; });
+  const arm = (A, side) => ({ a: A.sh, grip: A.hand, el: A.el, rx: A.sh.rotation.x, rz: 0, pz: 0, side });
+  const R = { r: arm(u.aR, 1), l: arm(u.aL, -1), I, anim: null, lastSwing: 0, flinch: 0, state: null, wT: 1, added: [] }, put = (o, parent) => { parent.add(o); R.added.push(o); return o; };
+  u.hr.rotation.x = 0;
   const W = weaponModel(I); R.kind = W.kind; R.len = W.len;
-  if (W.kind === 'bow') { R.l.grip.add(W.g); R.arrow = mesh(FG.shaft, '#d8c9a0', 0, -0.28, 0, R.r.grip); R.arrow.visible = false; }
-  else { R.r.grip.add(W.g); W.g.rotation.x = W.kind === 'thrust' || W.kind === 'stab' || W.kind === 'xbow' ? Math.PI : 2.44; }
+  if (W.kind === 'bow') { put(W.g, R.l.grip); R.arrow = put(mesh(FG.shaft, '#d8c9a0', 0, -0.28, 0), R.r.grip); R.arrow.visible = false; }
+  else { put(W.g, R.r.grip); W.g.rotation.x = W.kind === 'thrust' || W.kind === 'stab' || W.kind === 'xbow' ? Math.PI : 2.44; }
   const sh = W.kind === 'bow' || W.kind === 'xbow' || W.kind === 'chop2' || W.kind === 'thrust' && I && I.hands === 2 ? null : shieldModel(shieldId);
-  if (sh) { R.l.grip.add(sh); R.shield = sh; }
+  if (sh) { put(sh, R.l.grip); R.shield = sh; }
   R.trailMat = new THREE.MeshBasicMaterial({ color: '#fff6dc', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
-  R.trail = new THREE.Mesh(FG.trail, R.trailMat); R.trail.position.set(0.3, 0.7, 0.02); R.trail.rotation.y = Math.PI / 2; const sc = (0.3 + R.len) / 1.2; R.trail.scale.set(sc, sc, 1); g.add(R.trail);
+  R.trail = new THREE.Mesh(FG.trail, R.trailMat); R.trail.position.set(0.155, 0.92, 0.02); R.trail.rotation.y = Math.PI / 2; const sc = (0.42 + R.len) / 1.2; R.trail.scale.set(sc, sc, 1); g.add(R.trail);
   u.rig = R; return R;
 }
 function removeRig(g) {
   const u = g.userData, R = u.rig; if (!R) return;
-  [R.r.a, R.l.a, R.trail].forEach(o => g.remove(o)); R.trailMat.dispose();
-  g.children.forEach(c => { if (c.userData.hip) c.visible = true; }); u.hl.visible = true; u.hr.visible = true; g.rotation.x = 0; g.rotation.z = 0; u.rig = null;
+  for (const o of R.added) if (o.parent) o.parent.remove(o); g.remove(R.trail); R.trailMat.dispose();
+  g.traverse(c => { if (c.userData.hip) c.visible = true; }); g.rotation.x = 0; g.rotation.z = 0; R.r.a.position.z = 0; R.l.a.position.z = 0; u.rig = null;
 }
 const ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x), lerp = (a, b, k) => a + (b - a) * k;
 // where the arms rest, guard, wind up and finish, for each way of fighting
@@ -12967,7 +13038,8 @@ function poseRig(R, mode, p, dt) {
   // ease the arms toward the pose (fast), except mid-strike, where the swing is exact
   const k = mode === 'strike' ? 1 : 1 - Math.exp(-dt * 18), A = R.r, L = R.l;
   A.rx = lerp(A.rx, rx, k); A.rz = lerp(A.rz, rz, k); A.pz = lerp(A.pz, rp, k); L.rx = lerp(L.rx, lx, k); L.rz = lerp(L.rz, lz, k); L.pz = lerp(L.pz, lp, k);
-  A.a.rotation.set(A.rx, 0, A.rz); A.a.position.z = 0.02 + A.pz; L.a.rotation.set(L.rx, 0, L.rz); L.a.position.z = 0.02 + L.pz;
+  A.a.rotation.set(A.rx, 0, A.rz); A.a.position.z = A.pz; L.a.rotation.set(L.rx, 0, L.rz); L.a.position.z = L.pz;
+  { const eb = mode === 'block' ? -0.75 : mode === 'strike' ? -0.12 : -0.42; A.el.rotation.x += (eb - A.el.rotation.x) * 0.35; L.el.rotation.x += ((mode === 'block' ? -0.9 : -0.45) - L.el.rotation.x) * 0.35; }
   R.trailMat.opacity = trail; R.trail.visible = trail > 0.01; if (R.arrow) R.arrow.visible = draw > 0;
   return lunge;
 }
@@ -16480,7 +16552,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.10.2246';
+const BUILD = '2026.11.10.2254';
 const NOTES = [
   { v: '0.80', date: '10 November', title: 'A new light', items: [
     'The first stage of all-new graphics. The sun now casts real shadows that move through the day: long at dawn and dusk, short at noon.',
