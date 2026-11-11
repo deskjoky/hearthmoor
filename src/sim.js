@@ -3072,10 +3072,12 @@
     // where townsfolk gather: never all in one place
     const plazas = [
       { id: 'square', name: 'the market place', x: square.x, z: square.z, r0: 4.2, r1: 8, w: 2.4 },
-      { id: 'marketS', name: 'the market place', x: square.x - mu[0] * 11.5, z: square.z - mu[1] * 11.5, r0: 0, r1: 3.6, w: 1 },
-      { id: 'marketN', name: 'the market place', x: square.x + mu[0] * 11.5, z: square.z + mu[1] * 11.5, r0: 0, r1: 3.6, w: 1 },
-      { id: 'hallsq', name: 'the hall square', x: hallSq.x, z: hallSq.z, r0: 2.4, r1: 9, w: 2 },
-      { id: 'churchyard', name: 'the churchyard', x: church.x + Math.sin(church.face) * 9, z: church.z + Math.cos(church.face) * 9, r0: 0, r1: 3, w: 0.8 },
+      { id: 'marketS', name: 'the market place', x: square.x - mu[0] * 11.5, z: square.z - mu[1] * 11.5, r0: 0, r1: 3.6, w: 0.5 },
+      { id: 'marketN', name: 'the market place', x: square.x + mu[0] * 11.5, z: square.z + mu[1] * 11.5, r0: 0, r1: 3.6, w: 0.5 },
+      { id: 'hallsq', name: 'the hall square', x: hallSq.x, z: hallSq.z, r0: 2.4, r1: 9.5, w: 3 },
+      { id: 'keepgate', name: 'the keep gate', x: keep.x + 1, z: keep.z + 24, r0: 0, r1: 4, w: 0.6 },
+      { id: 'guildsq', name: 'the guildhall steps', x: guildSq.x + 3, z: guildSq.z, r0: 0, r1: 3, w: 0.4 },
+      { id: 'churchyard', name: 'the churchyard', x: church.x + Math.sin(church.face) * 9, z: church.z + Math.cos(church.face) * 9, r0: 0, r1: 4.5, w: 0.6 },
       { id: 'quay', name: 'the quay', x: quayX(-480) + 1, z: -480, r0: 0, r1: 9, w: 1.5, line: true },
       { id: 'green', name: 'Tanners’ Green', x: green.x, z: green.z, r0: 0, r1: green.r - 1, w: 0.8 }
     ];

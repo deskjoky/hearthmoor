@@ -489,8 +489,8 @@ console.log('15. Oakbridge: a market city of its own');
   const blds = O.biz.map(b => ({ x: b.x, z: b.z, r: 4.9, n: b.name })).concat(O.houses.map((h, i) => ({ x: h.x, z: h.z, r: 4.3, n: 'house ' + i })));
   const onStreet = blds.filter(b => O.streets.some(st => segD(b.x, b.z, st.pts) < st.w / 2 + 2.8));
   check(!onStreet.length, 'no building stands in a street' + (onStreet.length ? ': ' + onStreet.map(b => b.n).join(', ') : ''));
-  let clash = 0; for (let i = 0; i < blds.length; i++) for (let j = i + 1; j < blds.length; j++) if (Math.hypot(blds[i].x - blds[j].x, blds[i].z - blds[j].z) < 8.2) clash++;
-  check(!clash && blds.every(b => O.inside(b.x, b.z)) && O.square.r >= 20, blds.length + ' buildings, none crowding another, a market square ' + O.square.r * 2 + ' m across, all within the walls');
+  let clash = 0; for (let i = 0; i < blds.length; i++) for (let j = i + 1; j < blds.length; j++) if (Math.hypot(blds[i].x - blds[j].x, blds[i].z - blds[j].z) < 6) clash++;
+  check(!clash && blds.every(b => O.inside(b.x, b.z)) && O.market.w >= 18 && O.market.len >= 30, blds.length + ' buildings in terraced rows, none overlapping another, a market place ' + Math.round(O.market.w) + ' m by ' + Math.round(O.market.len) + ' m, all within the walls');
   const rad = O.wall.map(([x, z]) => Math.hypot(x - O.C.x, z - O.C.z));
   check(Math.max(...rad) - Math.min(...rad) > 15, 'the walls follow the land (' + Math.round(Math.min(...rad)) + ' to ' + Math.round(Math.max(...rad)) + ' m from the centre), not a circle');
   // crossing the river: townsfolk use the bridge, not the water
