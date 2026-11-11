@@ -972,7 +972,7 @@ scene.add(hemi, sun);
 /* ================= the new look, stage one: light, shadow, surface, sky, water, grass =================
    Every surface is still coloured by its makers, but now it is lit by a sun that casts shadows, carries a
    grain you can see up close, and sits under a real sky. Nothing here loads a file: it is all made in code. */
-const GFX = { stands: [], frustum: new THREE.Frustum(), pm: new THREE.Matrix4(), time: { value: 0 }, sunDir: { value: new THREE.Vector3(-0.6, 0.7, 0.3) }, sunCol: { value: new THREE.Color(1, 0.9, 0.7) }, skyTop: { value: new THREE.Color('#4a7fc0') }, skyHor: { value: new THREE.Color('#a3b5b1') }, night: { value: 0 }, noise: { value: null }, quality: 2 };
+const GFX = { stands: [], frustum: new THREE.Frustum(), pm: new THREE.Matrix4(), time: { value: 0 }, sunDir: { value: new THREE.Vector3(-0.6, 0.7, 0.3) }, sunCol: { value: new THREE.Color(1, 0.9, 0.7) }, skyTop: { value: new THREE.Color('#4a7fc0') }, skyHor: { value: new THREE.Color('#a3b5b1') }, night: { value: 0 }, noise: { value: null }, quality: 2, look: { value: new THREE.Vector4(1, 1, 1, 0) }, lookTint: { value: new THREE.Vector3(1, 1, 1) }, lookId: 'classic' };
 // one tiling texture of noise, three kinds in its three channels: fine grain, soft blotches, long streaks
 GFX.noise.value = (function () {
   const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N; const cx = cv.getContext('2d'), im = cx.createImageData(N, N), d = im.data;
@@ -985,10 +985,28 @@ GFX.noise.value = (function () {
     d[o] = 255 * fbm(A, x, y); d[o + 1] = 255 * fbm(B, x, y); d[o + 2] = 255 * (0.65 * value(C1, 64, x * 64 / N, y * 4 / N * 64 / 64) + 0.35 * value(C2, 8, x * 8 / N, y * 8 / N)); d[o + 3] = 255; }
   cx.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t;
 })();
+// the look of the whole game: how rich the colour is, how hard the contrast, how much surface detail shows, and how much broad brushwork.
+// uLook = (saturation, contrast, detail, brush). Every surface ends with this, so one set of dials changes everything at once.
+const LOOK_GRADE = detail => `
+      vec3 lkc = gl_FragColor.rgb;${detail ? ' lkc = mix(cIn, lkc, uLook.z);' : ''}
+      float lkb = texture2D(uNoise, vWp.xz * 0.045 + vWp.y * 0.03).g; lkc = mix(lkc, lkc * mix(vec3(0.86, 0.94, 1.1), vec3(1.14, 1.03, 0.86), smoothstep(0.3, 0.7, lkb)), uLook.w);
+      float lkl = dot(lkc, vec3(0.299, 0.587, 0.114)); lkc = mix(vec3(lkl), lkc, uLook.x); lkc = (lkc - 0.5) * uLook.y + 0.5; lkc *= uLookTint; gl_FragColor.rgb = max(lkc, 0.0);`;
+const ART_LOOKS = {
+  classic:   { name: 'As it is now', look: [1, 1, 1, 0], tint: [1, 1, 1], hemi: 1, sun: 1, fog: 1 },
+  painterly: { name: 'Painterly and warm', look: [1.12, 1.03, 0.45, 0.6], tint: [1.03, 1.0, 0.95], hemi: 1.12, sun: 1.04, sunTint: '#fff4e0', fog: 0.9, haze: '#efdcb8', hazeAmt: 0.25, top: '#5b8fd0', topAmt: 0.3, cloud: 0.55, hemiSky: '#d9dcf2', hemiGround: '#6a5236' },
+  moody:     { name: 'Realistic and moody', look: [0.72, 1.18, 1.35, 0.15], tint: [0.95, 0.98, 1.04], hemi: 0.86, sun: 0.92, sunTint: '#e9e2d6', fog: 0.82, haze: '#8d98a0', hazeAmt: 0.4, top: '#56677c', topAmt: 0.6, cloud: 0.8, hemiSky: '#aab6c4', hemiGround: '#26241f' },
+  lowpoly:   { name: 'Clean low-poly', look: [1.3, 1.06, 0, 0], tint: [1, 1, 1], hemi: 1.15, sun: 1, fog: 1.25, haze: '#cfe6f5', hazeAmt: 0.3, top: '#3f8be0', topAmt: 0.5, cloud: 0.3, hemiSky: '#e6f1ff', hemiGround: '#6b6448' }
+};
+function applyLook(id) {
+  const L = ART_LOOKS[id] || ART_LOOKS.classic; GFX.lookId = ART_LOOKS[id] ? id : 'classic';
+  GFX.look.value.set(L.look[0], L.look[1], L.look[2], L.look[3]); GFX.lookTint.value.set(L.tint[0], L.tint[1], L.tint[2]);
+  hemi.color.set(L.hemiSky || 0xcfe0e6); hemi.groundColor.set(L.hemiGround || 0x3d3424);
+}
+applyLook((function () { try { return new URLSearchParams(location.search).get('look'); } catch (e) { return null; } })() || (meta.settings && meta.settings.art) || 'classic');
 // teach a plain material to show grain, weathering and a little relief, in world space, so no model needs unwrapping
 function surface(m, kind) {
   m.onBeforeCompile = sh => {
-    sh.uniforms.uNoise = GFX.noise; sh.uniforms.uSun = GFX.sunDir; sh.uniforms.uTime = GFX.time; sh.uniforms.uSkyTop = GFX.skyTop; sh.uniforms.uSunCol = GFX.sunCol;
+    sh.uniforms.uNoise = GFX.noise; sh.uniforms.uSun = GFX.sunDir; sh.uniforms.uTime = GFX.time; sh.uniforms.uSkyTop = GFX.skyTop; sh.uniforms.uSunCol = GFX.sunCol; sh.uniforms.uLook = GFX.look; sh.uniforms.uLookTint = GFX.lookTint;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aKind; varying float vKind; varying vec3 vWp; varying vec3 vWn;').replace('#include <begin_vertex>', '#include <begin_vertex>\n vKind = aKind;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n vec4 wp4 = vec4(transformed, 1.0);\n #ifdef USE_INSTANCING\n wp4 = instanceMatrix * wp4;\n #endif\n vWp = (modelMatrix * wp4).xyz;\n vec3 wn3 = objectNormal;\n #ifdef USE_INSTANCING\n wn3 = mat3(instanceMatrix) * wn3;\n #endif\n vWn = normalize(mat3(modelMatrix) * wn3);');
     const body = kind === 'ground' ? `
@@ -1032,8 +1050,8 @@ function surface(m, kind) {
         float lf = texture2D(uNoise, vWp.xz * 1.9 + vWp.y * 0.7).r, lf2 = texture2D(uNoise, vWp.zy * 0.6 + vWp.x * 0.3).g; c *= 0.66 + 0.6 * lf; c = mix(c * 0.86, c * vec3(1.14, 1.16, 0.84), smoothstep(-0.5, 0.9, vWn.y) * (0.45 + 0.55 * lf2)); c += vec3(0.03, 0.05, 0.01) * (1.0 - smoothstep(-0.2, 0.4, vWn.y)); }
       c = mix(c0, c, k > 5.5 ? 1.0 : far);
       gl_FragColor.rgb = c;`;
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec3 uSun; uniform float uTime; uniform vec3 uSkyTop; uniform vec3 uSunCol; varying vec3 vWp; varying vec3 vWn; varying float vKind;')
-      .replace('#include <fog_fragment>', '{' + body + '}\n#include <fog_fragment>');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec3 uSun; uniform float uTime; uniform vec3 uSkyTop; uniform vec3 uSunCol; uniform vec4 uLook; uniform vec3 uLookTint; varying vec3 vWp; varying vec3 vWn; varying float vKind;')
+      .replace('#include <fog_fragment>', '{ vec3 cIn = gl_FragColor.rgb;' + body + LOOK_GRADE(kind !== 'water') + '}\n#include <fog_fragment>');
   };
   m.customProgramCacheKey = () => 'gfx-' + (kind || 'plain');
   return m;
@@ -1075,11 +1093,11 @@ const GRASS = { n: 7000, R: 25, cell: 0.58, mesh: null, at: null, queue: null };
   for (const g0 of parts) { const g = g0.toNonIndexed(), p = g.attributes.position, u = g.attributes.uv, put = i => { pos[o * 3] = p.getX(i); pos[o * 3 + 1] = p.getY(i); pos[o * 3 + 2] = p.getZ(i); nor[o * 3 + 1] = 1; uv[o * 2] = u.getX(i); uv[o * 2 + 1] = u.getY(i); o++; }; for (let i = 0; i < p.count; i++) put(i); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   const m = new THREE.MeshLambertMaterial({ color: '#667c3a', side: THREE.DoubleSide });
-  m.onBeforeCompile = sh => { sh.uniforms.uTime = GFX.time; sh.uniforms.uNoise = GFX.noise;
+  m.onBeforeCompile = sh => { sh.uniforms.uTime = GFX.time; sh.uniforms.uNoise = GFX.noise; sh.uniforms.uLook = GFX.look; sh.uniforms.uLookTint = GFX.lookTint;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime; varying float vH; varying vec3 vGp;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n vH = uv.y; vec3 ip = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; vGp = ip; float ph = ip.x * 0.31 + ip.z * 0.27; float sw = (sin(uTime * 1.7 + ph) * 0.6 + sin(uTime * 3.1 + ph * 1.9) * 0.25) * uv.y * uv.y; transformed.x += sw * 0.07; transformed.z += sw * 0.04;');
-    sh.fragmentShader = sh.fragmentShader.replace(': vLightBack', ': vLightFront').replace(': vIndirectBack', ': vIndirectFront').replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; varying float vH; varying vec3 vGp;')
-      .replace('#include <fog_fragment>', '{ float gC = texture2D(uNoise, vGp.xz * 0.0131).g, gB = texture2D(uNoise, vGp.xz * 0.137).g; vec3 c = gl_FragColor.rgb * (0.62 + 0.6 * vH) * (0.8 + 0.4 * gB); c = mix(c, c * vec3(1.25, 1.1, 0.6), smoothstep(0.52, 0.78, gC) * 0.5); gl_FragColor.rgb = c; }\n#include <fog_fragment>'); };
+    sh.fragmentShader = sh.fragmentShader.replace(': vLightBack', ': vLightFront').replace(': vIndirectBack', ': vIndirectFront').replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec4 uLook; uniform vec3 uLookTint; varying float vH; varying vec3 vGp;')
+      .replace('#include <fog_fragment>', '{ float gC = texture2D(uNoise, vGp.xz * 0.0131).g, gB = texture2D(uNoise, vGp.xz * 0.137).g; vec3 c = gl_FragColor.rgb * (0.62 + 0.6 * vH) * (0.8 + 0.4 * gB); c = mix(c, c * vec3(1.25, 1.1, 0.6), smoothstep(0.52, 0.78, gC) * 0.5); float lkl = dot(c, vec3(0.299, 0.587, 0.114)); c = mix(vec3(lkl), c, uLook.x); c = (c - 0.5) * uLook.y + 0.5; c *= uLookTint; gl_FragColor.rgb = max(c, 0.0); }\n#include <fog_fragment>'); };
   GRASS.mat = m; GRASS.mesh = new THREE.InstancedMesh(g, m, GRASS.n); GRASS.mesh.frustumCulled = false; GRASS.mesh.count = 0; GRASS.mesh.userData.sh = 1; GRASS.mesh.receiveShadow = true; scene.add(GRASS.mesh);
 })();
 const hash2 = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return (h ^ (h >>> 16)) / 4294967296; };
@@ -3415,6 +3433,14 @@ function syncLight(h) {
   GFX.night.value = 1 - k; GFX.sunCol.value.copy(sun.color).multiplyScalar(0.25 + 0.75 * k); skyMat.uniforms.uCloud.value = HOL.season === 'winter' ? 0.72 : 0.46;
   windowMat.emissiveIntensity = Math.max(0, 1 - k * 1.4) * 1.1 * (HL && HL.glow ? HL.glow : 1);
   scene.fog.near = 55 - (1 - k) * 22; scene.fog.far = 200 - (1 - k) * 70; if (HL && HL.fog) { scene.fog.near *= HL.fog; scene.fog.far *= HL.fog + 0.2; }
+  // the chosen look has the last word on light, haze and sky
+  { const LK = ART_LOOKS[GFX.lookId] || ART_LOOKS.classic, dayK = 0.3 + 0.7 * k;
+    hemi.intensity *= LK.hemi; sun.intensity *= LK.sun; if (LK.sunTint) sun.color.multiply(holC.set(LK.sunTint));
+    scene.fog.near *= LK.fog; scene.fog.far *= LK.fog;
+    if (LK.haze) { holC.set(LK.haze); scene.fog.color.lerp(holC, LK.hazeAmt * dayK); renderer.setClearColor(scene.fog.color); GFX.skyHor.value.lerp(holC, LK.hazeAmt * dayK); }
+    if (LK.top) GFX.skyTop.value.lerp(holC.set(LK.top), LK.topAmt * k);
+    if (LK.cloud != null && HOL.season !== 'winter') skyMat.uniforms.uCloud.value = LK.cloud;
+    GFX.sunCol.value.copy(sun.color).multiplyScalar(0.25 + 0.75 * k); }
 }
 
 /* ----- camera and input: twin thumbsticks ----- */
@@ -8508,7 +8534,7 @@ function boot(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 const hot = window.claude && window.claude.hot;
-window.__hm = { groundH, standH, L, scene, GRASS, GFX, wildClear, MY_SHIP, store, readSlot, getSaveOk: () => saveOk, mini, pressBar, cam, focus, L, signPos, Sim, rankOf, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries }), solids: () => solidsNow(G), collide, get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
+window.__hm = { groundH, standH, L, scene, GRASS, GFX, applyLook, wildClear, MY_SHIP, store, readSlot, getSaveOk: () => saveOk, mini, pressBar, cam, focus, L, signPos, Sim, rankOf, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries }), solids: () => solidsNow(G), collide, get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
 openStore().then(() => { if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {}); });
 })();
 </script>
