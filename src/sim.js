@@ -289,6 +289,7 @@
   // people walk at about 1.4 m a second on the 18-minute day; WALKX converts the old speeds
   const WALKX = 1.8;
   function moveTo(a, tx, tz, step, s) {
+    if (a.held) { a.moving = false; return false; }   // someone is speaking with them: they stand and listen
     step *= WALKX;
     if (a.tx == null || Math.abs(a.tx - tx) + Math.abs(a.tz - tz) > 0.5) { a.tx = tx; a.tz = tz; a.settle = false; }
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);

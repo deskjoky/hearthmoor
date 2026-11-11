@@ -659,6 +659,136 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   .btn { min-height: 38px; padding: 6px 10px; font-size: 14px; }
   .goal { display: none; }
 }
+
+/* ================= Menus, second edition =================
+   The book: a rail of sections down the side, the section's pages along the top, and the whole height left for the page.
+   Cards: a panel at the side of the view, with who or what it is at the top and big, even buttons.
+   Nothing here removes a fact; it only gives each one a steadier place. */
+:root { --card: rgba(255,252,240,.42); --card-2: rgba(255,252,240,.7); --r: 9px; }
+.sheet { padding: calc(env(safe-area-inset-top, 0px) + 6px) max(6px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 6px) max(6px, env(safe-area-inset-left, 0px)); }
+.cover { max-width: 960px; border-radius: 12px; padding: 7px; }
+.cover.bk { flex-direction: row; gap: 7px; }
+.rail { flex: none; width: 92px; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; scrollbar-width: none; }
+.rail::-webkit-scrollbar { display: none; }
+.rail .tab { position: relative; flex: 1 1 0; min-height: 46px; max-height: 76px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 4px 2px; border-radius: 8px; background: transparent; color: #cdbb96; font-size: 14.5px; overflow: visible; transition: background .15s; }
+.rail .tab .ic { width: 21px; height: 21px; stroke: currentColor; }
+.rail .tab[aria-selected="true"] { background: linear-gradient(90deg, #f2e4c6, var(--parch)); color: var(--ink); box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+.rail .tab[aria-selected="true"] .ic { stroke: var(--seal); }
+.rail .tab i { position: absolute; top: 5px; right: 16px; min-width: 17px; padding: 0 4px; border-radius: 9px; background: var(--gilt); color: #2a1d12; font: 700 11px/17px var(--f-body); font-style: normal; }
+.bkmain { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; background: var(--parch); }
+.bkhead { flex: none; display: flex; align-items: center; gap: 10px; padding: 0 4px 0 12px; min-height: 48px; background: linear-gradient(#f4e8cc, #ecdcb8); border-bottom: 1px solid var(--line); }
+.bkhead .subtabs { position: static; flex: 1; min-width: 0; margin: 0; padding: 0; background: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 2px; align-self: stretch; align-items: stretch; }
+.bkhead .subtabs::-webkit-scrollbar { display: none; }
+.bkhead .subtabs button { flex: none; border: 0; border-radius: 0; background: none; padding: 0 12px; min-height: 47px; font: 400 17px var(--f-display); color: var(--ink-soft); border-bottom: 3px solid transparent; white-space: nowrap; }
+.bkhead .subtabs button[aria-pressed="true"] { background: none; color: var(--ink); border-bottom-color: var(--seal); }
+.bktitle { flex: 1; min-width: 0; font: 400 21px var(--f-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bkstat { flex: none; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.bkstat b { font-size: 16px; color: #7d5a10; } .bkstat small { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.bkhead .close { margin: 0; color: var(--ink); width: 44px; height: 44px; border-radius: 8px; font-size: 28px; }
+.bkhead .close:active { background: rgba(42,31,22,.1); }
+.bkmain .page { border-radius: 0; padding: 12px 16px 28px; }
+@media (max-height: 520px) { .page > h3:first-child { display: none; } }
+@media (orientation: portrait) {
+  .cover.bk { flex-direction: column-reverse; }
+  .rail { width: auto; flex-direction: row; } .rail .tab { min-height: 54px; font-size: 12.5px; } .rail .tab i { right: 8px; top: 3px; }
+  .bkstat small { display: none; }
+}
+
+/* ----- what pages are made of ----- */
+.page h3 { font-size: 24px; }
+.page h4 { display: flex; align-items: center; gap: 10px; border: 0; padding: 0; margin: 20px 0 8px; font-size: 19px; }
+.page h4::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.page h6, .card h6 { margin: 12px 0 4px; font: 700 11px var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+.lead { font-size: 15px; margin: 0 0 8px !important; }
+.box, .day { background: var(--card); border-radius: var(--r); padding: 11px 13px; box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 1px 3px rgba(60,40,20,.08); }
+.box h5 { font-size: 19px; margin-bottom: 6px; }
+.grid2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.btn { border-radius: 8px; min-height: 44px; padding: 8px 14px; font-weight: 600; line-height: 1.15; box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 1px 2px rgba(0,0,0,.25); transition: transform .06s; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn.alt { background: var(--card-2); border-color: rgba(42,31,22,.38); box-shadow: 0 1px 2px rgba(60,40,20,.12); }
+.btn.warn { color: #fbeee0; }
+.btn:disabled { opacity: .42; box-shadow: none; }
+.btn small { margin-top: 1px; }
+.acts { gap: 7px; }
+.kv { gap: 0; font-size: 14.5px; }
+.kv dt { padding-right: 14px !important; }
+.kv dt, .kv dd { padding: 4px 0; border-bottom: 1px dotted var(--line); }
+.kv dt:last-of-type, .kv dd:last-of-type { border-bottom: 0; }
+.kv dd { font-weight: 600; }
+.seg { border-radius: 9px; border-color: rgba(42,31,22,.4); background: var(--card); max-width: 100%; }
+.seg button { min-height: 42px; padding: 8px 14px; }
+.seg.towns { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; } .seg.towns::-webkit-scrollbar { display: none; } .seg.towns button { flex: 1 0 auto; }
+.prow, .staffpick, .mi, .ptile, .choice { border-radius: var(--r); background: var(--card); }
+.prow { padding: 9px 12px; min-height: 46px; }
+.prow:active, .staffpick:active, .mi:active { background: var(--card-2); }
+.stepper button { border-radius: 8px; width: 44px; height: 44px; background: var(--card-2); }
+details.fold { margin-top: 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); }
+details.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 9px 13px; min-height: 44px; font: 400 17px var(--f-display); }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::after { content: "\203A"; margin-left: auto; font-size: 22px; color: var(--ink-soft); transition: transform .15s; }
+details.fold[open] > summary::after { transform: rotate(90deg); }
+details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
+.seg.towns { margin-top: 10px; }
+.kv dt { display: flex; align-items: center; } .kv dd { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; text-align: right; }
+.kv dd .btn { min-height: 38px; padding: 5px 12px; }
+.forsale { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 0 13px; } .forsale[open] { padding-bottom: 10px; } .forsale summary { font: 400 17px var(--f-display); min-height: 44px; padding: 10px 0 0; }
+.hintline { font-size: 13px; color: var(--ink-soft); font-style: italic; align-self: center; }
+
+/* ----- the card beside the view: a person, a shop, a place ----- */
+.card:not(.tab) { position: relative; max-width: 420px; padding: 11px 13px 13px; border-radius: 12px; background: linear-gradient(#f3e6c8, #e6d3a8); border: 1px solid rgba(42,31,22,.35); box-shadow: 0 6px 26px rgba(0,0,0,.5), 0 0 0 3px rgba(53,37,27,.55); max-height: 46vh; }
+.card:not(.tab) > #cardInfo > h2:first-of-type, .card:not(.tab) > #cardInfo > .cardx + h2 { padding-right: 44px; font-size: 22px; }
+.card h2 { font-size: 22px; }
+.card .sub { font-size: 13.5px; margin-top: 3px; }
+.card .why { font-size: 13.5px; line-height: 1.35; padding: 7px 9px; border-radius: 7px; background: var(--card); margin-top: 7px; }
+.card p { margin: 6px 0; line-height: 1.4; }
+.cardx { position: absolute; z-index: 2; top: 6px; right: 6px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(42,31,22,.1); color: var(--ink); font-size: 24px; line-height: 1; }
+.cardx:active { background: rgba(42,31,22,.22); }
+.card:not(.tab) { box-sizing: border-box; }
+.panel .card:not(.tab) { margin: 0 auto; padding: 11px 13px 13px; }
+.card .btn { flex: initial; min-height: 42px; padding: 6px 10px; font-size: 14.5px; white-space: normal; }
+.card .btn small { display: block; margin-left: 0; font-size: 11.5px; }
+.card .sub { display: block; }
+.card .plog { font-size: 13px; } .card .plog li:nth-child(n+3) { display: list-item; }
+.pchead .cardx { position: static; flex: none; margin: -4px -6px 0 0; }
+.card .acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 7px; margin-top: 9px; overflow: visible; padding-bottom: 0; }
+.card .acts .btn { width: 100%; }
+.card .acts > .acts { grid-column: 1 / -1; margin-top: 0; }
+.card .places { margin-top: 9px; }
+.card.tab { border-radius: 999px; overflow: hidden; }
+.cardtab { padding: 9px 18px; font-size: 17px; }
+.cardtab small { background: rgba(241,227,194,.16); border-radius: 999px; padding: 2px 8px; }
+@media (orientation: landscape) {
+  .panel:not(.tabbed) { left: auto; top: calc(env(safe-area-inset-top, 0px) + 62px); right: max(10px, env(safe-area-inset-right, 0px)); width: min(400px, 45vw); padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 10px); display: flex; flex-direction: column; justify-content: flex-end; }
+  .panel:not(.tabbed) .card { max-width: none; width: 100%; margin: 0; max-height: 100%; }
+  body.carding .minimap { opacity: 0; pointer-events: none; }
+}
+/* a person */
+.pchead { display: flex; align-items: flex-start; gap: 10px; }
+.pface { flex: none; width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 400 26px var(--f-display); color: #f6ead0; background: radial-gradient(circle at 35% 30%, #4a7fae, #24405e); box-shadow: 0 0 0 2px #e8d6ae, 0 0 0 3px rgba(42,31,22,.45); }
+.pface.f { background: radial-gradient(circle at 35% 30%, #c76a92, #7a3350); } .pface.kid { width: 40px; height: 40px; font-size: 22px; }
+.pcwho { flex: 1; min-width: 0; } .pcwho h2 { font-size: 21px; } .pcwho .badges { margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin-top: 9px; align-items: start; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px 6px; min-width: 0; }
+.stat small { display: block; font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+.stat b { display: block; font-size: 14.5px; line-height: 1.15; overflow-wrap: anywhere; } .stat b em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--ink-soft); }
+.stat i { display: block; height: 4px; margin-top: 4px; border-radius: 2px; background: rgba(42,31,22,.15); overflow: hidden; } .stat i u { display: block; height: 100%; background: var(--gold); }
+.stat.good i u { background: var(--moss); } .stat.bad i u { background: var(--seal); } .stat.bad b { color: #8a2a14; }
+.pcnow { margin-top: 7px; font-size: 13.5px; line-height: 1.35; } .pcnow b { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); margin-right: 5px; }
+.pctabs { display: flex; margin: 10px -13px 0; padding: 0 13px; border-bottom: 1px solid var(--line); }
+.pctabs button { position: relative; flex: 1; border: 0; background: none; min-height: 40px; font: 400 17px var(--f-display); color: var(--ink-soft); border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.pctabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--seal); }
+.pctabs button i { position: absolute; top: 9px; margin-left: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--seal); }
+.pcleaf > .why:first-child, .pcleaf > p:first-child { margin-top: 9px; }
+.pcleaf .bar { margin-top: 6px; }
+@media (max-width: 420px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ----- someone speaking ----- */
+.dialog { border-radius: 12px !important; padding: 12px 14px 10px !important; overflow: visible; max-height: none !important; box-shadow: 0 6px 26px rgba(0,0,0,.5), 0 0 0 3px rgba(53,37,27,.55); }
+.dialog p { font-size: 16.5px; line-height: 1.42; max-height: 26vh; overflow-y: auto; margin-bottom: 8px; }
+.dwho { position: absolute; left: 14px; top: -15px; background: var(--leather); color: #f1e3c2; font: 400 15px var(--f-display); padding: 3px 12px; border-radius: 7px; box-shadow: 0 2px 6px rgba(0,0,0,.4); border: 1px solid rgba(226,181,82,.55); }
+.dwho + p { margin-top: 8px; }
+.scenebox { border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.6), 0 0 0 3px rgba(53,37,27,.55); }
+.choice { padding: 9px 12px; }
 </style>
 </head>
 <body>
@@ -692,9 +822,9 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 <div class="mini" id="mini" hidden></div>
 <div class="sceneveil" id="scene" hidden role="dialog" aria-modal="true"></div>
 <div class="sheet" id="book" hidden>
-  <div class="cover">
-    <div class="bookhead"><div class="tabs" role="tablist" id="tabs"></div><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button></div>
-    <div class="page" id="page"></div>
+  <div class="cover bk">
+    <nav class="rail" role="tablist" id="tabs" aria-label="Sections of the book"></nav>
+    <div class="bkmain"><div class="bkhead" id="bkhead"></div><div class="page" id="page"></div></div>
   </div>
 </div>
 <div class="fighthud" id="fightHud" hidden></div>
@@ -702,8 +832,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 <div class="fightfx" id="fightFx"></div>
 <div class="sheet" id="waresSheet" hidden>
   <div class="cover">
-    <div class="bookhead"><div class="tabs"><span class="tab" aria-selected="true" id="waresTitle">The shop</span></div><button type="button" class="close" data-c='["ui","closeWares"]' aria-label="Leave the counter">&times;</button></div>
-    <div class="page" id="waresPage"></div>
+    <div class="bkmain"><div class="bkhead"><b class="bktitle" id="waresTitle">The shop</b><span class="bkstat num" id="waresPurse"></span><button type="button" class="close" data-c='["ui","closeWares"]' aria-label="Leave the counter">&times;</button></div>
+    <div class="page" id="waresPage"></div></div>
   </div>
 </div>
 <div class="mapui" id="mapui" hidden>
@@ -1021,6 +1151,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   // people walk at about 1.4 m a second on the 18-minute day; WALKX converts the old speeds
   const WALKX = 1.8;
   function moveTo(a, tx, tz, step, s) {
+    if (a.held) { a.moving = false; return false; }   // someone is speaking with them: they stand and listen
     step *= WALKX;
     if (a.tx == null || Math.abs(a.tx - tx) + Math.abs(a.tz - tz) > 0.5) { a.tx = tx; a.tz = tz; a.settle = false; }
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
@@ -13596,14 +13727,24 @@ function syncHoliday(s) {
 function stepHoliday(dt, t) { for (let i = 0; i < HOL.flames.length; i++) { const f = HOL.flames[i], k = 1 + Math.sin(t * (6 + i * 3)) * 0.12 + Math.sin(t * 17 + i) * 0.06; f.scale.set(1 / k, k, 1 / k); } }
 
 function personCard(s, pr, body) {
-  const doing = body && (body.why || body.doing);
+  const doing = body && (body.why || body.doing), f = Sim.sexOf(pr) === 'f', Y = Sim.you(s);
   const log = pr.log.slice(0, 3).map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('');
-  return `<h2>${esc(pr.name)} ${ageBadge(pr)}</h2><div class="badges">${pr.status === 'here' ? wedBadge(s, pr) : ''}</div><div class="sub">${esc(Sim.occupation(s, pr))} · ${esc(Sim.homeText(s, pr))}</div>
-    <div class="why num"><b>Purse:</b> <span class="${pr.purse < 0 ? 'neg' : ''}">${pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c'}</span> · <b>Respect:</b> ${Math.round(pr.rep || 0)}/100${s.gov && s.gov.council.includes(pr.id) ? ' · <b>On the council</b>' : ''} · <b>Mood:</b> ${Math.round(pr.mood)}/100 · ${opinionText(pr.opinion)}${doing ? `<br><b>Doing:</b> ${esc(doing)}` : ''}</div>
-    ${pr.status === 'here' && !pr.kid && G.folk ? `<div class="why">${esc(Sim.regardOf(s, pr))}</div>` : ''}${hateLine(s, pr)}${memLines(s, pr)}
-    ${log ? `<ul class="plog">${log}</ul>` : ''}
-    ${relationLine(s, pr)}
-    <div class="acts">${(() => { const P = Sim.postsBelow(G).find(x => x.pid === pr.id); return P && !P.cd ? B_('Dismiss as ' + esc(P.title), ['ui', 'fireSel', P.key], 'warn') : ''; })()}${UI.inside && pr.id === Sim.regionLord(G, 'hearthmoor') && G.offices.elder === 'player' ? B_('Speak with the Lord', ['gate']) : ''}${body && pr.status === 'here' && Math.hypot(body.x - G.player.x, body.z - G.player.z) < 2.4 ? B_(G.player.sneak ? 'Pick their pocket' : 'Pick their pocket (better sneaking)', ['wPick', pr.id], 'alt') : ''}${enemyActs(s, pr, body)}${relationActs(s, pr, body)}${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${B_('Close', ['ui', 'deselect'], 'alt')}</div>`;
+  const near = body && Math.hypot(body.x - G.player.x, body.z - G.player.z);
+  const tile = (k, v, frac, cls) => `<div class="stat ${cls || ''}"><small>${k}</small><b>${v}</b>${frac == null ? '' : `<i><u style="width:${Math.round(clamp(frac, 0, 1) * 100)}%"></u></i>`}</div>`;
+  const op = pr.opinion || 0;
+  const head = `<div class="pchead"><span class="pface ${f ? 'f' : 'm'}${pr.kid ? ' kid' : ''}" aria-hidden="true">${esc((pr.name || '?').charAt(0))}</span><div class="pcwho"><h2>${esc(pr.name)} ${ageBadge(pr)}</h2><div class="sub">${esc(Sim.occupation(s, pr))} · ${esc(Sim.homeText(s, pr))}</div><div class="badges">${pr.status === 'here' ? wedBadge(s, pr) : ''}${s.gov && s.gov.council.includes(pr.id) ? '<span class="wedbadge court">On the council</span>' : ''}</div></div><button type="button" class="cardx" data-c='["ui","deselect"]' aria-label="Close">&times;</button></div>`;
+  const stats = `<div class="stats num">${tile('Purse', pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c', null, pr.purse < 0 ? 'bad' : '')}${tile('Respect', Math.round(pr.rep || 0) + '<em>/100</em>', (pr.rep || 0) / 100)}${tile('Mood', Math.round(pr.mood) + '<em>/100</em>', pr.mood / 100, pr.mood < 30 ? 'bad' : 'good')}${tile('Toward you', op >= 40 ? 'Admires' : op >= 10 ? 'Likes' : op > -10 ? 'Neutral' : op > -40 ? 'Resents' : 'Hates', (op + 60) / 120, op <= -10 ? 'bad' : op >= 10 ? 'good' : '')}</div>`;
+  const now = doing ? `<div class="pcnow"><b>Now</b> ${esc(doing)}</div>` : '';
+  // three leaves: what you can do with them, what is known of them, and the rest
+  const talk = relationLine(s, pr) + relationActs(s, pr, body);
+  const about = `<div class="why">${opinionText(op)}.</div>${pr.status === 'here' && !pr.kid && G.folk ? `<div class="why">${esc(Sim.regardOf(s, pr))}</div>` : ''}${hateLine(s, pr)}${memLines(s, pr)}${log ? `<h6>Lately</h6><ul class="plog">${log}</ul>` : ''}` || '<div class="why">Nothing is known of them yet.</div>';
+  const P = Sim.postsBelow(G).find(x => x.pid === pr.id), foe = enemyActs(s, pr, body);
+  const more = `<div class="acts">${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${UI.inside && pr.id === Sim.regionLord(G, 'hearthmoor') && G.offices.elder === 'player' ? B_('Speak with the Lord', ['gate']) : ''}</div>`
+    + (foe ? `<h6>Trouble between you</h6><div class="acts">${foe}</div>` : '')
+    + `<h6>Underhand</h6><div class="acts">${body && pr.status === 'here' && near < 2.4 ? B_(G.player.sneak ? 'Pick their pocket' : 'Pick their pocket<small>better while sneaking</small>', ['wPick', pr.id], 'alt') : '<span class="hintline">Stand beside them to try their pocket.</span>'}${P && !P.cd ? B_('Dismiss as ' + esc(P.title), ['ui', 'fireSel', P.key], 'warn') : ''}</div>`;
+  const tabs = [['talk', 'Talk'], ['about', 'About'], ['more', 'More']], cur = !talk && (UI.ptab || 'talk') === 'talk' ? 'about' : UI.ptab || 'talk';
+  const lordBtn = UI.inside && pr.id === Sim.regionLord(G, 'hearthmoor') && G.offices.elder === 'player' && cur !== 'more' ? `<div class="acts">${B_('Speak with the Lord', ['gate'])}</div>` : '';
+  return `${head}${stats}${now}<div class="pctabs" role="tablist">${tabs.map(([k, n]) => k === 'talk' && !talk ? '' : `<button type="button" role="tab" aria-selected="${cur === k}" data-c='${JSON.stringify(['ui', 'ptab', k])}'>${n}${k === 'more' && foe ? '<i></i>' : ''}</button>`).join('')}</div><div class="pcleaf">${lordBtn}${cur === 'talk' ? talk : cur === 'about' ? about : more}</div>`;
 }
 function relationLine(s, pr) {
   const Y = Sim.you(s), f = Y.court[pr.id];
@@ -13615,12 +13756,14 @@ function relationLine(s, pr) {
 function relationActs(s, pr, body) {
   const Y = Sim.you(s), near = body && Math.hypot(body.x - G.player.x, body.z - G.player.z) <= 8;
   let a = loveActs(s, pr, near);
-  if (pr.status === 'here' && !pr.kid && !Sim.canCourt(s, pr) && Y.spouse !== pr.id && !(pr.parents || []).includes(Y.pid) && near) a += `<div class="acts">${B_('Talk', ['lTalk', pr.id], 'alt')}</div>`;
-  if (!pr.kid && Y.heir !== pr.id && ((pr.parents || []).includes(Y.pid) || Y.spouse === pr.id)) a += B_('Name as your heir', ['nameHeir', pr.id], 'alt');
+  if (pr.status === 'here' && !pr.kid && !Sim.canCourt(s, pr) && Y.spouse !== pr.id && !(pr.parents || []).includes(Y.pid) && near) a += `<div class="acts">${B_('Talk', ['lTalk', pr.id])}</div>`;
+  if (!pr.kid && Y.heir !== pr.id && ((pr.parents || []).includes(Y.pid) || Y.spouse === pr.id)) a += `<div class="acts">${B_('Name as your heir', ['nameHeir', pr.id], 'alt')}</div>`;
   return a;
 }
 function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
+  // whoever you are speaking with stops where they are and turns to you; they walk on when you close the card
+  for (const ag of G.agents) { if (ag.id === UI.sel && UI.sel != null && !UI.overlay) { ag.held = true; ag.moving = false; const dx = G.player.x - ag.x, dz = G.player.z - ag.z; if (dx * dx + dz * dz < 144) ag.face = Math.atan2(dx, dz); } else if (ag.held) delete ag.held; }
   let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
   if (!UI.inside && (UI.sel == null || G.caught)) { const wc = wildCard(G); if (wc) { html = wc; UI.sel = null; } }
   if (!UI.inside && UI.sel == null && !G.caught) { const bb = burgleBtn(G); if (bb) html = (html || '<h2>A house</h2><p>Someone lives here.</p>') + `<div class="acts">${bb}</div>`; }
@@ -13639,10 +13782,10 @@ function renderCard(force) {
   const mineHere = Lh && ((Lh.emp && (G.biz && G.biz[Lh.emp] && G.biz[Lh.emp].owner === 'player')) || (Lh.plot != null && Sim.shopOnPlot(G, Lh.plot)) || (Lh.biz && G.biz && G.biz[Lh.biz] && G.biz[Lh.biz].owner === 'player'));
   const tab = html && here && Lh && UI.openLoc !== here && meta.settings.cards !== 'open';   // your own places too: a small tab first, the full card on a tap
   if (tab) { const m = html.match(/<h2>([\s\S]*?)<\/h2>/); html = `<button type="button" class="cardtab" data-c='["ui","openCard"]'>${m ? m[1] : 'This place'}<small>tap to open</small></button>`; }
-  else if (html && here && Lh) html = `<button type="button" class="cardfold" data-c='["ui","foldCard"]' aria-label="Fold this card away">&#9662;</button>` + html;
-  $('card').classList.toggle('tab', !!tab);
-  const i = html.search(/<div class="(acts|places)">/);
-  const info = i < 0 ? html : html.slice(0, i), rest = i < 0 ? '' : html.slice(i);
+  else if (html && here && Lh) html = `<button type="button" class="cardx" data-c='["ui","foldCard"]' aria-label="Fold this card away">&times;</button>` + html;
+  else if (html && UI.sel != null && !html.includes('class="cardx"')) html = `<button type="button" class="cardx" data-c='["ui","deselect"]' aria-label="Close">&times;</button>` + html;
+  $('card').classList.toggle('tab', !!tab); $('panel').classList.toggle('tabbed', !!tab); document.body.classList.toggle('carding', !!html && !tab && !UI.overlay && !mini.on);
+  const info = html, rest = '';
   if (force || info !== UI.ci) { $('cardInfo').innerHTML = info; UI.ci = info; }
   if (force || rest !== UI.cr) { $('cardActs').innerHTML = rest; UI.cr = rest; }
   $('panel').hidden = !html || !!UI.overlay || mini.on;
@@ -13763,13 +13906,17 @@ function keepPlace(pg, y) {
   if (UI.reveal) { const el = pg.querySelector(UI.reveal); UI.reveal = null; if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } }
 }
 function turnPage(el, turn) { if (turn) Snd.play('page'); if (turn && !calm()) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); } }
+const SEC_IC = { today: 'sun', money: 'coin', business: 'house', people: 'people', you: 'person', power: 'crown' };
 function renderBook(turn) {
   const sec = sectionOf(UI.tab); UI.subOf = UI.subOf || {}; if (sec[2].some(y => y[0] === UI.tab)) UI.subOf[sec[0]] = UI.tab;
-  $('tabs').innerHTML = SECTIONS.map(([k, n, pages]) => `<button type="button" class="tab" role="tab" aria-selected="${sec[0] === k}" data-c='${JSON.stringify(['ui', 'tab', (UI.subOf && UI.subOf[k]) || pages[0][0]])}'>${n}</button>`).join('');
+  const nTask = taskList(G).filter(x => !x.soft).length;
+  $('tabs').innerHTML = SECTIONS.map(([k, n, pages]) => `<button type="button" class="tab" role="tab" aria-selected="${sec[0] === k}" data-c='${JSON.stringify(['ui', 'tab', (UI.subOf && UI.subOf[k]) || pages[0][0]])}'>${icon(SEC_IC[k])}<span>${n}</span>${k === 'today' && nTask ? `<i class="num">${nTask}</i>` : ''}</button>`).join('');
   const key = [UI.tab, JSON.stringify(UI.focus || null), UI.staffSel, UI.court, UI.btown, UI.ptown, UI.tree].join('|');
   turn = turn && key !== UI.pageKey; UI.pageKey = key;   // only a real change of page goes back to the top
   const pg = $('page'), y = turn ? 0 : pg.scrollTop;
-  const subs = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}<span class="paused" title="Time stands still while the book is open">Paused</span></nav>`;
+  const c0 = Sim.calendar(G);
+  $('bkhead').innerHTML = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}</nav><span class="bkstat num" title="Time stands still while the book is open"><b>${money(G.coins)}</b><small>${c0.dom} ${c0.monthName} \u00b7 paused</small></span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
+  const subs = '';
   pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   keepPlace(pg, y); turnPage(pg, turn);
 }
@@ -13861,7 +14008,7 @@ function seasonBox(s) {
   const c = Sim.calendar(s), L = (s.priceLog || {}).hearthmoor || {};
   const trend = g => { const a = L[g] || []; if (a.length < 2) return ''; const now = a[a.length - 1], then = a[0], d = now - then; return `<dt>${g.charAt(0).toUpperCase() + g.slice(1)}</dt><dd class="num">${now.toFixed(2)}c ${Math.abs(d) < 0.05 ? '· steady' : d > 0 ? '· up ' + d.toFixed(2) + 'c' : '· down ' + (-d).toFixed(2) + 'c'} <small>over ${a.length} days</small></dd>`; };
   const ups = s.shops.map(x => { const T = TR[x.trade], Ti = Sim.tierOf(x); const per = Object.keys(T.recipe).reduce((a, g) => a + T.recipe[g] * Sim.buyPrice(s, 'hearthmoor', g), 0); const held = Object.keys(T.recipe).map(g => x.stock[g] + ' ' + g).join(', '); return `<li>${esc(Ti.name)}: supplies cost ${per.toFixed(1)}c a batch at today’s prices; in storage ${held}.</li>`; }).join('');
-  return `<div class="box"><h5>${c.season.charAt(0).toUpperCase() + c.season.slice(1)}, ${c.dom} ${c.monthName} · ${c.next} in ${c.daysLeft} ${c.daysLeft === 1 ? 'day' : 'days'}</h5><p>Now: ${SEASON_SAY[c.season]}</p><p><b>Coming:</b> ${SEASON_SAY[c.next]}</p>${L.grain ? `<p>Prices at the Trading Post in Hearthmoor:</p><dl class="kv">${['grain', 'wood', 'ore'].map(trend).join('')}</dl>` : ''}${ups ? `<ul class="notes">${ups}</ul>` : ''}</div>`;
+  return `<details class="fold"><summary>${c.season.charAt(0).toUpperCase() + c.season.slice(1)}, ${c.dom} ${c.monthName} · ${c.next} in ${c.daysLeft} ${c.daysLeft === 1 ? 'day' : 'days'}</summary><div><p>Now: ${SEASON_SAY[c.season]}</p><p><b>Coming:</b> ${SEASON_SAY[c.next]}</p>${L.grain ? `<p>Prices at the Trading Post in Hearthmoor:</p><dl class="kv">${['grain', 'wood', 'ore'].map(trend).join('')}</dl>` : ''}${ups ? `<ul class="notes">${ups}</ul>` : ''}</div></details>`;
 }
 function businessTowns(s) {
   const mine = myBusinesses(s), count = t => mine.filter(x => x.town === t).length, towns = Object.keys(TOWN_NAMES).filter(t => !(TOWNS[t] && TOWNS[t].foreign) || count(t) || townHere() === t);
@@ -14822,7 +14969,7 @@ function pageGear(s) {
   { const inv = s.player.inv, goods = Object.keys(inv).filter(g => inv[g] > 0); if (goods.length) h += `<p class="skgroup">Goods</p><p>${goods.map(g => inv[g] + ' ' + g).join(', ')} (one each to carry).</p>`; }
   return h;
 }
-function renderWares() { if (!G) return; const pg = $('waresPage'), y = pg.scrollTop; const at = UI.waresAt; $('waresTitle').textContent = at === 'market' ? 'The market' : (Sim.empById(at) || {}).name || 'The shop'; if (!Sim.atShop(G, at)) { $('waresSheet').hidden = true; closeOverlay(); return; } pg.innerHTML = pageWares(G).replace(/^<h3>[^<]*<\/h3>/, ''); keepPlace(pg, y); }
+function renderWares() { if (!G) return; const pg = $('waresPage'), y = pg.scrollTop; const at = UI.waresAt; $('waresTitle').textContent = at === 'market' ? 'The market' : (Sim.empById(at) || {}).name || 'The shop'; $('waresPurse').innerHTML = `<b>${money(G.coins)}</b><small>your purse</small>`; if (!Sim.atShop(G, at)) { $('waresSheet').hidden = true; closeOverlay(); return; } pg.innerHTML = pageWares(G).replace(/^<h3>[^<]*<\/h3>/, ''); keepPlace(pg, y); }
 /* ----- pictures of things you can buy: small drawings made in code ----- */
 const DYE_HEX = { red: '#a8322a', blue: '#2f5f8a', green: '#3f6a3a', black: '#2a2622', yellow: '#c9a33a', purple: '#5a3a6e', brown: '#6b4a2e', white: '#e8e2d0' };
 function itemIcon(id, dye) {
@@ -15514,6 +15661,7 @@ const ICONS = {
   sun: '<circle cx="12" cy="12" r="4.5" fill="none"/><path d="M12 2.5 V5 M12 19 V21.5 M2.5 12 H5 M19 12 H21.5" fill="none"/>',
   house: '<path d="M3 11 L12 4 L21 11 M5 10 V20 H19 V10 M10 20 V14 H14 V20" fill="none"/>',
   crown: '<path d="M4 18 L3 7 L8 11 L12 5 L16 11 L21 7 L20 18 Z" fill="none"/>',
+  person: '<circle cx="12" cy="8" r="3.6" fill="none"/><path d="M4.5 20 C5 15.5 8.5 13.6 12 13.6 C15.5 13.6 19 15.5 19.5 20" fill="none"/>',
   people: '<circle cx="9" cy="8" r="3" fill="none"/><circle cx="16.5" cy="9" r="2.4" fill="none"/><path d="M3.5 19 C4 15 6.5 13.5 9 13.5 C11.5 13.5 14 15 14.5 19 M14 14 C17 13 20 14.5 20.5 18.5" fill="none"/>'
 };
 const icon = (n, cls) => `<svg class="ic ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -15699,6 +15847,7 @@ const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 function fullNewName() { const f = cap1((UI.newFirst || '').replace(/\s+/g, '')) || 'Wren', l = cap1((UI.newLast || '').replace(/\s+/g, '')); return l ? f + ' ' + l : f; }
 function uiCmd(k, v) {
   if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
+  if (k === 'ptab') { UI.ptab = v; renderCard(true); return; }
   if (k === 'tab') { UI.tab = v; UI.confirm = null; UI.focus = null; UI.staffSel = null; renderBook(true); return; }
   if (k === 'bset') { const d = UI.bdraft; if (!d) return; if (v[0] === 'random') { const H = Sim.HERALDRY, pick = o => { const ks = Object.keys(o); return ks[Math.floor(Math.random() * ks.length)]; }; d.div = pick(H.divisions); d.charge = pick(H.charges); d.field = pick(H.tinctures); do d.second = pick(H.tinctures); while (d.second === d.field); do d.mark = pick(H.tinctures); while (d.mark === d.field); } else d[v[0]] = v[1]; renderBook(false); return; }
   if (k === 'skillSel') { UI.skillSel = v; UI.perkSel = null; renderBook(false); return; }
@@ -15840,7 +15989,8 @@ function renderDialog() {
   const el = $('dialog'); if (!el) return;
   if (!UI.dialog.length || UI.mode !== 'play' || FIGHT.on) { el.hidden = true; return; }
   const more = UI.dialog.length > 1;
-  el.innerHTML = `<p>${esc(UI.dialog[0])}</p><div class="dacts">${more ? `<span class="num">${UI.dialog.length - 1} more</span>` : ''}${more ? B_('Next', ['ui', 'dialogNext']) + B_('Skip', ['ui', 'dialogEnd'], 'alt') : B_('Done', ['ui', 'dialogNext'])}</div>`;
+  const line = UI.dialog[0], sm = /^([A-Z][^:"\u201c]{1,38}): (["\u201c][\s\S]*)$/.exec(line);
+  el.innerHTML = `${sm ? `<div class="dwho">${esc(sm[1])}</div>` : ''}<p>${esc(sm ? sm[2] : line)}</p><div class="dacts">${more ? `<span class="num">${UI.dialog.length - 1} more</span>` : ''}${more ? B_('Next', ['ui', 'dialogNext']) + B_('Skip', ['ui', 'dialogEnd'], 'alt') : B_('Done', ['ui', 'dialogNext'])}</div>`;
   el.hidden = false;
 }
 function drainEvents() {
@@ -16614,8 +16764,17 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.11.0341';
+const BUILD = '2026.11.11.0416';
 const NOTES = [
+  { v: '0.82', date: '10 November', title: 'The menus, made over', items: [
+    'The book has a new shape. Its six sections run down the side with a picture each, the pages of a section run along the top, and your purse and the date are always in the corner. The page itself now gets nearly the whole height of the screen.',
+    'Tapping a person opens a new card: their face, age and whether they are married at the top; purse, respect, mood and how they feel about you as four small gauges; then three leaves, Talk, About and More, so the buttons you want are never buried under the facts.',
+    'Whoever you are speaking with stops walking and turns to face you. They go on their way when you close the card.',
+    'Cards for people, shops and places open at the side of the view on a phone held sideways, so they no longer sit on top of you. Every card closes with the same mark in its corner.',
+    'Buttons are larger and even in width. Lists, tables and boxes have a steadier look throughout, and nothing that was shown before has been taken away.',
+    'When someone speaks, their name sits on a plate above the words.',
+    'The note about the season on the Ledger and Shops pages folds down to one line; tap it to read the rest.',
+  ] },
   { v: '0.81.1', date: '10 November', title: 'Bridges and paving put right', items: [
     'Every bridge has been rebuilt the same way: its ends sit flush with the banks, it rises in a gentle arch, and you walk on its deck all the way over.',
     'The Oak Bridge no longer leans to one side. It is level across its width, with three arches under it.',
