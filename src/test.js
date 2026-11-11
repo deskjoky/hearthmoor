@@ -1,5 +1,5 @@
 // Headless tests for the Hearthmoor simulation. Run: node test.js
-const Sim = require('./sim.js');
+const Sim = require('./sim.js'); Sim.setStrict(true);   // in tests a fault in a daily step must fail loudly
 // most tests look at one system at a time, so the world does not age in them; the life-cycle tests turn it back on
 const newGameRaw = Sim.newGame, newGameAging = (...a) => { const s = newGameRaw(...a); s.bandits = null; s.ageRate = 4; return s; }; Sim.newGame = (...a) => { const s = newGameAging(...a); s.ageRate = 0; return s; };
 let failures = 0;

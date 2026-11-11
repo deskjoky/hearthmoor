@@ -7388,7 +7388,21 @@ function syncMyHome() {
   if (h) { const dr = Sim.doorOf(h); L.myhome = { x: dr.x, z: dr.z, r: 3.4, name: h.name + ' (home)', town: h.town && h.town !== 'hearthmoor' ? h.town : undefined }; L.home.name = 'Your old hut'; }
   else { delete L.myhome; L.home.name = 'Your Hut'; }
 }
+// one error in a frame must never stop the game: say so once in a while, and keep drawing
+let frameFails = 0, frameNoteAt = -1e9;
 function frame(now) {
+  try { frameBody(now); frameFails = 0; }
+  catch (e) {
+    frameFails++; last = now;
+    try { console.error(e); } catch (e2) {}
+    try {
+      if (now - frameNoteAt > 8000) { frameNoteAt = now; toast('Something went wrong on screen (' + String(e && e.message || e).slice(0, 60) + '). The game is carrying on.', 'bad', true); }
+      if (frameFails === 180) toast('The same problem keeps repeating. Your last save is safe: reload the page to carry on.', 'bad', true);
+    } catch (e2) {}
+  }
+  requestAnimationFrame(frame);
+}
+function frameBody(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
@@ -7411,7 +7425,6 @@ function frame(now) {
   gfxFrame(dt, t);
   if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
   if (bench) bench.frame(now);
-  requestAnimationFrame(frame);
 }
 /* ================= sound: everything is synthesized, nothing is downloaded ================= */
 const Snd = (function () {

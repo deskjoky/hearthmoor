@@ -466,7 +466,7 @@
     s.day = Math.floor((s.t - 360) / DAY) + 1;
     s.stats = freshStats(s);
     holidayDawn(s);
-    if (s.people) peopleMorning(s);
+    if (s.people) guard(s, 'the village woke', () => peopleMorning(s));
     for (const shop of s.shops) if (shop.worker && shop.worker.pid) { const wp = person(s, shop.worker.pid); shop.worker.home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 }; }
     const base = s.t - minuteOfDay(s.t);
     const sched = [];
@@ -530,6 +530,17 @@
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
   const FLOW_LABEL = { stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  // one broken part of a day must not stop the whole game: record it, tell the player once, and carry on
+  const FAULTS = [];
+  let STRICT = false;
+  function guard(s, name, fn) {
+    try { return fn(); } catch (e) {
+      if (STRICT) throw e;
+      FAULTS.push({ day: s && s.day, name, msg: String(e && e.message || e) }); if (FAULTS.length > 50) FAULTS.shift();
+      if (s) { s.faultDay = s.faultDay || {}; if (s.faultDay[name] !== s.day) { s.faultDay[name] = s.day; try { event(s, 'Something went wrong while ' + name + ' (' + String(e && e.message || e).slice(0, 80) + '). The game has carried on, and your progress is kept.', 'bad'); } catch (e2) {} } }
+      return undefined;
+    }
+  }
   // money that leaves your purse without a command of yours: named in the books all the same
   function flow(s, key, n) { if (!s.stats || !n) return; const f = s.stats.flows = s.stats.flows || {}; f[key] = (f[key] || 0) + n; }
   function closeDay(s) {
@@ -537,16 +548,16 @@
     if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
     if (s.ship) { spend(s, SHIP_UPKEEP); st.ship = (st.ship || 0) + SHIP_UPKEEP; }
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
-    if (s.people) { bizDay(s); peopleEvening(s); }
-    if (s.gov) govEvening(s);
-    if (s.gov && s.people) justiceDay(s);
-    if (s.realm && s.towns && s.people) courtsDay(s);
-    if (s.towns) townEvening(s);
-    if (s.people) propertyDay(s);
-    if (s.people) folkDay(s);
-    goodsDay(s); logPrices(s); seaMarketDay(s); valdoriaDay(s);
-    if (s.realm) realmDay(s);
-    if (s.people) electionDay(s);
+    if (s.people) { guard(s, 'the businesses closed for the day', () => bizDay(s)); guard(s, 'the evening in the village', () => peopleEvening(s)); }
+    if (s.gov) guard(s, 'the village government met', () => govEvening(s));
+    if (s.gov && s.people) guard(s, 'the watch and the courts sat', () => justiceDay(s));
+    if (s.realm && s.towns && s.people) guard(s, 'the royal courts sat', () => courtsDay(s));
+    if (s.towns) guard(s, 'the towns settled their evening', () => townEvening(s));
+    if (s.people) guard(s, 'property was reckoned', () => propertyDay(s));
+    if (s.people) guard(s, 'the folk talked it over', () => folkDay(s));
+    guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s));
+    if (s.realm) guard(s, 'the realm kept its books', () => realmDay(s));
+    if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
@@ -8202,8 +8213,8 @@
     const before = s.t;
     s.t += dt;
     updateJob(s, before);
-    if (crossed(before, s.t, 21 * 60)) closeDay(s);
-    if (crossed(before, s.t, 6 * 60)) openDay(s);
+    if (crossed(before, s.t, 21 * 60)) guard(s, 'the day ended', () => closeDay(s));
+    if (crossed(before, s.t, 6 * 60)) guard(s, 'the day began', () => openDay(s));
     const h = hourOf(s);
     if (h >= 6 && h < 21) spawnScheduled(s);
     if (s.valdoria && s.courts && Math.floor(before / 60) !== Math.floor(s.t / 60) && h >= 8 && h < 19) valCutpurse(s);
@@ -8215,13 +8226,13 @@
     if (s.folk) folkStep(s);
     separate(s);
     checkVillage(s);
-    if (s.elect) electionTick(s, before);
+    if (s.elect) guard(s, 'the vote went on', () => electionTick(s, before));
     if (!s.char || !s.char.retro) setupChar(s); if (!s.player.items) setupBag(s);
     if (!s.rpgShops && s.biz) { s.rpgShops = true; const MAP = { i_hammer: 'weaponsmith', i_cooper: 'bowyer', o_cooper: 'bowyer', s_arm1: 'armourer', s_arm2: 'weaponsmith', v_forge: 'armourer' };
       for (const id in s.biz) { const b = s.biz[id], e = empById(id); if (MAP[id]) b.trade = MAP[id]; else if (e && e.name === 'The Royal Armoury' && (b.town === 'crownmere')) b.trade = 'armourer'; } }
     FOREMAN.on = !!(s.char.perks.foreman);
-    if (!s.fight) wildStep(s, dt);
-    if (s.people && s.offices) { standingDay(s); agendaTick(s); byElectTick(s); if (s.people[you(s).pid]) familyDay(s); }
+    if (!s.fight) guard(s, 'the wilds moved', () => wildStep(s, dt));
+    if (s.people && s.offices) { guard(s, 'standing was reviewed', () => standingDay(s)); guard(s, 'office business was done', () => agendaTick(s)); guard(s, 'by-elections were held', () => byElectTick(s)); if (s.people[you(s).pid]) guard(s, 'the family went about its day', () => familyDay(s)); }
     if (s.regaliaPending && s.player.items) { const o = s.regaliaPending; s.regaliaPending = null; const give = { elder: ['chainoffice'], lord: ['mantle', 'signet'], seat: ['signet', 'finecoat'], crown: ['regalia', 'crown', 'mantle'] }[o] || [];
       const names = []; for (const id of give) { if (!ITEMS[id]) continue; let it = s.player.items.find(x => x.id === id); if (!it) { it = addItem(s, id, 1); names.push(ITEMS[id].name.toLowerCase()); } if (it && it.u != null) rpgCmd(s, 'rEquip', it.u); }
       if (names.length) event(s, 'You are sworn in, and given the marks of your office: ' + names.join(', ') + '. You wear them now.', 'good'); }
@@ -9041,7 +9052,7 @@
     openCost, STARTER_PRICE, tradeLevel, tradeXp, levelProgress, roundPay, workPlace, workRefusal, WORK_LEVELS, WORK_PAY, PERFECT_BONUS, CHAIN_MAX, BENCH_CUT, LEVEL_RANK, workRank, levelGate, barsFor, xpLevel,
     tierOf, plotPt, shopLabel, shopById, shopOnPlot, empById, learned, tradeSpeed, inShift, playerAtWork, wtpMean, recipeText, costText, goodsName,
     netWorth, propertyValue, summary, workerHours, canPay,
-    relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
+    faults: () => FAULTS.slice(), setStrict: v => { STRICT = !!v; }, relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
