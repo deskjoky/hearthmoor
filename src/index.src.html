@@ -1461,23 +1461,21 @@ mesh(new THREE.CylinderGeometry(POND.r + 0.6, POND.r + 0.6, 0.05, 20), waterMat,
 
 /* ----- lanes: worn earth that winds between the buildings ----- */
 const LANES = [
-  { w: 3.4, pts: [[9, 4], [24, 4.5], [40, 4], [45, 4], [54, 4], [66, 3], [92, 5]] },              // the east road, over the bridge to Oakbridge
-  { w: 2.4, pts: [[0, -5], [0.5, -14], [1, -22], [2, -32], [2, -46]] },                            // up to the manor
-  { w: 2.2, pts: [[-9, 3], [-16, 3.5], [-26, 4]] },                                                 // to the Village Hall
-  { w: 1.8, pts: [[-26, 4], [-32, 0], [-38, -4]] },                                                 // the Long Hut
-  { w: 2.0, pts: [[-24, 0], [-22, -10], [-22, -20], [-24, -30], [-26, -37.5]] },                   // the mill lane
-  { w: 1.5, pts: [[-22, -10], [-27, -12.4]] },                                                      // hall lot gate
-  { w: 1.6, pts: [[-22, -14], [-17.4, -14]] },                                                      // Elder's House
-  { w: 1.6, pts: [[0.8, -21], [-8.5, -23]] }, { w: 1.6, pts: [[1, -21], [14.5, -23]] },             // Fern Cottage, Brook House
-  { w: 1.8, pts: [[14.5, -23], [26, -28], [30, -30.5]] }, { w: 1.6, pts: [[30, -30.5], [36, -40], [39, -47]] }, // barn, iron pit
-  { w: 1.8, pts: [[24, 4.5], [25.5, -6], [26, -12.6]] }, { w: 1.4, pts: [[28, 4.4], [28, 0]] },    // granary, Ash Lane
-  { w: 1.8, pts: [[34, 4.2], [34, 9.6]] },                                                          // trading post
-  { w: 2.4, pts: [[0, 13], [0, 20], [0, 25], [0, 40], [0.5, 56]] },                                // south to the lots and the open land
-  { w: 2.0, pts: [[-36, 30], [-26, 24.5], [-14, 25], [0, 25], [14, 25], [26, 24.5], [36, 33], [37.6, 36]] }, // the lots lane
-  { w: 1.4, pts: [[0, 41], [19.4, 41.5]] }, { w: 1.4, pts: [[0, 43], [-19.4, 43.5]] },              // Hill Croft, Wood End
-  { w: 1.8, pts: [[-26, 4], [-34, 12], [-35.4, 19.6]] },                                            // your hut
-  { w: 1.4, pts: [[-36.5, 21], [-50, 12], [-56, 9]] },                                              // into the woods
-  { w: 1.6, pts: [[-32, 0], [-40, -14], [-42, -22]] },                                              // to the wheat field
+  // the village is laid out the way such places grew: a market square at the crossing of two roads, four streets out to four gates, and back lanes behind the plots
+  { w: 3.4, pts: [[11, 4], [24, 4.2], [40, 4], [45, 4], [54, 4], [66, 3], [92, 5]] },              // East Street, through the East Gate and over the bridge to Oakbridge
+  { w: 2.6, pts: [[0.5, -5], [1, -14], [1.5, -24], [2, -32], [2, -46]] },                          // Manor Street, up to the manor
+  { w: 3.0, pts: [[-11, 4], [-24, 4], [-36, 4], [-46, 4]] },                                        // West Street, to the West Gate
+  { w: 1.6, pts: [[-46, 4], [-52, 6], [-56, 9]] },                                                  // beyond the gate, into the woods
+  { w: 1.6, pts: [[-46, 4], [-48, -8], [-45, -20]] },                                               // beyond the gate, to the wheat field
+  { w: 2.6, pts: [[0, 13], [0, 24], [0, 37], [0, 50], [0.5, 64]] },                                // South Street, through the South Gate to the open land
+  { w: 2.0, pts: [[-24, 4], [-24, -14], [-25, -26], [-26, -37.5]] },                               // Mill Lane
+  { w: 1.8, pts: [[-24, -14], [-12, -15], [1, -15]] },                                              // Hall Lane, behind the bakehouse
+  { w: 1.8, pts: [[1.5, -24], [14, -24], [26, -24]] }, { w: 1.8, pts: [[26, -24], [30, -30.5]] },   // Barn Lane
+  { w: 1.6, pts: [[30, -30.5], [36, -40], [39, -47]] },                                             // on to the iron pit
+  { w: 1.8, pts: [[26, 4], [26, -12], [26, -24]] },                                                 // Granary Lane
+  { w: 1.8, pts: [[-24, 4], [-24, 18], [-14, 24], [0, 24]] },                                       // Chapel Lane
+  { w: 1.8, pts: [[0, 24], [14, 24], [26, 18], [26, 4]] },                                          // Lots Lane
+  { w: 1.6, pts: [[-18, 37], [0, 37], [8, 37]] },                                                   // Commons Lane
   { w: 1.6, pts: [[66, 3], [63.5, -2.4]] }                                                          // the watchtower
 ];
 const dirt = '#6f5a3d';
@@ -1486,7 +1484,7 @@ const dirt = '#6f5a3d';
   for (const ln of LANES) parts.push({ geo: ribbon(ln.pts, i => ln.w * (0.92 + 0.16 * Math.sin(i * 1.7)), (x, z) => groundH(x, z) + 0.08, 1), color: dirt });
   // the square: an irregular worn green around the well
   const ring = [];
-  for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2, r = 10.4 + Math.sin(a * 3) * 1.1 + Math.cos(a * 5) * 0.6; ring.push([SQ.x + Math.cos(a) * r, SQ.z + Math.sin(a) * r * 0.92]); }
+  for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a), k = 1 + 0.03 * Math.sin(a * 7), se = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e); ring.push([SQ.x + se(c, 0.45) * 11.6 * k, SQ.z + se(sn, 0.45) * 9.4 * k]); }
   const sq = [];
   for (let i = 0; i < ring.length; i++) { const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length]; sq.push(SQ.x, groundH(SQ.x, SQ.z) + 0.1, SQ.z, bx, groundH(bx, bz) + 0.1, bz, ax, groundH(ax, az) + 0.1, az); }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sq, 3)); sg.computeVertexNormals();
@@ -1498,9 +1496,9 @@ const nearLane = (x, z, r) => LANES.some(ln => segDist(x, z, ln.pts) < ln.w / 2 
 /* ----- where trees may not grow ----- */
 const HOUSES = Sim.HOUSES;
 const keepClear = [
-  { x: SQ.x, z: SQ.z, r: 14 }, { x: -31, z: 4, r: 7 }, { x: -30, z: -16, r: 7 }, { x: 26, z: -15, r: 5 }, { x: 64, z: -6, r: 5 }, { x: 34, z: 12, r: 6 },
+  { x: SQ.x, z: SQ.z, r: 15 }, { x: L.hall.x, z: L.hall.z, r: 7 }, { x: L.granary.x, z: L.granary.z, r: 5 }, { x: 64, z: -6, r: 5 }, { x: L.market.x, z: L.market.z, r: 6 }, { x: L.chapel.x, z: L.chapel.z, r: 7 }, { x: L.stables.x, z: L.stables.z, r: 6 },
   { x: 2, z: -58, r: 20 }, { x: -26, z: -42, r: 8 }, { x: POND.x, z: POND.z, r: 7 }, { x: 34, z: -34, r: 10 }, { x: L.pit.x, z: L.pit.z, r: 8 },
-  { x: L.home.x, z: L.home.z, r: 5 }, { x: L.cottage.x, z: L.cottage.z, r: 5 }, { x: 0, z: 54, r: 18 }
+  { x: L.home.x, z: L.home.z, r: 5 }, { x: L.cottage.x, z: L.cottage.z, r: 5 }, { x: 0, z: 62, r: 18 }
 ].concat(Sim.EMPLOYERS.map(e => ({ x: e.x, z: e.z, r: 7 })), Sim.PLOTS.map(p => ({ x: p.x, z: p.z, r: 6.5 })), HOUSES.map(h => ({ x: h.x, z: h.z, r: 6.5 })));
 const fieldBox = { x0: L.field.x - 11, x1: L.field.x + 11, z0: L.field.z - 8, z1: L.field.z + 8 };
 const clear = (x, z) => keepClear.every(k => Math.hypot(x - k.x, z - k.z) > k.r) && !nearLane(x, z, 1.6)
@@ -1828,13 +1826,13 @@ function townHouse(f, h, i, o) {
   }
 }
 HOUSES.forEach((h, i) => {
-  const FACE = [[-2, -22], [6, -22], [-32, -2], [-26, 22], [26, 22], [28, 6], [-23, -14], [4, 41], [-30, 28], [-4, 43]][i] || [0, 4];
+  const FACE = h.f || [0, 4];
   const ry = facing(h.x, h.z, FACE[0], FACE[1]);
   const big = h.cap >= 4;
   cottage(fr(h.x, h.z, ry), { w: big ? 6 : 4.6, d: big ? 4.6 : 3.8, h: big ? 2.5 : 2.2, wall: WALLS[i % 4], roof: THATCH[i % 4], washing: i % 3 === 0, door: ['#3b2a1c', '#5a3a28', '#2f4f6a', '#6b4a2e'][i % 4] });
 });
 // your hut: small, draughty, yours
-cottage(fr(L.home.x, L.home.z, facing(L.home.x, L.home.z, -30, 20)), { w: 3.6, d: 3, h: 1.9, wall: '#8a6e4c', roof: '#7a6440', door: '#2f4f6a', yard: false, rh: 1.6 });
+cottage(fr(L.home.x, L.home.z, facing(L.home.x, L.home.z, L.home.x, 4)), { w: 3.6, d: 3, h: 1.9, wall: '#8a6e4c', roof: '#7a6440', door: '#2f4f6a', yard: false, rh: 1.6 });
 function hut(x, z, opts) {
   const o = Object.assign({ w: 3.6, d: 3, h: 1.9, wall: '#6e4f33', roof: '#8a7445', door: '#3b2a1c' }, opts);
   const g = new THREE.Group(); g.position.set(x, groundH(x, z), z); g.rotation.y = o.ry != null ? o.ry : Math.atan2(-x, -z);
@@ -2114,7 +2112,7 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   V.barnFrame = f; V.penAt = { px, pz };
 })();
 (function cottage() {
-  const p = L.cottage, ry = facing(p.x, p.z, 34, 36);
+  const p = L.cottage, ry = facing(p.x, p.z, p.x, 4);
   V.cottageOld = hut(p.x, p.z, { wall: '#5e4a36', roof: '#6b5a3a', door: '#2a2018', ry }); V.cottageOld.rotation.z = 0.04;
   V.cottageNew = hut(p.x, p.z, { wall: '#c9b48a', roof: '#9a8050', door: '#7a3a28', ry });
   V.forSaleSign = new THREE.Group(); V.forSaleSign.position.set(p.x - 2.6, groundH(p.x - 2.6, p.z - 1), p.z - 1); scene.add(V.forSaleSign);
@@ -2803,7 +2801,7 @@ function syncVillage(s) {
 }
 // chimneys that smoke in the morning and evening, when the hearths are lit
 const HEARTHS = HOUSES.map((h, i) => {
-  const FACE = [[-2, -22], [6, -22], [-32, -2], [-26, 22], [26, 22], [28, 6], [-23, -14], [4, 41], [-30, 28], [-4, 43]][i] || [0, 4];
+  const FACE = h.f || [0, 4];
   const ry = facing(h.x, h.z, FACE[0], FACE[1]), w = h.cap >= 4 ? 6 : 4.6, hh = h.cap >= 4 ? 2.5 : 2.2;
   const v = new THREE.Vector3(-w / 2 + 0.8, 0.4 + hh + 2.4, -0.4).applyMatrix4(fr(h.x, h.z, ry));
   return { id: 'h' + i, x: v.x, y: v.y, z: v.z };

@@ -58,15 +58,15 @@
      x runs east, z runs south, so north is -z. The square is at (0, 4). */
   // dir: which way a shop faces. 1 = its counter faces south (+z), -1 = it faces north (-z)
   const PLOTS = [
-    { x: -14, z: 30, name: 'West lot', dir: -1 }, { x: 0, z: 31, name: 'Middle lot', dir: -1 }, { x: 14, z: 30, name: 'East lot', dir: -1 },
-    { x: -30, z: -16, name: 'Hall lot', grant: true, dir: 1 }
+    { x: -10, z: 30, name: 'West lot', dir: -1 }, { x: 30, z: 11, name: 'Middle lot', dir: -1 }, { x: 10, z: 30, name: 'East lot', dir: -1 },
+    { x: -17, z: -8, name: 'Hall lot', grant: true, dir: -1 }
   ];
   const REL = { serve: { x: 0, z: 0.4 }, queue0: { x: 0, z: 2.6 }, station: { x: -2.3, z: -0.8 }, store: { x: 2.4, z: -0.6 }, bench: { x: 3.9, z: 2.4 } };
   const EMPLOYERS = [
-    { id: 'gerd', trade: 'bakery', name: "Gerd's Bakehouse", boss: 'Gerd', x: -12, z: -8, dir: 1, shift: [6, 12], wage: 6 },
-    { id: 'forge', trade: 'smithy', name: "Hollin's Forge", boss: 'Hollin', x: 12, z: -8, dir: 1, shift: [8, 14], wage: 8 },
-    { id: 'tankard', trade: 'tavern', name: 'The Crooked Tankard', boss: 'Mother Ysolde', x: -12, z: 17, dir: -1, shift: [15, 21], wage: 6 },
-    { id: 'ash', trade: 'joinery', name: 'Ash & Sons Joinery', boss: 'Ash', x: 12, z: 17, dir: -1, shift: [9, 15], wage: 7 }
+    { id: 'gerd', trade: 'bakery', name: "Gerd's Bakehouse", boss: 'Gerd', x: -7, z: -9, dir: 1, shift: [6, 12], wage: 6 },
+    { id: 'forge', trade: 'smithy', name: "Hollin's Forge", boss: 'Hollin', x: 8, z: -9, dir: 1, shift: [8, 14], wage: 8 },
+    { id: 'tankard', trade: 'tavern', name: 'The Crooked Tankard', boss: 'Mother Ysolde', x: -7, z: 17, dir: -1, shift: [15, 21], wage: 6 },
+    { id: 'ash', trade: 'joinery', name: 'Ash & Sons Joinery', boss: 'Ash', x: 8, z: 17, dir: -1, shift: [9, 15], wage: 7 }
   ];
   // the mill: a village business on the millrace, run by its own miller (no shifts for hire yet)
   const MILL = { id: 'mill', trade: 'mill', name: "Tamsin's Mill", boss: 'Tamsin', x: -26, z: -42, dir: 1, shift: [6, 15], wage: 7, noJob: true };
@@ -77,18 +77,20 @@
     field: { x: -46, z: -30, r: 10, name: 'Wheat Field' },
     forest: { x: -62, z: 6, r: 10, name: 'Pine Woods' },
     pit: { x: 40, z: -52, r: 6, name: 'Iron Pit' },
-    market: { x: 34, z: 12, r: 4, name: 'Trading Post' },
-    home: { x: -38, z: 20, r: 3, name: 'Your Hut' },
+    market: { x: 17, z: 12, r: 4, name: 'Trading Post' },
+    home: { x: -38, z: -1, r: 3, name: 'Your Hut' },
     well: { x: 0, z: 4, r: 2.2, name: 'Village Well' },
-    hall: { x: -31, z: 4, r: 5.5, name: 'Village Hall' },
-    granary: { x: 26, z: -15, r: 3.4, name: 'Granary' },
+    hall: { x: -16, z: 4, r: 5.5, name: 'Village Hall' },
+    granary: { x: 17, z: -4, r: 3.4, name: 'Granary' },
     tower: { x: 64, z: -6, r: 4, name: 'Old Watchtower' },
     manor: { x: 2, z: -52, r: 7, name: 'Varrow Manor' },
-    cottage: { x: 40, z: 38, r: 3.5, name: "Old Ama's Cottage" },
+    cottage: { x: 39, z: 11, r: 3.5, name: "Old Ama's Cottage" },
     mill: { x: -26, z: -42, r: 5, name: "Tamsin's Mill" },
     barn: { x: 30, z: -36, r: 5, name: 'The Barn' },
     bridge: { x: 50, z: 4, r: 4, name: 'Stream Bridge' },
-    lots: { x: 0, z: 54, r: 10, name: 'Open land' },
+    lots: { x: 0, z: 62, r: 10, name: 'Open land' },
+    chapel: { x: -20, z: 30, r: 4.5, name: 'St Alder\u2019s Chapel' },
+    stables: { x: 39, z: -3, r: 4, name: 'The Gate Stables' },
     waystation: { x: 226, z: -34, r: 9, name: 'The Waystation' },
     ruin: { x: 290, z: -246, r: 12, name: 'Old Barrow Keep' },
     oakgate: { x: 404, z: -372, r: 12, name: 'Oakbridge Gate' }
@@ -96,19 +98,23 @@
   PLOTS.forEach((p, i) => { LOCS['plot' + i] = { x: p.x, z: p.z, r: 4.6, name: p.name, plot: i }; });
   EMPLOYERS.forEach(e => { LOCS['emp:' + e.id] = { x: e.x, z: e.z + 1.5 * e.dir, r: 3.8, name: e.name, emp: e.id }; });
   const P = {
-    market: { x: 34, z: 9.4 }, well: { x: 0, z: 5.8 }, plaza: { x: 0, z: 9 }, center: { x: 0, z: 4 },
-    road: { x: 82, z: 4 }, home: { x: -35.6, z: 20 },
-    hall: { x: -26, z: 4 }, granary: { x: 26, z: -12.2 }, tower: { x: 62, z: -1.6 }, gate: { x: 2, z: -38.6 }, cottage: { x: 38, z: 35.6 },
+    market: { x: 17, z: 9.4 }, well: { x: 0, z: 5.8 }, plaza: { x: 0, z: 9 }, center: { x: 0, z: 4 },
+    road: { x: 82, z: 4 }, home: { x: -38, z: 1.6 },
+    hall: { x: -11, z: 4 }, granary: { x: 17, z: -1.2 }, tower: { x: 62, z: -1.6 }, gate: { x: 2, z: -38.6 }, cottage: { x: 39, z: 8.4 },
     manorRoad: { x: 2, z: -37 }, square: { x: 5, z: 1 }, mill: { x: -26, z: -38.2 },
-    elderDesk: { x: -27.4, z: 6.2 }, guardPost: { x: 4.4, z: -38.4 }
+    elderDesk: { x: -12.4, z: 6.2 }, guardPost: { x: 4.4, z: -38.4 }, chapel: { x: -20, z: 26.6 }, stables: { x: 39, z: 0.4 }
   };
   // homes: whole households live together; rent is paid per household
   const HOUSES = [
-    { name: 'Fern Cottage', x: -12, z: -24, cap: 4 }, { name: 'Brook House', x: 18, z: -24, cap: 4 }, { name: 'The Long Hut', x: -40, z: -8, cap: 5 },
-    { name: 'Mill Row', x: -28, z: 27, cap: 3 }, { name: 'Thorn Hut', x: 28, z: 27, cap: 3 }, { name: 'Ash Lane', x: 28, z: -2, cap: 3 },
-    { name: 'Elder’s House', x: -19, z: -14, cap: 3 }, { name: 'Hill Croft', x: 22, z: 42, cap: 3 }, { name: 'West Croft', x: -40, z: 34, cap: 3 },
-    { name: 'Wood End', x: -22, z: 44, cap: 3 }
+    // f: the point on its street that the house faces. The first ten are the old village; the last four were added when it was rebuilt on a medieval plan
+    { name: 'Fern Cottage', x: -7, z: -30, cap: 4, f: [1.5, -30] }, { name: 'Brook House', x: 9, z: -19, cap: 4, f: [1.5, -19] }, { name: 'The Long Hut', x: -30, z: -2, cap: 5, f: [-30, 4] },
+    { name: 'Mill Row', x: -30, z: 10, cap: 3, f: [-30, 4] }, { name: 'Thorn Hut', x: 30, z: -2, cap: 3, f: [30, 4] }, { name: 'Ash Lane', x: 9, z: -29, cap: 3, f: [1.5, -29] },
+    { name: 'Elder’s House', x: -7, z: -21, cap: 3, f: [1.5, -21] }, { name: 'Hill Croft', x: 8, z: 42, cap: 3, f: [8, 37] }, { name: 'West Croft', x: -39, z: 10, cap: 3, f: [-39, 4] },
+    { name: 'Wood End', x: -8, z: 42, cap: 3, f: [-8, 37] },
+    { name: 'Lane End', x: 20, z: -13, cap: 3, f: [26, -13] }, { name: 'Tanner’s Row', x: 32, z: -15, cap: 3, f: [26, -15] }, { name: 'Chapel Cottage', x: -31, z: 21, cap: 3, f: [-24, 21] },
+    { name: 'Commons Row', x: -18, z: 42, cap: 3, f: [-18, 37] }
   ];
+  const OLD_HOUSES = 10;   // how many houses the village had before it was rebuilt
   const HOMES = HOUSES, WORKER_HOMES = [], NEW_HUTS = [];
 
   /* ---------- the land beyond the village (Stage II) ----------
@@ -206,7 +212,7 @@
     cottages: { name: 'New cottages', cost: 90, days: 4, text: 'Three cottages on the open land. New families move in: more hands, more customers, more voices at the moot.' },
     pasture: { name: 'A common pasture', cost: 30, days: 2, text: 'Grazing for everyone\u2019s animals. Field hands earn a little more, and the chest takes small grazing fees.' }
   };
-  const NEW_COTTAGES = [{ x: -8, z: 53, name: 'Commons Cottage' }, { x: 8, z: 53, name: 'Stile Cottage' }, { x: 0, z: 63, name: 'Far Croft' }];
+  const NEW_COTTAGES = [{ x: -9, z: 58, name: 'Commons Cottage' }, { x: 9, z: 58, name: 'Stile Cottage' }, { x: 0, z: 70, name: 'Far Croft' }];
   const FOOD = 3, ODD_JOBS = 3, COMMONS_PAY = 7, EVICT_AFTER = 3, LEAVE_AFTER = 4;
   const INTEREST = 0.02, SEIZE_AT = -150, SEIZE_DAYS = 3, CHEST_FLOOR = -150, LORD_FALL = -300, COUNCIL_SEATS = 3;
   const VILLAGERS = [
@@ -1580,7 +1586,8 @@
     const i = +String(h.id).replace(/^[a-z]+/, ''), L = h.town === 'oakbridge' ? OAK.houses : h.town === 'crownmere' ? CM.houses : h.town === 'greenhaven' ? GH.houses : null;
     const src = L && L[i];
     if (src) return { face: src.face, tall: !!src.tall, kind: h.town };
-    return { face: Math.atan2(P.center.x - h.x, P.center.z - h.z), tall: (h.cap || 0) >= 4, kind: 'hearthmoor' };
+    const own = !h.town && HOUSES.find(x => x.name === h.name), aim = own && own.f ? { x: own.f[0], z: own.f[1] } : P.center;
+    return { face: Math.atan2(aim.x - h.x, aim.z - h.z), tall: (h.cap || 0) >= 4, kind: 'hearthmoor' };
   }
   function doorOf(h) { const f = houseShape(h).face; return { x: h.x + Math.sin(f) * 4.2, z: h.z + Math.cos(f) * 4.2 }; }
   function homeOfYou(s) { const st = yourSeat(s); if (st) { const pt = SEATS()[st]; return { x: pt.x, z: pt.z, name: seatName(s, st), town: st, house: null, seat: st }; } const h = yourHouse(s); return h ? { x: h.x, z: h.z, name: h.name, town: h.town || 'hearthmoor', house: h } : { x: P.home.x, z: P.home.z, name: 'your hut', town: 'hearthmoor', house: null }; }
