@@ -8458,8 +8458,8 @@
     for (const a of s.agents) { const p = a.pid && s.people && s.people[a.pid]; if (!p || townOf(p) !== 'hearthmoor') continue; const pt = homePoint(s, p) || P.center; a.x = pt.x; a.z = pt.z; a.mode = 'routine'; a.icon = null; a.moving = false; a.tx = null; a.tz = null; if (a.job) a.spot = jobSpot(s, a.job); }
     for (const shop of (s.shops || [])) { shop.queue = []; if (shop.worker) { const w = shop.worker, wp = w.pid && s.people && s.people[w.pid]; w.home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 }; const pt = plotPt(shop, 'serve'); w.x = pt.x; w.z = pt.z; w.task = null; w.carry = null; w.sup = null; } }
     if (s.schedule) s.schedule = s.schedule.filter(e => !e.shop && !e.id);
-    const pl = s.player; if (pl && inVillage(pl)) { pl.x = P.plaza.x; pl.z = P.plaza.z + 2; pl.dest = null; pl.action = null; }
-    event(s, 'Hearthmoor has been rebuilt on an older plan: a market square with the shops round it, streets of houses out to three gates, a palisade, a chapel and a stable. Every home keeps its people and its owner. You are standing in the square.', 'story');
+    const pl = s.player; if (pl && inVillage(pl)) { pl.x = P.home.x; pl.z = P.home.z; pl.dest = null; pl.action = null; }
+    event(s, 'Hearthmoor has been rebuilt on an older plan: a market square with the shops round it, streets of houses out to three gates, a palisade, a chapel and a stable. Every home keeps its people and its owner. You wake at your old hut, which now stands on West Street.', 'story');
   }
   function deserialize(str, opt) {   // opt.allowOld: tests only, to keep the old migrations exercised; the game refuses old saves
     let s = JSON.parse(str);

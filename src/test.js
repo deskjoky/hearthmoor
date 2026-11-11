@@ -1408,6 +1408,7 @@ console.log('45. Rebellion against the King of Alderwyn (v0.51)');
   const owed = RW.after.owed.slice(); check(owed.length >= 1, 'and ' + owed.length + ' allies sworn on a promise are owed land or a seat');
   check(Y('rewardAlly', owed[0], 'seat').ok && !RW.after.owed.includes(owed[0]), 'a promise kept: a council seat for an ally');
   check(Y('rebelSettle', 'amnesty').ok && RW.after.settled, 'the old king’s lords are given amnesty');
+  holdElections(w);   // this is about the broken promise, not about whether the new ruler survives a vote in the meantime
   for (let i = 0; i < 26; i++) Sim.advance(w, 1440);
   check(owed.length < 2 || RW.rival, owed.length < 2 ? 'no promise left unkept' : 'an ally cheated of their promise raises men against the new ruler');
   // a rising for a charter, ended on the king's terms
