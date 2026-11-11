@@ -1276,6 +1276,12 @@ function deckAt(x, z) {
   for (const D of DECKS) { const dx = x - D.ax, dz = z - D.az, t = (dx * D.ux + dz * D.uz) / D.L; if (t < -0.03 || t > 1.03) continue; if (Math.abs(dx * D.uz - dz * D.ux) > D.w / 2 + 0.25) continue; return D.h(Math.max(0, Math.min(1, t))); }
   return null;
 }
+// a parish church: nave, chancel and a square west tower over the door, with a few graves about it
+function drawChurch(cf, S1, S2, RF) {
+  box(cf, '#7d776a', 0, 0.2, 0, 9, 0.5, 15); box(cf, S1, 0, 3.2, 0.5, 7.4, 6, 11); part(cf, roofG(8, 11.6, 3.8), RF, 0, 6.2, 0.5); box(cf, S1, 0, 2.6, -6.2, 5.4, 4.8, 3); part(cf, roofG(6, 3.4, 2.6), RF, 0, 5, -6.2);
+    box(cf, S2, 0, 6.5, 6.2, 4.6, 13, 4.6); part(cf, new THREE.ConeGeometry(3.6, 4.6, 4), RF, 0, 15.3, 6.2, Math.PI / 4); box(cf, '#3b2a1c', 0, 1.6, 8.52, 1.8, 3, 0.1); win(cf, 0, 8.6, 8.52, 0.9, 1.8, 0.06); [-3, 0, 3].forEach(z => { win(cf, 3.72, 3.4, z, 0.06, 2.2, 0.9); win(cf, -3.72, 3.4, z, 0.06, 2.2, 0.9); });
+    [[-6.5, 3], [-7, -2], [6.5, -1], [7, 4], [-6, -6]].forEach(([u, v], k) => box(cf, '#8b877c', u, 0.45, v, 0.5, 0.9, 0.14, 0, 0.2 * (k % 3 - 1)));
+}
 function span(ax, az, bx, bz, w, o) {
   o = o || {};
   const L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, ry = Math.atan2(ux, uz);
@@ -2303,9 +2309,7 @@ const CROPS = [
   { const R = O.keep.bailey, N = 16; for (let k = 0; k < N; k++) { const a0 = Math.PI / 2 + (k + 0.5) / N * Math.PI * 2, a1 = Math.PI / 2 + (k + 1.5) / N * Math.PI * 2; if (k === N - 1) continue; between(O.keep.x + Math.cos(a0) * R, O.keep.z + Math.sin(a0) * R, O.keep.x + Math.cos(a1) * R, O.keep.z + Math.sin(a1) * R, Y + 2, 1.2, 4, STONE); }
     [-1, 1].forEach(sd => { const a = Math.PI / 2 + sd * Math.PI / N, g = M4(O.keep.x + Math.cos(a) * R, Y, O.keep.z + Math.sin(a) * R); box(g, STONE2, 0, 3, 0, 2.6, 6, 2.6); part(g, new THREE.ConeGeometry(2.1, 2.2, 4), SLATE, 0, 7.1, 0, Math.PI / 4); }); }
   // St Aldhelm’s: nave, chancel and a square west tower, in its churchyard
-  { const cf = at(O.church.x, O.church.z, O.church.face); box(cf, '#7d776a', 0, 0.2, 0, 9, 0.5, 15); box(cf, STONE, 0, 3.2, 0.5, 7.4, 6, 11); part(cf, roofG(8, 11.6, 3.8), SLATE, 0, 6.2, 0.5); box(cf, STONE, 0, 2.6, -6.2, 5.4, 4.8, 3); part(cf, roofG(6, 3.4, 2.6), SLATE, 0, 5, -6.2);
-    box(cf, STONE2, 0, 6.5, 6.2, 4.6, 13, 4.6); part(cf, new THREE.ConeGeometry(3.6, 4.6, 4), SLATE, 0, 15.3, 6.2, Math.PI / 4); box(cf, '#3b2a1c', 0, 1.6, 8.52, 1.8, 3, 0.1); win(cf, 0, 8.6, 8.52, 0.9, 1.8, 0.06); [-3, 0, 3].forEach(z => { win(cf, 3.72, 3.4, z, 0.06, 2.2, 0.9); win(cf, -3.72, 3.4, z, 0.06, 2.2, 0.9); });
-    [[-6.5, 3], [-7, -2], [6.5, -1], [7, 4], [-6, -6]].forEach(([u, v], k) => box(cf, '#8b877c', u, 0.45, v, 0.5, 0.9, 0.14, 0, 0.2 * (k % 3 - 1))); }
+  drawChurch(at(O.church.x, O.church.z, O.church.face), STONE, STONE2, SLATE);
   // the mill wheel turns in the race beside the Riverside Bakehouse
   { const ml = O.biz.find(b => b.id === 'o_mill'), g = M4(ml.x + 5.2, Y + 0.6, ml.z, 0); part(g, new THREE.CylinderGeometry(2.4, 2.4, 0.9, 14), '#5b4029', 0, 0, 0, 0, 0, Math.PI / 2); part(g, new THREE.CylinderGeometry(0.3, 0.3, 1.6, 6), BEAMS, 0, 0, 0, 0, 0, Math.PI / 2); }
   // the Oak Bridge: a gentle stone arch at street level, on two piers in the river
@@ -2372,6 +2376,7 @@ const CROPS = [
     for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, pd = mesh(new THREE.BoxGeometry(1.2, 0.7, 0.12), '#6b4a2e', 0, Math.sin(a) * 2.9, Math.cos(a) * 2.9, wheel); pd.rotation.x = -a; }
     mesh(new THREE.BoxGeometry(0.4, 0.4, 3), '#3a3128', 0, 0, 0, wg).rotation.y = Math.PI / 2; }
   // the moot hall: a timber hall raised on stone posts, open below for the market in the wet
+  drawChurch(at(H.church.x, H.church.z, H.church.face), '#b9ad94', '#a39a84', '#6b5a3a');
   const hf = at(H.hall.x, H.hall.z, H.hall.face);
   [-4, -1.3, 1.3, 4].forEach(x => [-2.5, 2.5].forEach(z => box(hf, '#8b877c', x, 1.2, z, 0.6, 2.4, 0.6)));
   box(hf, '#6b4a2e', 0, 2.5, 0, 10, 0.25, 6.4); box(hf, '#c9b48a', 0, 3.9, 0, 9.6, 2.6, 6); [-4.8, -2.4, 0, 2.4, 4.8].forEach(x => box(hf, BEAMS, x, 3.9, 3.02, 0.16, 2.6, 0.08));
@@ -3616,6 +3621,7 @@ const OAK_SOLIDS = (function () {
 })();
 const GH_SOLIDS = (function () {
   const H = Sim.GH, out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
+  { const c = H.church, vx = Math.sin(c.face), vz = Math.cos(c.face); [-6, -2.5, 1, 4.5].forEach(v => C(c.x + vx * v, c.z + vz * v, 4)); C(c.x + vx * 6.4, c.z + vz * 6.4, 3.2); }
   H.houses.forEach(h => { C(h.x, h.z, 2.8); if (h.tall) C(h.x + Math.cos(h.face) * 4.6, h.z - Math.sin(h.face) * 4.6, 2); });
   H.biz.forEach(b => {
     const ux = Math.cos(b.face), uz = -Math.sin(b.face);
@@ -6483,7 +6489,7 @@ const PLACE_NOTE = {
   market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
   icmine: 'Adits driven into the crag, where most of Ironcrest works: iron ore by the cartload.', icsmelt: 'Three stone furnaces that turn ore into iron, day and night.', ickeep: 'The seat of the lord of Ironcrest.', ewquay: 'Ships from up and down the coast unload here. Dockers always needed.', ewyard: 'A ship on the slip, ribs showing.', ewkeep: 'The Warden of the Coast keeps her hall here.', ewgate: 'The Land Gate, where the coast road comes in.', ewlight: 'The lighthouse at the end of the mole.', 'stage:ironcrest': 'Coaches down to Crownmere and beyond, and horses for sale.', 'stage:eastwatch': 'Coaches west to Oakbridge and beyond, and horses for sale.',
-  granary: 'The village food store.', oakchurch: 'The parish church of Oakbridge, older than the walls, with its square tower over the churchyard.', chapel: 'A small stone chapel with a bell, for weddings, funerals and holy days.', stables: 'An open-fronted stable inside the East Gate, where travellers leave their horses.', cmmarket: 'The Great Market: stalls, shops and the great fountain.', cmhall: 'Seat of the Lord Mayor and the guilds.', cmcastle: 'The royal castle above the lake.', cmgreat: 'Where the lords gather and the court sits in state.', cmquay: 'Boats and barges on Crown Lake.', cmgate: 'The great south gate.', cmgatew: 'The west gate, to Greenhaven.', 'stage:crownmere': 'Coaches to every town, and horses for sale.', 'stage:hearthmoor': 'Coaches to Oakbridge and Greenhaven, and horses for sale.', 'stage:oakbridge': 'Coaches to Hearthmoor and Greenhaven, and horses for sale.', 'stage:greenhaven': 'Coaches to Hearthmoor and Oakbridge, and horses for sale.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
+  granary: 'The village food store.', ghchurch: 'The village church of Greenhaven, at the end of Church Lane, where the harvest is blessed.', oakchurch: 'The parish church of Oakbridge, older than the walls, with its square tower over the churchyard.', chapel: 'A small stone chapel with a bell, for weddings, funerals and holy days.', stables: 'An open-fronted stable inside the East Gate, where travellers leave their horses.', cmmarket: 'The Great Market: stalls, shops and the great fountain.', cmhall: 'Seat of the Lord Mayor and the guilds.', cmcastle: 'The royal castle above the lake.', cmgreat: 'Where the lords gather and the court sits in state.', cmquay: 'Boats and barges on Crown Lake.', cmgate: 'The great south gate.', cmgatew: 'The west gate, to Greenhaven.', 'stage:crownmere': 'Coaches to every town, and horses for sale.', 'stage:hearthmoor': 'Coaches to Oakbridge and Greenhaven, and horses for sale.', 'stage:oakbridge': 'Coaches to Hearthmoor and Greenhaven, and horses for sale.', 'stage:greenhaven': 'Coaches to Hearthmoor and Oakbridge, and horses for sale.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
 };
 function renderMapCard() {
   buildPins();
@@ -7099,7 +7105,7 @@ const Mini = (function () {
     line(2, [[H.bridge.ax, H.bridge.az], [H.bridge.bx, H.bridge.bz]], H.bridge.w, COL.street);
     H.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 7.6 : 5, 4.2, h.face, COL.house));
     H.biz.forEach(b => rect(4, b.x, b.z, b.id === 'g_mill' ? 10 : b.id === 'g_plough' ? 8 : 6.4, b.id === 'g_mill' ? 8 : 5.6, b.face, b.id === 'g_estate' ? COL.big : COL.house));
-    rect(4, H.hall.x, H.hall.z, 10, 6, H.hall.face, COL.big); rect(4, H.estate.x, H.estate.z, 22, 11, H.estate.face, COL.big); }
+    rect(4, H.hall.x, H.hall.z, 10, 6, H.hall.face, COL.big); rect(4, H.church.x, H.church.z, 8, 15, H.church.face, COL.big); rect(4, H.estate.x, H.estate.z, 22, 11, H.estate.face, COL.big); }
   // Crownmere
   { const O = Sim.CM;
     O.streets.forEach(st => line(2, st.pts, st.w, COL.street));

@@ -3096,6 +3096,66 @@
   OAK.biz.forEach(b0 => { LOCS['ob:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'oakbridge' }; });
   const OAK_JOBS = { docks: ['Porter on the quay', 'Hauling cargo on the quay'], carting: ['Carter', 'Loading carts'], watch: ['Town watchman', 'Keeping watch at the gate'], washing: ['Washer', 'Washing linen at the river steps'], oakfields: ['Field hand', 'Working the fields outside the walls'], labour: ['Labourer', 'Hauling stone on the east bank'] };
   OAK.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
+  /* ---------- Streets first (Stage II): in every town a house fronts a street ----------
+     Side lanes are driven off the streets, a plot's depth apart, until there is frontage for every household; then
+     the plots are walked along both sides of every street and lane. Homes keep their number and their height from
+     the towns as first built, so an old save finds every household behind its own door. */
+  const OLD_TALL = {"greenhaven":[43,"99400009008"],"crownmere":[640,"caffb5ff5f339d1ffbff3fbdbd033778000020005813edeaa2deaa31000cee0d07cabe4680ee7f7efddb6f81dbffeafff740e1c0f80000600853a476762520ce01bbbfabfe9debfdd195590b0b1c40d3"],"ironcrest":[46,"eb0020812120"],"eastwatch":[112,"c1aa56d946b932dac12581800a0b"],"dawnport":[104,"c91f9e795135ca3f0c37749508"],"goldmeadow":[26,"0080210"],"thornwick":[20,"00234"],"stonewatch":[56,"d916ae18db1584"],"valdor":[72,"a7af7f5c84e4654509"]};
+  const LANE_NAMES = ['Pump Lane', 'Angel Lane', 'Bell Yard', 'Crooked Lane', 'Dyers’ Close', 'Elm Row', 'Friars’ Lane', 'Goose Lane', 'Hog Lane', 'Kiln Close', 'Lamb Yard', 'Mercers’ Lane', 'Needle Row', 'Old Close', 'Pye Lane', 'Quill Yard', 'Rood Lane', 'Saddlers’ Row', 'Tallow Close', 'Vine Yard', 'Wren Lane', 'Coopers’ Close', 'Glovers’ Row', 'Honey Lane', 'Ivy Close', 'Lark Lane', 'Malt Yard', 'Nettle Lane', 'Paternoster Row', 'Swan Yard', 'Thimble Lane', 'Well Close', 'Barley Lane', 'Candle Row', 'Dove Yard', 'Fetter Lane', 'Garlick Row', 'Hatters’ Close', 'Pudding Lane', 'Shoe Lane'];
+  const VAL_LANES = ['Calle del Pozo', 'Calle de la Luna', 'Callejón del Horno', 'Calle de los Olivos', 'Calle del Ángel', 'Callejón de la Rosa', 'Calle de San Blas', 'Calle del Agua', 'Calle de la Sal', 'Callejón del Gato', 'Calle de los Tintes', 'Calle de la Parra', 'Calle del Sol', 'Callejón de las Flores', 'Calle del Molino', 'Calle de la Paloma'];
+  function streetLots(streets, need, ok, o) {
+    o = o || {};
+    const segD = (x, z, pts) => { let best = 1e9; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); best = Math.min(best, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return best; };
+    const names = o.names || LANE_NAMES, gap = o.gap || 6.3;
+    const walk = () => {
+      const lots = [];
+      streets.forEach((st, si) => {
+        if (st.noHouses || st.pts.length < 2) return;
+        for (let i = 0; i < st.pts.length - 1; i++) {
+          const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / len, nz = (bx - ax) / len;
+          for (let d = 3.2; d < len - 1; d += gap) for (const side of [1, -1]) {
+            const off = st.w / 2 + 4.1, x = ax + (bx - ax) * d / len + nx * off * side, z = az + (bz - az) * d / len + nz * off * side;
+            if (!ok(x, z, 3.4) || streets.some((s2, j) => s2.pts.length > 1 && segD(x, z, s2.pts) < s2.w / 2 + (j === si ? 3.6 : 3.9)) || lots.some(l => Math.abs(l.x - x) < 6.1 && Math.hypot(l.x - x, l.z - z) < 6.1)) continue;
+            lots.push({ x, z, face: Math.atan2(-nx * side, -nz * side), street: st.name, lane: !!st.lane });
+          }
+        }
+      });
+      return lots;
+    };
+    let lots = walk(), ln = o.nameAt || 0;
+    for (let round = 0; round < 5 && lots.length < need * (o.slack || 1.12); round++) {
+      const base = streets.length; let added = 0;
+      for (let si = 0; si < base; si++) {
+        const st = streets[si]; if (st.noLanes || st.pts.length < 2) continue;
+        let k = 0;
+        for (let i = 0; i < st.pts.length - 1; i++) {
+          const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / len, nz = (bx - ax) / len;
+          for (let d = 15; d < len - 6; d += 15, k++) {
+            const side = k % 2 ? 1 : -1, ox = ax + (bx - ax) * d / len, oz = az + (bz - az) * d / len; let L = 0;
+            for (let t = st.w / 2 + 2; t <= (o.reach || 46); t += 3) {
+              const x = ox + nx * side * t, z = oz + nz * side * t;
+              if (!ok(x, z, 2.4) || segD(x, z, st.pts) < t * 0.75 || streets.some((s2, j) => j !== si && s2.pts.length > 1 && segD(x, z, s2.pts) < s2.w / 2 + 12.5)) break;
+              L = t;
+            }
+            if (L < 17) continue;
+            streets.push({ name: names[ln++ % names.length], w: 3, pts: [[ox + nx * side * (st.w / 2 - 0.3), oz + nz * side * (st.w / 2 - 0.3)], [ox + nx * side * L, oz + nz * side * L]], lane: true }); added++;
+          }
+        }
+      }
+      if (!added) break;
+      lots = walk();
+    }
+    return lots;
+  }
+  // the homes of a town, by number: the tall ones as first built take the plots nearest the middle
+  function lotHomes(town, lots, n, C, cores) {
+    const T = OLD_TALL[town], bit = i => T ? (parseInt(T[1][i >> 2], 16) >> (3 - (i & 3))) & 1 : 0;
+    const cen = l => Math.min(...(cores || [C]).map(q => Math.hypot(l.x - q.x, l.z - q.z)));
+    const best = lots.slice().sort((a, b) => (a.lane ? 12 : 0) + cen(a) - (b.lane ? 12 : 0) - cen(b)).slice(0, n), houses = [];
+    let ti = 0, ci = 0; const nt = Array.from({ length: n }, (_, i) => bit(i)).reduce((a, b) => a + b, 0);
+    for (let i = 0; i < n; i++) { const tall = !!bit(i), l = tall ? best[ti++] : best[nt + ci++]; if (!l) break; houses.push({ x: l.x, z: l.z, face: l.face, tall, street: l.street }); }
+    return houses;
+  }
   /* ---------- Greenhaven: a farming town on the river Green (Stage II) ----------
      Cottages around a broad village green with its maypole and well; the Great Mill on the river;
      the Plough inn; the moot hall where the reeve and council sit; Ashcombe Hall on its rise across
@@ -3118,8 +3178,12 @@
       { name: 'South Lane', w: 3.2, pts: [[green.x + 2, green.z + 17], [-218, -790], [-222, -760]] },
       { name: 'Back Lane', w: 2.8, pts: [[green.x + 12, green.z - 12], [-196, -852], [-194, -876]] },
       { name: 'Hall Drive', w: 3.2, pts: [[bridge.ax, bridge.az], [-290, -842], [-304, -850]] },
-      { name: 'Orchard Lane', w: 2.6, pts: [[green.x + 12, green.z + 12], [-190, -800], [-178, -786]] }
+      { name: 'Orchard Lane', w: 2.6, pts: [[green.x + 12, green.z + 12], [-190, -800], [-178, -786]] },
+      { name: 'Church Lane', w: 3, pts: [[-218, -790], [-240, -778], [-252, -786]] },
+      { name: 'The Green', w: 3, noLanes: true, pts: Array.from({ length: 25 }, (_, k) => [green.x + Math.cos(k / 24 * Math.PI * 2) * (green.r + 1.6), green.z + Math.sin(k / 24 * Math.PI * 2) * (green.r + 1.6)]) }
     ];
+    streets[5].noHouses = true; streets[5].noLanes = true;
+    const church = { x: -252, z: -797, face: 0 };
     const streetDist = (x, z) => Math.min(...streets.map(st => segD(x, z, st.pts) - st.w / 2));
     const onRing = (q, a, extra) => { const d = q.r + (extra || 5.4); return { x: q.x + Math.cos(a) * d, z: q.z + Math.sin(a) * d, face: Math.atan2(-Math.cos(a), -Math.sin(a)) }; };
     const onStreet = (si, t, side) => {
@@ -3150,23 +3214,10 @@
     const pastures = [{ x: -330, z: -905, w: 50, d: 36, kind: 'sheep' }, { x: -308, z: -742, w: 30, d: 24, kind: 'cows' }];
     const orchard = { x: -172, z: -788, w: 20, d: 16 };
     const inField = (x, z, m) => fields.concat(pastures, [orchard]).some(f => Math.abs(x - f.x) < f.w / 2 + m && Math.abs(z - f.z) < f.d / 2 + m);
-    const fits = (x, z, rad) => riverDist(x, z) > rad + 9 && streetDist(x, z) > rad - 1.2 && Math.hypot(x - green.x, z - green.z) > green.r + rad + 1 &&
-      Math.hypot(x - hall.x, z - hall.z) > 9 + rad && Math.hypot(x - estate.x, z - estate.z) > estate.r + rad && !inField(x, z, rad) && Math.hypot(x - C.x, z - C.z) < 70;
-    const houses = [], taken = biz.map(b => ({ x: b.x, z: b.z, r: b.id === 'g_mill' ? 8 : b.id === 'g_estate' ? 12 : 5.2 }));
-    const free = (x, z, rad) => taken.every(t => Math.hypot(x - t.x, z - t.z) > t.r + rad + 1.2);
-    for (const row of [0, 1]) for (const st of streets) {
-      if (st.name === 'Hall Drive') continue;
-      for (let i = 0; i < st.pts.length - 1; i++) {
-        const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
-        for (let d = 3; d < len - 2; d += 2) for (const side of [-1, 1]) {
-          const off = st.w / 2 + 4 + row * 11, x = ax + (bx - ax) * d / len + nx * off * side, z = az + (bz - az) * d / len + nz * off * side, rad = 3.8;
-          if (!fits(x, z, rad) || !free(x, z, rad)) continue;
-          houses.push({ x, z, face: Math.atan2(-nx * side, -nz * side), tall: r() < 0.15 }); taken.push({ x, z, r: rad });
-        }
-      }
-    }
-    // cottages facing the green, between the shops
-    for (let k = 0; k < 24; k++) { const at = onRing(green, k / 24 * Math.PI * 2, 5); if (fits(at.x, at.z, 3.8) && free(at.x, at.z, 3.8)) { houses.push({ x: at.x, z: at.z, face: at.face, tall: false }); taken.push({ x: at.x, z: at.z, r: 3.8 }); } }
+    const taken = biz.map(b => ({ x: b.x, z: b.z, r: b.id === 'g_mill' ? 8 : b.id === 'g_estate' ? 12 : 5.2 }));
+    const ok = (x, z, rad) => riverDist(x, z) > rad + 9 && Math.hypot(x - green.x, z - green.z) > green.r + rad + 1 && Math.hypot(x - hall.x, z - hall.z) > 9 + rad && Math.hypot(x - estate.x, z - estate.z) > estate.r + rad &&
+      Math.hypot(x - church.x, z - church.z) > 10 + rad && !inField(x, z, rad) && Math.hypot(x - C.x, z - C.z) < 74 && taken.every(t => Math.hypot(x - t.x, z - t.z) > t.r + rad + 0.8);
+    const houses = lotHomes('greenhaven', streetLots(streets, 43, ok), 43, C, [green]);
     const spots = {
       ghfields: { x: fields[0].x, z: fields[0].z, rx: 18, rz: 13 }, ghfields2: { x: fields[1].x, z: fields[1].z, rx: 16, rz: 11 },
       shepherd: { x: pastures[0].x, z: pastures[0].z, rx: 20, rz: 14 }, cowherd: { x: pastures[1].x, z: pastures[1].z, rx: 11, rz: 9 },
@@ -3179,13 +3230,14 @@
       { id: 'millyard', name: 'the mill yard', x: millAt.x + 9, z: millAt.z + 2, r0: 0, r1: 4, w: 1 }
     ];
     const inside = () => true;
-    return { C, green, bridge, streets, biz, hall, estate, fields, pastures, orchard, houses, spots, plazas, riverDist, riverX, inside, entry, waterHalf: 5, avoid: 5.4, push: 7.5, board: { x: green.x + 6, z: green.z + 15 } };
+    return { C, green, church, bridge, streets, biz, hall, estate, fields, pastures, orchard, houses, spots, plazas, riverDist, riverX, inside, entry, waterHalf: 5, avoid: 5.4, push: 7.5, board: { x: green.x + 6, z: green.z + 15 } };
   })();
   TOWNS.greenhaven.x = GH.C.x; TOWNS.greenhaven.z = GH.C.z;
   // the north road leaves the east road at the waystation fork and climbs to Greenhaven
   ROADS.north = [[240, -58], [238, -120], [216, -200], [172, -300], [122, -400], [62, -500], [-8, -600], [-78, -690], [-128, -760], [-150, -792], [GH.entry.x, GH.entry.z]];
   LOCS.ghgreen = { x: GH.green.x, z: GH.green.z, r: GH.green.r, name: 'Greenhaven Village Green', town: 'greenhaven' };
   LOCS.ghhall = { x: GH.hall.x + Math.sin(GH.hall.face) * 6, z: GH.hall.z + Math.cos(GH.hall.face) * 6, r: 4.5, name: 'Greenhaven Moot Hall', town: 'greenhaven' };
+  LOCS.ghchurch = { x: GH.church.x, z: GH.church.z + 9, r: 4.5, name: 'St Wilfrid’s Church', town: 'greenhaven' };
   LOCS.ghbridge = { x: GH.bridge.x, z: GH.bridge.z, r: 5, name: 'The Green Bridge', town: 'greenhaven' };
   LOCS.ghentry = { x: GH.entry.x + 4, z: GH.entry.z + 1, r: 8, name: 'The road into Greenhaven', town: 'greenhaven' };
   GH.biz.forEach(b0 => { const d = b0.id === 'g_estate' ? 9 : b0.id === 'g_mill' ? 6 : 3.6; LOCS['gb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * d, z: b0.z + Math.cos(b0.face) * d, r: 3.4, name: b0.name, biz: b0.id, town: 'greenhaven' }; });
@@ -3303,25 +3355,11 @@
     const fits = (x, z, rad) => inside(x, z) && wallDist(x, z) > rad + 3 && lakeDist(x, z) > rad + 6 && riverDist(x, z) > rad + 9 && streetDist(x, z) > rad - 1.2 &&
       squares.every(q => Math.hypot(x - q.x, z - q.z) > q.r + rad + 1) && Math.hypot(x - castle.x, z - castle.z) > 40 + rad && Math.hypot(x - cathedral.x, z - cathedral.z) > 16 + rad &&
       Math.hypot(x - hall.x, z - hall.z) > 12 + rad && mansions.every(m => Math.hypot(x - m.x, z - m.z) > 10 + rad) && Math.hypot(x - gate.x, z - gate.z) > 14 + rad && Math.hypot(x - gateW.x, z - gateW.z) > 14 + rad;
-    const houses = [], taken = biz.map(b => ({ x: b.x, z: b.z, r: 5.2 }));
-    const free = (x, z, rad) => taken.every(t => Math.hypot(x - t.x, z - t.z) > t.r + rad + 0.6);
-    for (const row of [0, 1]) for (const st of streets) {
-      for (let i = 0; i < st.pts.length - 1; i++) {
-        const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
-        for (let d = 3; d < len - 2; d += 2) for (const side of [-1, 1]) {
-          const off = st.w / 2 + 4 + row * 10.5, x = ax + (bx - ax) * d / len + nx * off * side, z = az + (bz - az) * d / len + nz * off * side, rad = 4.3;
-          if (!fits(x, z, rad) || !free(x, z, rad)) continue;
-          const dm = Math.hypot(x - C.x, z - C.z), old = Math.hypot(x - oldSq.x, z - oldSq.z) < 70;
-          houses.push({ x, z, face: Math.atan2(-nx * side, -nz * side), tall: !old && (dm < 140 ? r() < 0.8 : r() < 0.45) }); taken.push({ x, z, r: rad });
-        }
-      }
-    }
-    const nearest = (x, z) => { let best = null, bd = 1e9; for (const st of streets) for (let i = 0; i < st.pts.length - 1; i++) { const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)), px = ax + t * dx, pz = az + t * dz, d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; best = { x: px, z: pz, d }; } } return best; };
-    for (let k = 0; k < 6000 && houses.length < 640; k++) {
-      const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 270, x = C.x + Math.cos(a) * d, z = C.z + Math.sin(a) * d, rad = 4.3;
-      const n = nearest(x, z); if (!n || n.d > 34 || !fits(x, z, rad) || !free(x, z, rad + 0.4)) continue;
-      houses.push({ x, z, face: Math.atan2(n.x - x, n.z - z), tall: r() < 0.4 }); taken.push({ x, z, r: rad + 0.4 });
-    }
+    const taken = biz.map(b => ({ x: b.x, z: b.z, r: 5.2 }));
+    const free = (x, z, rad) => taken.every(t => Math.abs(t.x - x) < 12 ? Math.hypot(x - t.x, z - t.z) > t.r + rad + 0.6 : true);
+    const ok = (x, z, rad) => inside(x, z) && wallDist(x, z) > rad + 3 && lakeDist(x, z) > rad + 6 && riverDist(x, z) > rad + 9 && squares.every(q => Math.hypot(x - q.x, z - q.z) > q.r + rad + 1) && Math.hypot(x - castle.x, z - castle.z) > 40 + rad && Math.hypot(x - cathedral.x, z - cathedral.z) > 16 + rad &&
+      Math.hypot(x - hall.x, z - hall.z) > 12 + rad && mansions.every(m => Math.hypot(x - m.x, z - m.z) > 10 + rad) && Math.hypot(x - gate.x, z - gate.z) > 14 + rad && Math.hypot(x - gateW.x, z - gateW.z) > 14 + rad && free(x, z, rad - 0.4);
+    const houses = lotHomes('crownmere', streetLots(streets, 640, ok, { slack: 1.05 }), 640, C, squares);
     const spots = {
       cm_fish: { x: (quay.x0 + quay.x1) / 2, z: shoreZ((quay.x0 + quay.x1) / 2) - 9, rx: 90, rz: 2 }, cm_watch: { x: gate.x - Math.sin(gate.face) * 14, z: gate.z - Math.cos(gate.face) * 14, rx: 8, rz: 5 },
       cm_castle: { x: castle.x + 34, z: castle.z + 44, rx: 14, rz: 8 }, cm_porter: { x: market.x, z: market.z, rx: 24, rz: 24 },
@@ -3367,19 +3405,9 @@
     const marks = cfg.marks || [];
     const taken = biz.map(b => ({ x: b.x, z: b.z, r: 5.2 })).concat(marks.map(m => ({ x: m.x, z: m.z, r: m.r })));
     const free = (x, z, rad) => taken.every(t => Math.hypot(x - t.x, z - t.z) > t.r + rad + 1.2);
-    const fits = (x, z, rad) => streetDist(x, z) > rad - 1.0 && plazas.every(q => Math.hypot(x - q.x, z - q.z) > q.r1 + rad + 1.5) && Math.hypot(x - C.x, z - C.z) < cfg.R && !(cfg.avoid && cfg.avoid(x, z, rad));
-    const houses = [];
-    for (const row of [0, 1, 2]) for (const st of streets) {
-      if (st.noHouses) continue;
-      for (let i = 0; i < st.pts.length - 1; i++) {
-        const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
-        for (let d = 3; d < len - 2; d += 2) for (const side of [-1, 1]) {
-          const off = st.w / 2 + 4 + row * 10.5, x = ax + (bx - ax) * d / len + nx * off * side, z = az + (bz - az) * d / len + nz * off * side, rad = 3.6;
-          if (houses.length >= cfg.maxHouses || !fits(x, z, rad) || !free(x, z, rad)) continue;
-          houses.push({ x, z, face: Math.atan2(-nx * side, -nz * side), tall: r() < cfg.tall * (row ? 0.6 : 1) }); taken.push({ x, z, r: rad });
-        }
-      }
-    }
+    const ok = (x, z, rad) => plazas.every(q => Math.hypot(x - q.x, z - q.z) > q.r1 + rad + 1.5) && Math.hypot(x - C.x, z - C.z) < cfg.R && !(cfg.avoid && cfg.avoid(x, z, rad)) && free(x, z, rad - 0.4);
+    const lots = streetLots(streets, cfg.maxHouses, ok, { names: cfg.lanes });
+    const houses = lotHomes(cfg.id, lots, Math.min(cfg.maxHouses, OLD_TALL[cfg.id] ? OLD_TALL[cfg.id][0] : cfg.maxHouses), C, plazas);
     return Object.assign({ C, streets, biz, houses, plazas, spots: cfg.spots, riverDist: () => 1e9, riverX: () => 1e9, inside: cfg.inside || (() => true), bridge: null, avoid: 0, push: 0, board: cfg.board, entry: cfg.entry }, cfg.extra || {});
   }
   const IC = makeTown({
@@ -3454,7 +3482,7 @@
   const DP = (function () {
     const C = { x: 1990, z: -300 }, R = 104;
     const T = makeTown({
-      id: 'dawnport', C, seed: 20231, R: R - 6, maxHouses: 104, tall: 0.6,
+      id: 'dawnport', lanes: VAL_LANES, C, seed: 20231, R: R - 6, maxHouses: 104, tall: 0.6,
       inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 3 && x > 1908,
       avoid: (x, z, rad) => x < 1916 + rad || Math.hypot(x - 2084, z + 300) < 22 + rad || Math.hypot(x - 1934, z + 366) < 12 + rad,
       streets: [
@@ -3495,7 +3523,7 @@
   // Valdoria's other towns: Goldmeadow on the plains to the south-east, Thornwick at the forest's edge to the east,
   // and Stonewatch, the walled fortress guarding the northern pass. Roads run to each from Dawnport.
   const GM = makeTown({
-    id: 'goldmeadow', C: { x: 2210, z: 168 }, seed: 31337, R: 62, maxHouses: 26, tall: 0.15,
+    id: 'goldmeadow', lanes: VAL_LANES, C: { x: 2210, z: 168 }, seed: 31337, R: 62, maxHouses: 26, tall: 0.15,
     streets: [
       { name: 'the Harvest Road', w: 4.4, pts: [[2194, 108], [2203, 140], [2210, 170], [2218, 214]] },
       { name: 'Paddock Lane', w: 3.4, pts: [[2158, 172], [2210, 170], [2262, 174]] }
@@ -3508,7 +3536,7 @@
     extra: { windmill: { x: 2262, z: 140 } }
   });
   const TW = makeTown({
-    id: 'thornwick', C: { x: 2385, z: -186 }, seed: 40404, R: 52, maxHouses: 20, tall: 0.1,
+    id: 'thornwick', lanes: VAL_LANES, C: { x: 2385, z: -186 }, seed: 40404, R: 52, maxHouses: 20, tall: 0.1,
     streets: [
       { name: 'Timber Street', w: 4.2, pts: [[2326, -186], [2360, -186], [2400, -187], [2436, -190]] },
       { name: 'Sawpit Lane', w: 3.2, pts: [[2386, -187], [2389, -226]] },
@@ -3526,7 +3554,7 @@
     const wall = []; for (let a = 0; a < 360.1; a += 9) { const t0 = a * Math.PI / 180; wall.push([C.x + Math.cos(t0) * R, C.z + Math.sin(t0) * R]); }
     const gate = { x: C.x - 6, z: C.z + R, face: 0 };
     const T = makeTown({
-      id: 'stonewatch', C, seed: 50505, R: R - 8, maxHouses: 56, tall: 0.5,
+      id: 'stonewatch', lanes: VAL_LANES, C, seed: 50505, R: R - 8, maxHouses: 56, tall: 0.5,
       inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 4,
       avoid: (x, z, rad) => Math.hypot(x - 2240, z + 800) < 20 + rad,
       streets: [
@@ -3547,7 +3575,7 @@
   // Valdor, the royal capital: on the high ground beyond Thornwick's forest, at the end of the Queen's Road. The Calle Mayor
   // runs from the west gate to the Plaza de la Reina; the cathedral stands north of it, the Alcázar on the rise to the east.
   const VD = makeTown({
-    id: 'valdor', C: { x: 2720, z: -300 }, seed: 60606, R: 94, maxHouses: 72, tall: 0.6,
+    id: 'valdor', lanes: VAL_LANES, C: { x: 2720, z: -300 }, seed: 60606, R: 94, maxHouses: 72, tall: 0.6,
     avoid: (x, z, rad) => Math.hypot(x - 2806, z + 300) < 30 + rad || Math.hypot(x - 2720, z + 352) < 18 + rad || Math.hypot(x - 2622, z + 318) < 12 + rad,
     streets: [
       { name: 'the Calle Mayor', w: 5.2, pts: [[2632, -300], [2676, -300], [2720, -300], [2772, -300]] },
@@ -3743,6 +3771,19 @@
     plog(s, mayor, 'Elected Mayor of Oakbridge by the guilds and townsfolk.');
   }
   // saves from the first, smaller Oakbridge: every home keeps its family and moves to its place in the larger town
+  const townHouseName = (town, h) => town === 'greenhaven' ? (h.tall ? 'Farmhouse, ' : 'Cottage, ') + (h.x < GH.riverX(h.z) ? 'by the Hall' : Math.hypot(h.x - GH.green.x, h.z - GH.green.z) < 40 ? 'on the green' : 'Greenhaven')
+    : town === 'crownmere' ? (h.tall ? 'Townhouse, ' : 'Cottage, ') + (Math.hypot(h.x - CM.market.x, h.z - CM.market.z) < 80 ? 'Market Ward' : h.z < CM.C.z - 90 ? 'Lakeside' : h.x < CM.C.x - 60 ? 'Court Quarter' : h.x > CM.C.x + 60 && h.z > CM.C.z + 30 ? 'Old Town' : h.x > CM.C.x + 60 ? 'Guild Ward' : 'South Ward') : null;
+  // every other town re-laid on streets: each home moves with its number, and keeps its owner, rent and people
+  function relayTowns(s) {
+    if (!s.houses) return;
+    const moved = new Set();
+    for (const h of s.houses) { const L = h.town && h.town !== 'oakbridge' && LAYOUT[h.town]; if (!L) continue; const h0 = L.houses[+String(h.id).replace(/^[a-z]+/, '')]; if (!h0) continue; h.x = h0.x; h.z = h0.z; const nm = townHouseName(h.town, h0); if (nm) h.name = nm; moved.add(h.town); }
+    if (!moved.size) return;
+    s.agents = (s.agents || []).filter(a => { if (a.kind === 'person') { const p = s.people[a.pid]; return !(p && moved.has(townOf(p))); } for (const t of moved) { const L = LAYOUT[t]; if (Math.hypot(a.x - L.C.x, a.z - L.C.z) < (TOWNS[t].r || 120)) return false; } return true; });
+    if (moved.has(s.bodiesIn)) s.bodiesIn = null;
+    const pl = s.player; if (pl) for (const t of moved) { const L = LAYOUT[t], q = L.plazas && L.plazas[0]; if (q && Math.hypot(pl.x - L.C.x, pl.z - L.C.z) < (TOWNS[t].r || 120) + 15) { pl.x = q.x + (q.r0 || 0) + 1.5; pl.z = q.z; pl.dest = null; pl.action = null; } }
+    event(s, 'The towns of the realm have been re-laid on older lines: side lanes run off every street, and every house now fronts one. Each home keeps its people and its owner.', 'story');
+  }
   function rebuildOakbridge(s, said) {
     if (!s.towns || !s.towns.oakbridge) return;
     const have = new Map(s.houses.filter(h => h.town === 'oakbridge').map(h => [h.id, h]));
@@ -8496,7 +8537,7 @@
     if (s.v === 14) { s.v = 15; setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRoyals(s); event(s, 'The roads of Valdoria are open: from Dawnport south-east to Goldmeadow, east to Thornwick, and north to the fortress of Stonewatch. Coaches run between them.', 'story'); }
     if (s.v === 15) { s.v = 16; setupNewTown(s, 'valdor'); setupValdoria(s); setupGoods(s); event(s, 'The Queen’s Road is open, east from Thornwick through the forest to Valdor, the royal capital of Valdoria. Queen Ximena holds court at the Alcázar, and Valdoria now keeps its own courts and its own watch on the roads.', 'story'); }
     if (s.v === 16) s.v = 17;
-    if (s.v === 17) { s.v = 18; relayHearthmoor(s); rebuildOakbridge(s, 'Oakbridge has been rebuilt as a bridge town: a High Street from the South Gate to the bridge, a market place at the bridgehead, a church, a keep in its bailey, and three gates in the wall. Every home keeps its people and its owner.'); }
+    if (s.v === 17) { s.v = 18; relayHearthmoor(s); rebuildOakbridge(s, 'Oakbridge has been rebuilt as a bridge town: a High Street from the South Gate to the bridge, a market place at the bridgehead, a church, a keep in its bailey, and three gates in the wall. Every home keeps its people and its owner.'); relayTowns(s); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
     for (const C of allCourts(s)) if (Array.isArray(C.closed)) {
