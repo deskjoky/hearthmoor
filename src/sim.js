@@ -4671,7 +4671,8 @@
     if (!office || !AGENDA[office]) { s.agenda = []; return; }
     if (s.agendaDay === s.day) return; s.agendaDay = s.day;
     const [lo, hi] = AGENDA_N[office], n = lo + (wrand(s) < 0.5 ? 1 : 0);
-    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1);   // lapsed matters were already counted by standingDay const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
+    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1);   // lapsed matters were already counted by standingDay
+    const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
     for (let i = 0; i < Math.min(n, hi) && pool.length; i++) { const k = pool.splice(Math.floor(wrand(s) * pool.length), 1)[0]; s.agenda.push({ id: (s.agendaId = (s.agendaId || 0) + 1), office, k, region: mine && mine.region, until: s.day + 1 }); }
   }
   function agendaDo(s, id, pick) {

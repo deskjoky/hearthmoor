@@ -5533,7 +5533,8 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     if (!office || !AGENDA[office]) { s.agenda = []; return; }
     if (s.agendaDay === s.day) return; s.agendaDay = s.day;
     const [lo, hi] = AGENDA_N[office], n = lo + (wrand(s) < 0.5 ? 1 : 0);
-    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1);   // lapsed matters were already counted by standingDay const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
+    s.agenda = (s.agenda || []).filter(x => x.until >= s.day && x.office === office).slice(0, 1);   // lapsed matters were already counted by standingDay
+    const pool = AGENDA[office].map((x, i) => i).filter(i => !s.agenda.some(x => x.k === i));
     for (let i = 0; i < Math.min(n, hi) && pool.length; i++) { const k = pool.splice(Math.floor(wrand(s) * pool.length), 1)[0]; s.agenda.push({ id: (s.agendaId = (s.agendaId || 0) + 1), office, k, region: mine && mine.region, until: s.day + 1 }); }
   }
   function agendaDo(s, id, pick) {
@@ -16764,8 +16765,11 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.11.0416';
+const BUILD = '2026.11.11.1341';
 const NOTES = [
+  { v: '0.82.1', date: '11 November', title: 'Office holders no longer freeze', items: [
+    'Fixed: the game stopped dead for anyone holding an office (a council seat, the Elder\u2019s chair, a lordship, a seat on the royal council or the crown), and again every morning. The Elder, Lord and Ruler starts froze as soon as they began. All of them run now.',
+  ] },
   { v: '0.82', date: '10 November', title: 'The menus, made over', items: [
     'The book has a new shape. Its six sections run down the side with a picture each, the pages of a section run along the top, and your purse and the date are always in the corner. The page itself now gets nearly the whole height of the screen.',
     'Tapping a person opens a new card: their face, age and whether they are married at the top; purse, respect, mood and how they feel about you as four small gauges; then three leaves, Talk, About and More, so the buttons you want are never buried under the facts.',
