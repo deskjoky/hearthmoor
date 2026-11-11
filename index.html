@@ -10130,7 +10130,7 @@ function applyLook(id) {
   GFX.look.value.set(L.look[0], L.look[1], L.look[2], L.look[3]); GFX.lookTint.value.set(L.tint[0], L.tint[1], L.tint[2]);
   hemi.color.set(L.hemiSky || 0xcfe0e6); hemi.groundColor.set(L.hemiGround || 0x3d3424);
 }
-applyLook((function () { try { return new URLSearchParams(location.search).get('look'); } catch (e) { return null; } })() || (meta.settings && meta.settings.art) || 'classic');
+applyLook((function () { try { return new URLSearchParams(location.search).get('look'); } catch (e) { return null; } })() || (meta.settings && meta.settings.art) || 'painterly');   // the chosen art direction: painterly and warm
 // teach a plain material to show grain, weathering and a little relief, in world space, so no model needs unwrapping
 function surface(m, kind) {
   m.onBeforeCompile = sh => {
@@ -16869,7 +16869,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.11.2020';
+const BUILD = '2026.11.11.2154';
 const NOTES = [
   { v: '0.83', date: '11 November', title: 'Steady ground', items: [
     'One error can no longer freeze the game. If something goes wrong on screen or in a day\u2019s routine, you get a short notice and the game carries on, and your progress is kept.',
