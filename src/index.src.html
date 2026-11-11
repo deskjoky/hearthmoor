@@ -7717,6 +7717,14 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.83', date: '11 November', title: 'Steady ground', items: [
+    'One error can no longer freeze the game. If something goes wrong on screen or in a day\u2019s routine, you get a short notice and the game carries on, and your progress is kept.',
+    'A long game is smoother at dusk and dawn: the evening step is about seven times faster, and the morning step about twice as fast.',
+    'Saving is lighter: the game saves every 30 seconds (and whenever you leave the page), only when time has moved, and refreshes its backup copy every five minutes.',
+    'When someone dies, every business they owned now passes to a grown heir or closes, not just the one they worked in. Businesses left with a dead owner in older saves are settled the next morning, and you cannot buy from the dead.',
+    'People who leave the village give up their tenancy and what they owned. Starting again as a new character now clears the old character\u2019s levels, perks, gear and any fight. A save made mid-fight now breaks the fight off kindly when loaded.',
+    'Small fixes: the court counter, \u201cCouncillor since day\u201d, the wording of village projects (\u201cpays for digging a second well\u201d), selling a chosen number of items, and eviction news from far-off towns.'
+  ] },
   { v: '0.82.1', date: '11 November', title: 'Office holders no longer freeze', items: [
     'Fixed: the game stopped dead for anyone holding an office (a council seat, the Elder\u2019s chair, a lordship, a seat on the royal council or the crown), and again every morning. The Elder, Lord and Ruler starts froze as soon as they began. All of them run now.',
   ] },
