@@ -1119,13 +1119,52 @@ function groundH(x, z) {
 const OAK_Y = worldH(TOWNS.oakbridge.x, TOWNS.oakbridge.z), OAK_TREES = [];
 const deckH0 = t => OAK_Y + 0.12 + 0.9 * Math.sin(Math.PI * Math.max(0, Math.min(1, t)));
 const waterLevelGreen = z => { const x = Sim.GH.riverX(z); return groundH(x, z) + 2.4 - 0.7; };
-function standH(x, z) {
-  const g = groundH(x, z), O = Sim.OAK, B = O.bridge, GB = Sim.GH.bridge;
-  if (Math.abs(z - GB.z) < GB.w / 2 + 0.3 && x > GB.ax - 0.4 && x < GB.bx + 0.4) return Math.max(g, groundH(GB.ax, GB.az) + 0.15);
-  if (Math.abs(x - B.x) < 30 && Math.abs(z - B.z) < 30) {
-    const L = B.half * 2, t = ((x - B.ax) * (B.bx - B.ax) + (z - B.az) * (B.bz - B.az)) / (L * L), c = Math.abs((x - B.ax) * (B.bz - B.az) - (z - B.az) * (B.bx - B.ax)) / L;
-    if (t > -0.02 && t < 1.02 && c < B.w / 2 + 0.3) return Math.max(g, deckH0(t));
+/* ----- bridges: every one is a span from bank to bank. Its ends sit flush with the ground, it rises in a gentle arch
+   between them, and whoever crosses walks on its deck. ----- */
+const DECKS = [];
+function deckAt(x, z) {
+  for (const D of DECKS) { const dx = x - D.ax, dz = z - D.az, t = (dx * D.ux + dz * D.uz) / D.L; if (t < -0.03 || t > 1.03) continue; if (Math.abs(dx * D.uz - dz * D.ux) > D.w / 2 + 0.25) continue; return D.h(Math.max(0, Math.min(1, t))); }
+  return null;
+}
+function span(ax, az, bx, bz, w, o) {
+  o = o || {};
+  const L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, ry = Math.atan2(ux, uz);
+  const ya = (o.ya != null ? o.ya : groundH(ax, az)) + 0.05, yb = (o.yb != null ? o.yb : groundH(bx, bz)) + 0.05, rise = o.rise || 0;
+  const h = t => ya + (yb - ya) * t + rise * Math.sin(Math.PI * t);
+  DECKS.push({ ax, az, ux, uz, L, w, h });
+  const stone = o.style === 'stone', plank = o.style === 'plank', thick = o.thick || (stone ? 0.5 : plank ? 0.14 : 0.3), N = Math.max(4, Math.ceil(L / (o.seg || (plank ? 0.9 : 1.3))));
+  const deckC = o.deck || (stone ? '#a39d90' : plank ? '#7a5a3a' : '#6b4a2e'), railC = o.rail || (stone ? '#8b877c' : BEAMS), railH = o.railH || (plank ? 0.5 : 0.8), pierC = o.pierC || '#8b877c';
+  const frame = (x, y, z, pitch) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch || 0, ry, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
+  let low = Infinity; for (let k = 0; k <= 16; k++) low = Math.min(low, groundH(ax + (bx - ax) * k / 16, az + (bz - az) * k / 16));
+  const nA = o.arches || 0, spring = low + 0.35;
+  for (let k = 0; k < N; k++) {
+    const t0 = k / N, t1 = (k + 1) / N, tm = (t0 + t1) / 2, y0 = h(t0), y1 = h(t1), segL = L / N, len = Math.hypot(segL, y1 - y0) + 0.05, pitch = -Math.atan2(y1 - y0, segL);
+    const xm = ax + (bx - ax) * tm, zm = az + (bz - az) * tm, f = frame(xm, (y0 + y1) / 2, zm, pitch);
+    box(f, deckC, 0, -thick / 2, 0, w, thick, len);
+    if (!stone) box(f, '#5b4029', 0, -thick / 2 + 0.012, len / 2 - 0.04, w + 0.02, thick, 0.07);   // the gaps between boards
+    if (stone) { box(f, railC, -w / 2 + 0.22, 0.4, 0, 0.44, 0.8, len); box(f, railC, w / 2 - 0.22, 0.4, 0, 0.44, 0.8, len); }
+    else if (o.rails !== false) [-1, 1].forEach(sd => { box(f, railC, sd * (w / 2 - 0.07), railH, 0, 0.11, 0.11, len); if (k % (o.postEvery || 2) === 0) box(f, railC, sd * (w / 2 - 0.07), railH / 2, -len / 2 + 0.07, 0.14, railH, 0.14); if (k === N - 1) box(f, railC, sd * (w / 2 - 0.07), railH / 2, len / 2 - 0.07, 0.14, railH, 0.14); });
+    if (stone) {   // the masonry under the roadway, cut away into arches
+      const top = (y0 + y1) / 2 - thick, crown = h(tm) - thick - 0.3, a = nA ? Math.abs(Math.sin(nA * Math.PI * tm)) : 0, intr = spring + Math.max(0, crown - spring) * a;
+      if (top - intr > 0.04) box(frame(xm, (top + intr) / 2, zm), railC, 0, 0, 0, w, top - intr + 0.12, segL + 0.04);
+    }
   }
+  const piers = o.piers || (stone && nA > 1 ? Array.from({ length: nA - 1 }, (_, k) => (k + 1) / nA) : []);
+  piers.forEach(tp => { const x = ax + (bx - ax) * tp, z = az + (bz - az) * tp, top = stone ? spring + 0.1 : h(tp) - thick, bot = groundH(x, z) - 0.7; if (top - bot > 0.1) box(frame(x, (top + bot) / 2, z), pierC, 0, 0, 0, w * (stone ? 1.08 : 0.86), top - bot, o.pierL || (stone ? 1.8 : 1.1)); });
+  if (!plank) [[ax, az, ya], [bx, bz, yb]].forEach(([x, z, y]) => box(frame(x, y - thick - 0.7, z), pierC, 0, 0, 0, w + 0.2, 1.4, 1.1));   // an abutment in each bank
+}
+// paving that lies on the ground as it finds it, so nobody stands in it and there is no kerb to step through
+function drapeDisc(x, z, r, lift, kind) {
+  const rings = Math.max(3, Math.ceil(r / 2.2)), seg = 28, pos = [x, groundH(x, z) + lift, z], idx = [];
+  for (let k = 1; k <= rings; k++) for (let s0 = 0; s0 < seg; s0++) { const a = s0 / seg * Math.PI * 2, rr = r * k / rings, px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr; pos.push(px, groundH(px, pz) + (k === rings ? lift * 0.3 : lift), pz); }
+  for (let s0 = 0; s0 < seg; s0++) idx.push(0, 1 + (s0 + 1) % seg, 1 + s0);
+  for (let k = 1; k < rings; k++) for (let s0 = 0; s0 < seg; s0++) { const a = 1 + (k - 1) * seg + s0, b = 1 + (k - 1) * seg + (s0 + 1) % seg, c = a + seg, d = b + seg; idx.push(a, b, c, b, d, c); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  if (kind != null) g.setAttribute('aKind', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3).fill(kind), 1));
+  return g;
+}
+function standH(x, z) {
+  const g = groundH(x, z), O = Sim.OAK;
   { const d = deckAt(x, z); if (d != null) return Math.max(g, d); }
   if (z < -434 && z > -538 && Math.abs(x - 440) < 30) { const rx = O.riverX(z); if (x > rx - 11.2 && x < rx - 6) return Math.max(g, OAK_Y + 0.13); }
   return g;
@@ -1694,21 +1733,12 @@ function hut(x, z, opts) {
 })();
 
 /* ----- the bridges ----- */
-const DECKS = [];   // { x, z, ry, hl (half length, along local z), hw (half width, local x), y (the top of the deck) }
-function deckAt(x, z) { for (const D of DECKS) { const dx = x - D.x, dz = z - D.z; if (Math.abs(dx) > D.r || Math.abs(dz) > D.r) continue; const c = Math.cos(D.ry), s = Math.sin(D.ry), lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) <= D.hw + 0.25 && Math.abs(lz) <= D.hl + 0.2) return D.y; } return null; }
 (function bridges() {
-  // the road bridge over the stream
-  const y = Math.max(groundH(44.5, 4), groundH(54, 4)) + 0.45, f = new THREE.Matrix4().makeTranslation(49.3, y, 4);
-  box(f, '#6b4a2e', 0, 0, 0, 10, 0.3, 3.8); DECKS.push({ x: 49.3, z: 4, ry: Math.PI / 2, hl: 5, hw: 1.9, y: y + 0.15, r: 6 });
-  for (let x = -4.6; x <= 4.6; x += 0.8) box(f, '#5b4029', x, 0.02, 0, 0.12, 0.32, 3.82);
-  [-1.85, 1.85].forEach(z => { box(f, BEAMS, 0, 0.75, z, 10, 0.14, 0.14); for (let x = -4.8; x <= 4.8; x += 1.6) box(f, BEAMS, x, 0.45, z, 0.16, 0.9, 0.16); });
-  [-3, 3].forEach(x => box(f, '#6c675e', x, -1.1, 0, 1, 2, 3.4));
-  // a plank footbridge where the manor lane crosses the millrace, and one where the mill lane crosses the tail-race
-  [[2, -42, 0], [-24.4, -30.4, 0.6]].forEach(([x, z, ry]) => {
-    const g = fr(x, z, ry, 0.25);
-    box(g, '#7a5a3a', 0, 0, 0, 2.6, 0.16, 3.2); DECKS.push({ x, z, ry, hl: 1.6, hw: 1.3, y: groundH(x, z) + 0.33, r: 3 });
-    [-1.2, 1.2].forEach(a => box(g, BEAMS, a, 0.5, 0, 0.1, 0.1, 3.2));
-  });
+  // the road bridge over the stream: timber on two stone piers, bank to bank
+  span(43.9, 4, 54.7, 4, 3.8, { rise: 0.32, piers: [0.27, 0.73], postEvery: 1 });
+  // plank footbridges: where the manor lane crosses the millrace just inside the gate, and where the mill lane crosses the tail-race
+  span(2, -44.2, 2, -40.25, 2.6, { style: 'plank', rise: 0.06 });
+  { const c = Math.cos(0.6), s = Math.sin(0.6); span(-24.4 - s * 2.4, -30.4 - c * 2.4, -24.4 + s * 2.6, -30.4 + c * 2.6, 2.6, { style: 'plank', rise: 0.08 }); }
 })();
 // signposts: to Oakbridge and Crownmere, and the open land
 (function signs() {
@@ -1881,7 +1911,7 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   bannerB(f, -7.2, 8.6, 0.8, 3.2); bannerB(f, 5.2, 5.4, 2.6, 3.6);
   // the garden: hedges, a path of flagstones, a fountain
   box(f, '#4a6530', -5, 0.5, 7.5, 5, 1, 1); box(f, '#4a6530', 5, 0.5, 7.5, 5, 1, 1);
-  for (let z = 4.6; z < 12.4; z += 1.1) box(f, '#9a948a', 0, 0.12, z, 1.6, 0.12, 0.9);
+  for (let z = 4.6; z < 12.4; z += 1.1) { const wz = mz + z; if (wz > -44.5 && wz < -40) continue; box(fr(mx, wz), '#9a948a', 0, 0.04, 0, 1.6, 0.1, 0.9); }   // each flagstone on the ground where it lies; the footbridge takes over at the millrace
   part(f, new THREE.CylinderGeometry(1.2, 1.3, 0.6, 10), '#86847a', -6, 0.3, 10); part(f, new THREE.CylinderGeometry(1, 1, 0.06, 10), '#4f7d8c', -6, 0.6, 10);
   // the curtain wall with its gate, at the foot of the rise
   const gz = Sim.P.gate.z - 1.4;
@@ -1889,10 +1919,11 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   for (let z = gz - 2; z >= mz - 12; z -= 2) [-16, 20].forEach(x => { const g = fr(x, z); box(g, '#7d7a70', 0, 1.1, 0, 0.7, 2.4, 2.05); });
   for (let x = -16; x <= 20; x += 2) { const g = fr(x, mz - 12); box(g, '#7d7a70', 0, 1.1, 0, 2.05, 2.4, 0.7); }
   const gf = fr(mx, gz);
-  [-1.9, 1.9].forEach(x => { box(gf, '#6f6c63', x, 1.8, 0, 1.4, 3.6, 1.4); bannerB(gf, x, 3.6, 0, 1.8); });
+  [-2.25, 2.25].forEach(x => { box(gf, '#6f6c63', x, 2.4, 0, 2.1, 5.6, 1.5); bannerB(gf, x, 5.0, 0, 1.8); });
+  box(gf, '#6f6c63', 0, 3.85, 0, 2.5, 2.7, 1.2); for (let k = -1; k <= 1; k++) box(gf, '#6f6c63', k * 0.9, 5.4, 0, 0.5, 0.45, 1.2);   // the arch over the gate; the portcullis lifts into it
   const gate = new THREE.Group(); gate.position.set(mx, groundH(mx, gz), gz); scene.add(gate);
   V.gate = mesh(new THREE.BoxGeometry(2.4, 2.4, 0.25), '#4a3424', 0, 1.2, 0, gate);
-  mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 1.8, 0.05, V.gate.parent); mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 0.6, 0.05, V.gate.parent);
+  mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, 0.6, 0.05, V.gate); mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), '#2a2420', 0, -0.6, 0.05, V.gate);
 })();
 (function mill() {
   // Tamsin's mill: stone below, timber above, its wheel turned by the millrace
@@ -2057,14 +2088,7 @@ const CROPS = [
   box(kf, STONE2, 0, 7, 0, 14, 14, 14); for (let q = 0; q < 4; q++) { const x = -7 + (q % 2) * 14, z = -7 + Math.floor(q / 2) * 14; box(kf, STONE2, x, 9, z, 4, 18, 4); part(kf, new THREE.ConeGeometry(3, 3.2, 4), SLATE, x, 19.6, z, Math.PI / 4); }
   box(kf, '#3b2a1c', 0, 2, 7.02, 2.6, 4, 0.1); box(kf, BEAMS, 0, 16, 0, 0.16, 4, 0.16); box(kf, '#2f5a2e', 0.6, 17, 0, 1.2, 1.4, 0.04);
   // the Oak Bridge: a gentle stone arch at street level, on two piers in the river
-  const B = O.bridge, bry = Math.atan2(B.bx - B.ax, B.bz - B.az), N = 8;
-  for (let k = 0; k < N; k++) {
-    const t0 = k / N, t1 = (k + 1) / N, x0 = B.ax + (B.bx - B.ax) * t0, z0 = B.az + (B.bz - B.az) * t0, x1 = B.ax + (B.bx - B.ax) * t1, z1 = B.az + (B.bz - B.az) * t1;
-    const y0 = deckH0(t0), y1 = deckH0(t1), L = B.half * 2 / N, tilt = -Math.atan2(y1 - y0, L), g = M4((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, bry, tilt);
-    box(g, '#a39d90', 0, -0.25, 0, B.w, 0.5, L + 0.08); box(g, STONE2, -B.w / 2 + 0.25, 0.45, 0, 0.5, 0.9, L + 0.08); box(g, STONE2, B.w / 2 - 0.25, 0.45, 0, 0.5, 0.9, L + 0.08);
-    box(g, STONE2, 0, -0.9, 0, B.w, 0.8, L + 0.08);
-  }
-  [0.36, 0.64].forEach(t => { const x = B.ax + (B.bx - B.ax) * t, z = B.az + (B.bz - B.az) * t, top = deckH0(t) - 1.2, bot = Y - 3.4; box(M4(x, (top + bot) / 2, z, bry), STONE2, 0, 0, 0, B.w + 0.6, top - bot, 2.4); });
+  { const B = O.bridge; span(B.ax, B.az, B.bx, B.bz, B.w, { style: 'stone', ya: OAK_Y + 0.07, yb: OAK_Y + 0.07, rise: 0.9, arches: 3, rail: STONE2, pierC: STONE2 }); }
   // the quay: a timber wharf along the west bank, boats tied up alongside, cargo stacked ready
   for (let z = -436; z > -536; z -= 2.2) { const rx = O.riverX(z), ry = Math.atan2(O.riverX(z - 1) - rx, -1); box(M4(rx - 8.6, Y - 0.02, z, ry), '#6b4a2e', 0, 0, 0, 5.2, 0.3, 2.3); if (Math.round(z) % 11 === 0) box(M4(rx - 6.1, Y - 1.2, z), BEAMS, 0, 0, 0, 0.3, 2.6, 0.3); }
   [[-452, 0.06], [-474, -0.08], [-506, 0.1]].forEach(([z, r0]) => { const x = O.riverX(z) - 3.6, g = M4(x, Y - 0.62, z, r0); box(g, '#6b4a2e', 0, 0, 0, 2, 0.7, 6.4); box(g, '#5b4029', 0, 0.38, 0, 1.6, 0.1, 5.8); box(g, BEAMS, 0, 2.2, 0.6, 0.12, 3.8, 0.12); box(g, '#e8dcbc', 0, 2.5, 1.0, 0.04, 2.4, 1.6); });
@@ -2140,9 +2164,7 @@ const CROPS = [
   for (let k = -1; k <= 1; k += 2) { box(ef, '#8b877c', k * 12, 1, 6, 0.6, 2, 18); box(ef, '#8b877c', k * 7.5, 1, 15, 9, 2, 0.6); box(ef, '#8b877c', k * 2.2, 1.3, 15, 0.9, 2.6, 0.9); }
   [[-7, 10], [7, 10], [-4, 12.5], [4, 12.5]].forEach(([u, v]) => { const g = new THREE.Matrix4().copy(ef).multiply(M4(u, 0, v)); part(g, new THREE.SphereGeometry(0.9, 6, 4), '#3f6b3a', 0, 0.8, 0); });
   // the Green Bridge, at the level of the lanes
-  const B = H.bridge, by = groundH(B.ax, B.az);
-  box(M4(B.x, by + 0.15, B.z), '#a39d90', 0, -0.2, 0, B.half * 2 + 0.4, 0.4, B.w); [-1, 1].forEach(k => box(M4(B.x, by + 0.15, B.z), '#8b877c', 0, 0.35, k * (B.w / 2 - 0.2), B.half * 2 + 0.4, 0.7, 0.4));
-  box(M4(B.x, by, B.z), '#8b877c', 0, -1.6, 0, 1.8, 3, B.w + 0.4);
+  { const B = H.bridge; span(B.ax, B.az, B.bx, B.bz, B.w, { style: 'stone', rise: 0.4, arches: 2 }); }
   // fields of wheat, barley, beans and cabbages, hedged; pasture with sheep and cattle; the orchard
   const hedge = (x0, z0, x1, z1) => { const len = Math.hypot(x1 - x0, z1 - z0); for (let d = 0; d < len; d += 2.2) { const x = x0 + (x1 - x0) * d / len, z = z0 + (z1 - z0) * d / len; part(M4(x, groundH(x, z), z), GEO.sack, d % 4.4 < 2.2 ? '#3f5a2e' : '#465f30', 0, 0.5, 0, 0, 0, 0, 3.6, 2.6, 3.6); } };
   const ring = (f, gap) => { const x0 = f.x - f.w / 2, x1 = f.x + f.w / 2, z0 = f.z - f.d / 2, z1 = f.z + f.d / 2; hedge(x0, z0, x1, z0); hedge(x0, z1, x1 - gap, z1); hedge(x0, z0, x0, z1); hedge(x1, z0, x1, z1); };
@@ -2310,14 +2332,9 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
     // where the road meets the river Alder, a timber bridge on stone piers
     let cross = null;
     for (let i = 0; i < R.length - 1 && !cross; i++) { const [ax, az] = R[i], [bx, bz] = R[i + 1], L0 = Math.hypot(bx - ax, bz - az); for (let t = 0; t <= L0; t += 1) { const x = ax + (bx - ax) * t / L0, z = az + (bz - az) * t / L0; if (segDist(x, z, RIVER) < 2) { cross = { x, z, ry: Math.atan2(bx - ax, bz - az) }; break; } } }
-    const deckY = cross ? Math.max(groundH(cross.x + Math.sin(cross.ry) * 16, cross.z + Math.cos(cross.ry) * 16), groundH(cross.x - Math.sin(cross.ry) * 16, cross.z - Math.cos(cross.ry) * 16)) + 0.35 : 0;
-    const yOf = (x, z) => cross && Math.hypot(x - cross.x, z - cross.z) < 17 ? deckY + 0.08 : groundH(x, z) + 0.09;
+    if (cross) { const sx = Math.sin(cross.ry) * 17, sz = Math.cos(cross.ry) * 17; span(cross.x - sx, cross.z - sz, cross.x + sx, cross.z + sz, 5.6, { rise: 0.3, thick: 0.35, seg: 2.1, piers: [0.22, 0.5, 0.78], pierL: 1.6 }); }
+    const yOf = (x, z) => { const d = cross && Math.hypot(x - cross.x, z - cross.z) < 16 ? deckAt(x, z) : null; return d != null ? d + 0.03 : groundH(x, z) + 0.09; };
     parts.push({ geo: ribbon(R, i => 3.8 + 0.4 * Math.sin(i * 0.9), yOf, 2), color: dirt });
-    if (cross) {
-      const f = M4(cross.x, deckY, cross.z, cross.ry);
-      box(f, '#6b4a2e', 0, 0, 0, 5.6, 0.35, 34); DECKS.push({ x: cross.x, z: cross.z, ry: cross.ry, hl: 17, hw: 2.8, y: deckY + 0.18, r: 18 }); [-2.7, 2.7].forEach(x => { box(f, BEAMS, x, 0.75, 0, 0.14, 0.14, 34); for (let z = -16; z <= 16; z += 2.7) box(f, BEAMS, x, 0.4, z, 0.14, 0.8, 0.14); });
-      for (const z of [-9, 0, 9]) box(f, '#8b877c', 0, -2.2, z, 4.6, 4.2, 1.6);
-    }
   }
   scene.add(new THREE.Mesh(mergeColored(parts), vc));
   // the sea, east of Eastwatch, out to the edge of the world
@@ -2333,7 +2350,7 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
   const O = Sim.IC, Y = IC_Y, rr = tileRand(57, 3), at = (x, z, ry) => fr(x, z, ry);
   const STONE = '#8f8a80', STONE2 = '#7a766d', SLATE = '#3a434f';
   O.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#857d70', m: new THREE.Matrix4() }));
-  O.plazas.forEach(q => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), '#8a8478', 0, 0.06, 0));
+  O.plazas.forEach(q => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: '#8a8478', kind: 4, smooth: true }));
   // the square: a well and a market cross
   { const c = fr(700, -1258); part(c, new THREE.CylinderGeometry(1.4, 1.5, 1, 10), STONE2, 0, 0.5, 0); box(c, BEAMS, -1.1, 1.6, 0, 0.14, 2.2, 0.14); box(c, BEAMS, 1.1, 1.6, 0, 0.14, 2.2, 0.14); part(c, roofG(1.6, 2.8, 0.7), SLATE, 0, 2.7, 0, Math.PI / 2); }
   O.houses.forEach((h, i) => townHouse(at(h.x, h.z, h.face), h, i + 3, { stone: STONE, stone2: STONE2, slate: SLATE, tile: '#6b4a2e', stoneTown: true, roofs: [SLATE, SLATE, '#5e4a2c'], walls: ['#a89a80', '#9a948a', '#b9a47a', '#8b877c'] }));
@@ -2380,7 +2397,7 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
   later(O.gate.x, O.gate.z, () => { const f = at(O.gate.x, O.gate.z, Math.PI / 2); [-5.4, 5.4].forEach(x => { box(f, STONE2, x, 4, 0, 3.6, 8, 4); box(f, STONE, x, 8.4, 0, 4, 0.8, 4.4); }); box(f, STONE2, 0, 7, 0, 7.4, 2.2, 3.4); realmBanner(f, -5.4, 8.8, 1.6, 0, 2.4); realmBanner(f, 5.4, 8.8, 1.6, 0, 2.4); });
   // streets and squares
   O.streets.forEach(st => later(st.pts[0][0], st.pts[0][1], () => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#9a8f7c', m: new THREE.Matrix4() })));
-  O.plazas.forEach(q => later(q.x, q.z, () => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), '#958e81', 0, 0.06, 0)));
+  O.plazas.forEach(q => later(q.x, q.z, () => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: '#958e81', kind: 4, smooth: true })));
   later(1000, -300, () => { const c = fr(1000, -300); part(c, new THREE.CylinderGeometry(2, 2.4, 0.6, 8), '#86847a', 0, 0.3, 0); box(c, STONE2, 0, 2.6, 0, 0.6, 4.2, 0.6); box(c, STONE2, 0, 4, 0, 1.8, 0.45, 0.45); });
   later(1076, -300, () => { const c = fr(1076, -300); part(c, new THREE.CylinderGeometry(3, 3.2, 0.8, 16), '#86847a', 0, 0.4, 0); part(c, new THREE.CylinderGeometry(2.7, 2.7, 0.06, 16), '#4f7d8c', 0, 0.76, 0); box(c, STONE2, 0, 2.2, 0, 0.6, 3.2, 0.6); realmBanner(c, 0, 3.5, 0, 0, 2.4); });
   // homes and shops
@@ -2431,7 +2448,7 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
   const between = (x0, z0, x1, z1, y, w, h, color) => box(new THREE.Matrix4().compose(new THREE.Vector3((x0 + x1) / 2, y, (z0 + z1) / 2), new THREE.Quaternion().setFromEuler(RX.set(0, Math.atan2(x1 - x0, z1 - z0), 0)), new THREE.Vector3(1, 1, 1)), color, 0, 0, 0, w, h, Math.hypot(x1 - x0, z1 - z0) + 0.5);
   // pale streets of beaten sand and stone, and the squares
   O.streets.forEach(st => later(st.pts[0][0], st.pts[0][1], () => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#a8916c', m: new THREE.Matrix4() })));
-  O.plazas.forEach(q => later(q.x, q.z, () => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), '#b39c78', 0, 0.06, 0)));
+  O.plazas.forEach(q => later(q.x, q.z, () => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: '#b39c78', kind: 4, smooth: true })));
   // the fountain in the Plaza Mayor, with orange trees round it
   later(2010, -300, () => { const c = fr(2010, -300); part(c, new THREE.CylinderGeometry(3.4, 3.6, 0.9, 16), SAND2, 0, 0.45, 0); part(c, new THREE.CylinderGeometry(3.1, 3.1, 0.06, 16), '#4f8c9c', 0, 0.86, 0); part(c, new THREE.CylinderGeometry(0.5, 0.7, 2.6, 8), SAND, 0, 1.8, 0); part(c, new THREE.CylinderGeometry(1.4, 0.9, 0.4, 10), SAND, 0, 3.1, 0); valBanner(c, 0, 3.4, 0, 0, 2.2);
     [[7, 7], [-7, 7], [7, -7], [-7, -7]].forEach(([x, z]) => { box(c, '#6b4a2e', x, 0.9, z, 0.3, 1.8, 0.3); part(c, G_HEMI, '#3f6b34', x, 1.6, z, 0, 0, 0, 1.5, 1.6, 1.5); for (let k = 0; k < 5; k++) part(c, G_HEMI, '#e8862c', x + Math.cos(k * 1.3) * 1.1, 2.1 + (k % 2) * 0.4, z + Math.sin(k * 1.3) * 1.1, 0, 0, 0, 0.16, 0.16, 0.16); }); });
@@ -2503,7 +2520,7 @@ const VAL_TREES = [];
   scene.add(new THREE.Mesh(mergeColored(['vgold', 'vthorn', 'vstone', 'vqueen'].map(k => ({ geo: ribbon(Sim.ROADS[k], i => 3.6 + 0.3 * Math.sin(i * 0.9), (x, z) => groundH(x, z) + 0.09, 2), color: dirt }))), vc));
   const town = (O, seed, o) => {
     O.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: o.street, m: new THREE.Matrix4() }));
-    O.plazas.forEach(q => part(fr(q.x, q.z), new THREE.CylinderGeometry(q.r1 + 1, q.r1 + 1, 0.14, 28), o.plaza, 0, 0.06, 0));
+    O.plazas.forEach(q => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: o.plaza, kind: 4, smooth: true }));
     O.houses.forEach((h, i) => townHouse(at(h.x, h.z, h.face), h, i + seed, o.house));
     O.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i + seed, Object.assign({}, o.house, { sign: o.sign[b.trade] || '#a8322a' })));
     flushBuild();
@@ -2619,7 +2636,7 @@ function syncAnimals(dt, t) {
 }
 
 // square projects: stone paving and lanterns
-V.paving = mesh(new THREE.CylinderGeometry(9.6, 9.6, 0.07, 24), '#8d887c', SQ.x, groundH(SQ.x, SQ.z) + 0.14, SQ.z); V.paving.visible = false;
+V.paving = mesh(drapeDisc(SQ.x, SQ.z, 9.6, 0.06, 4), '#8d887c', 0, 0, 0); V.paving.visible = false;
 V.lanterns = new THREE.Group(); scene.add(V.lanterns);
 for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + 0.2; const x = SQ.x + Math.cos(a) * 10.4, z = SQ.z + Math.sin(a) * 10; const y = groundH(x, z); mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), '#2a2420', x, y + 1.1, z, V.lanterns); mesh(new THREE.BoxGeometry(0.34, 0.4, 0.34), windowMat, x, y + 2.3, z, V.lanterns); }
 V.lanterns.visible = false;
@@ -2632,7 +2649,7 @@ function syncVillage(s) {
   V.paving.visible = !!v.projects.pave; V.lanterns.visible = !!v.projects.lanterns;
   const land = v.land; LANDV.stakes.visible = !land; LANDV.landWork.visible = !!land && land.state === 'building' && land.use === 'cottages';
   LANDV.newCottages.visible = !!land && land.state === 'done' && land.use === 'cottages'; LANDV.pastureLand.visible = !!land && land.use === 'pasture' && land.state === 'done';
-  V.gate.position.x = v.step >= 8 ? 1.6 : 0;
+  V.gate.position.y = v.step >= 8 ? 3.72 : 1.2;
 }
 // chimneys that smoke in the morning and evening, when the hearths are lit
 const HEARTHS = HOUSES.map((h, i) => {
@@ -7534,6 +7551,13 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.81.1', date: '10 November', title: 'Bridges and paving put right', items: [
+    'Every bridge has been rebuilt the same way: its ends sit flush with the banks, it rises in a gentle arch, and you walk on its deck all the way over.',
+    'The Oak Bridge no longer leans to one side. It is level across its width, with three arches under it.',
+    'The two plank footbridges now lie on the banks instead of standing above them.',
+    'Town squares are paved along the lie of the ground, so nobody stands ankle-deep in the paving.',
+    'The manor gate has proper towers that meet the wall and an arch over the gateway. The gate lifts as a portcullis, bars and all, and the flagstones lie on the lane.',
+  ] },
   { v: '0.81', date: '10 November', title: 'New people, new towns, new woods', items: [
     'People are all new: real proportions, a head with a face, arms that bend at the elbow and legs that bend at the knee. They walk with a proper stride, swing their arms, breathe and look about when they stand, and bend to their work.',
     'Clothes are part of the body now: belted tunics and hose, long dresses, robes, cloaks that sway, hats, hoods and aprons. Armour shows as mail or plate with pauldrons; weapons hang at the hip or on the back, and a staff or spear is carried upright.',
@@ -8298,7 +8322,7 @@ function boot(data) {
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 const hot = window.claude && window.claude.hot;
-window.__hm = { scene, GRASS, GFX, wildClear, MY_SHIP, store, readSlot, getSaveOk: () => saveOk, mini, pressBar, cam, focus, L, signPos, Sim, rankOf, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries }), solids: () => solidsNow(G), collide, get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
+window.__hm = { groundH, standH, L, scene, GRASS, GFX, wildClear, MY_SHIP, store, readSlot, getSaveOk: () => saveOk, mini, pressBar, cam, focus, L, signPos, Sim, rankOf, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries }), solids: () => solidsNow(G), collide, get G() { return G; }, act, adv: m => Sim.advance(G, m), UI, uiCmd, openBook, openPause, saveNow };
 openStore().then(() => { if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {}); });
 })();
 </script>
