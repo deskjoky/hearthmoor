@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 17;   // 17: v0.54's economy and climb; older saves cannot be carried over
+  const VERSION = 18;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -8444,6 +8444,23 @@
     const pl = s.player; pl.x = P.home.x; pl.z = P.home.z; pl.dest = null; pl.action = null;
     event(s, 'Hearthmoor has been rebuilt: a stream and a millrace, a mill, the manor on its rise, families in their homes, and room to grow. Everyone you know is still here.', 'story');
   }
+  // version 18: Hearthmoor was rebuilt round a market square, with streets, gates and a palisade. Every house keeps its owner, rent and tenants;
+  // only where it stands changes. Four new houses join the village, and everyone is set down at their own door.
+  function relayHearthmoor(s) {
+    if (!s.houses) return;
+    const mine = s.houses.filter(h => !h.town);
+    for (const h of mine) { const src = HOUSES.find(x => x.name === h.name) || NEW_COTTAGES.find(x => x.name === h.name); if (src) { h.x = src.x; h.z = src.z; } }
+    let next = 0; for (const h of s.houses) { const m = /^h(\d+)$/.exec(String(h.id)); if (m) next = Math.max(next, +m[1] + 1); }
+    for (const src of HOUSES.slice(OLD_HOUSES)) if (!mine.some(h => h.name === src.name)) s.houses.push({ id: 'h' + (next++), name: src.name, x: src.x, z: src.z, owner: 'office:lord', rent: 2, cap: src.cap, tenants: [] });
+    const inVillage = o => Math.hypot(o.x - P.center.x, o.z - P.center.z) < 110;
+    // nobody is caught halfway down a street that is no longer there
+    s.agents = (s.agents || []).filter(a => a.kind === 'person' || !inVillage(a));
+    for (const a of s.agents) { const p = a.pid && s.people && s.people[a.pid]; if (!p || townOf(p) !== 'hearthmoor') continue; const pt = homePoint(s, p) || P.center; a.x = pt.x; a.z = pt.z; a.mode = 'routine'; a.icon = null; a.moving = false; a.tx = null; a.tz = null; if (a.job) a.spot = jobSpot(s, a.job); }
+    for (const shop of (s.shops || [])) { shop.queue = []; if (shop.worker) { const w = shop.worker, wp = w.pid && s.people && s.people[w.pid]; w.home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 }; const pt = plotPt(shop, 'serve'); w.x = pt.x; w.z = pt.z; w.task = null; w.carry = null; w.sup = null; } }
+    if (s.schedule) s.schedule = s.schedule.filter(e => !e.shop && !e.id);
+    const pl = s.player; if (pl && inVillage(pl)) { pl.x = P.plaza.x; pl.z = P.plaza.z + 2; pl.dest = null; pl.action = null; }
+    event(s, 'Hearthmoor has been rebuilt on an older plan: a market square with the shops round it, streets of houses out to three gates, a palisade, a chapel and a stable. Every home keeps its people and its owner. You are standing in the square.', 'story');
+  }
   function deserialize(str, opt) {   // opt.allowOld: tests only, to keep the old migrations exercised; the game refuses old saves
     let s = JSON.parse(str);
     if (!s || typeof s !== 'object' || typeof s.v !== 'number') throw new Error('Not a Hearthmoor save');
@@ -8491,6 +8508,7 @@
     if (s.v === 14) { s.v = 15; setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRoyals(s); event(s, 'The roads of Valdoria are open: from Dawnport south-east to Goldmeadow, east to Thornwick, and north to the fortress of Stonewatch. Coaches run between them.', 'story'); }
     if (s.v === 15) { s.v = 16; setupNewTown(s, 'valdor'); setupValdoria(s); setupGoods(s); event(s, 'The Queen’s Road is open, east from Thornwick through the forest to Valdor, the royal capital of Valdoria. Queen Ximena holds court at the Alcázar, and Valdoria now keeps its own courts and its own watch on the roads.', 'story'); }
     if (s.v === 16) s.v = 17;
+    if (s.v === 17) { s.v = 18; relayHearthmoor(s); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
     for (const C of allCourts(s)) if (Array.isArray(C.closed)) {

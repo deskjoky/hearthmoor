@@ -866,7 +866,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
 (function (root) {
   'use strict';
 
-  const VERSION = 17;   // 17: v0.54's economy and climb; older saves cannot be carried over
+  const VERSION = 18;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -9306,6 +9306,23 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     const pl = s.player; pl.x = P.home.x; pl.z = P.home.z; pl.dest = null; pl.action = null;
     event(s, 'Hearthmoor has been rebuilt: a stream and a millrace, a mill, the manor on its rise, families in their homes, and room to grow. Everyone you know is still here.', 'story');
   }
+  // version 18: Hearthmoor was rebuilt round a market square, with streets, gates and a palisade. Every house keeps its owner, rent and tenants;
+  // only where it stands changes. Four new houses join the village, and everyone is set down at their own door.
+  function relayHearthmoor(s) {
+    if (!s.houses) return;
+    const mine = s.houses.filter(h => !h.town);
+    for (const h of mine) { const src = HOUSES.find(x => x.name === h.name) || NEW_COTTAGES.find(x => x.name === h.name); if (src) { h.x = src.x; h.z = src.z; } }
+    let next = 0; for (const h of s.houses) { const m = /^h(\d+)$/.exec(String(h.id)); if (m) next = Math.max(next, +m[1] + 1); }
+    for (const src of HOUSES.slice(OLD_HOUSES)) if (!mine.some(h => h.name === src.name)) s.houses.push({ id: 'h' + (next++), name: src.name, x: src.x, z: src.z, owner: 'office:lord', rent: 2, cap: src.cap, tenants: [] });
+    const inVillage = o => Math.hypot(o.x - P.center.x, o.z - P.center.z) < 110;
+    // nobody is caught halfway down a street that is no longer there
+    s.agents = (s.agents || []).filter(a => a.kind === 'person' || !inVillage(a));
+    for (const a of s.agents) { const p = a.pid && s.people && s.people[a.pid]; if (!p || townOf(p) !== 'hearthmoor') continue; const pt = homePoint(s, p) || P.center; a.x = pt.x; a.z = pt.z; a.mode = 'routine'; a.icon = null; a.moving = false; a.tx = null; a.tz = null; if (a.job) a.spot = jobSpot(s, a.job); }
+    for (const shop of (s.shops || [])) { shop.queue = []; if (shop.worker) { const w = shop.worker, wp = w.pid && s.people && s.people[w.pid]; w.home = (wp && homePoint(s, wp)) || { x: P.well.x - 1.5, z: P.well.z + 2.2 }; const pt = plotPt(shop, 'serve'); w.x = pt.x; w.z = pt.z; w.task = null; w.carry = null; w.sup = null; } }
+    if (s.schedule) s.schedule = s.schedule.filter(e => !e.shop && !e.id);
+    const pl = s.player; if (pl && inVillage(pl)) { pl.x = P.plaza.x; pl.z = P.plaza.z + 2; pl.dest = null; pl.action = null; }
+    event(s, 'Hearthmoor has been rebuilt on an older plan: a market square with the shops round it, streets of houses out to three gates, a palisade, a chapel and a stable. Every home keeps its people and its owner. You are standing in the square.', 'story');
+  }
   function deserialize(str, opt) {   // opt.allowOld: tests only, to keep the old migrations exercised; the game refuses old saves
     let s = JSON.parse(str);
     if (!s || typeof s !== 'object' || typeof s.v !== 'number') throw new Error('Not a Hearthmoor save');
@@ -9353,6 +9370,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     if (s.v === 14) { s.v = 15; setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupRoyals(s); event(s, 'The roads of Valdoria are open: from Dawnport south-east to Goldmeadow, east to Thornwick, and north to the fortress of Stonewatch. Coaches run between them.', 'story'); }
     if (s.v === 15) { s.v = 16; setupNewTown(s, 'valdor'); setupValdoria(s); setupGoods(s); event(s, 'The Queen’s Road is open, east from Thornwick through the forest to Valdor, the royal capital of Valdoria. Queen Ximena holds court at the Alcázar, and Valdoria now keeps its own courts and its own watch on the roads.', 'story'); }
     if (s.v === 16) s.v = 17;
+    if (s.v === 17) { s.v = 18; relayHearthmoor(s); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
     for (const C of allCourts(s)) if (Array.isArray(C.closed)) {
@@ -10601,7 +10619,7 @@ const LANES = [
   { w: 2.6, pts: [[0.5, -5], [1, -14], [1.5, -24], [2, -32], [2, -46]] },                          // Manor Street, up to the manor
   { w: 3.0, pts: [[-11, 4], [-24, 4], [-36, 4], [-46, 4]] },                                        // West Street, to the West Gate
   { w: 1.6, pts: [[-46, 4], [-52, 6], [-56, 9]] },                                                  // beyond the gate, into the woods
-  { w: 1.6, pts: [[-46, 4], [-48, -8], [-45, -20]] },                                               // beyond the gate, to the wheat field
+  { w: 1.6, pts: [[-46, 4], [-50, 2], [-52, -8], [-50, -20]] },                                               // beyond the gate, to the wheat field
   { w: 2.6, pts: [[0, 13], [0, 24], [0, 37], [0, 50], [0.5, 64]] },                                // South Street, through the South Gate to the open land
   { w: 2.0, pts: [[-24, 4], [-24, -14], [-25, -26], [-26, -37.5]] },                               // Mill Lane
   { w: 1.8, pts: [[-24, -14], [-12, -15], [1, -15]] },                                              // Hall Lane, behind the bakehouse
@@ -10627,6 +10645,15 @@ const dirt = '#6f5a3d';
   scene.add(new THREE.Mesh(mergeColored(parts), vc));
 })();
 const nearLane = (x, z, r) => LANES.some(ln => segDist(x, z, ln.pts) < ln.w / 2 + r);
+/* ----- the palisade: a ring of oak stakes round the village, joined to the manor's garden wall, and open wherever a street or lane goes through ----- */
+const PAL_LINE = [[20, -40], [24, -31], [40, -22], [45, -6], [45, 14], [40, 34], [24, 46], [0, 50], [-24, 46], [-40, 34], [-46, 14], [-46, -10], [-44, -30], [-34, -34], [-20, -35], [-16, -40]];
+const GATES = [{ name: 'East Gate', x: 45, z: 4, ry: Math.PI / 2 }, { name: 'West Gate', x: -46, z: 4, ry: Math.PI / 2 }, { name: 'South Gate', x: 0, z: 50, ry: 0 }];
+const PAL_STAKES = (function () {
+  const out = [];
+  for (let i = 0; i < PAL_LINE.length - 1; i++) { const [ax, az] = PAL_LINE[i], [bx, bz] = PAL_LINE[i + 1], len = Math.hypot(bx - ax, bz - az), n = Math.ceil(len / 0.5), a = Math.atan2(bx - ax, bz - az);
+    for (let k = 0; k < n; k++) { const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n; if (!nearLane(x, z, 1.0)) out.push([x, z, a]); } }
+  return out;
+})();
 
 /* ----- where trees may not grow ----- */
 const HOUSES = Sim.HOUSES;
@@ -11178,6 +11205,58 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   mesh(new THREE.BoxGeometry(0.4, 0.6, 0.06), windowMat, 0, 4.6, 1.62, V.towerBuilt);
   mesh(new THREE.BoxGeometry(1, 1.6, 0.08), '#3b2a1c', -0.2, 0.8, 1.62, V.towerBuilt);
   banner(V.towerBuilt, 1.2, 7.4, 0, 2.6);
+})();
+(function medievalWorks() {
+  const STONE = '#9a948a', STONE2 = '#8b877c', SLATE = '#3f4a5a', OAK = '#6b4f33', OAK2 = '#5c432b';
+  // the palisade
+  PAL_STAKES.forEach(([x, z, a], i) => { const h = 2.5 + hash2(i, 7) * 0.5; box(fr(x, z, a), i % 3 ? OAK : OAK2, 0, h / 2 - 0.2, 0, 0.3, h, 0.48); });
+  // three gatehouses: two timber towers, a walk across between them, and the leaves standing open
+  for (const g of GATES) {
+    const f = fr(g.x, g.z, g.ry);
+    for (const sx of [-3.1, 3.1]) { box(f, OAK2, sx, 2.5, 0, 1.9, 5.4, 1.9); box(f, BEAMS, sx, 5.2, 0, 2.3, 0.25, 2.3); part(f, roofG(2.9, 2.9, 1.3), THATCH[1], sx, 5.3, 0); box(f, OAK, sx * 0.62, 1.7, 1.25, 0.14, 3.2, 2.3); }
+    box(f, OAK, 0, 4.25, 0, 6.2, 0.3, 1.6); box(f, BEAMS, 0, 4.9, 0.75, 6.2, 0.9, 0.1); box(f, BEAMS, 0, 4.9, -0.75, 6.2, 0.9, 0.1); box(f, BEAMS, 0, 3.95, 0, 6.2, 0.35, 0.35);
+    box(f, '#2b4a7a', 3.1, 6.9, 0, 0.06, 0.9, 0.7); box(f, BEAMS, 3.1, 6.6, 0.36, 0.08, 1.6, 0.08);
+  }
+  // St Alder's chapel: a stone nave with a slate roof, a bell tower at the door, and a few graves under a low wall
+  { const p = L.chapel, f = fr(p.x, p.z, facing(p.x, p.z, p.x, 24));
+    box(f, '#7d776a', 0, 0.2, 0, 5.6, 0.8, 8.2); box(f, STONE, 0, 2.3, -0.4, 5, 3.8, 7);
+    part(f, roofG(5.9, 7.6, 2.6), SLATE, 0, 4.2, -0.4, Math.PI / 2);
+    box(f, STONE2, 0, 3.6, 3.4, 2.4, 7.2, 2.4); part(f, new THREE.ConeGeometry(1.9, 2.8, 4), SLATE, 0, 8.6, 3.4, Math.PI / 4);
+    box(f, '#2a1c12', 0, 1.3, 4.62, 1.1, 1.9, 0.08); box(f, BEAMS, 0, 2.35, 4.62, 1.3, 0.14, 0.1);
+    win(f, 0, 5.6, 4.62, 0.5, 0.9, 0.06); win(f, 1.22, 5.6, 3.4, 0.06, 0.9, 0.5); win(f, -1.22, 5.6, 3.4, 0.06, 0.9, 0.5);
+    for (const sz of [-2.6, -0.4, 1.4]) { win(f, 2.52, 2.5, sz, 0.06, 1.3, 0.5); win(f, -2.52, 2.5, sz, 0.06, 1.3, 0.5); }
+    box(f, '#c9b04a', 0, 10.2, 3.4, 0.08, 0.7, 0.08); box(f, '#c9b04a', 0, 10.35, 3.4, 0.4, 0.08, 0.08);
+    for (let k = 0; k < 6; k++) { const gx = -5.4 + (k % 3) * 1.3, gz = -2.2 + Math.floor(k / 3) * 2.2; box(f, k % 2 ? STONE : STONE2, gx, 0.45, gz, 0.5, 0.9, 0.14, 0, 0, (hash2(k, 3) - 0.5) * 0.25); box(f, '#55683a', gx, 0.06, gz + 0.8, 0.7, 0.12, 1.5); }
+    for (let k = 0; k < 9; k++) { box(f, STONE2, -7.2, 0.35, -4.2 + k * 1.05, 0.4, 0.7, 0.95); if (k < 5) box(f, STONE2, -6.8 + k * 0.95, 0.35, -4.6, 0.9, 0.7, 0.4); } }
+  // the gate stables: an open-fronted shed with three stalls, hay, a trough and a hitching rail on the street
+  { const p = L.stables, f = fr(p.x, p.z, facing(p.x, p.z, p.x, 4));
+    box(f, '#7d776a', 0, 0.12, 0, 8.4, 0.5, 4.8); box(f, WALLS[3], 0, 1.6, -2.1, 8, 2.7, 0.22);
+    for (const sx of [-3.9, 3.9]) box(f, WALLS[3], sx, 1.6, 0, 0.22, 2.7, 4.4);
+    for (const sx of [-3.9, -1.3, 1.3, 3.9]) box(f, BEAMS, sx, 1.6, 2.1, 0.22, 2.8, 0.22);
+    box(f, BEAMS, 0, 2.9, 2.1, 8.1, 0.22, 0.22);
+    for (const sx of [-1.3, 1.3]) box(f, OAK, sx, 0.95, 0, 0.12, 1.5, 3.8);
+    part(f, roofG(5.6, 8.9, 1.7), THATCH[2], 0, 2.95, 0);
+    box(f, '#c9a84a', -2.6, 0.55, -1.2, 1.8, 0.9, 1.4); box(f, '#b8973e', 2.7, 0.4, -1.4, 1.5, 0.6, 1.0);
+    box(f, OAK2, 0, 0.45, 3.2, 2.6, 0.5, 0.6); box(f, '#3f7486', 0, 0.66, 3.2, 2.3, 0.1, 0.4);
+    for (const sx of [-3.2, 3.2]) box(f, BEAMS, sx, 0.6, 4.4, 0.16, 1.2, 0.16); box(f, BEAMS, 0, 1.1, 4.4, 6.6, 0.12, 0.12);
+    part(f, G_BARREL, '#6b4a2e', 4.6, 0.35, 1.6); }
+  // the smith's yard beside the forge: a fenced corner with an anvil on its block, a quench barrel, a woodpile and a wheel to mend
+  { const f = fr(14.5, -9.5, 0);
+    for (let x = -2; x <= 2.01; x += 0.8) { box(f, OAK, x, 0.45, -2.5, 0.1, 0.9, 0.1); if (Math.abs(x) > 0.7) box(f, OAK, x, 0.45, 2.5, 0.1, 0.9, 0.1); }
+    for (let z = -2.5; z <= 2.51; z += 0.8) box(f, OAK, 2, 0.45, z, 0.1, 0.9, 0.1);
+    box(f, OAK, 0, 0.7, -2.5, 4, 0.08, 0.06); box(f, OAK, 2, 0.7, 0, 0.06, 0.08, 5);
+    box(f, '#5a4430', 0, 0.3, 0, 0.6, 0.6, 0.6); box(f, '#2c2c30', 0, 0.75, 0, 0.9, 0.3, 0.36); box(f, '#2c2c30', 0.5, 0.78, 0, 0.5, 0.16, 0.2);
+    part(f, G_BARREL, '#4a3424', 1.3, 0.35, -1.7); part(f, G_WHEEL, '#6b4a2e', -1.5, 0.75, -2.3, 0, 0, 0);
+    for (let k = 0; k < 9; k++) part(f, GEO.log, '#7a5232', 1.4, 0.15 + Math.floor(k / 3) * 0.24, 1.0 + (k % 3) * 0.28, 0, 0, Math.PI / 2); }
+  // on the square: two more stalls, the stocks, and a notice board
+  const stall = (x, z, ry, c1, c2) => { const f = fr(x, z, ry);
+    for (const [a, b] of [[-1.2, -0.8], [1.2, -0.8], [-1.2, 0.8], [1.2, 0.8]]) box(f, BEAMS, a, 1.1, b, 0.12, 2.2, 0.12);
+    for (let k = 0; k < 6; k++) box(f, k % 2 ? c1 : c2, -1.25 + k * 0.5, 2.3, 0, 0.5, 0.08, 2.1, 0, 0.16, 0);
+    box(f, '#8a6d48', 0, 0.85, 0.5, 2.5, 0.1, 0.9); box(f, '#8a6d48', 0, 0.42, 0.9, 2.5, 0.8, 0.08);
+    for (let k = 0; k < 4; k++) box(f, ['#c9692b', '#7fa04a', '#d9c46a', '#a84a3a'][k], -0.9 + k * 0.6, 1.0, 0.5, 0.4, 0.22, 0.4); };
+  stall(7.6, -1.6, -Math.PI / 2, '#b0483a', '#efe6d0'); stall(-7.6, 9.6, Math.PI / 2, '#3d6a8a', '#efe6d0');
+  { const f = fr(-3.4, 10.6, 0.3); box(f, BEAMS, -0.8, 0.8, 0, 0.16, 1.6, 0.16); box(f, BEAMS, 0.8, 0.8, 0, 0.16, 1.6, 0.16); box(f, OAK, 0, 1.25, 0, 1.9, 0.5, 0.14); box(f, '#2a1c12', 0, 1.25, 0.08, 0.26, 0.26, 0.02); box(f, '#2a1c12', -0.55, 1.25, 0.08, 0.16, 0.16, 0.02); box(f, '#2a1c12', 0.55, 1.25, 0.08, 0.16, 0.16, 0.02); box(f, '#7d776a', 0, 0.08, 0, 2.4, 0.16, 1.2); }
+  { const f = fr(4.6, -3.2, 0); box(f, BEAMS, -0.7, 1, 0, 0.14, 2, 0.14); box(f, BEAMS, 0.7, 1, 0, 0.14, 2, 0.14); box(f, '#8a6d48', 0, 1.45, 0, 1.5, 1, 0.08); part(f, roofG(0.5, 1.9, 0.3), THATCH[0], 0, 2.0, 0); for (let k = 0; k < 4; k++) box(f, '#e8dcbc', -0.4 + (k % 2) * 0.8, 1.25 + Math.floor(k / 2) * 0.42, 0.05, 0.5, 0.34, 0.02, 0, 0, (hash2(k, 11) - 0.5) * 0.2); }
 })();
 (function manor() {
   // Varrow Manor on its rise, behind a garden wall; the gate faces the lane up from the square
@@ -12640,6 +12719,11 @@ const staticSolids = (function () {
   C(L.home.x, L.home.z, 1.9); C(L.cottage.x, L.cottage.z, 2.1); C(L.well.x, L.well.z, 1.2); C(L.market.x, L.market.z, 2.2); C(L.granary.x, L.granary.z, 1.9);
   C(-7.5, 1, 1.3); C(7.5, 8.5, 1.3); C(-4.5, -2.5, 0.7); C(POND.x, POND.z, POND.r);
   out.push({ x: L.hall.x - 0.1, z: L.hall.z, hx: 2.9, hz: 4.4 });
+  // the palisade and its gate towers, the chapel, the stables, and what stands on the square
+  for (let i = 0; i < PAL_STAKES.length; i += 3) C(PAL_STAKES[i][0], PAL_STAKES[i][1], 0.8);
+  for (const g of GATES) for (const sx of [-3.1, 3.1]) C(g.x + Math.cos(g.ry) * sx, g.z - Math.sin(g.ry) * sx, 1.3);
+  out.push({ x: L.chapel.x, z: L.chapel.z + 0.4, hx: 2.7, hz: 3.7 }, { x: L.chapel.x, z: L.chapel.z - 3.4, hx: 1.4, hz: 1.4 }, { x: L.stables.x, z: L.stables.z - 1.6, hx: 4.1, hz: 0.6 });
+  C(L.stables.x - 3.9, L.stables.z, 0.5); C(L.stables.x + 3.9, L.stables.z, 0.5); C(7.6, -1.6, 1.3); C(-7.6, 9.6, 1.3); C(-3.4, 10.6, 0.9); C(4.6, -3.2, 0.7); C(14.5, -9.5, 0.6);
   const mx = L.manor.x, mz = L.manor.z, gz = Sim.P.gate.z - 1.4;
   out.push({ x: mx - 1.4, z: mz, hx: 9.4, hz: 3.4 }, { x: (-16 + mx - 2.4) / 2, z: gz, hx: (mx - 2.4 + 16) / 2, hz: 0.45 }, { x: (mx + 2.4 + 20) / 2, z: gz, hx: (20 - mx - 2.4) / 2, hz: 0.45 },
     { x: -16, z: (gz + mz - 12) / 2, hx: 0.45, hz: (gz - mz + 12) / 2 }, { x: 20, z: (gz + mz - 12) / 2, hx: 0.45, hz: (gz - mz + 12) / 2 }, { x: 2, z: mz - 12, hx: 18, hz: 0.45 });
@@ -15536,7 +15620,7 @@ const PLACE_NOTE = {
   market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
   icmine: 'Adits driven into the crag, where most of Ironcrest works: iron ore by the cartload.', icsmelt: 'Three stone furnaces that turn ore into iron, day and night.', ickeep: 'The seat of the lord of Ironcrest.', ewquay: 'Ships from up and down the coast unload here. Dockers always needed.', ewyard: 'A ship on the slip, ribs showing.', ewkeep: 'The Warden of the Coast keeps her hall here.', ewgate: 'The Land Gate, where the coast road comes in.', ewlight: 'The lighthouse at the end of the mole.', 'stage:ironcrest': 'Coaches down to Crownmere and beyond, and horses for sale.', 'stage:eastwatch': 'Coaches west to Oakbridge and beyond, and horses for sale.',
-  granary: 'The village food store.', cmmarket: 'The Great Market: stalls, shops and the great fountain.', cmhall: 'Seat of the Lord Mayor and the guilds.', cmcastle: 'The royal castle above the lake.', cmgreat: 'Where the lords gather and the court sits in state.', cmquay: 'Boats and barges on Crown Lake.', cmgate: 'The great south gate.', cmgatew: 'The west gate, to Greenhaven.', 'stage:crownmere': 'Coaches to every town, and horses for sale.', 'stage:hearthmoor': 'Coaches to Oakbridge and Greenhaven, and horses for sale.', 'stage:oakbridge': 'Coaches to Hearthmoor and Greenhaven, and horses for sale.', 'stage:greenhaven': 'Coaches to Hearthmoor and Oakbridge, and horses for sale.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
+  granary: 'The village food store.', chapel: 'A small stone chapel with a bell, for weddings, funerals and holy days.', stables: 'An open-fronted stable inside the East Gate, where travellers leave their horses.', cmmarket: 'The Great Market: stalls, shops and the great fountain.', cmhall: 'Seat of the Lord Mayor and the guilds.', cmcastle: 'The royal castle above the lake.', cmgreat: 'Where the lords gather and the court sits in state.', cmquay: 'Boats and barges on Crown Lake.', cmgate: 'The great south gate.', cmgatew: 'The west gate, to Greenhaven.', 'stage:crownmere': 'Coaches to every town, and horses for sale.', 'stage:hearthmoor': 'Coaches to Oakbridge and Greenhaven, and horses for sale.', 'stage:oakbridge': 'Coaches to Hearthmoor and Greenhaven, and horses for sale.', 'stage:greenhaven': 'Coaches to Hearthmoor and Oakbridge, and horses for sale.', ghentry: 'Where the north road reaches Greenhaven.', ghgreen: 'The village green, with the maypole and the well.', ghhall: 'Where the reeve and council of Greenhaven sit.', ghbridge: 'The bridge over the river Green.', waystation: 'A drovers\u2019 rest on the road to Oakbridge.', ruin: 'A ruined tower on a knoll by the road.', oakgate: 'The south gate of Oakbridge, open from dawn to dusk.', mill: 'Tamsin\u2019s waterwheel mill, on the millrace.', barn: 'The village barn and farmyard.', bridge: 'The road east to Oakbridge and Crownmere.', lots: 'Common land for the village to grow into.', tower: 'Watches the road to Ashford.', manor: 'Lord Varrow’s seat, behind its wall.', cottage: 'Old Ama’s cottage.'
 };
 function renderMapCard() {
   buildPins();
@@ -16874,7 +16958,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.11.2159';
+const BUILD = '2026.11.11.2212';
 const NOTES = [
   { v: '0.83', date: '11 November', title: 'Steady ground', items: [
     'One error can no longer freeze the game. If something goes wrong on screen or in a day\u2019s routine, you get a short notice and the game carries on, and your progress is kept.',
