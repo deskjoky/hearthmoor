@@ -143,11 +143,11 @@
     'A village that feeds its own in a lean year is remembered by its lord.'
   ];
   const PROJECTS = {
-    pave: { name: 'Pave the square', cost: 60, text: 'Stone on the square. Every shop draws one more traveler a day.' },
-    lanterns: { name: 'Lanterns on the square', cost: 40, text: 'Lamps for the evenings. Villagers shop a little more often.' },
-    granary: { name: 'Enlarge the granary', cost: 50, text: 'A bigger store. No more grain shortages.' },
-    well: { name: 'Dig a second well', cost: 35, text: 'Less hauling of water. Villagers are a little happier.' },
-    road: { name: 'Mend the Ashford road', cost: 70, text: 'Carts come easier. One more traveler to every shop a day.' }
+    pave: { name: 'Pave the square', cost: 60, act: 'paving the square', done: 'the square is paved.', text: 'Stone on the square. Every shop draws one more traveler a day.' },
+    lanterns: { name: 'Lanterns on the square', cost: 40, act: 'lanterns on the square', done: 'the lanterns on the square are lit.', text: 'Lamps for the evenings. Villagers shop a little more often.' },
+    granary: { name: 'Enlarge the granary', cost: 50, act: 'enlarging the granary', done: 'the granary is enlarged.', text: 'A bigger store. No more grain shortages.' },
+    well: { name: 'Dig a second well', cost: 35, act: 'digging a second well', done: 'the second well is dug.', text: 'Less hauling of water. Villagers are a little happier.' },
+    road: { name: 'Mend the Ashford road', cost: 70, act: 'mending the Ashford road', done: 'the Ashford road is mended.', text: 'Carts come easier. One more traveler to every shop a day.' }
   };
   const TOLLS = { none: { name: 'No toll', coin: 0, travelers: 1 }, low: { name: 'Low toll (2c)', coin: 2, travelers: 0.85 }, high: { name: 'High toll (5c)', coin: 5, travelers: 0.6 } };
   const DISPUTES = [
@@ -1417,7 +1417,7 @@
   // the village asks four things of you: make a living, solve a problem, lead, and win the succession. The steps between
   // them (meeting the elder, the summons, the steward's letter) now happen on their own
   const VILLAGE_MILESTONES = [1, 2, 6, 8];
-  const ownsAny = s => s.shops.length > 0 || Object.values(s.biz || {}).some(b => b.owner === 'player');
+  const ownsAny = s => { if (s.shops.length > 0) return true; const B = s.biz; if (B) for (const id in B) if (B[id].owner === 'player') return true; return false; };
   function checkVillage(s) {
     const v = s.village;
     // once you hold the Elder's chair or anything above it, the village story is done: its old tasks no longer apply
@@ -1526,7 +1526,17 @@
   const idleAdult = p => !p.job && !p.retired && !p.kid;
   const villagers = s => living(s).filter(p => !p.town || p.town === 'hearthmoor');
   const adults = s => living(s).filter(p => !p.kid);
-  const living = s => Object.values(s.people).filter(p => p.status === 'here');
+  // the living, listed once per moment of game time instead of once per call (it was the biggest cost of a long game);
+  // anything that changes who is alive or here bumps PVER, which throws the list away
+  let PVER = 0;
+  const LIVE_CACHE = new WeakMap();
+  const living = s => {
+    const c = LIVE_CACHE.get(s);
+    if (c && c.t === s.t && c.v === PVER && c.n === s.nextPid) return c.arr;
+    const arr = Object.freeze(Object.values(s.people).filter(p => p.status === 'here'));
+    LIVE_CACHE.set(s, { t: s.t, v: PVER, n: s.nextPid, arr });
+    return arr;
+  };
   function plog(s, p, text) { p.log.unshift({ day: s.day, text }); const cap = p.status === 'you' ? 20 : (!p.town || p.town === 'hearthmoor') ? 10 : 5; if (p.log.length > cap) p.log.length = cap; }
   function houseById(s, id) { const h = indexOf(s.houses, 'id').get(id); return h && h.id === id ? h : s.houses.find(x => x.id === id); }
   function landlordName(s, owner) {
@@ -1549,7 +1559,7 @@
     const id = 'p' + (s.nextPid++);
     if (o && o.skill == null) o.skill = Math.round((0.6 + rand(s) * 0.6) * 100) / 100;
     const p = Object.assign({ id, name: 'Someone', age: 30, purse: 20, skill: 0.6 + rand(s) * 0.6, job: null, home: null, mood: 60, opinion: 0, arrears: 0, homeless: 0, status: 'here', log: [], palette: Math.floor(rand(s) * 10), ate: 0, retired: false }, o);
-    p.id = id; s.people[id] = p; if (p.rep == null) { try { p.rep = Math.round(repTarget(s, p) * 10) / 10; } catch (e) { p.rep = 0; } if (!Number.isFinite(p.rep)) p.rep = 0; }   // newcomers have a standing from the day they arrive
+    p.id = id; s.people[id] = p; PVER++; if (p.rep == null) { try { p.rep = Math.round(repTarget(s, p) * 10) / 10; } catch (e) { p.rep = 0; } if (!Number.isFinite(p.rep)) p.rep = 0; }   // newcomers have a standing from the day they arrive
     return p;
   }
   function addBody(s, p, at) {
@@ -1710,7 +1720,7 @@
     const dead = (name, sex, ageAt, yearsAgo, town, maiden) => {
       const id = 'p' + (s.nextPid++), died = s.day - Math.max(1, Math.round(yearsAgo)) * rate;
       const p = Object.assign({}, PERSON_TEMPLATE, { id, name, age: Math.round(ageAt), sex, status: 'dead', died, log: [{ day: died, text: 'Died, aged ' + Math.round(ageAt) + '.' }], ancestor: true });
-      if (town) p.town = town; if (maiden) p.maiden = maiden; s.people[id] = p; return p;
+      if (town) p.town = town; if (maiden) p.maiden = maiden; s.people[id] = p; PVER++; return p;
     };
     const couple = (sur, town, childAge) => {
       // a father and mother, born some thirty years before their eldest; both have since died
@@ -2028,7 +2038,8 @@
             s.rec.evictions++;
             if (h.owner === 'office:lord' && s.gov) approve(s, 'lord', -2);
             if (h.owner === 'player') approveHolder(s, 'player', -2);
-            event(s, p.name + ' has been evicted from ' + h.name + (h.owner === 'player' ? ' (your house)' : '') + '.', 'bad');
+            // only news that touches you: your own tenants, or your own village. Evictions in towns you have never seen stay in their own people's histories
+            if (h.owner === 'player' || townOf(p) === 'hearthmoor') event(s, p.name + ' has been evicted from ' + h.name + (h.owner === 'player' ? ' (your house)' : '') + '.', 'bad');
           }
         }
       }
@@ -2050,7 +2061,17 @@
   const AGE_RATES = { off: 0, calendar: YEAR_DAYS, steady: 15, quick: 4 };
   const bdayOf = (s, p) => { const n = parseInt(String(p.id).slice(1), 10) || 0; return (n * 7 + 3) % Math.max(1, s.ageRate || 1); };
   const sameFamily = (a, b) => (a.parents || []).some(id => (b.parents || []).includes(id)) || (a.parents || []).includes(b.id) || (b.parents || []).includes(a.id);
-  const childrenOf = (s, p) => Object.values(s.people).filter(q => (q.parents || []).includes(p.id));
+  // children are looked up through an index of parents, rebuilt once per moment instead of scanning everybody on every call
+  const KIN_CACHE = new WeakMap();
+  const childrenOf = (s, p) => {
+    let c = KIN_CACHE.get(s);
+    if (!c || c.t !== s.t || c.v !== PVER || c.n !== s.nextPid) {
+      const idx = new Map();
+      for (const id in s.people) { const q = s.people[id], ps = q.parents; if (ps) for (let i = 0; i < ps.length; i++) { const a = idx.get(ps[i]); if (a) a.push(q); else idx.set(ps[i], [q]); } }
+      c = { t: s.t, v: PVER, n: s.nextPid, idx }; KIN_CACHE.set(s, c);
+    }
+    const a = c.idx.get(p.id); return a ? a.slice() : [];
+  };
   const surname = n => String(n).split(' ').slice(-1)[0];
   function lifeDay(s) {
     const rate = s.ageRate; if (!rate) return;
@@ -2119,8 +2140,30 @@
     const sibs = living(s).filter(q => q !== p && (p.parents || []).length && (q.parents || []).some(id => (p.parents || []).includes(id)) && !q.kid);
     return { spouse: sp, kids, sibs, first: sp || kids.find(c => !c.kid) || sibs[0] || kids[0] || null };
   }
+  // a business whose owner has died goes to a grown heir, or shuts and lets its staff go
+  function passOnBiz(s, bz, p, H, said, why) {
+    const heir = H.first, adult = heir && !heir.kid ? heir : (H.kids.find(c => !c.kid) || null), e = empById(bz.id), nm = e ? e.name : 'the business';
+    if (adult) { bz.owner = adult.id; bz.staff = bz.staff.filter(x => x.pid !== adult.id); if (!adult.job) adult.job = { type: 'biz', biz: bz.id, role: 'owner' }; plog(s, adult, 'Inherited ' + nm + '.'); if (said) said.push(nm); }
+    else { bz.closed = true; bz.staff.forEach(x => { const w = s.people[x.pid]; if (w && w.job && w.job.biz === bz.id) { w.job = null; plog(s, w, nm + ' closed when ' + p.name + ' ' + (why || 'died') + '.'); } }); bz.staff = []; }
+  }
+  // someone who leaves the village for good gives up their tenancy, and what they owned passes to their heirs or the town
+  function settleLeaver(s, p) {
+    if (p.home) { const h0 = houseById(s, p.home); if (h0) h0.tenants = h0.tenants.filter(x => x !== p.id); p.home = null; p.arrears = 0; }   // quietly: the log line about leaving says it all
+    const H = heirsOf(s, p), heir = H.first;
+    for (const h of s.houses) if (h.owner === p.id) h.owner = heir ? heir.id : (h.town ? 'town:' + h.town : 'office:lord');
+    for (const id in (s.biz || {})) { const bz = s.biz[id]; if (bz.owner === p.id && !bz.closed) passOnBiz(s, bz, p, H, null, 'left'); }
+  }
+  // saves from before this fix may hold businesses whose owner is already dead: settle them
+  function settleDeadOwners(s) {
+    if (!s.biz) return;
+    for (const id in s.biz) {
+      const bz = s.biz[id]; if (bz.closed || !bz.owner || bz.owner === 'player') continue;
+      const o = s.people[bz.owner]; if (!o || (o.status !== 'dead' && o.status !== 'left')) continue;
+      passOnBiz(s, bz, o, heirsOf(s, o), null);
+    }
+  }
   function dies(s, p) {
-    p.status = 'dead'; p.died = s.day; plog(s, p, 'Died, aged ' + p.age + '.'); p.log = p.log.slice(0, 3);
+    p.status = 'dead'; PVER++; p.died = s.day; plog(s, p, 'Died, aged ' + p.age + '.'); p.log = p.log.slice(0, 3);
     const b = bodyOf(s, p); if (b) s.agents = s.agents.filter(x => x !== b);
     const H = heirsOf(s, p), heir = H.first, town = TOWNS[townOf(p)] ? TOWNS[townOf(p)].name : 'Hearthmoor';
     const said = [];
@@ -2138,6 +2181,7 @@
       else if (bz) { bz.closed = true; bz.staff.forEach(x => { const w = s.people[x.pid]; if (w) { w.job = null; plog(s, w, empById(bz.id).name + ' closed when ' + p.name + ' died.'); } }); bz.staff = []; }
       p.job = null;
     }
+    for (const id in (s.biz || {})) { const bz = s.biz[id]; if (bz.owner === p.id && !bz.closed) passOnBiz(s, bz, p, H, said); }   // any other business they owned
     // offices fall vacant and are filled their own way; a lordship passes to a grown child, with the crown's recognition
     if (p.job && p.job.type === 'office') {
       const off = p.job.office; p.job = null;
@@ -2162,7 +2206,7 @@
   function you(s) {
     if (!s.you) s.you = { age: 22, bday: 1, spouse: null, court: {}, heir: null, hoping: true, generation: 1, family: null, sex: s.look && s.look.body === 'f' ? 'f' : 'm', lastTalk: {} };
     const Y = s.you;
-    if (!Y.pid || !s.people[Y.pid]) { const r = newPerson(s, { name: s.name, age: Y.age, purse: 0, sex: Y.sex, palette: 0 }); r.status = 'you'; r.log = [{ day: s.day, text: 'Came to Hearthmoor with nothing.' }]; Y.pid = r.id; }
+    if (!Y.pid || !s.people[Y.pid]) { const r = newPerson(s, { name: s.name, age: Y.age, purse: 0, sex: Y.sex, palette: 0 }); r.status = 'you'; PVER++; r.log = [{ day: s.day, text: 'Came to Hearthmoor with nothing.' }]; Y.pid = r.id; }
     const r = s.people[Y.pid]; r.name = s.name; r.age = Y.age; r.sex = Y.sex; r.spouse = Y.spouse;
     return Y;
   }
@@ -2227,8 +2271,8 @@
     const Y = you(s), old = s.people[Y.pid], v = s.village, wasLord = s.offices.lord === 'player';
     // the one who came before joins the dead (or retires to live with the family)
     old.name = s.name; old.age = Y.age; old.spouse = Y.spouse;
-    if (why === 'retire') { old.status = 'here'; old.retired = true; old.home = 'you'; old.town = undefined; old.purse = 0; old.rep = Math.round(v.standing * 0.8); old.log.unshift({ day: s.day, text: 'Handed everything to ' + h.name + ' and retired.' }); addBody(s, old); }
-    else { old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + '.' }); const sp = Y.spouse && s.people[Y.spouse]; if (sp) { sp.spouse = null; sp.widowed = old.id; } }
+    if (why === 'retire') { old.status = 'here'; PVER++; old.retired = true; old.home = 'you'; old.town = undefined; old.purse = 0; old.rep = Math.round(v.standing * 0.8); old.log.unshift({ day: s.day, text: 'Handed everything to ' + h.name + ' and retired.' }); addBody(s, old); }
+    else { old.status = 'dead'; PVER++; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + '.' }); const sp = Y.spouse && s.people[Y.spouse]; if (sp) { sp.spouse = null; sp.widowed = old.id; } }
     // offices: the Elder's chair is elected, so it falls vacant; the lordship passes only to a grown child of the blood
     if (s.offices.elder === 'player') { s.offices.elder = null; govLog(s, 'The Elder\u2019s chair stands empty. The moot will choose.', 'story'); }
     if (wasLord) { if ((h.parents || []).includes(Y.pid) && !h.kid) { /* kept below */ } else { s.offices.lord = null; replaceLord(s, 'the old lord is gone and no child of the blood can take the title'); } }
@@ -2258,7 +2302,7 @@
     Y.age = h.age < 16 && s.ageRate ? h.age : Math.max(16, h.age); Y.sex = sexOf(h); Y.spouse = h.spouse && s.people[h.spouse] && s.people[h.spouse].status === 'here' ? h.spouse : null; Y.heir = null; Y.court = {}; Y.generation++; Y.family = surname(h.name);
     if (Y.spouse) { const sp = s.people[Y.spouse]; sp.spouse = h.id; if (sp.home !== 'you') { moveOut(s, sp, 'Moved in with ' + h.name + '.'); sp.home = 'you'; } }
     // the heir's own record becomes yours; your children stay listed as theirs
-    h.status = 'you'; h.kid = false; h.town = undefined; Y.pid = h.id; h.log.unshift({ day: s.day, text: why === 'retire' ? 'Took over from ' + prev + '.' : 'Inherited everything from ' + prev + '.' });
+    h.status = 'you'; PVER++; h.kid = false; h.town = undefined; Y.pid = h.id; h.log.unshift({ day: s.day, text: why === 'retire' ? 'Took over from ' + prev + '.' : 'Inherited everything from ' + prev + '.' });
     v.standing = Math.round(v.standing * 0.4 + (h.rep || 0) * 0.3);
     if (v.standing < 40 && v.council && s.gov) { v.council = false; s.gov.lostSeatDay = s.day; }
     for (const q of Object.values(s.people)) if (q.status === 'here' && q.id !== h.id) q.opinion = Math.round((q.opinion || 0) * 0.5);
@@ -2270,7 +2314,7 @@
   // with nobody to carry on: the family's property goes back to the lord and the town, and you begin again as a newcomer
   function beginAgain(s, name, sex) {
     const Y = you(s), old = s.people[Y.pid];
-    old.name = s.name; old.status = 'dead'; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
+    old.name = s.name; old.status = 'dead'; PVER++; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
     if (s.offices.elder === 'player') s.offices.elder = null;
     if (s.offices.lord === 'player') { s.offices.lord = null; replaceLord(s, 'the old lord died without an heir'); }
     if (s.realm) { const R = s.realm; for (const k in COUNCIL) if (R.council[k] === 'player') R.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + '.' }).id; for (const id in R.regions) if (R.regions[id].lord === 'player') R.regions[id].lord = null; if (isRuler(s)) { R.crown = 'king'; succession(s, 'The ruler of Alderwyn has died without an heir'); } R.favour = 0; R.exile = null; s.player.house = null; s.player.seat = null; }
@@ -2283,6 +2327,9 @@
     // a new, unrelated life: nothing that belonged to the old character follows the stranger. The world, and its memory of the dead, stay.
     s.tradeXp = {}; s.work = null; s.workLast = null; s.workSeen = {}; s.starterUsed = false; s.rec.everElder = false; s.job = null;
     s.player.inv = { grain: 0, wood: 0, ore: 0 }; s.player.house = null; s.ship = null;
+    // the new life starts with no levels, perks, gear or fight in hand
+    { const sk = {}; for (const k in SKILLS) sk[k] = { lv: SKILL_START, xp: 0 }; s.char = { level: 1, xp: 0, points: 0, perks: {}, pending: 0, hpMax: 100, stMax: 100, hp: 100, st: 100, carry: 0, skills: sk, retro: true }; }
+    s.player.items = []; s.player.equip = {}; setupBag(s); s.fight = null;
     if (s.elect) { const E = s.elect; for (const r of Object.values(E.races)) { r.you = false; r.pledge = null; r.challenger = false; } E.pledges.forEach(pl => { if (pl.state === 'given') pl.state = 'lapsed'; }); E.kept = 0; E.broken = 0; E.handbook = null; E.alert = null; }
     for (const q of living(s)) { q.opinion = 0; q.hate = 0; q.mem = []; if (q.nem) q.nem = null; }
     s.folk = null; setupFolk(s);
@@ -2327,11 +2374,12 @@
 
   /* each morning: the jobless look for work, the homeless for a roof, and some give up */
   function peopleMorning(s) {
+    settleDeadOwners(s);
     lifeDay(s);
     for (const k of living(s).filter(q => q.kid)) {
       if (s.you && (k.parents || []).includes(s.you.pid)) { if (k.home !== 'you') { if (k.home && houseById(s, k.home)) moveOut(s, k, 'Came home.'); k.home = 'you'; } continue; }
       const pars = parentsOf(s, k), par = pars.find(q => q.home) || pars[0];
-      if (!pars.length) { if ((k.parents || []).length && !(k.parents || []).some(id => s.people[id] && s.people[id].status === 'here')) { k.status = 'left'; plog(s, k, 'Left Hearthmoor with family.'); const b = bodyOf(s, k); if (b) b.gone = true; } continue; }
+      if (!pars.length) { if ((k.parents || []).length && !(k.parents || []).some(id => s.people[id] && s.people[id].status === 'here')) { k.status = 'left'; PVER++; settleLeaver(s, k); plog(s, k, 'Left Hearthmoor with family.'); const b = bodyOf(s, k); if (b) b.gone = true; } continue; }
       if (par.home !== k.home) {
         if (k.home && houseById(s, k.home)) moveOut(s, k, par.home ? 'Moved with ' + par.name + '.' : 'Lost the family home along with ' + par.name + '.');
         if (par.home && houseById(s, par.home)) { const hh = houseById(s, par.home); hh.tenants.push(k.id); k.home = hh.id; } else k.home = par.home;
@@ -2366,7 +2414,7 @@
         if (open) { open.staff.push({ pid: p.id, wage: 7 }); p.job = { type: 'biz', biz: open.id, role: 'hand' }; plog(s, p, 'Found work at ' + empById(open.id).name + '.'); }
       }
       if (!p.home && !p.job && p.homeless >= LEAVE_AFTER && p.purse < 5 && !p.retired && !p.kid) {
-        p.status = 'left'; plog(s, p, 'Left Hearthmoor for Ashford with nothing.');
+        p.status = 'left'; PVER++; settleLeaver(s, p); plog(s, p, 'Left Hearthmoor for Ashford with nothing.');
         const b = bodyOf(s, p); if (b) b.gone = true;
         s.rec.peopleLeft++;
         event(s, p.name + ' has left Hearthmoor, homeless and out of work.', 'bad');
@@ -2621,8 +2669,8 @@
       const floor = t >= 0.5 ? 10 : -30 - Math.round((0.5 - t) * 200);
       if (v.chest - pr.cost >= Math.max(CHEST_FLOOR, floor)) {
         v.chest -= pr.cost; v.projects[k] = s.day; if (k === 'granary') v.shortage = false;
-        approve(s, 'elder', 8); plog(s, e, 'As Elder, paid for ' + pr.name.toLowerCase() + '.');
-        govLog(s, 'Elder ' + e.name + ' pays for ' + pr.name.toLowerCase() + (v.chest < 0 ? ', borrowing to do it. The village chest is now ' + (-v.chest) + 'c in debt.' : ' from the village chest.'), v.chest < 0 ? 'bad' : 'good');
+        approve(s, 'elder', 8); plog(s, e, 'As Elder, paid for ' + pr.act + '.');
+        govLog(s, 'Elder ' + e.name + ' pays for ' + pr.act + (v.chest < 0 ? ', borrowing to do it. The village chest is now ' + (-v.chest) + 'c in debt.' : ' from the village chest.'), v.chest < 0 ? 'bad' : 'good');
       }
     }
     // the open land: a growing village wants homes
@@ -5417,7 +5465,8 @@
       case 'rSell': {   // a: shop, b: item u, c: how many (stacks)
         const it = itemByU(s, b); if (!it) return fail('You do not have that.'); if (!buysHere(s, a, it.id)) return fail('They will not buy that here.');
         if (!atShop(s, a)) return fail('Sell it at the counter.');
-        const n = it.n != null ? Math.min(it.n, c || it.n) : 1, each = itemPrice(s, it.id, a, true) * (it.dur != null ? 0.4 + 0.6 * it.dur / 100 : 1), got = Math.round(each * n * 10) / 10;
+        if (c && !(Math.floor(Number(c)) >= 1)) return fail('Choose how many to sell.');
+        const n = it.n != null ? Math.min(it.n, Math.floor(Number(c)) || it.n) : 1, each = itemPrice(s, it.id, a, true) * (it.dur != null ? 0.4 + 0.6 * it.dur / 100 : 1), got = Math.round(each * n * 10) / 10;
         takeItem(s, b, n); earn(s, got); skillUse(s, 'trade', got / 5); return ok('Sold for ' + got + 'c.');
       }
       case 'rDye': {   // a: shop (a tailor or weaver), b: item u, c: colour
@@ -5995,7 +6044,7 @@
     s.coins = { merchant: 150, elder: 400, lord: 1200, ruler: 2000 }[mode];
     s.start = mode;
     if (mode === 'elder' || mode === 'lord' || mode === 'ruler') {
-      v.step = 9; v.council = true; v.landGranted = true; v.standing = 80; v.chest = Math.max(v.chest, 150);
+      v.step = 9; v.council = true; v.landGranted = true; v.standing = 80; v.chest = Math.max(v.chest, 150); if (s.rec.councilSince == null) s.rec.councilSince = s.day;
       if (mode === 'elder') { const old = s.offices.elder && s.people[s.offices.elder]; appoint(s, 'elder', 'player'); s.rec.everElder = true; if (old) old.retired = true; if (s.gov) s.gov.approval.elder = 65; }
     }
     if (mode === 'lord' || mode === 'ruler') { Y.age = Math.max(Y.age, mode === 'ruler' ? 32 : 28); s.people[Y.pid].age = Y.age; R.favour = 55; R.deeds = { greenhaven: 1 }; }
@@ -6427,7 +6476,7 @@
       if (vic) vic.opinion = clamp((vic.opinion || 0) + (by === 'you' ? 6 : 2), -100, 100);
       if (c.truth !== 'guilty' && c.witnesses.some(x => x.leaned > 0)) s.justice.secrets.filter(x => x.kind === 'threat' && x.caseId === c.id).forEach(x => { x.weight += 2; x.text += ', and an innocent person was convicted on it'; });
       if (c.truth === 'guilty') J.deterUntil = Math.max(J.deterUntil || 0, s.day + 8);
-      else { J.wrongful++; c.wrongful = true; if (A) { A.grudge = (A.grudge || 0) + 1; } }
+      else { J.wrongful = (J.wrongful || 0) + 1; c.wrongful = true; if (A) { A.grudge = (A.grudge || 0) + 1; } }
       if (by === 'you' && A) { if (c.truth === 'guilty') wrong(s, A, 9, 'You found them guilty of ' + CRIME[c.kind].toLowerCase() + '.', { noKin: true }); else { wrong(s, A, 42, 'You convicted them of ' + CRIME[c.kind].toLowerCase() + ', and they were innocent.'); deed(s, -4, 0, 'an innocent convicted'); } }
     }
     J.closed.unshift(c); if (J.closed.length > 30) J.closed.length = 30;
@@ -7223,9 +7272,9 @@
         if (elder ? v.chest - cost0 < CHEST_FLOOR : v.chest < cost0) return fail(elder ? 'Even borrowing, the chest cannot go below ' + CHEST_FLOOR + 'c.' : 'The chest holds ' + v.chest + 'c; this needs ' + pr.cost + 'c. You can add your own coin, or the Elder can borrow.');
         v.chest -= cost0; v.projects[a] = s.day; s.rec.projectsFunded++; if (v.broken) delete v.broken[a];
         approveHolder(s, 'player', 6);
-        if (v.chest < 0) govLog(s, s.name + ' borrows to pay for ' + pr.name.toLowerCase() + '. The village chest is ' + (-v.chest) + 'c in debt.', 'bad');
+        if (v.chest < 0) govLog(s, s.name + ' borrows to pay for ' + pr.act + '. The village chest is ' + (-v.chest) + 'c in debt.', 'bad');
         if (a === 'granary' && v.shortage) { v.shortage = false; }
-        addStanding(s, 10, pr.name.toLowerCase() + ' is done.');
+        addStanding(s, 10, pr.done);
         return ok();
       }
       case 'giveChest': {
@@ -7366,6 +7415,7 @@
         if (!bz) return fail('No such business.');
         if (bz.owner === 'player') return fail('You already own it.');
         const owner = s.people[bz.owner];
+        if (owner && owner.status !== 'here') return fail('Nobody is left who can sell it.');
         if (!sellerWilling(s, bz.owner)) return fail(owner.name + ' will not sell to you.');
         const price = bizPrice(s, a);
         if (s.coins < price) return fail(empById(a).name + ' costs ' + price + 'c.');
@@ -8936,7 +8986,7 @@
         const proof = p.nem && p.nem.ev >= 2;
         if (b === 'banish') {
           if (!(isRuler(s) || (s.realm && yourLordships(s).includes(townOf(p))))) return fail('Only a lord or the crown can banish.');
-          p.status = 'left'; moveOut(s, p, 'Banished by ' + s.name + '.'); if (p.job) loseJob(s, p, 'Banished.'); s.agents = s.agents.filter(x => x.pid !== p.id); endNem(s, p, null);
+          p.status = 'left'; PVER++; moveOut(s, p, 'Banished by ' + s.name + '.'); settleLeaver(s, p); if (p.job) loseJob(s, p, 'Banished.'); s.agents = s.agents.filter(x => x.pid !== p.id); endNem(s, p, null);
           for (const q of kinOf(s, p)) wrong(s, q, proof ? 12 : 25, 'You banished ' + p.name + '.', { noKin: true });
           deed(s, proof ? -1 : -8, 2, 'banishing ' + p.name); if (!proof) townApprove(s, townOf(p), -6);
           return ok(p.name + ' is put on the road out of the kingdom, never to return.' + (proof ? '' : ' Without proof, many call it tyranny.'));

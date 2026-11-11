@@ -930,11 +930,13 @@ function readSlot(n) {
 }
 const playable = g => g && !g.old ? g : null;
 function slotInfo(n) { const s = readSlot(n); if (!s) return null; if (s.old) return s; let when = null; try { when = (JSON.parse(store.get(KEY(n) + '.when') || 'null')); } catch (e) { } return Object.assign(Sim.summary(s), { when }); }
-let G = null, slot = null, lastSave = 0, saveOk = true;
+let G = null, slot = null, lastSave = 0, saveOk = true, lastSaveT = -1, bakAt = 0;
 function saveNow() {
   if (window.FIGHT_TEST || !G || !slot || UI.mode !== 'play') return;
   const str = Sim.serialize(G), prev = store.get(KEY(slot));
-  if (prev && prev !== str) store.set(BAK(slot), prev);
+  // the backup is the save from a few minutes ago, not from ten seconds ago: writing a second copy every time doubled the work
+  if (prev && prev !== str && (!bakAt || Date.now() - bakAt > 300000)) { store.set(BAK(slot), prev); bakAt = Date.now(); }
+  lastSaveT = G.t;
   saveOk = store.set(KEY(slot), str);
   store.set(KEY(slot) + '.when', JSON.stringify(Date.now()));
   meta.lastSlot = slot; saveMeta();
@@ -6104,7 +6106,7 @@ function pageVillage(s) {
   let html = `<h3>Hearthmoor and the Realm</h3><p class="lead">Who rules here, and where you stand.</p>
     <p>Hearthmoor is held by ${esc(Sim.lordTitle(s))} for ${esc(R.king)} in ${esc(R.capital)}. Steward ${esc(Sim.holderName(s, 'steward'))} runs his estate and his tax collector visits each week. Day to day, ${esc(Sim.elderTitle(s))} and the council decide what gets built, set the toll and settle quarrels. Travelers bring news from Ashford, Kellmere and the capital.</p>
     ${govHTML(s)}
-    <div class="box"><dl class="kv"><dt>Your standing</dt><dd>${v.standing}/100</dd><dt>Position</dt><dd>${v.council ? 'Councillor since day ' + s.rec.councilSince : v.step > 0 ? 'Known to the elder' : 'A newcomer'}</dd><dt>Granary</dt><dd>${v.shortage ? 'short: ' + v.granary + '/' + v.granaryNeed + ' grain' : 'stocked'}</dd><dt>Watchtower</dt><dd>${v.towerBuilt ? 'rebuilt' : 'in ruins'}</dd><dt>Out of work</dt><dd>${v.jobless.length ? v.jobless.join(' and ') : 'nobody'}</dd><dt>Taxes paid</dt><dd>${s.rec.taxesPaid}c</dd></dl></div>
+    <div class="box"><dl class="kv"><dt>Your standing</dt><dd>${v.standing}/100</dd><dt>Position</dt><dd>${v.council ? 'Councillor' + (s.rec.councilSince != null ? ' since day ' + s.rec.councilSince : '') : v.step > 0 ? 'Known to the elder' : 'A newcomer'}</dd><dt>Granary</dt><dd>${v.shortage ? 'short: ' + v.granary + '/' + v.granaryNeed + ' grain' : 'stocked'}</dd><dt>Watchtower</dt><dd>${v.towerBuilt ? 'rebuilt' : 'in ruins'}</dd><dt>Out of work</dt><dd>${v.jobless.length ? v.jobless.join(' and ') : 'nobody'}</dd><dt>Taxes paid</dt><dd>${s.rec.taxesPaid}c</dd></dl></div>
     <h4>The four things the village asks</h4><ul class="goals">${Sim.VILLAGE_MILESTONES.map((i, n) => `<li class="${v.step > i ? 'done' : v.step === i ? 'now' : ''}"><span class="tick">${v.step > i ? '&#10003;' : n + 1}</span><span>${esc(Sim.stepText(s, Sim.STEPS[i]))}</span></li>`).join('')}</ul>`;
   if (v.council || s.offices.elder === 'player') html += villagePowers(s);
   html += `<h4>Property and orders</h4><p>Old Ama’s cottage: ${({ forsale: 'for sale at 90c', owned: 'yours, needs repairs', repaired: 'repaired, tenant arriving', let: 'rented out at 5c a day' })[v.cottage]}. Rent collected: ${s.rec.rentCollected}c.</p>
@@ -6650,7 +6652,7 @@ function statsHTML(s) {
     ${group('Trade', [['Goods made', sum(r.made)]].concat(P.filter(k => r.made[k]).map(k => ['&nbsp;&nbsp;' + nice[k], r.made[k]]), [['Goods sold', r.goodsSold], ['Sales revenue', r.salesRevenue + 'c'], ['Customers served', r.served], ['Customers lost', r.lost], ['&nbsp;&nbsp;over the price', r.lostPrice], ['Raw goods sold', r.rawSales + 'c']]))}
     ${group('People', [['Workers on staff', staff + Object.values(s.biz).filter(b => b.owner === 'player').reduce((a, b) => a + b.staff.length, 0)], ['Workers hired', r.workersHired], ['Workers let go', r.staffFired], ['Workers who quit', r.workersQuit], ['Wages paid', r.wagesPaid + 'c'], ['Evictions', r.evictions], ['Rent raises', r.rentRaises], ['People who left the village', r.peopleLeft], ['Villagers who like you', Sim.living(s).filter(p => p.opinion >= 10).length], ['Villagers who resent you', Sim.living(s).filter(p => p.opinion <= -10).length]])}
     ${group('Work', [['Good items made at work', r.workRounds || 0], ['Wages earned', r.wagesEarned + 'c'], ['Times let go', r.timesFired], ['Jobs quit', r.jobsQuit]].concat(Object.keys(MINI).filter(k => Sim.tradeXp(s, k) > 0).map(k => [Sim.tradeName(k), 'level ' + Sim.tradeLevel(s, k) + ' (' + Sim.tradeXp(s, k) + ' items)'])))}
-    ${group('Village', [['Standing', s.village.standing + '/100'], ['Position', s.village.council ? 'Councillor since day ' + r.councilSince : s.village.step > 0 ? 'Known to the elder' : 'Newcomer'], ['Elder\u2019s tasks done', r.elderTasks], ['Grain given', r.grainDonated], ['Coin given to the village', r.chestGiven + 'c'], ['Projects funded', r.projectsFunded], ['Disputes settled', r.disputesSettled], ['Merchant orders filled', r.contractsDone], ['Taxes paid to the lord', r.taxesPaid + 'c'], ['Times elected', r.timesElected || 0], ['Votes survived', r.votesWon || 0], ['Votes lost', r.votesLost || 0]])}
+    ${group('Village', [['Standing', s.village.standing + '/100'], ['Position', s.village.council ? 'Councillor' + (r.councilSince != null ? ' since day ' + r.councilSince : '') : s.village.step > 0 ? 'Known to the elder' : 'Newcomer'], ['Elder\u2019s tasks done', r.elderTasks], ['Grain given', r.grainDonated], ['Coin given to the village', r.chestGiven + 'c'], ['Projects funded', r.projectsFunded], ['Disputes settled', r.disputesSettled], ['Merchant orders filled', r.contractsDone], ['Taxes paid to the lord', r.taxesPaid + 'c'], ['Times elected', r.timesElected || 0], ['Votes survived', r.votesWon || 0], ['Votes lost', r.votesLost || 0]])}
     ${group('Life', [['Days in Hearthmoor', r.days], ['Distance walked', (r.walked / 1000).toFixed(2) + ' km'], ['Grain gathered', r.gathered.grain], ['Wood chopped', r.gathered.wood], ['Ore dug', r.gathered.ore]])}
     ${(() => { const E = Sim.electState(s), mine = Sim.yourOffice(s), rk = rankOf(s);
       return group('Office', [['Now', esc(rk.title)], ['Highest office won', esc(r.highestTitle || (r.everElder ? 'Elder of Hearthmoor' : s.village.council ? 'a seat on the village council' : '\u2014'))], ['Days in this office', mine ? Math.min(Sim.heldDays(s), s.day) : '\u2014'], ['Elections stood in', r.racesRun || 0], ['Elections won', r.racesWon || 0], ['Elections lost', r.racesLost || 0], ['Voted out of office', r.votedOut || 0], ['Promises kept', E.kept || 0], ['Promises broken', E.broken || 0], ['Lordships held now', Sim.yourLordships(s).filter(x => x !== 'crownmere').map(x => Sim.REGIONS[x]).join(', ') || 'none'], ['Times crowned', r.crowned || 0], ['Cases judged fairly', r.fairVerdicts || 0]]); })()}
@@ -6758,8 +6760,10 @@ function renderTitle() {
 }
 function enterGame(game, n) {
   if (Interior.active()) Interior.leave(true); UI.inside = null; UI.myHouse = undefined;
-  UI.dialog = []; G = game; slot = n; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
+  UI.dialog = []; G = game; slot = n; bakAt = 0; lastSaveT = -1; rebuildPlayer(G.look); UI.mode = 'play'; UI.overlay = null; UI.sel = null; UI.loc = null; UI.confirm = null; UI.exportText = '';
   meta.lastSlot = n; saveMeta();
+  // a fight cannot be rebuilt from a save (its scene and what should happen afterwards are not kept), so a save made mid-fight comes round as a fight broken off
+  if (G.fight) { G.fight.over = G.fight.over || 'yielded'; Sim.endFight(G); FIGHT.on = false; setTimeout(() => toast('The fight you were in had to be broken off when the game was saved. You come to, shaken but able to walk.', 'info', true), 600); }
   resetMeshes(); focus.set(G.player.x, 0, G.player.z); solidKey = '';
   ['title', 'book', 'pause'].forEach(id => $(id).hidden = true);
   ['hud', 'sticks'].forEach(id => $(id).hidden = false);
@@ -6906,7 +6910,7 @@ $('speeds').addEventListener('click', e => { const b = e.target.closest('[data-s
 ['book', 'pause'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) closeOverlay(); }));
 document.addEventListener('keydown', e => { if (e.code === 'KeyM' && UI.mode === 'play' && !(e.target.closest && e.target.closest('input, textarea'))) { if (UI.overlay === 'map') closeOverlay(); else if (!UI.overlay) openMap(); return; } if (e.key === 'Escape' && UI.mode === 'play') { if (UI.overlay) closeOverlay(); else openPause(); } });
 
-setInterval(() => { if (!document.hidden) saveNow(); }, 10000);
+setInterval(() => { if (!document.hidden && G && G.t !== lastSaveT) saveNow(); }, 30000);   // it also saves when the page is hidden or closed
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
 window.addEventListener('pagehide', saveNow);
 window.addEventListener('beforeunload', saveNow);

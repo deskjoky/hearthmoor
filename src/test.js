@@ -708,9 +708,10 @@ console.log('23. Crownmere: the capital on Crown Lake');
   const r = Sim.cmd(s, 'coach', 'crownmere'); check(r.ok && Sim.townAt(s.player.x, s.player.z) === 'crownmere', 'the coach from Oakbridge reaches Crownmere in ' + r.mins + ' minutes');
   Sim.step(s, 0.01); const bodies = s.agents.filter(a => a.kind === 'person');
   check(bodies.length > 1000 && bodies.every(a => Sim.townOf(s.people[a.pid]) === 'crownmere'), 'in the capital, ' + bodies.length + ' townsfolk are about');
-  let wet = 0, t0 = Date.now(); for (let k = 0; k < 600; k++) { Sim.advance(s, 1); if (k % 20) continue; for (const a of bodies) if (C.lakeDist(a.x, a.z) < -1) wet++; }
+  let wet = 0, t0 = Date.now(), cpu0 = process.cpuUsage(); for (let k = 0; k < 600; k++) { Sim.advance(s, 1); if (k % 20) continue; for (const a of bodies) if (C.lakeDist(a.x, a.z) < -1) wet++; }
   check(wet === 0, 'nobody walks into the lake');
-  check(Date.now() - t0 < 30000, 'ten hours of a busy capital take ' + (Date.now() - t0) + ' ms to simulate');
+  { const cu = process.cpuUsage(cpu0), cpuMs = Math.round((cu.user + cu.system) / 1000);   // CPU time, not the clock on the wall, so a busy machine running other tests cannot fail it
+    check(cpuMs < 30000, 'ten hours of a busy capital take ' + cpuMs + ' ms of processing to simulate'); }
 }
 
 console.log('24. Stage II checks: a month away with your businesses in good hands, and real choices as Elder');
@@ -1644,6 +1645,37 @@ console.log('50. Staff, elections and promises (v0.57-v0.59)');
   check(!!Sim.challengeBar(h, cr), 'a popular king cannot be challenged early');
   h.realm.council.trade = 'player'; Sim.electState(h).since = h.day - 99; h.realm.kingSupport = 30; const bar = Sim.challengeBar(h, cr); { const at = Sim.LOCS[Sim.raceVenue(cr).loc]; h.player.x = at.x; h.player.z = at.z; }
   check(!bar && Sim.cmd(h, 'challenge', 'crown').ok !== false && cr.poll <= h.day + 4, 'a faltering king can be forced to an early vote' + (bar ? ': ' + bar : ''));
+}
+
+// stage I, steady ground: one broken part of a day no longer stops the game, and the dead leave nothing behind
+{
+  console.log('\n== steady ground ==');
+  const g = Sim.newGame(7101); Sim.advance(g, 60); g.gov = {};
+  Sim.setStrict(false);
+  let day0 = g.day, threw = false; try { Sim.advance(g, 1440 * 3); } catch (e) { threw = true; }
+  Sim.setStrict(true);
+  check(!threw && g.day >= day0 + 3, 'with the village government broken, three days still go by (day ' + day0 + ' to ' + g.day + ')');
+  check(Sim.faults().some(f => /government/.test(f.name)), 'the broken part is recorded, so it can be seen and fixed');
+  const w = Sim.newGame(7102); Sim.advance(w, 60 * 24 * 20);
+  const A = Object.values(w.biz).find(b => !b.closed && b.owner !== 'player' && w.people[b.owner] && w.people[b.owner].status === 'here');
+  const owner = w.people[A.owner], B = Object.values(w.biz).find(b => b !== A && !b.closed && b.owner !== 'player' && b.owner !== owner.id);
+  B.owner = owner.id;   // a second business in the same hands
+  Sim.dies(w, owner);
+  check(!Sim.living(w).includes(owner), 'the dead are not among the living the moment they die');
+  check(w.biz[A.id].owner !== owner.id || w.biz[A.id].closed, 'the business they worked in passes on or shuts');
+  check(w.biz[B.id].owner !== owner.id || w.biz[B.id].closed, 'so does any other business they owned');
+  // a save from before the fix: an owner already dead, still on the books
+  const x = Object.values(w.biz).find(b => !b.closed && b.owner !== 'player' && w.people[b.owner] && w.people[b.owner].status === 'here');
+  const o2 = w.people[x.owner]; o2.status = 'dead';
+  const buy = Sim.cmd(w, 'buyBiz', x.id); check(buy && buy.ok === false, 'nobody can buy a business from a dead owner');
+  Sim.advance(w, 1440);
+  check(x.owner !== o2.id || x.closed, 'a business left with a dead owner is settled the next morning');
+  // starting again as a stranger
+  const b = Sim.newGame(7103); Sim.advance(b, 60 * 24 * 5);
+  b.char.level = 6; b.char.perks.foreman = 1; b.player.items.push({ u: 9999, id: 'tunic', dur: 40 }); b.fight = { kind: 'knockout', foes: [], allies: [] }; b.pendingDeath = {};
+  check(Sim.cmd(b, 'beginAgain', 'Wren', 'm').ok, 'starting again works');
+  check(b.char.level === 1 && !b.char.perks.foreman && !b.fight && !b.player.items.some(i => i.u === 9999), 'the new life keeps no levels, perks, gear or fight from the old one');
+  Sim.advance(b, 1440 * 2); check(b.char.level === 1, 'and does not get them back by being credited');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
