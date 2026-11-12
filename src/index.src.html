@@ -4678,7 +4678,11 @@ function bizDials(s, b, short) {
   const mode = b.prices || 'fair', fw = Sim.fairWage(b.town), st = b.staff;
   const payMode = !st.length ? null : st.every(x => x.wage <= fw - 2) ? 'low' : st.every(x => x.wage >= fw + 1) ? 'good' : st.every(x => x.wage === fw) ? 'fair' : null;
   const seg = (cmd, cur, opts) => `<div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${cur === v}" data-c='${esc(JSON.stringify([cmd, b.id, v]))}'>${esc(n)}</button>`).join('')}</div>`;
-  let h = `<div class="setting"><span>Prices</span>${seg('fPrices', mode, [['cheap', 'Cheap'], ['fair', 'Fair'], ['greedy', 'Greedy']])}${short ? '' : `<p>${esc(Sim.PRICE_MODES[mode].says)}.</p>`}</div>`;
+  let h = `<div class="setting"><span>Prices</span>${seg('fPrices', mode, [['cheap', 'Cheap'], ['fair', 'Fair'], ['greedy', 'Dear']])}${short ? '' : `<p>${esc(Sim.PRICE_MODES[mode].says)}.</p>`}</div>`;
+  { const r = Sim.renownOf(b), lv = Sim.bizLevel(b), cost = Sim.levelCost(s, b), inv = b.investor;
+    h += `<div class="setting"><span>Its name</span><b>${esc(Sim.renownWord(r))}</b>${progressBar(r / 100)}${short ? '' : `<p>${Math.round(r)} of 100, heading for ${b.renownTo == null ? 50 : b.renownTo} because of ${esc(b.renownWhy || 'nothing out of the way')}. Below 50 fewer people come in, even when goods are short.</p>`}</div>`;
+    h += `<div class="setting"><span>The ladder</span><p>${Sim.LADDER.biz.map((n, i) => i === lv ? '<b>' + n + '</b>' : n).join(' → ')}</p>${cost != null ? `<div class="acts">${B_('Make it ' + (lv === 0 ? 'a fine shop' : 'a house of note') + ' · ' + cost + 'c<small>' + esc(Sim.LADDER_GAIN.biz[lv + 1]) + '</small>', ['improveBiz', b.id], 'alt', s.coins < cost)}</div>` : ''}</div>`;
+    if (!short) h += `<div class="setting"><span>An investor</span>${inv ? `<p>${esc(inv.name)} holds ${Math.round(inv.share * 100)}%: they paid ${inv.paid}c on day ${inv.since} and take ${Math.round(inv.share * 100)}% of each day's profit.</p><div class="acts">${B_('Buy back their share · ' + Sim.buyBackPrice(s, b) + 'c', ['investOut', b.id], 'alt', s.coins < Sim.buyBackPrice(s, b))}</div>` : `<p>Sell a share for coin now. The investor then takes that share of each day's profit until you buy it back (for a tenth more than they paid).</p><div class="acts">${Sim.INVEST_SHARES.map(sh => B_('Sell ' + Math.round(sh * 100) + '% · ' + Sim.investPrice(s, b, sh) + 'c', ['investIn', b.id, sh], 'alt')).join('')}</div>`}</div>`; }
   if (st.length) h += `<div class="setting"><span>Pay</span>${seg('fPay', payMode, [['low', 'Low · ' + (fw - 2) + 'c'], ['fair', 'Fair · ' + fw + 'c'], ['good', 'Generous · ' + (fw + 1) + 'c']])}${short ? '' : `<p>Fair pay in ${esc(TOWN_NAMES[b.town || 'hearthmoor'])} is about ${fw}c a day. Pay less and workers sour and walk out; pay more and they are loyal.</p>`}</div>`;
   return h;
 }
@@ -4974,7 +4978,7 @@ function hud(s) {
 /* the book: five sections, each with a few pages. A section remembers the page you last read in it. */
 const SECTIONS = [
   ['today', 'Today', [['tasks', 'Tasks'], ['goals', 'Goals'], ['calendar', 'Calendar']]],
-  ['money', 'Money', [['ledger', 'Ledger'], ['jobs', 'Work']]],
+  ['money', 'Money', [['purse', 'Purse'], ['ledger', 'Ledger'], ['jobs', 'Work']]],
   ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
   ['people', 'People', [['people', 'Townsfolk'], ['notables', 'Of note'], ['rival', 'Rival'], ['family', 'Family']]],
   ['you', 'You', [['skills', 'Skills'], ['gear', 'Gear'], ['renown', 'Your name']]],
@@ -5012,7 +5016,7 @@ function renderBook(turn) {
   const c0 = Sim.calendar(G);
   $('bkhead').innerHTML = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}</nav><span class="bkstat num" title="Time stands still while the book is open"><b>${money(G.coins)}</b><small>${c0.dom} ${c0.monthName} \u00b7 paused</small></span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
   const subs = '';
-  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, purse: pagePurse, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   keepPlace(pg, y); turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -5136,9 +5140,11 @@ function pageShops(s, only) {
       <dt>Each batch</dt><dd>${Sim.goodsName(shop.trade, Ti.out)} from ${Sim.recipeText(shop.trade)}</dd><dt>Time</dt><dd>${Ti.min} min</dd>
       <dt>Storage and shelf</dt><dd>${Ti.cap} each</dd><dt>Open to customers</dt><dd>${String(T.hours[0]).padStart(2, '0')}:00–${T.hours[1]}:00</dd>
       <dt>Travelers a day</dt><dd>about ${Ti.travelers}</dd><dt>Upkeep</dt><dd>${Ti.upkeep}c a day</dd><dt>Supplies if bought</dt><dd>${unit.toFixed(2)}c each</dd></dl></div>
-      <div class="box"><h5>Price: <span class="num" id="pv-${shop.id}">${shop.price}c</span></h5>
+      <div class="box"><h5>Price: <span class="num" id="pv-${shop.id}">${shop.price}c</span> <small>· ${esc(Sim.DIAL_NAME[Sim.shopDial(shop)])}</small></h5><div class="seg" role="group">${['cheap', 'fair', 'greedy'].map(m => `<button type="button" aria-pressed="${Sim.shopDial(shop) === m}" data-c='${esc(JSON.stringify(['shopDial', shop.id, m]))}'>${Sim.DIAL_NAME[m]} · ${Math.round(Sim.shopBase(shop) * Sim.DIAL[m])}c</button>`).join('')}</div>
       <input type="range" id="price-${shop.id}" data-shop="${shop.id}" min="1" max="${Math.round(T.wtp * 2.2)}" step="1" value="${shop.price}" aria-label="Price for ${T.many}">
-      <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div></div>`;
+      <p class="num" id="pw-${shop.id}">${willText(shop)}</p></div>
+      <div class="box"><h5>Its name: ${esc(Sim.renownWord(Sim.renownOf(shop)))}</h5>${progressBar(Sim.renownOf(shop) / 100)}<p class="why">${Math.round(Sim.renownOf(shop))} of 100, heading for ${shop.renownTo == null ? 50 : shop.renownTo} because of ${esc(shop.renownWhy || 'nothing out of the way')}. A good name brings people who will pay a little more; a poor one drives them off.</p>
+      <p><b>The ladder:</b> ${Sim.LADDER.shop.map((n, i) => i === shop.tier ? '<b>' + n + '</b>' : n).join(' → ')}${shop.tier < 2 ? ' (build the next building below)' : ''}.</p></div></div>`;
     if (shop.worker && !shop.manager && !(shop.hands || []).length) html += `<p><label class="checkrow"><input type="checkbox" id="pol-${shop.id}" data-shop="${shop.id}" ${Sim.supplier(shop) === 'worker' ? 'checked' : ''}> ${esc(shop.worker.name)} buys ${Object.keys(T.recipe).join(' and ')} at the Trading Post when storage runs out</label></p><p class="why">The bench stops while they walk there and back. Hire a manager later and they take over the buying, a little cheaper.</p>`;
     else if (shop.worker) { const who = Sim.supplier(shop) || 'none', opts = [shop.manager ? ['manager', 'Manager (automatic)'] : null, ['employee', 'An employee'], ['worker', esc(shop.worker.name.split(' ')[0])], shop.manager ? null : ['none', 'Nobody']].filter(Boolean);
       html += `<div class="setting"><span>Who fetches ${Object.keys(T.recipe).join(' and ')}</span><div class="seg" role="group">${opts.map(([v, n]) => `<button type="button" aria-pressed="${who === v}" data-c='${esc(JSON.stringify(['policy', shop.id, 'supplyBy', v]))}'>${n}</button>`).join('')}</div>${(shop.policy.supplyBy === 'employee' && who !== 'employee') ? '<p class="why">Set an employee to Supplies on the Staff page.</p>' : who === 'manager' ? '<p>The manager buys a little cheaper and the bench never stops.</p>' : who === 'worker' ? '<p>The bench stops while they walk to the Trading Post.</p>' : ''}</div>`; }
@@ -5496,6 +5502,21 @@ function crowdBox(s, town) {
   return h + '</div>';
 }
 /* Stage V: your rival, and how to deal with them */
+/* Stage VII: one plain page about money */
+function pagePurse(s) {
+  const M = Sim.moneyView(s), W = M.wealth, row = (l, n) => `<dt>${esc(l)}</dt><dd class="num ${n < 0 ? 'neg' : ''}">${n < 0 ? '−' : ''}${Math.abs(Math.round(n))}c</dd>`;
+  let h = `<h3>Your Purse</h3><p class="lead">What came in, what went out, what you owe and what falls due.</p>`;
+  h += `<div class="box"><dl class="kv">${row('In your purse', M.coins)}${row('All you own, at today’s prices', M.worth)}</dl>
+    <p>${W.title ? 'People call you <b>' + esc(W.title) + '</b>.' : 'You have no title yet.'} ${W.next ? (W.newMoney ? 'You are rich enough to be called ' + esc(W.next.title) + ', but ' + esc(Sim.townName(W.home)) + ' does not think enough of you yet: they call it new money. Raise your standing there.' : 'Next: <b>' + esc(W.next.title) + '</b> at ' + W.next.w + 'c, with a good enough name in ' + esc(Sim.townName(W.home)) + '.') : ''}</p></div>`;
+  h += `<h4>The last ${M.days || 0} day${M.days === 1 ? '' : 's'}</h4><div class="box">${M.days ? `<dl class="kv">${M.ins.map(([l, n]) => row(l, n)).join('')}${M.outs.map(([l, n]) => row(l, -n)).join('')}${M.other.map(([l, n]) => row(l, n)).join('')}<dt><b>Altogether</b></dt><dd class="num ${M.net < 0 ? 'neg' : ''}"><b>${M.net < 0 ? 'down ' : 'up '}${Math.abs(Math.round(M.net))}c</b></dd></dl>` : '<p>Nothing yet: the books close each evening at 21:00.</p>'}</div>`;
+  h += `<h4>Falling due</h4><div class="box">${M.due.length ? `<dl class="kv">${M.due.map(d => `<dt>${esc(d.when)}: ${esc(d.what)}</dt><dd class="num ${d.n < 0 ? 'neg' : ''}">${d.n == null ? '' : (d.n < 0 ? '−' : '') + Math.abs(d.n) + 'c'}</dd>`).join('')}</dl>` : '<p>Nothing.</p>'}</div>`;
+  if (M.owe.length) h += `<h4>What you owe</h4><div class="box"><dl class="kv">${M.owe.map(o => `<dt>${esc(o.what)}</dt><dd class="num neg">${o.n == null ? '' : o.n + 'c'}</dd>`).join('')}</dl></div>`;
+  const open = M.deals.filter(d => !d.taken), live = M.deals.filter(d => d.taken && !d.done), done = M.deals.filter(d => d.done && d.result);
+  h += `<h4>The deals board</h4><div class="box"><p class="why">Three chances a week, gone by the end of it. A good deal pays a little more than the same coin in your shops; some carry risk.</p>${open.length ? open.map(d => `<p><b>${esc(d.title)}</b><br>${esc(d.text)} <small>Until day ${d.until}.</small></p><div class="acts">${B_('Take it', ['dealTake', d.id], '', d.cost && s.coins < d.cost)}</div>`).join('') : '<p>Nothing new on the board this week.</p>'}
+    ${live.length ? `<p><b>Under way:</b> ${live.map(d => esc(d.title) + (d.due ? ' (day ' + d.due + ')' : '')).join('; ')}</p>` : ''}${done.length ? `<ul class="plog">${done.map(d => `<li>${esc(d.result)}</li>`).join('')}</ul>` : ''}</div>`;
+  h += `<h4>Titles</h4><ul class="plog">${Sim.WEALTH_STEPS.map((x, i) => `<li class="${i <= W.i ? 'pos' : ''}">${esc(x.t[Sim.you(s).sex === 'f' ? 1 : 0])}: ${x.w}c, and ${esc(Sim.standingWord(x.st, 0).toLowerCase())} at home${i <= W.i ? ' ✓' : ''}</li>`).join('')}</ul>`;
+  return h;
+}
 function pageRival(s) {
   const V = Sim.rivalView(s); let h = `<h3>Your Rival</h3>`;
   const past = V && V.past.length ? `<h4>Rivals before</h4><ul class="plog">${V.past.map(x => `<li>${esc(x.name)}: ${esc({ beaten: 'beaten, and left', bought: 'bought out, and left', exposed: 'exposed, and left in disgrace', allied: 'became your ally', died: 'died', gone: 'left' }[x.how] || x.how)} on day ${x.d} (you won ${x.won} of ${x.won + x.lost} contests)</li>`).join('')}</ul>` : '';
@@ -5826,6 +5847,7 @@ function taskList(s) {
     if (F.ambush) { const q = s.people[F.ambush.pid]; out.push({ who: 'A warning', title: F.ambush.kind === 'assassin' ? 'Someone has hired a blade against you' : 'Someone has paid thugs to beat you', note: (q ? q.name + ' paid for it. ' : '') + 'Face them first, keep guards close, or stay off the roads and out of the streets at night.', act: B_('Your enemies', ['page', 'renown']) }); }
   }
   { const V = Sim.rivalView(s); if (V && V.active) { for (const w of V.wars) out.push({ who: 'Your rival, ' + V.name, title: 'Win the price war at ' + w.at, note: (w.fair ? 'Sell at ' + w.fair + 'c or less' : 'Set your prices there to Cheap, or out-earn them') + ' until day ' + w.until + '.', act: B_('Rival', ['page', 'rival']) }); if (V.court && V.court.stage !== 'betrothed') out.push({ who: 'Your rival, ' + V.name, title: 'Win ' + V.court.name + ' first', note: V.name + ' is at ' + V.court.theirs + ' of 100. Be betrothed before that reaches 100.', act: B_('Rival', ['page', 'rival']) }); } }
+  { const D = s.deals; const open = D ? D.list.filter(d => !d.taken && s.day <= d.until) : []; if (open.length) out.push({ who: 'The deals board', title: open.length + ' deal' + (open.length === 1 ? '' : 's') + ' this week', note: open.map(d => d.title).join(' · '), act: B_('Purse', ['page', 'purse']), soft: true }); }
   if (s.elect) for (const r of Sim.upcomingRaces(s).filter(r => r.open && r.you)) out.push({ who: 'Your campaign', title: (r.poll === s.day ? 'Today at noon: the vote for ' : 'Day ' + r.poll + ', noon: the vote for ') + Sim.raceLabel(r), note: 'Be at ' + Sim.venueName(r) + ' when the votes are counted. Speak in the town once a day until then.', act: go(Sim.raceVenue(r).loc, 'Go to ' + Sim.venueName(r)) });
   if (v.shortage) out.push({ who: 'The village', title: 'Refill the granary: ' + v.granary + ' of ' + v.granaryNeed + ' grain', note: 'Until it is full, villagers buy less at every shop.', act: go('granary', 'Go to the granary') });
   if (v.dispute != null && (v.council || s.offices.elder === 'player')) out.push({ who: 'The council', title: 'Settle the dispute before the council', note: Sim.DISPUTES[v.dispute].text, act: go('hall', 'Go to the Village Hall') });
@@ -7824,6 +7846,31 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
+/* ----- Stage VII: a business you have improved shows it: a painted sign, then banners and lanterns ----- */
+const BizSigns = { key: '', group: null, t: 0 };
+function syncBizSigns(s, dt) {
+  BizSigns.t -= dt; if (BizSigns.t > 0) return; BizSigns.t = 1;
+  const own = s && s.biz ? Object.values(s.biz).filter(b => b.owner === 'player' && (b.level || 0) > 0) : [], key = own.map(b => b.id + ':' + b.level).join('|');
+  if (key === BizSigns.key) return; BizSigns.key = key;
+  if (BizSigns.group) { scene.remove(BizSigns.group); BizSigns.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  const g = BizSigns.group = new THREE.Group(); scene.add(g);
+  const wood = new THREE.MeshLambertMaterial({ color: '#6b4a2e' }), paint = new THREE.MeshLambertMaterial({ color: '#c9a24a' }), cloth = new THREE.MeshLambertMaterial({ color: '#8e2b22', side: THREE.DoubleSide }), lamp = new THREE.MeshBasicMaterial({ color: '#ffd27a' });
+  const put = (geo, mat, x, y, z, ry) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.y = ry || 0; g.add(m); return m; };
+  for (const b of own) {
+    const e = Sim.empById(b.id); if (!e || e.x == null) continue;
+    const f = e.front || { x: e.x, z: e.z + 3 }, a = Math.atan2(f.x - e.x, f.z - e.z), ux = Math.sin(a), uz = Math.cos(a), sx = Math.cos(a), sz = -Math.sin(a);
+    const px = e.x + (f.x - e.x) * 0.6, pz = e.z + (f.z - e.z) * 0.6, gy = groundH(px, pz);
+    // the sign: a bracket and a painted board
+    put(new THREE.BoxGeometry(0.1, 0.1, 1.2), wood, px + ux * 0.5, gy + 3.4, pz + uz * 0.5, a);
+    put(new THREE.BoxGeometry(1.3, 0.8, 0.08), paint, px + ux * 1.0, gy + 2.85, pz + uz * 1.0, a + Math.PI / 2);
+    if (b.level >= 2) for (const side of [-1, 1]) {
+      const bx = px + sx * side * 2.2 + ux * 0.6, bz = pz + sz * side * 2.2 + uz * 0.6, by = groundH(bx, bz);
+      put(new THREE.CylinderGeometry(0.06, 0.06, 4.2, 6), wood, bx, by + 2.1, bz);
+      put(new THREE.PlaneGeometry(0.8, 1.6), cloth, bx + ux * 0.05, by + 3.1, bz + uz * 0.05, a);
+      put(new THREE.BoxGeometry(0.22, 0.3, 0.22), lamp, bx + ux * 0.3, by + 1.9, bz + uz * 0.3);
+    }
+  }
+}
 function frameBody(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
@@ -7843,7 +7890,7 @@ function frameBody(now) {
   if (UI.overlay !== 'map' && document.body.classList.contains('mapping')) { document.body.classList.remove('mapping'); $('mapui').hidden = true; UI.mapPid = null; }   // something else took the screen while the map was up
   lmFrame(now, t);
   if (G) Mini.update(dt);
-  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); }
+  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); syncBizSigns(G, dt); }
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay || UI.overlay === 'map') renderCard(false); }
   if (FIGHT.on && G && G.fight) poseFight(dt, t);
@@ -8139,6 +8186,16 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.90', date: '12 November', title: 'Running a business', items: [
+    'Every business you own has a price dial: Cheap, Fair or Dear. On the shops you build, the dial sets the price for you (you can still fine-tune it with the slider).',
+    'Every business has a name of its own, 0 to 100, shown as a word and a bar with the reason it is moving. Fair prices, a staffed counter and a fine building raise it; high prices, empty shelves and shutting when people come lower it. A good name brings people who pay a little more. Below 50, fewer people come in, even when goods are short.',
+    'Dear prices used to win every time in a town short of goods. Now a dear business earns more for a week or two, then its name falls and its takings with it: Fair earns the most in the long run, Cheap buys goodwill.',
+    'A ladder for every business. The shops you build go Stall, Shop, House of note as before. Businesses you buy go Shop, Fine shop, House of note: pay for the work and it can sell more, earns a better name, and you see it on the building: a painted sign, then banners and lanterns.',
+    'A deals board with three chances a week: bulk goods at a fifth under the market, a feast order at half again the price, a share in a cargo (most likely back with a third more, sometimes half lost), and a business for sale under its worth, sometimes your rival\u2019s. On the new Purse page, and on Tasks.',
+    'Investors: sell a quarter or half of a business you bought for coin now. They take that share of its profit until you buy it back for a tenth more than they paid.',
+    'A new Purse page under Money: your coin and all you own, the last week in and out in plain lines, what falls due tonight and later, and what you owe.',
+    'Wealth earns a title: Man or Woman of Means, Burgher, Merchant of Note, Merchant Prince or Princess, Magnate. Each needs the coin and a good enough name at home; rich but disliked, they call you new money.'
+  ] },
   { v: '0.89', date: '12 November', title: 'A good name', items: [
     'Your reputation is now four things you can read. Fame: how widely you are known. Character: honest to crooked. Standing: in each town, at the royal court and in Valdoria. And each person\u2019s own feeling toward you.',
     'Standing is kept town by town: a hero in Hearthmoor can be a nobody in Oakbridge. Where you hold office, how people rate your government is your standing there.',

@@ -390,7 +390,7 @@
     if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
   }
   function shopLabel(shop) { return tierOf(shop).name + ', ' + PLOTS[shop.plot].name; }
-  function wtpMean(shop, traveler) { const T = TRADES[shop.trade]; return T.wtp * (1 + 0.08 * shop.tier + (traveler ? 0.08 : 0)) * (shop.warMul || 1); }   // a rival's price war makes folk expect less
+  function wtpMean(shop, traveler) { const T = TRADES[shop.trade]; return T.wtp * (1 + 0.08 * shop.tier + (traveler ? 0.08 : 0)) * (shop.warMul || 1) * (shop.renownMul || 1); }   // a rival's price war makes folk expect less; a good name, more
   function earn(s, n) { s.coins += n; s.rec.coinsEarned += n; }
   function spend(s, n) { s.coins -= n; s.rec.coinsSpent += n; }
   function goodsName(trade, n) { const T = TRADES[trade]; return n + ' ' + (n === 1 ? T.one : T.many); }
@@ -535,8 +535,8 @@
   function skillLabel(skill) { return skill < 0.85 ? 'Slow but cheap' : skill < 1.1 ? 'Steady' : 'Quick hands'; }
 
   // the part of today's coin that already has its own line in the books
-  function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0) + (st.deals || 0) - (st.investors || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
+  const FLOW_LABEL = { dealTake: 'A deal from the board', investIn: 'Sold a share to an investor', investOut: 'Bought back an investor’s share', improveBiz: 'Improved a business', pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
   // one broken part of a day must not stop the whole game: record it, tell the player once, and carry on
   const FAULTS = [];
   let STRICT = false;
@@ -569,7 +569,9 @@
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
     if (s.people) guard(s, 'reputation was reckoned', () => repDay(s));
+    guard(s, 'the businesses were reckoned', () => { renownDay(s); if (s.people) { dealsDay(s); wealthDay(s); } });
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
+    entry.deals = st.deals || 0; entry.investors = st.investors || 0;
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
@@ -607,8 +609,8 @@
     const c0 = s.coins;
     if (s.people) managersDay(s, entry);
     entry.managers = c0 - s.coins;
-    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized + entry.fines + entry.restitution + entry.bribes + Math.max(0, entry.lands) + entry.partner;
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling + (entry.ship || 0) + entry.hush + Math.max(0, -entry.lands);
+    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized + entry.fines + entry.restitution + entry.bribes + Math.max(0, entry.lands) + entry.partner + Math.max(0, entry.deals);
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling + (entry.ship || 0) + entry.hush + Math.max(0, -entry.lands) + entry.investors + Math.max(0, -entry.deals);
     if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of ' + (s.rep ? Math.round(loanRate(s) * 1000) / 10 : 2) + '% a day is added every evening (less with a good name)' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
@@ -1909,7 +1911,7 @@
     if (t === 'hearthmoor') for (const sh of s.shops) if (sh.trade === trade) out.push({ shop: sh, cap: shopCap(sh) });
     return out;
   }
-  function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : (s.people && s.people[b.owner] && s.people[b.owner].held ? 0.4 : 1); const wt = x => { const q = s.people && s.people[x.pid]; if (q && q.held) return 0; if (!q || b.owner !== 'player' || b.lease) return 1; return (q.hate || 0) >= 35 ? 0.7 : (q.opinion || 0) >= 25 ? 1.2 : 1; }; return (b.staff.reduce((a, x) => a + wt(x), 0) + own) * E.perWorker * (b.disrepair ? 0.7 : 1); }
+  function bizCap(s, b) { const E = ECON[b.trade] || ECON.carter, own = b.owner === 'player' && !b.lease ? (b.manager ? 1 : 0) : (s.people && s.people[b.owner] && s.people[b.owner].held ? 0.4 : 1); const wt = x => { const q = s.people && s.people[x.pid]; if (q && q.held) return 0; if (!q || b.owner !== 'player' || b.lease) return 1; return (q.hate || 0) >= 35 ? 0.7 : (q.opinion || 0) >= 25 ? 1.2 : 1; }; return (b.staff.reduce((a, x) => a + wt(x), 0) + own) * E.perWorker * (b.disrepair ? 0.7 : 1) * (b.owner === 'player' ? 1 + 0.15 * (b.level || 0) : 1); }
   function shopCap(sh) { return (ECON[sh.trade] || ECON.carter).perWorker * (1 + (sh.worker ? 1 : 0) + (sh.manager ? 0.5 : 0) + ((sh.hands || []).length * 0.1)) * [1, 1.5, 2][sh.tier || 0]; }
   function townDemand(s, t, trade) {
     const E = ECON[trade]; if (!E) return 0;
@@ -1947,8 +1949,8 @@
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
-      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day || (b.riot && b.riot >= s.day), HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
-      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (b.undercut && b.undercut.until >= s.day ? 0.8 : 1) * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
+      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day || (b.riot && b.riot >= s.day) || b.feast === s.day, HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
+      const cap = bizCap(s, b) * (mine ? renownUtil(b) : 1), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (mine ? renownMul(b) : 1) * (b.undercut && b.undercut.until >= s.day ? 0.8 : 1) * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
       const Wt = WEALTH[t0] || 1, revenue0 = shut ? 0 : E.flat ? E.flat * Wt : Math.round(Wt * sold * PM.price * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
       // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
@@ -1965,7 +1967,7 @@
         w.purse += paid; wages += paid;
         if (paid < st.wage) { w.mood = clamp(w.mood - 15, 0, 100); plog(s, w, 'Was not paid in full.'); }
       }
-      const premises = Math.round(({ hearthmoor: 3, greenhaven: 4, ironcrest: 6, oakbridge: 8, eastwatch: 9, crownmere: 11 }[t0] || 5) * (1 + (Wt - 1) * 0.5));
+      const premises = Math.round(({ hearthmoor: 3, greenhaven: 4, ironcrest: 6, oakbridge: 8, eastwatch: 9, crownmere: 11 }[t0] || 5) * (1 + (Wt - 1) * 0.5) * (mine ? 1 + 0.25 * (b.level || 0) : 1));
       const upkeepP = mine && isPrestige(s, id) ? Math.round(bizPrice(s, id) * 0.002) : 0;
       const supplies = upkeepP + Math.round((E.flat ? revenue * 0.35 : (inputCost(s, t0, b.trade, sold) + sold * E.price * 0.08) * (1 + (Wt - 1) * 0.35)) * (mine && b.manager ? 0.9 : 1)), profit = revenue - supplies - wages - premises;
       b.lastRevenue = revenue; b.lastProfit = profit; b.lastWages = wages;
@@ -1974,6 +1976,7 @@
         const net = revenue - supplies - premises;
         if (net >= 0) earn(s, net); else spend(s, -net);
         s.stats.owned = (s.stats.owned || 0) + profit;
+        if (b.investor && profit > 0) { const cut = Math.round(profit * b.investor.share); spend(s, cut); s.stats.investors = (s.stats.investors || 0) + cut; const q = b.investor.pid && s.people[b.investor.pid]; if (q) q.purse += cut; }
         continue;
       }
       own.purse += revenue - supplies - premises;
@@ -7107,6 +7110,9 @@
     if (/^x[A-Z]/.test(name)) return xCmd(s, name, a, b, c);
     if (/^f[A-Z]/.test(name)) return folkCmd(s, name, a, b, c);
     if (/^p[A-Z]/.test(name)) return pplCmd(s, name, a, b, c);
+    if (name === 'dealTake') return dealCmd(s, name, a);
+    if (name === 'investIn' || name === 'investOut' || name === 'improveBiz') return investCmd(s, name, a, b);
+    if (name === 'shopDial') { const sh = shopById(s, a); if (!sh || !DIAL[b]) return fail('No.'); sh.price = clamp(Math.round(shopBase(sh) * DIAL[b]), 1, TRADES[sh.trade].wtp * 3); return ok(TRADES[sh.trade].name + ': prices set to ' + DIAL_NAME[b].toLowerCase() + ', ' + sh.price + 'c.'); }
     if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
     if (/^w[A-Z]/.test(name)) { const r = wildCmd(s, name, a, b, c); if (r) return r; }
     if (/^o[A-Z]/.test(name)) { const r = officeCmd(s, name, a, b, c); if (r) return r; }
@@ -7473,7 +7479,7 @@
         const owner = s.people[bz.owner];
         if (owner && owner.status !== 'here') return fail('Nobody is left who can sell it.');
         if (!sellerWilling(s, bz.owner)) return fail(owner.name + ' will not sell to you.');
-        const price = yourBizPrice(s, a);
+        const price = s.dealPrice && s.dealPrice.id === a ? s.dealPrice.price : yourBizPrice(s, a);
         if (s.coins < price) return fail(empById(a).name + ' costs ' + price + 'c.');
         spend(s, price); s.rec.invested += price; owner.purse += price; s.rec.bizBought++;
         bz.owner = 'player';
@@ -7566,6 +7572,7 @@
         // a: 'house' or 'biz', b: id, c: asking price (0 to take it off the market)
         const o = a === 'house' ? houseById(s, b) : s.biz[b];
         if (!o || o.owner !== 'player') return fail('That is not yours to sell.');
+        if (a !== 'house' && o.investor && c) return fail('Buy back ' + o.investor.name + '’s share first.');
         if (a === 'house' && s.player.house === b) return fail('You live there. Move out first.');
         if (a === 'biz' && c > 0 && o.lease && !leaseBreakable(s, o)) return fail('It is let until day ' + o.lease.until + '. Sell it once the lease is up.');
         o.forSale = c > 0 ? Math.round(c) : null; if (!o.forSale) s.offers = (s.offers || []).filter(x => !(x.kind === a && x.id === b));
@@ -8583,7 +8590,7 @@
   const hateIdx = h => HATE_STEPS.indexOf(hateStep(h));
   const FAIR_WAGE = { hearthmoor: 7, greenhaven: 7, oakbridge: 8, ironcrest: 9, eastwatch: 8, crownmere: 9, dawnport: 8, goldmeadow: 7, thornwick: 7, stonewatch: 8, valdor: 9 };
   const fairWage = t => FAIR_WAGE[t || 'hearthmoor'] || 7;
-  const PRICE_MODES = { cheap: { name: 'Cheap', price: 0.9, share: 1.3, says: 'More customers, less on each sale; folk love you for it' }, fair: { name: 'Fair', price: 1, share: 1, says: 'The usual price' }, greedy: { name: 'Greedy', price: 1.32, share: 0.78, says: 'Fewer customers, more on each sale; folk resent it' } };
+  const PRICE_MODES = { cheap: { name: 'Cheap', price: 0.9, share: 1.3, says: 'More customers, less on each sale; folk love you for it' }, fair: { name: 'Fair', price: 1, share: 1, says: 'The usual price' }, greedy: { name: 'Dear', price: 1.32, share: 0.78, says: 'Fewer customers, more on each sale; folk resent it' } };
   const MAX_NEM = 6;
   const folkIn = (s, t) => living(s).filter(p => townOf(p) === (t || 'hearthmoor'));
   const DENS = ['oakbridge', 'crownmere', 'eastwatch', 'dawnport', 'valdor'];   // where a hired blade can be found
@@ -10213,7 +10220,191 @@
   const yourBizPrice = (s, id) => Math.round(bizPrice(s, id) * repPriceMul(s, (s.biz[id] && s.biz[id].town) || 'hearthmoor', true));
   const yourHousePrice = (s, h) => Math.round(housePrice(s, h) * repPriceMul(s, h.town || 'hearthmoor', true));
 
+  /* ================= BUSINESS (Stage VII) =================
+     The engine underneath is unchanged: production, demand, prices and a ledger that adds up. What changes is what you see and
+     choose. Every business you own has a price dial (cheap, fair, dear), a renown (one 0-100 name that draws or loses custom),
+     and a three-step ladder (stall or shop, then shop or fine shop, then house of note) you can see on the building. A deals board
+     brings three chances a week. An investor can buy a share of a business for coin now. And your wealth earns a title, if the
+     people at home think enough of you. Deals and the board have their own dice. */
+  const DIAL = { cheap: 0.85, fair: 1, greedy: 1.2 }, DIAL_NAME = { cheap: 'Cheap', fair: 'Fair', greedy: 'Dear' };
+  const shopBase = shop => TRADES[shop.trade].wtp * (1 + 0.08 * shop.tier);
+  function shopDial(shop) { const r = shop.price / shopBase(shop); return r <= 0.92 ? 'cheap' : r >= 1.12 ? 'greedy' : 'fair'; }
+  const renownOf = x => x && x.renown != null ? x.renown : 50;
+  const renownWord = r => r < 20 ? 'Shunned' : r < 35 ? 'Poorly thought of' : r < 50 ? 'Ordinary' : r < 65 ? 'Well liked' : r < 80 ? 'A good name' : 'Famous for it';
+  const renownMul = x => 0.85 + 0.3 * renownOf(x) / 100;   // 50 is the old world exactly
+  const renownUtil = x => { const r = renownOf(x); return r >= 50 ? 1 : 0.45 + 0.55 * r / 50; };   // a poor name keeps people from the door even in a shortage
+  const LADDER = { shop: ['Stall', 'Shop', 'House of note'], biz: ['Shop', 'Fine shop', 'House of note'] };
+  const LADDER_GAIN = { biz: ['As you bought it.', 'A painted sign and a refit: 15% more it can sell, and a better name.', 'Banners and lanterns: 30% more it can sell, and a name people travel for.'] };
+  const bizLevel = b => b.level || 0;
+  const levelCost = (s, b) => bizLevel(b) >= 2 ? null : Math.round(bizPrice(s, b.id) * [0.25, 0.5][bizLevel(b)]);
+  // what moves a business's name, and the biggest reason
+  function renownTarget(s, x, kind) {
+    const f = [];
+    if (kind === 'biz') {
+      const m = x.prices || 'fair'; f.push(m === 'cheap' ? [14, 'your low prices'] : m === 'greedy' ? [-30, 'your high prices'] : [4, 'fair prices']);
+      if (bizLevel(x)) f.push([bizLevel(x) * 8, bizLevel(x) === 2 ? 'a house of note' : 'a fine shop']);
+      if (!x.staff.length && !x.manager && !x.lease) f.push([-8, 'no one minding the counter']);
+      if ((x.burnt && x.burnt > s.day) || x.strike === s.day || (x.riot && x.riot >= s.day)) f.push([-15, 'shut when people came']);
+      if (x.slump) f.push([-10, x.slump.why]);
+      if (x.undercut && x.undercut.until >= s.day) f.push([-6, 'a rival selling for less next door']);
+      if (x.lastSold != null && x.lastSold >= bizCap(s, x) * 0.97) f.push([-4, 'often sold out']);
+    } else {
+      const m = shopDial(x); f.push(m === 'cheap' ? [14, 'your low prices'] : m === 'greedy' ? [-22, 'your high prices'] : [4, 'fair prices']);
+      if (x.tier) f.push([x.tier * 8, x.tier === 2 ? 'a house of note' : 'a proper shop']);
+      if (!x.worker && !(s.job && s.job.shop === x.id)) f.push([-6, 'no one minding the counter']);
+      const ss = s.stats && s.stats.shops && s.stats.shops[x.id]; if (ss && ((ss.soldOut || 0) + (ss.noService || 0)) > Math.max(2, (ss.sold || 0) * 0.3)) f.push([-8, 'customers turned away']);
+    }
+    const top = f.slice().sort((a, b) => Math.abs(b[0]) - Math.abs(a[0]))[0];
+    return { t: clamp(50 + f.reduce((a, x) => a + x[0], 0), 0, 100), why: top ? top[1] : 'nothing out of the way' };
+  }
+  function renownDay(s) {
+    const step = (x, kind) => { const T = renownTarget(s, x, kind), r0 = renownOf(x); x.renown = Math.round(clamp(r0 + (T.t - r0) * 0.08, 0, 100) * 10) / 10; x.renownWhy = T.why; x.renownTo = Math.round(T.t); };
+    for (const b of Object.values(s.biz || {})) { if (b.owner === 'player' && !b.closed) step(b, 'biz'); else if (b.investor && b.owner !== 'player') delete b.investor; }
+    for (const sh of s.shops || []) { step(sh, 'shop'); sh.renownMul = Math.round((0.94 + 0.12 * sh.renown / 100) * 1000) / 1000; }
+  }
+  /* ---------- the deals board: three chances a week ---------- */
+  function drand(s) { const D = s.dealDice = s.dealDice || { d: -1, x: 0, b: (s.rng ^ 0x5eed) | 0 }; if (D.d !== s.day) { D.d = s.day; D.x = (Math.imul(s.day + 3, 1597334677) ^ D.b) | 0; } D.x = (D.x + 0x6D2B79F5) | 0; let x = D.x; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
+  function yourWorth(s) {
+    const biz = ownedBy(s, 'player').reduce((a, b) => a + bizPrice(s, b.id) * (1 - (b.investor ? b.investor.share : 0)), 0);
+    const houses = (s.houses || []).filter(h => h.owner === 'player').reduce((a, h) => a + houseValue(s, h), 0);
+    return Math.round(s.coins + propertyValue(s) + biz + houses);
+  }
+  function dealOffers(s) {
+    const out = [], worth = Math.max(100, yourWorth(s)), mine = ownedBy(s, 'player'), shops = s.shops || [];
+    const usesG = g => shops.filter(sh => TRADES[sh.trade].recipe[g]);
+    const goods = GOODS.filter(g => usesG(g).length);
+    if (goods.length) { const g = goods[Math.floor(drand(s) * goods.length)], qty = 10 + Math.floor(drand(s) * 3) * 5, price = Math.round(qty * goodsPrice(s, 'hearthmoor', g) * 0.8); out.push({ kind: 'bulk', good: g, qty, cost: price, title: 'Bulk ' + g + ': ' + qty + ' for ' + price + 'c', text: 'A carter has ' + qty + ' ' + g + ' to clear, a fifth under the market price, delivered to your shops’ stores.' }); }
+    const feastable = shops.filter(sh => sh.goods >= 0).map(sh => ({ sh })).concat(mine.filter(b => !ECON[b.trade] || !ECON[b.trade].flat).map(b => ({ b })));
+    if (feastable.length) {
+      const f = feastable[Math.floor(drand(s) * feastable.length)];
+      if (f.sh) { const T = TRADES[f.sh.trade], n = Math.max(3, tierOf(f.sh).out * 2), pay = Math.round(n * shopBase(f.sh) * 1.5); out.push({ kind: 'feast', shop: f.sh.id, qty: n, reward: pay, days: 3, title: 'A feast order: ' + n + ' ' + T.many + ' for ' + pay + 'c', text: 'A wedding party wants ' + n + ' ' + T.many + ' from your ' + T.name.toLowerCase() + ' within three days, at half again the usual price.' }); }
+      else { const b = f.b, rev = Math.max(4, Math.round(avg((b.profits || [0]).map(() => b.lastRevenue || 0)))), pay = Math.round(rev * 1.4) + 4; out.push({ kind: 'feast', biz: b.id, reward: pay, title: 'Cater a feast at ' + empById(b.id).name + ' for ' + pay + 'c', text: 'Shut to the public tomorrow and serve a guild feast instead. You give up a day’s takings (about ' + rev + 'c) for ' + pay + 'c.' }); }
+    }
+    { const stake = clamp(Math.round(worth * 0.05 / 10) * 10, 40, 400); out.push({ kind: 'ship', cost: stake, days: 5, title: 'A share in a cargo: ' + stake + 'c', text: 'Put ' + stake + 'c into a cargo bound up the coast. In five days, most likely (seven times in ten) it comes back as ' + Math.round(stake * 1.35) + 'c; if the cargo is lost, you get back ' + Math.round(stake * 0.5) + 'c.' }); }
+    {   // a business for sale: your rival's if they are struggling, otherwise the weakest where you trade
+      const R = s.rival, rp = R && R.pid && s.people[R.pid];
+      let b = null, why = '';
+      if (rp && R.nerve < 45) { b = ownedBy(s, rp.id).sort((x, y) => bizPrice(s, x.id) - bizPrice(s, y.id))[0]; why = rp.name + ', your rival, needs coin and will sell'; }
+      if (!b) { const towns = yourTowns(s); b = Object.values(s.biz || {}).filter(x => x.owner !== 'player' && !x.closed && !x.lease && x.trade !== 'estate' && towns.includes(x.town || 'hearthmoor') && s.people[x.owner] && s.people[x.owner].status === 'here' && !yourFamily(s, s.people[x.owner]) && sellerWilling(s, x.owner) && !isPrestige(s, x.id)).sort((x, y) => avg(x.profits || [0]) - avg(y.profits || [0]))[0]; if (b) why = s.people[b.owner].name + ' wants out of ' + empById(b.id).name; }
+      if (b) { const price = Math.round(bizPrice(s, b.id) * (rp && b.owner === rp.id ? 0.85 : 0.82)); out.push({ kind: 'sale', biz: b.id, cost: price, title: empById(b.id).name + ' for ' + price + 'c', text: why + ': ' + price + 'c, about a fifth under its worth, this week only.' }); }
+    }
+    // three of them, chosen with the board's own dice
+    while (out.length > 3) out.splice(Math.floor(drand(s) * out.length), 1);
+    return out;
+  }
+  function dealsDay(s) {
+    const D = s.deals = s.deals || { week: -1, list: [], n: 1 };
+    for (const d of D.list) if (d.taken && !d.done) dealTick(s, d);
+    const wk = Math.floor((s.day - 1) / 7);
+    if (D.week !== wk) { D.week = wk; D.list = D.list.filter(d => d.taken && !d.done); for (const o of dealOffers(s)) D.list.push(Object.assign(o, { id: D.n++, until: s.day + 6 })); }
+    D.list = D.list.filter(d => !(d.done && s.day - d.done > 3) && !(!d.taken && s.day > d.until));
+  }
+  function dealPay(s, n, what) { if (n >= 0) earn(s, n); else spend(s, -n); s.stats.deals = (s.stats.deals || 0) + n; }
+  function dealTick(s, d) {
+    if (d.kind === 'ship' && s.day >= d.due) {
+      const won = drand(s) < 0.7, back = Math.round(d.cost * (won ? 1.35 : 0.5)); dealPay(s, back, 'ship'); d.done = s.day; d.result = won ? 'The cargo came in: ' + back + 'c back for ' + d.cost + 'c.' : 'The cargo was lost off the headland. You get ' + back + 'c back of ' + d.cost + 'c.';
+      event(s, d.result, won ? 'good' : 'bad');
+    } else if (d.kind === 'feast' && d.biz && s.day >= d.due) { dealPay(s, d.reward, 'feast'); d.done = s.day; d.result = 'The feast at ' + empById(d.biz).name + ' went well: ' + d.reward + 'c.'; event(s, d.result, 'good'); const b = s.biz[d.biz]; if (b) b.renown = Math.min(100, renownOf(b) + 3); }
+    else if (d.kind === 'feast' && d.shop != null) {
+      const sh = (s.shops || []).find(x => x.id === d.shop);
+      if (sh && sh.goods >= d.qty) { sh.goods -= d.qty; dealPay(s, d.reward, 'feast'); d.done = s.day; d.result = 'You filled the feast order: ' + d.reward + 'c.'; event(s, d.result, 'good'); sh.renown = Math.min(100, renownOf(sh) + 3); }
+      else if (s.day > d.due) { d.done = s.day; d.result = 'The feast order went unfilled.'; event(s, 'You could not fill the feast order in time. The wedding party went elsewhere, and talks about it.', 'bad'); if (sh) sh.renown = Math.max(0, renownOf(sh) - 6); }
+    }
+  }
+  function dealCmd(s, name, a) {
+    const D = s.deals; if (!D) return fail('No deals yet.'); const d = D.list.find(x => x.id === a); if (!d) return fail('That deal is gone.');
+    if (d.taken) return fail('You have taken that deal.'); if (s.day > d.until) return fail('That deal has passed.');
+    if (d.kind === 'bulk') {
+      if (s.coins < d.cost) return fail('It costs ' + d.cost + 'c.');
+      const to = (s.shops || []).filter(sh => TRADES[sh.trade].recipe[d.good]); if (!to.length) return fail('None of your shops use ' + d.good + '.');
+      spend(s, d.cost); s.stats.marketBuys += d.cost; let left = d.qty; to.forEach((sh, i) => { const n = i === to.length - 1 ? left : Math.round(d.qty / to.length); sh.stock[d.good] += n; left -= n; });
+      d.taken = true; d.done = s.day; return ok(d.qty + ' ' + d.good + ' delivered to your shops’ stores.');
+    }
+    if (d.kind === 'ship') { if (s.coins < d.cost) return fail('You need ' + d.cost + 'c.'); dealPay(s, -d.cost, 'ship'); d.taken = true; d.due = s.day + d.days; return ok('Your ' + d.cost + 'c is on its way up the coast. Word comes back on day ' + d.due + '.'); }
+    if (d.kind === 'feast') {
+      if (d.biz) { const b = s.biz[d.biz]; if (!b || b.owner !== 'player') return fail('That is not yours now.'); b.feast = s.day + 1; d.taken = true; d.due = s.day + 1; return ok(empById(d.biz).name + ' will be shut to the public tomorrow for the feast. You are paid tomorrow evening.'); }
+      d.taken = true; d.due = s.day + d.days; dealTick(s, d); return ok(d.done ? d.result : 'Agreed. Have ' + d.qty + ' ready on the shelf by day ' + d.due + ' and it is collected.');
+    }
+    if (d.kind === 'sale') {
+      const b = s.biz[d.biz]; if (!b || b.owner === 'player' || b.closed) return fail('It is no longer for sale.');
+      s.dealPrice = { id: d.biz, price: d.cost }; let r; try { r = cmd0(s, 'buyBiz', d.biz); } finally { s.dealPrice = null; }
+      if (r && r.ok) { d.taken = true; d.done = s.day; }
+      return r;
+    }
+    return fail('Unknown deal.');
+  }
+  /* ---------- investors ---------- */
+  const INVEST_SHARES = [0.25, 0.5];
+  function investPrice(s, b, share) { return Math.round(bizPrice(s, b.id) * share * 0.9); }
+  function buyBackPrice(s, b) { return b.investor ? Math.round(bizPrice(s, b.id) * b.investor.share * 1.1) : 0; }
+  function investorFor(s, b, cost) {
+    const t = b.town || 'hearthmoor', X = s.ppl, rich = living(s).filter(q => townOf(q) === t && !q.kid && q.purse >= cost + 50 && !yourFamily(s, q) && !isRival(s, q)).sort((a, c) => (X && X.key[c.id] ? 1 : 0) - (X && X.key[a.id] ? 1 : 0) || c.purse - a.purse)[0];
+    return rich || null;
+  }
+  function investCmd(s, name, a, b) {
+    const bz = s.biz && s.biz[a]; if (!bz || bz.owner !== 'player') return fail('That is not your business.');
+    if (name === 'investIn') {
+      if (bz.investor) return fail('An investor already holds a share of ' + empById(a).name + '.');
+      const share = INVEST_SHARES.includes(b) ? b : 0.25, pay = investPrice(s, bz, share), q = investorFor(s, bz, pay);
+      const nm = q ? q.name : 'a goldsmith of Crownmere';
+      if (q) q.purse -= pay;
+      earn(s, pay); bz.investor = { pid: q ? q.id : null, name: nm, share, paid: pay, since: s.day };
+      if (q) plog(s, q, 'Bought a ' + Math.round(share * 100) + '% share of ' + empById(a).name + ' from ' + s.name + '.');
+      return ok(nm + ' pays you ' + pay + 'c for a ' + Math.round(share * 100) + '% share of ' + empById(a).name + '. From tonight they take that share of its profit, until you buy them out.');
+    }
+    if (name === 'investOut') {
+      if (!bz.investor) return fail('No one holds a share of it.');
+      const price = buyBackPrice(s, bz); if (s.coins < price) return fail('Buying back the share costs ' + price + 'c.');
+      spend(s, price); const q = bz.investor.pid && s.people[bz.investor.pid]; if (q) { q.purse += price; plog(s, q, 'Sold their share of ' + empById(a).name + ' back to ' + s.name + '.'); }
+      const nm = bz.investor.name; delete bz.investor; return ok('You buy back ' + nm + '’s share of ' + empById(a).name + ' for ' + price + 'c. It is all yours again.');
+    }
+    if (name === 'improveBiz') {
+      const cost = levelCost(s, bz); if (cost == null) return fail(empById(a).name + ' is already a house of note.');
+      if (s.coins < cost) return fail('The work costs ' + cost + 'c.');
+      spend(s, cost); s.rec.invested += cost; bz.level = bizLevel(bz) + 1; bz.renown = Math.min(100, renownOf(bz) + 5);
+      return ok(empById(a).name + ' is now ' + (bz.level === 2 ? 'a house of note: banners at the door and lanterns lit at dusk' : 'a fine shop, with a painted sign over the door') + '. ' + LADDER_GAIN.biz[bz.level]);
+    }
+    return fail('Unknown.');
+  }
+  /* ---------- wealth, and what it makes of you ---------- */
+  const WEALTH_STEPS = [{ w: 300, st: 25, t: ['Man of Means', 'Woman of Means'] }, { w: 1000, st: 35, t: ['Burgher', 'Burgher'] }, { w: 3000, st: 45, t: ['Merchant of Note', 'Merchant of Note'] }, { w: 10000, st: 55, t: ['Merchant Prince', 'Merchant Princess'] }, { w: 30000, st: 65, t: ['Magnate', 'Magnate'] }];
+  function wealthTitle(s) {
+    const worth = yourWorth(s), home = yourTown(s) || 'hearthmoor', st = standing(s, home), f = you(s).sex === 'f' ? 1 : 0;
+    let i = -1; for (let k = 0; k < WEALTH_STEPS.length; k++) if (worth >= WEALTH_STEPS[k].w && st >= WEALTH_STEPS[k].st) i = k;
+    const nx = WEALTH_STEPS[i + 1], newMoney = !!(nx && worth >= nx.w && st < nx.st);
+    return { i, title: i >= 0 ? WEALTH_STEPS[i].t[f] : null, worth, standing: st, home, next: nx ? { w: nx.w, st: nx.st, title: nx.t[f] } : null, newMoney };
+  }
+  function wealthDay(s) {
+    const W = wealthTitle(s), best = s.rec.wealthStep == null ? -1 : s.rec.wealthStep;
+    if (W.i > best) { s.rec.wealthStep = W.i; withWhy('becoming ' + W.title, () => deed(s, 0, 2 + W.i, 'becoming ' + W.title)); event(s, 'People have started calling you ' + W.title + '. Your wealth and your name at home have earned it.', 'story'); }
+    else if (W.newMoney && s.rec.newMoneyDay == null) { s.rec.newMoneyDay = s.day; event(s, 'You are rich enough to be called ' + W.next.title + ', but ' + townName(W.home) + ' does not think enough of you yet. Behind your back they call it new money.', 'info'); }
+  }
+  /* ---------- one plain page about money ---------- */
+  function moneyView(s) {
+    const L = (s.ledger || []).slice(-7), sum = f => L.reduce((a, e) => a + (f(e) || 0), 0), shopSum = k => sum(e => (e.shops || []).reduce((a, x) => a + (x[k] || 0), 0));
+    const ins = [['Your shops', shopSum('revenue')], ['Your businesses', sum(e => Math.max(0, e.owned))], ['Rent', sum(e => e.rent)], ['Wages from your job', sum(e => e.jobPay)], ['Goods sold at market', sum(e => e.rawSales)], ['Orders and contracts', sum(e => e.contract)], ['Deals', sum(e => Math.max(0, e.deals || 0))], ['Everything else', sum(e => (e.seized || 0) + (e.fines || 0) + (e.restitution || 0) + (e.bribes || 0) + Math.max(0, e.lands || 0) + (e.partner || 0))]];
+    const outs = [['Supplies', shopSum('supplies') + sum(e => e.marketBuys)], ['Wages', shopSum('wages') + sum(e => (e.salaries || 0) + (e.managers || 0))], ['Upkeep', shopSum('upkeep')], ['Losses at your businesses', sum(e => Math.max(0, -e.owned))], ['Tax', sum(e => e.tax)], ['Interest', sum(e => e.interest)], ['Investors’ shares', sum(e => e.investors || 0)], ['Household, horse and ship', sum(e => (e.family || 0) + (e.stabling || 0) + (e.ship || 0))], ['Gifts and alms', sum(e => (e.given || 0) + (e.hush || 0))], ['Deals that went wrong', sum(e => Math.max(0, -(e.deals || 0)))], ['Land', sum(e => Math.max(0, -(e.lands || 0)))]];
+    const other = {}; for (const e of L) for (const x of e.otherItems || []) other[x.label] = (other[x.label] || 0) + x.amount;
+    const unexpl = sum(e => e.unexplained || 0); if (Math.abs(unexpl) >= 1) other['Not accounted for'] = (other['Not accounted for'] || 0) + unexpl;
+    const tIn = ins.reduce((a, x) => a + x[1], 0), tOut = outs.reduce((a, x) => a + x[1], 0), tOther = Object.values(other).reduce((a, x) => a + x, 0);
+    // tonight's bills, and what falls due
+    const wages = (s.shops || []).reduce((a, sh) => a + (sh.worker ? sh.worker.wage : 0) + (sh.hands || []).reduce((b, h) => b + h.wage, 0), 0) + ownedBy(s, 'player').reduce((a, b) => a + b.staff.reduce((c, x) => c + x.wage, 0), 0);
+    const upkeep = (s.shops || []).reduce((a, sh) => a + tierOf(sh).upkeep, 0);
+    const due = [];
+    if (wages) due.push({ when: 'Tonight', what: 'Wages', n: -wages }); if (upkeep) due.push({ when: 'Tonight', what: 'Shop upkeep', n: -upkeep });
+    if (s.player.horse) due.push({ when: 'Tonight', what: 'Stabling', n: -STABLING }); if (s.ship) due.push({ when: 'Tonight', what: 'Your ship’s crew and upkeep', n: -SHIP_UPKEEP });
+    if (s.coins < 0) due.push({ when: 'Tonight', what: 'Interest on your debt', n: -Math.max(1, Math.ceil(-s.coins * loanRate(s))) });
+    for (const d of (s.deals ? s.deals.list : [])) if (d.taken && !d.done) due.push({ when: 'Day ' + d.due, what: d.kind === 'ship' ? 'Your cargo comes back (likely ' + Math.round(d.cost * 1.35) + 'c)' : d.kind === 'feast' ? 'The feast order (' + d.reward + 'c)' : d.title, n: null });
+    if (s.village && s.village.contract) due.push({ when: 'Day ' + s.village.contract.until, what: 'Deliver ' + goodsName(s.village.contract.trade, s.village.contract.qty) + ' (' + s.village.contract.reward + 'c)', n: null });
+    for (const c of (s.realm && s.realm.contracts || []).filter(c => c.taken)) due.push({ when: 'Day ' + c.until, what: c.what.charAt(0).toUpperCase() + c.what.slice(1) + ' (' + c.reward + 'c)', n: null });
+    const owe = [];
+    if (s.coins < 0) owe.push({ what: 'The Ashford moneylender, at ' + Math.round(loanRate(s) * 1000) / 10 + '% a day', n: -s.coins });
+    for (const b of ownedBy(s, 'player')) if (b.investor) owe.push({ what: b.investor.name + ' holds ' + Math.round(b.investor.share * 100) + '% of ' + empById(b.id).name + ' (buy back for ' + buyBackPrice(s, b) + 'c)', n: null });
+    return { coins: s.coins, worth: yourWorth(s), wealth: wealthTitle(s), days: L.length, ins: ins.filter(x => x[1]), outs: outs.filter(x => x[1]), other: Object.entries(other).filter(x => Math.round(x[1])), tIn, tOut, tOther, net: tIn - tOut + tOther, due, owe, tonight: -(wages + upkeep), deals: s.deals ? s.deals.list.map(d => Object.assign({}, d)) : [] };
+  }
+
   const api = {
+    shopDial, shopBase, DIAL, DIAL_NAME, renownOf, renownWord, LADDER, LADDER_GAIN, bizLevel, levelCost, renownTarget, renownDay, dealsDay, dealOffers, yourWorth, investPrice, buyBackPrice, WEALTH_STEPS, wealthTitle, moneyView, INVEST_SHARES,
     setupRep, repView, standing, standingWord, charWord, repK, loanRate, repAdd, repInstall, repPriceMul, wontDeal, yourBuyPrice, yourSellPrice, yourBizPrice, yourHousePrice, officeIn,
     setupRival, rivalDay, rivalView, yourRung, rivalRung, RUNG_NAME, FOUL_NAME, isRival, isAlly, proofOf, rivalPrice, pactScore, contest, rivalMove, bizPrice, nerveWord,
     farFolk, farOne, roadFolk, routinePlan, FAR_IN, FAR_KEY, FAR_KID, FAR_BODY, FAR_MOVING, FAR_KIN, ROAD_NAME,
