@@ -10462,7 +10462,7 @@ function deckAt(x, z) {
 }
 // a parish church: nave, chancel and a square west tower over the door, with a few graves about it
 function drawChurch(cf, S1, S2, RF) {
-  box(cf, '#7d776a', 0, 0.2, 0, 9, 0.5, 15); box(cf, S1, 0, 3.2, 0.5, 7.4, 6, 11); part(cf, roofG(8, 11.6, 3.8), RF, 0, 6.2, 0.5); box(cf, S1, 0, 2.6, -6.2, 5.4, 4.8, 3); part(cf, roofG(6, 3.4, 2.6), RF, 0, 5, -6.2);
+  box(cf, '#7d776a', 0, 0.2, 0, 9, 0.5, 15); box(cf, S1, 0, 3.2, 0.5, 7.4, 6, 11); roofOn(cf, [8, 11.6, 3.8], RF, 0, 6.2, 0.5); box(cf, S1, 0, 2.6, -6.2, 5.4, 4.8, 3); roofOn(cf, [6, 3.4, 2.6], RF, 0, 5, -6.2);
     box(cf, S2, 0, 6.5, 6.2, 4.6, 13, 4.6); part(cf, new THREE.ConeGeometry(3.6, 4.6, 4), RF, 0, 15.3, 6.2, Math.PI / 4); box(cf, '#3b2a1c', 0, 1.6, 8.52, 1.8, 3, 0.1); win(cf, 0, 8.6, 8.52, 0.9, 1.8, 0.06); [-3, 0, 3].forEach(z => { win(cf, 3.72, 3.4, z, 0.06, 2.2, 0.9); win(cf, -3.72, 3.4, z, 0.06, 2.2, 0.9); });
     [[-6.5, 3], [-7, -2], [6.5, -1], [7, 4], [-6, -6]].forEach(([u, v], k) => box(cf, '#8b877c', u, 0.45, v, 0.5, 0.9, 0.14, 0, 0.2 * (k % 3 - 1)));
 }
@@ -10809,6 +10809,17 @@ function gableRoof(w, d, h, color, mt) {
 const THATCH = ['#9a8350', '#8a7445', '#a38c58', '#7f6a3f'], WALLS = ['#c9b48a', '#b9a47a', '#d1bf96', '#a89270'], BEAMS = '#4a3424';
 const roofGeoCache = {};
 const roofG = (w, d, h) => roofGeoCache[w + ',' + d + ',' + h] || (roofGeoCache[w + ',' + d + ',' + h] = gableRoofGeo(w, d, h));
+const tint = (c, k) => { const o = new THREE.Color(c); o.multiplyScalar(k); return '#' + o.getHexString(); };
+// a roof with its trim: barge boards on the gables, a ridge cap, and a dark line under the eaves
+function roofOn(f, dims, color, x, y, z, ry, rx, rz, sx, sy, sz) {
+  const [a, b, h] = dims;
+  part(f, roofG(a, b, h), color, x, y, z, ry, rx, rz, sx, sy, sz);
+  if (h < 1 || a < 2.6 || rx || rz || sx) return;
+  const g = partM(f, x || 0, y || 0, z || 0, ry || 0, 0, 0, 1, 1, 1), th = Math.atan2(h, a / 2), L = Math.hypot(a / 2, h) + 0.12, dk = tint(color, 0.58);
+  [-1, 1].forEach(e => [-1, 1].forEach(sd => box(g, dk, e * (b / 2 + 0.02), h / 2 + 0.05, sd * a / 4, 0.1, 0.16, L, 0, sd * th)));
+  box(g, tint(color, 1.16), 0, h + 0.01, 0, b + 0.16, 0.14, 0.3);
+  [-1, 1].forEach(sd => box(g, dk, 0, 0.02, sd * (a / 2 - 0.06), b, 0.1, 0.12));
+}
 function cottage(f, o) {
   const w = o.w || 5, d = o.d || 4, h = o.h || 2.3, wall = o.wall || WALLS[0], roof = o.roof || THATCH[0];
   box(f, '#7d776a', 0, 0.15, 0, w + 0.4, 0.7, d + 0.4);                                    // stone footing, sunk into the slope
@@ -10816,8 +10827,19 @@ function cottage(f, o) {
   // timber framing
   [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(f, BEAMS, a * w / 2, 0.4 + h / 2, b * d / 2, 0.18, h + 0.05, 0.18));
   box(f, BEAMS, 0, 0.4 + h, d / 2 + 0.02, w + 0.1, 0.16, 0.08); box(f, BEAMS, 0, 0.4 + h * 0.5, d / 2 + 0.02, w, 0.1, 0.06);
-  part(f, roofG(d + 0.9, w + 0.7, o.rh || 2), roof, 0, 0.4 + h, 0);
+  // the frame shows: a sill beam, studs between the posts, braces in the corners, rails on the gable walls
+  box(f, BEAMS, 0, 0.46, d / 2 + 0.02, w + 0.1, 0.14, 0.08); box(f, BEAMS, 0, 0.4 + h, -d / 2 - 0.02, w + 0.1, 0.16, 0.08);
+  for (let k = 1; k < Math.round(w / 1.5); k++) { const x = -w / 2 + k * w / Math.round(w / 1.5); if (Math.abs(x - (o.doorX || 0.4)) > 0.55) box(f, BEAMS, x, 0.4 + h * 0.75, d / 2 + 0.02, 0.1, h * 0.5, 0.06); }
+  [-1, 1].forEach(sd => { box(f, BEAMS, sd * (w / 2 - 0.42), 0.4 + h - 0.42, d / 2 + 0.03, 0.1, 1.05, 0.06, 0, 0, sd * 0.78); box(f, BEAMS, sd * (w / 2 + 0.02), 0.4 + h * 0.5, 0, 0.08, 0.1, d); box(f, BEAMS, sd * (w / 2 + 0.02), 0.4 + h, 0, 0.08, 0.16, d + 0.1); });
+  // plaster gables under the thatch, with a king post
+  { const rh = o.rh || 2, a = d + 0.9, gh = rh * d / a; [-1, 1].forEach(sd => { part(f, roofG(d, 0.1, gh), wall, sd * (w / 2 - 0.03), 0.4 + h, 0); box(f, BEAMS, sd * (w / 2 + 0.03), 0.4 + h + gh * 0.45, 0, 0.08, gh * 0.9, 0.12); }); }
+  roofOn(f, [d + 0.9, w + 0.7, o.rh || 2], roof, 0, 0.4 + h, 0);
   box(f, '#6c675e', -w / 2 + 0.8, 0.4 + h + 1.1, -0.4, 0.6, 2.6, 0.6);                    // chimney
+  box(f, '#5a554d', -w / 2 + 0.8, 0.4 + h + 2.44, -0.4, 0.76, 0.12, 0.76); box(f, '#8a4f36', -w / 2 + 0.8, 0.4 + h + 2.62, -0.4, 0.3, 0.26, 0.3);
+  // the door in its frame, on a worn stone step; shutters and sills at the windows
+  { const dx = o.doorX || 0.4, dz = d / 2 + 0.05, sh = o.shutter || ['#4f6b3a', '#2f4f6a', '#7a3b2a', '#6b4a2e'][Math.abs(Math.round(w * 10 + d * 7)) % 4];
+    box(f, BEAMS, dx - 0.47, 1.06, dz, 0.1, 1.36, 0.1); box(f, BEAMS, dx + 0.47, 1.06, dz, 0.1, 1.36, 0.1); box(f, BEAMS, dx, 1.72, dz, 1.14, 0.12, 0.1); box(f, '#8b877c', dx, 0.34, d / 2 + 0.35, 1.1, 0.14, 0.5); box(f, '#1c1512', dx + 0.26, 1.0, dz + 0.04, 0.06, 0.06, 0.04);
+    const wx = [-w / 2 + 1].concat(w > 4.4 ? [w / 2 - 0.9] : []); wx.forEach(x => { box(f, sh, x - 0.42, 1.6, dz, 0.24, 0.5, 0.04); box(f, sh, x + 0.42, 1.6, dz, 0.24, 0.5, 0.04); box(f, BEAMS, x, 1.33, dz, 0.75, 0.07, 0.12); }); }
   box(f, o.door || '#3b2a1c', o.doorX || 0.4, 0.4 + 0.6, d / 2 + 0.04, 0.8, 1.2, 0.08);
   win(f, -w / 2 + 1, 0.4 + 1.2, d / 2 + 0.04, 0.55, 0.45, 0.06); if (w > 4.4) win(f, w / 2 - 0.9, 0.4 + 1.2, d / 2 + 0.04, 0.55, 0.45, 0.06);
   win(f, w / 2 + 0.04, 0.4 + 1.2, 0, 0.06, 0.45, 0.55);
@@ -10850,7 +10872,7 @@ function tradeHouse(f, trade, i, o) {
   if (kind === 'smithy') {
     // a low stone forge with a great chimney, and an open-fronted shed where the anvil rings
     footing(7.4, 6);
-    box(f, STONE2, -1.2, 1.8, -0.2, 5, 3.2, 5.6); part(f, roofG(6.4, 5.6, 2), SLATE, -1.2, 3.4, -0.2);
+    box(f, STONE2, -1.2, 1.8, -0.2, 5, 3.2, 5.6); roofOn(f, [6.4, 5.6, 2], SLATE, -1.2, 3.4, -0.2);
     box(f, '#2a1f16', -1.6, 1.4, 2.62, 2.2, 2.4, 0.06); win(f, -3.1, 2.1, 2.62, 0.7, 0.6, 0.06);
     box(f, STONE, -3.2, 4.4, -1.6, 1.3, 6.2, 1.3); box(f, '#55504a', -3.2, 7.6, -1.6, 1.6, 0.3, 1.6);
     [[1.6, -2.6], [3.8, -2.6], [1.6, 2.8], [3.8, 2.8]].forEach(([x, z]) => box(f, BEAMS, x, 1.5, z, 0.2, 3, 0.2));
@@ -10865,8 +10887,8 @@ function tradeHouse(f, trade, i, o) {
     // a big inn: stone below, a jettied plaster floor above, dormers, benches out front
     footing(7.8, 6.4);
     box(f, STONE2, 0, 1.7, 0, 7.6, 3, 6.2); box(f, wall, 0, 4.5, 0.25, 8.2, 2.6, 6.8); frame(8.2, 4.5, 2.6, 3.66);
-    part(f, roofG(7.6, 8.6, 4), roof, 0, 5.8, 0.25);
-    [-2.2, 2.2].forEach(x => { box(f, wall, x, 7, 2.6, 1.3, 1.2, 1.4); part(f, roofG(1.6, 1.5, 0.7), roof, x, 7.6, 2.6, Math.PI / 2); win(f, x, 7, 3.32, 0.6, 0.6, 0.04); });
+    roofOn(f, [7.6, 8.6, 4], roof, 0, 5.8, 0.25);
+    [-2.2, 2.2].forEach(x => { box(f, wall, x, 7, 2.6, 1.3, 1.2, 1.4); roofOn(f, [1.6, 1.5, 0.7], roof, x, 7.6, 2.6, Math.PI / 2); win(f, x, 7, 3.32, 0.6, 0.6, 0.04); });
     box(f, STONE, 3.4, 7.6, -1.6, 0.9, 4.2, 0.9);
     box(f, '#2a1f16', 0, 1.4, 3.12, 2.2, 2.4, 0.06); [-2.8, -1.7, 1.7, 2.8].forEach(x => win(f, x, 1.9, 3.12, 0.7, 1, 0.06)); [-3.2, -1.1, 1.1, 3.2].forEach(x => win(f, x, 4.5, 3.66, 0.7, 0.8, 0.06));
     box(f, BEAMS, 3.9, 3.5, 3.9, 0.1, 0.1, 1.6); box(f, c, 3.9, 2.7, 4.4, 0.06, 1.1, 1.0); box(f, '#d9b04a', 3.94, 2.7, 4.4, 0.02, 0.5, 0.5);
@@ -10876,7 +10898,7 @@ function tradeHouse(f, trade, i, o) {
     // whitewashed, with the great domed oven bulging out of the side and loaves on the hatch
     footing(6.6, 5.6);
     box(f, '#e6dcc4', 0.4, 2.0, 0, 6.4, 3.6, 5.4); frame(6.4, 2.0, 3.6, 2.72);
-    part(f, roofG(6.4, 7, 2.8), o.thatch ? THATCH[i % 4] : TILE, 0.4, 3.8, 0);
+    roofOn(f, [6.4, 7, 2.8], o.thatch ? THATCH[i % 4] : TILE, 0.4, 3.8, 0);
     part(f, G_HEMI, '#b9866a', -3.0, 0.3, -0.6, 0, 0, 0, 1.7, 1.6, 1.7); box(f, '#9a6a4e', -3.6, 2.3, -0.6, 0.6, 1.6, 0.6); box(f, '#2a1f16', -4.4, 0.7, -0.6, 0.06, 0.7, 0.7);
     for (let k = 0; k < 8; k++) part(f, GEO.log, '#7a5232', -3.4 + (k % 4) * 0.3, 0.15 + Math.floor(k / 4) * 0.24, 1.8, Math.PI / 2, 0, Math.PI / 2);
     box(f, '#2a1f16', -0.8, 1.3, 2.74, 1.0, 2.0, 0.06); box(f, '#2a1f16', 1.8, 1.8, 2.74, 2.0, 1.2, 0.06);
@@ -10888,7 +10910,7 @@ function tradeHouse(f, trade, i, o) {
     // a deep striped awning over an open counter, hams hung from the rail
     footing(6.6, 5.8);
     box(f, wall, 0, 1.7, 0, 6.4, 3, 5.6); box(f, wall, 0, 4.4, 0.2, 6.8, 2.4, 6); frame(6.8, 4.4, 2.4, 3.22);
-    part(f, roofG(6.6, 7.2, 2.8), roof, 0, 5.6, 0.2);
+    roofOn(f, [6.6, 7.2, 2.8], roof, 0, 5.6, 0.2);
     box(f, '#2a1f16', -0.4, 1.4, 2.82, 4.4, 2.0, 0.06); box(f, '#a77a4a', -0.4, 0.9, 3.3, 4.4, 0.14, 0.9);
     for (let k = 0; k < 7; k++) box(f, k % 2 ? '#efe6d0' : '#8e2b22', -3.0 + k * 0.87, 2.85, 3.7, 0.87, 0.06, 2.0, 0, 0.3);
     box(f, BEAMS, -0.4, 2.45, 3.5, 4.4, 0.06, 0.06); for (let k = 0; k < 5; k++) part(f, GEO.sack, '#9a4a3a', -2.0 + k * 0.8, 2.05, 3.5, 0, 0, 0, 0.6, 1.2, 0.6);
@@ -10902,7 +10924,7 @@ function tradeHouse(f, trade, i, o) {
     footing(6.2, 5.8);
     box(f, STONE, 0, 1.7, 0, 6, 3, 5.6); box(f, gold ? STONE : wall, 0, 4.5, 0, 6, 2.6, 5.6); box(f, gold ? STONE2 : wall, 0, 7, 0.15, 6.2, 2.4, 5.9);
     if (!gold) frame(6, 4.5, 2.6, 2.82);
-    part(f, roofG(6.2, 6.6, 3.2), gold ? SLATE : roof, 0, 8.2, 0.1); box(f, STONE2, -2.2, 9.4, -1.2, 0.7, 2.6, 0.7);
+    roofOn(f, [6.2, 6.6, 3.2], gold ? SLATE : roof, 0, 8.2, 0.1); box(f, STONE2, -2.2, 9.4, -1.2, 0.7, 2.6, 0.7);
     box(f, accent, 1.2, 1.9, 3.15, 2.8, 2.0, 0.9); win(f, 1.2, 2.0, 3.62, 2.4, 1.4, 0.04); box(f, accent, 1.2, 3.0, 3.25, 3.0, 0.2, 1.1); box(f, accent, 1.2, 0.85, 3.25, 3.0, 0.15, 1.1);
     const ware = gold ? '#e8c45a' : apo ? '#5f8f6a' : can ? '#f2e3a6' : '#8a5a78';
     for (let k = 0; k < 5; k++) box(f, ware, 0.3 + k * 0.45, 1.25, 3.55, 0.2, gold ? 0.15 : can ? 0.4 : 0.28, 0.2);
@@ -10915,7 +10937,7 @@ function tradeHouse(f, trade, i, o) {
     // a long loft with a row of tall windows for light, dyed cloth drying on poles outside
     footing(7.6, 5.6);
     box(f, wall, 0, 1.6, 0, 7.4, 2.8, 5.4); box(f, wall, 0, 4.2, 0, 7.4, 2.4, 5.4); frame(7.4, 4.2, 2.4, 2.72); frame(7.4, 1.6, 2.8, 2.72);
-    part(f, roofG(6.2, 8, 2.6), o.thatch ? THATCH[(i + 1) % 4] : roof, 0, 5.4, 0);
+    roofOn(f, [6.2, 8, 2.6], o.thatch ? THATCH[(i + 1) % 4] : roof, 0, 5.4, 0);
     for (let k = 0; k < 5; k++) win(f, -3 + k * 1.5, 4.3, 2.74, 0.9, 1.4, 0.04);
     box(f, '#2a1f16', -2.2, 1.3, 2.74, 1.1, 2.1, 0.06); win(f, 0.4, 1.7, 2.74, 0.9, 0.9, 0.04); win(f, 2.4, 1.7, 2.74, 0.9, 0.9, 0.04);
     box(f, BEAMS, 4.4, 1.3, 0.8, 0.12, 2.6, 0.12); box(f, BEAMS, 4.4, 1.3, -2.2, 0.12, 2.6, 0.12); box(f, BEAMS, 4.4, 2.55, -0.7, 0.08, 0.08, 3.2);
@@ -10925,21 +10947,21 @@ function tradeHouse(f, trade, i, o) {
   } else if (kind === 'potter') {
     // a thatched workshop beside its bottle kiln, pots drying on boards
     footing(5.6, 5.4);
-    box(f, wall, 1.0, 1.7, 0, 5.4, 3, 5.2); frame(5.4, 1.7, 3, 2.62); part(f, roofG(6.2, 6, 2.6), THATCH[(i + 2) % 4], 1.0, 3.2, 0);
+    box(f, wall, 1.0, 1.7, 0, 5.4, 3, 5.2); frame(5.4, 1.7, 3, 2.62); roofOn(f, [6.2, 6, 2.6], THATCH[(i + 2) % 4], 1.0, 3.2, 0);
     box(f, '#2a1f16', 0.2, 1.3, 2.64, 1.0, 2.0, 0.06); win(f, 2.4, 1.8, 2.64, 0.9, 0.8, 0.04);
     part(f, G_KILN, '#a86a4a', -3.0, 1.9, -0.6, 0, 0, 0, 1.4, 3.8, 1.4); part(f, G_CYL, '#8e5a40', -3.0, 4.2, -0.6, 0, 0, 0, 0.55, 1.2, 0.55); box(f, '#2a1f16', -3.0, 0.6, 1.2, 0.7, 0.9, 0.1);
     [3.0, 3.5].forEach((z, r) => { box(f, '#8a6d48', 0.8, 0.5 + r * 0.45, z, 4.2, 0.08, 0.4); for (let k = 0; k < 7; k++) part(f, G_KILN, ['#b5704a', '#a8714d', '#c88a5a'][k % 3], -1.0 + k * 0.6, 0.73 + r * 0.45, z, 0, Math.PI, 0, 0.18, 0.38, 0.18); });
   } else if (kind === 'tanner') {
     // an open shed and a yard of soaking vats, with hides stretched on frames
     footing(5, 5);
-    box(f, '#a89270', -1.4, 1.5, -0.6, 4.8, 2.6, 4.8); part(f, roofG(5.6, 5.4, 2), '#5e4a2c', -1.4, 2.8, -0.6); box(f, '#2a1f16', -1.4, 1.2, 1.82, 1.6, 2.0, 0.06);
+    box(f, '#a89270', -1.4, 1.5, -0.6, 4.8, 2.6, 4.8); roofOn(f, [5.6, 5.4, 2], '#5e4a2c', -1.4, 2.8, -0.6); box(f, '#2a1f16', -1.4, 1.2, 1.82, 1.6, 2.0, 0.06);
     for (let k = 0; k < 3; k++) { part(f, G_CYL, '#5b4029', 2.6, 0.45, -2.0 + k * 1.6, 0, 0, 0, 0.7, 0.9, 0.7); part(f, G_CYL, ['#6b5a3a', '#7a6a4a', '#4f4a3a'][k], 2.6, 0.9, -2.0 + k * 1.6, 0, 0, 0, 0.62, 0.02, 0.62); }
     [-2.8, -0.2].forEach(x => { box(f, BEAMS, x - 0.9, 1.0, 3.4, 0.1, 2, 0.1); box(f, BEAMS, x + 0.9, 1.0, 3.4, 0.1, 2, 0.1); box(f, '#9a6a44', x, 1.3, 3.4, 1.6, 1.3, 0.04); });
   } else if (kind === 'yard') {
     // a timber workshop with its great doors open on a yard of work
     footing(7, 5.8);
     box(f, '#8a6d48', 0, 2.0, -0.2, 7, 3.6, 5.6); [-3.5, -1.2, 1.2, 3.5].forEach(x => box(f, BEAMS, x, 2.0, 2.62, 0.18, 3.6, 0.08));
-    part(f, roofG(6.6, 7.6, 2.6), roof, 0, 3.8, -0.2);
+    roofOn(f, [6.6, 7.6, 2.6], roof, 0, 3.8, -0.2);
     box(f, '#2a1f16', 0, 1.6, 2.62, 3.2, 2.8, 0.06); box(f, '#6b4a2e', -2.2, 1.6, 3.3, 1.2, 2.8, 0.1, 0.9); box(f, '#6b4a2e', 2.2, 1.6, 3.3, 1.2, 2.8, 0.1, -0.9);
     for (let k = 0; k < 9; k++) part(f, GEO.log, '#9a7650', -4.3 + (k % 3) * 0.3, 0.2 + Math.floor(k / 3) * 0.26, 0.2, 0, 0, Math.PI / 2, 1, 2.6, 1);
     if (trade === 'wheelwright' || trade === 'carter') [0, 1, 2].forEach(k => part(f, G_WHEEL, '#6b4a2e', 4.1, 0.75, 1.8 - k * 0.6, Math.PI / 2));
@@ -10951,12 +10973,12 @@ function tradeHouse(f, trade, i, o) {
   } else if (kind === 'mason') {
     // a dressed-stone lodge with a yard of blocks and a timber crane
     footing(6.4, 5.6);
-    box(f, STONE, -0.6, 1.8, -0.4, 6, 3.2, 5.2); part(f, roofG(5.8, 6.6, 2.2), SLATE, -0.6, 3.4, -0.4); box(f, '#2a1f16', -1.4, 1.3, 2.22, 1.4, 2.2, 0.06); win(f, 1.0, 2.0, 2.22, 0.8, 0.8, 0.04);
+    box(f, STONE, -0.6, 1.8, -0.4, 6, 3.2, 5.2); roofOn(f, [5.8, 6.6, 2.2], SLATE, -0.6, 3.4, -0.4); box(f, '#2a1f16', -1.4, 1.3, 2.22, 1.4, 2.2, 0.06); win(f, 1.0, 2.0, 2.22, 0.8, 0.8, 0.04);
     [[3.4, 0.4, 1.4, 1.2, 0.8, 0.9], [3.4, 1.15, 1.4, 0.9, 0.7, 0.8], [2.2, 0.35, 3.8, 1.4, 0.7, 1.0], [0.4, 0.3, 3.9, 0.9, 0.6, 0.9], [3.6, 0.4, -1.6, 1.0, 0.8, 1.6]].forEach(([x, y, z, w, h, d]) => box(f, '#c9c2b2', x, y, z, w, h, d));
     box(f, BEAMS, -3.8, 2.6, 3.2, 0.3, 5.2, 0.3); box(f, BEAMS, -2.6, 4.9, 3.6, 2.6, 0.2, 0.2, -0.3); box(f, '#8a7a5a', -1.5, 3.6, 4.0, 0.03, 2.4, 0.03); box(f, '#c9c2b2', -1.5, 2.2, 4.0, 0.7, 0.5, 0.6);
   } else if (kind === 'dairy') {
     footing(6.4, 5.4);
-    box(f, '#e6dcc4', 0, 1.6, 0, 6.2, 2.8, 5.2); frame(6.2, 1.6, 2.8, 2.62); part(f, roofG(6, 6.8, 2.4), THATCH[i % 4], 0, 3.0, 0);
+    box(f, '#e6dcc4', 0, 1.6, 0, 6.2, 2.8, 5.2); frame(6.2, 1.6, 2.8, 2.62); roofOn(f, [6, 6.8, 2.4], THATCH[i % 4], 0, 3.0, 0);
     box(f, '#2a1f16', -1, 1.2, 2.64, 1.0, 1.9, 0.06); win(f, 1.4, 1.7, 2.64, 0.9, 0.7, 0.04);
     for (let k = 0; k < 4; k++) part(f, G_CYL, '#b9b4ab', 1.2 + k * 0.6, 0.4, 3.2, 0, 0, 0, 0.25, 0.8, 0.25);
     box(f, '#8a6d48', -3.6, 0.5, 2.2, 0.8, 0.1, 2.2); for (let k = 0; k < 3; k++) part(f, GEO.sack, '#f1e3b0', -3.6, 0.7, 1.5 + k * 0.7, 0, 0, 0, 0.9, 0.5, 0.9);
@@ -10965,7 +10987,7 @@ function tradeHouse(f, trade, i, o) {
     // anything else: the plain shop with the family upstairs
     footing(7.4, 6.4);
     box(f, STONE2, 0, 1.8, 0, 7, 2.8, 6); box(f, wall, 0, 4.5, 0.3, 7.4, 2.6, 6.6); frame(7.4, 4.5, 2.6, 3.62);
-    part(f, roofG(7.4, 7.8, 3), roof, 0, 5.8, 0.3);
+    roofOn(f, [7.4, 7.8, 3], roof, 0, 5.8, 0.3);
     box(f, '#2a1f16', 0, 1.6, 3.02, 4.2, 2.2, 0.06); win(f, -2.6, 1.9, 3.02, 0.9, 0.9, 0.06); win(f, 2.6, 1.9, 3.02, 0.9, 0.9, 0.06);
     for (let k = 0; k < 5; k++) box(f, k % 2 ? '#e2d3a8' : c, -2 + k, 3.0, 3.6, 1, 0.06, 1.4, 0, 0.3);
     sign(4.2, 2.9, 3.4, c);
@@ -10991,24 +11013,24 @@ function townHouse(f, h, i, o) {
     box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.8, d + 0.4); box(f, wall, 0, 1.7, 0, w, 2.6, d); box(f, wall, 0, 4.2, 0.3, w + 0.4, 2.4, d + 0.6);
     for (let k = 0; k <= 3; k++) box(f, BEAMS, -w / 2 - 0.2 + k * (w + 0.4) / 3, 4.2, d / 2 + 0.62, 0.16, 2.4, 0.08); box(f, BEAMS, 0, 3.0, d / 2 + 0.62, w + 0.4, 0.18, 0.1);
     for (let k = 0; k < 3; k++) box(f, BEAMS, -w / 2 + k * w / 2, 2.95, d / 2 + 0.25, 0.14, 0.14, 0.6);
-    part(f, roofG(d + 1.2, w + 0.8, 2.9), roof, 0, 5.4, 0.3); box(f, '#6c675e', side * (w / 2 - 0.7), 6.6, -1, 0.6, 2.4, 0.6);
+    roofOn(f, [d + 1.2, w + 0.8, 2.9], roof, 0, 5.4, 0.3); box(f, '#6c675e', side * (w / 2 - 0.7), 6.6, -1, 0.6, 2.4, 0.6);
     box(f, door, -1.4 * side, 1.0, d / 2 + 0.02, 0.9, 1.6, 0.08); wn(1.3 * side, 1.7, d / 2 + 0.02, 0.7, 0.6); wn(-1.5, 4.2, d / 2 + 0.62, 0.6, 0.6); wn(1.5, 4.2, d / 2 + 0.62, 0.6, 0.6); box2(1.3 * side, 1.25, d / 2 + 0.14);
   } else if (type === 'stone3') {
     const w = 5.2 + r2 * 0.8, d = 5.4;
     box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.8, d + 0.4); box(f, STONE, 0, 3.4, 0, w, 6.6, d); box(f, STONE2, 0, 2.3, d / 2 + 0.02, w + 0.1, 0.16, 0.08); box(f, STONE2, 0, 4.7, d / 2 + 0.02, w + 0.1, 0.16, 0.08);
-    part(f, roofG(d + 0.8, w + 0.5, 2.6), r < 0.6 ? SLATE : roof, 0, 6.7, 0); box(f, STONE2, -side * (w / 2 - 0.6), 8.2, -1.2, 0.7, 2.4, 0.7);
+    roofOn(f, [d + 0.8, w + 0.5, 2.6], r < 0.6 ? SLATE : roof, 0, 6.7, 0); box(f, STONE2, -side * (w / 2 - 0.6), 8.2, -1.2, 0.7, 2.4, 0.7);
     box(f, door, side * 1.2, 1.0, d / 2 + 0.03, 0.9, 1.7, 0.08); box(f, STONE2, side * 1.2, 1.95, d / 2 + 0.05, 1.2, 0.18, 0.08);
     wn(-side * 1.1, 1.5, d / 2 + 0.03, 0.7, 0.8); [-1.2, 1.2].forEach(x => { wn(x, 3.6, d / 2 + 0.03, 0.6, 0.8); wn(x, 5.7, d / 2 + 0.03, 0.55, 0.7); }); box2(-1.2, 3.1, d / 2 + 0.14);
   } else if (type === 'cross') {
     const w = 6.0, d = 5.0;
     box(f, '#7d776a', 0, 0.2, 0, w + 0.4, 0.8, d + 0.4); box(f, wall, 0, 2.6, 0, w, 4.6, d); box(f, BEAMS, 0, 2.7, d / 2 + 0.02, w + 0.1, 0.16, 0.08);
     for (let k = 0; k <= 4; k++) box(f, BEAMS, -w / 2 + k * w / 4, 2.6, d / 2 + 0.02, 0.14, 4.6, 0.06);
-    part(f, roofG(d + 0.8, w + 0.6, 2.6), roof, 0, 4.9, 0);
-    box(f, wall, side * 1.4, 5.2, 1.4, 2.4, 1.4, 2.4); part(f, roofG(2.8, 2.6, 1.4), roof, side * 1.4, 5.9, 1.6, Math.PI / 2); wn(side * 1.4, 5.2, 2.62, 0.6, 0.6);
+    roofOn(f, [d + 0.8, w + 0.6, 2.6], roof, 0, 4.9, 0);
+    box(f, wall, side * 1.4, 5.2, 1.4, 2.4, 1.4, 2.4); roofOn(f, [2.8, 2.6, 1.4], roof, side * 1.4, 5.9, 1.6, Math.PI / 2); wn(side * 1.4, 5.2, 2.62, 0.6, 0.6);
     box(f, door, -side * 1.4, 1.0, d / 2 + 0.03, 0.9, 1.6, 0.08); wn(side * 1.4, 1.7, d / 2 + 0.03, 0.8, 0.7); wn(-side * 1.4, 3.7, d / 2 + 0.03, 0.6, 0.6); box(f, '#6c675e', -side * 2.3, 6.4, -1.2, 0.6, 2.2, 0.6);
   } else if (type === 'stonecot') {
     const w = 5.0 + r2 * 0.6, d = 4.2;
-    box(f, ['#8b877c', '#9a948a', '#a89a80', '#b9a47a'][i % 4], 0, 1.2, 0, w, 2.4, d); part(f, roofG(d + 0.8, w + 0.6, 2.1), r2 < 0.5 ? THATCH[i % 4] : roof, 0, 2.4, 0);
+    box(f, ['#8b877c', '#9a948a', '#a89a80', '#b9a47a'][i % 4], 0, 1.2, 0, w, 2.4, d); roofOn(f, [d + 0.8, w + 0.6, 2.1], r2 < 0.5 ? THATCH[i % 4] : roof, 0, 2.4, 0);
     box(f, '#6c675e', side * (w / 2 - 0.5), 3.4, 0, 0.6, 2.4, 0.6);
     box(f, door, -side * 1.1, 0.9, d / 2 + 0.03, 0.8, 1.6, 0.08); wn(side * 1.1, 1.4, d / 2 + 0.03, 0.6, 0.6); box2(side * 1.1, 0.95, d / 2 + 0.14);
     if (r2 > 0.6) { box(f, '#8a6d48', -side * (w / 2 + 0.7), 0.5, 0.6, 1.2, 1.0, 2.0); box(f, roof, -side * (w / 2 + 0.7), 1.08, 0.6, 1.4, 0.1, 2.2, 0, 0, side * 0.25); }
@@ -11016,7 +11038,7 @@ function townHouse(f, h, i, o) {
     const w = 5.8, d = 3.9;
     box(f, '#7d776a', 0, 0.15, 0, w + 0.4, 0.7, d + 0.4); box(f, wall, 0, 1.5, 0, w, 2.2, d);
     [-w / 2, -w / 6, w / 6, w / 2].forEach(x => box(f, BEAMS, x, 1.5, d / 2 + 0.02, 0.16, 2.2, 0.08));
-    part(f, roofG(d + 1, w + 0.8, 2.4), THATCH[(i + 1) % 4], 0, 2.6, 0); box(f, wall, 0, 3.3, 1.8, 1.2, 0.9, 0.8); part(f, roofG(1.4, 1.0, 0.6), THATCH[(i + 1) % 4], 0, 3.7, 1.8, Math.PI / 2); win(f, 0, 3.3, 2.22, 0.5, 0.45, 0.04);
+    roofOn(f, [d + 1, w + 0.8, 2.4], THATCH[(i + 1) % 4], 0, 2.6, 0); box(f, wall, 0, 3.3, 1.8, 1.2, 0.9, 0.8); roofOn(f, [1.4, 1.0, 0.6], THATCH[(i + 1) % 4], 0, 3.7, 1.8, Math.PI / 2); win(f, 0, 3.3, 2.22, 0.5, 0.45, 0.04);
     box(f, door, side * 1.8, 1.0, d / 2 + 0.03, 0.8, 1.5, 0.08); wn(-side * 0.6, 1.5, d / 2 + 0.03, 0.6, 0.5); wn(-side * 2.1, 1.5, d / 2 + 0.03, 0.6, 0.5);
     box(f, '#6c675e', -side * (w / 2 - 0.6), 3.8, -0.4, 0.6, 2.2, 0.6);
   } else {
@@ -11050,7 +11072,7 @@ function hut(x, z, opts) {
   part(f, new THREE.CylinderGeometry(1, 1.1, 0.8, 10), '#86847a', 0, 0.4, 0);
   part(f, new THREE.CylinderGeometry(0.88, 0.88, 0.05, 10), '#24343c', 0, 0.78, 0);
   box(f, BEAMS, -1, 0.9, 0, 0.14, 1.8, 0.14); box(f, BEAMS, 1, 0.9, 0, 0.14, 1.8, 0.14);
-  part(f, roofG(1.5, 2.5, 0.7), '#6b5636', 0, 1.8, 0, Math.PI / 2);
+  roofOn(f, [1.5, 2.5, 0.7], '#6b5636', 0, 1.8, 0, Math.PI / 2);
   part(f, new THREE.CylinderGeometry(0.1, 0.1, 2.1, 6), '#5b4029', 0, 1.6, 0, 0, 0, Math.PI / 2);
   // market stalls with striped awnings
   [[-7.5, 1, '#8c3b29'], [7.5, 8.5, '#2f5d7a']].forEach(([x, z, c]) => {
@@ -11062,7 +11084,7 @@ function hut(x, z, opts) {
   });
   const nb = fr(-4.5, -2.5, facing(-4.5, -2.5, SQ.x, SQ.z));
   box(nb, BEAMS, -0.8, 0.9, 0, 0.12, 1.8, 0.12); box(nb, BEAMS, 0.8, 0.9, 0, 0.12, 1.8, 0.12);
-  box(nb, '#7a5634', 0, 1.35, 0, 1.9, 1, 0.1); part(nb, roofG(0.7, 2.2, 0.3), '#5e4a2c', 0, 1.9, 0);
+  box(nb, '#7a5634', 0, 1.35, 0, 1.9, 1, 0.1); roofOn(nb, [0.7, 2.2, 0.3], '#5e4a2c', 0, 1.9, 0);
   [[-0.5, 1.5], [0.2, 1.25], [0.55, 1.55]].forEach(([x, y]) => box(nb, '#e8dcbc', x, y, 0.07, 0.42, 0.5, 0.02));
 })();
 
@@ -11210,7 +11232,7 @@ const V = {};
   box(f, '#b9a47a', 0, 3.6, -0.1, 8.6, 1.8, 5.6);
   for (let i = -3; i <= 3; i++) box(f, BEAMS, i * 1.4, 3.6, 2.72, 0.18, 1.8, 0.1);
   box(f, BEAMS, 0, 2.7, 2.72, 8.6, 0.2, 0.12);
-  part(f, roofG(6.6, 9.4, 2.8), '#5e4a2c', 0, 4.5, -0.1);
+  roofOn(f, [6.6, 9.4, 2.8], '#5e4a2c', 0, 4.5, -0.1);
   box(f, '#3b2a1c', 0, 1.3, 2.62, 1.4, 2, 0.1);
   [-2.6, 2.6].forEach(x => { win(f, x, 1.8, 2.62, 0.7, 0.8, 0.06); win(f, x, 3.7, 2.72, 0.6, 0.6, 0.06); });
   box(f, '#7c776d', 0, 0.35, 3.6, 3, 0.3, 1.6); box(f, '#7c776d', 0, 0.15, 4.6, 3.4, 0.3, 0.8);   // steps
@@ -11250,14 +11272,14 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   // three gatehouses: two timber towers, a walk across between them, and the leaves standing open
   for (const g of GATES) {
     const f = fr(g.x, g.z, g.ry);
-    for (const sx of [-3.1, 3.1]) { box(f, OAK2, sx, 2.5, 0, 1.9, 5.4, 1.9); box(f, BEAMS, sx, 5.2, 0, 2.3, 0.25, 2.3); part(f, roofG(2.9, 2.9, 1.3), THATCH[1], sx, 5.3, 0); box(f, OAK, sx * 0.62, 1.7, 1.25, 0.14, 3.2, 2.3); }
+    for (const sx of [-3.1, 3.1]) { box(f, OAK2, sx, 2.5, 0, 1.9, 5.4, 1.9); box(f, BEAMS, sx, 5.2, 0, 2.3, 0.25, 2.3); roofOn(f, [2.9, 2.9, 1.3], THATCH[1], sx, 5.3, 0); box(f, OAK, sx * 0.62, 1.7, 1.25, 0.14, 3.2, 2.3); }
     box(f, OAK, 0, 4.25, 0, 6.2, 0.3, 1.6); box(f, BEAMS, 0, 4.9, 0.75, 6.2, 0.9, 0.1); box(f, BEAMS, 0, 4.9, -0.75, 6.2, 0.9, 0.1); box(f, BEAMS, 0, 3.95, 0, 6.2, 0.35, 0.35);
     box(f, '#2b4a7a', 3.1, 6.9, 0, 0.06, 0.9, 0.7); box(f, BEAMS, 3.1, 6.6, 0.36, 0.08, 1.6, 0.08);
   }
   // St Alder's chapel: a stone nave with a slate roof, a bell tower at the door, and a few graves under a low wall
   { const p = L.chapel, f = fr(p.x, p.z, facing(p.x, p.z, p.x, 24));
     box(f, '#7d776a', 0, 0.2, 0, 5.6, 0.8, 8.2); box(f, STONE, 0, 2.3, -0.4, 5, 3.8, 7);
-    part(f, roofG(5.9, 7.6, 2.6), SLATE, 0, 4.2, -0.4, Math.PI / 2);
+    roofOn(f, [5.9, 7.6, 2.6], SLATE, 0, 4.2, -0.4, Math.PI / 2);
     box(f, STONE2, 0, 3.6, 3.4, 2.4, 7.2, 2.4); part(f, new THREE.ConeGeometry(1.9, 2.8, 4), SLATE, 0, 8.6, 3.4, Math.PI / 4);
     box(f, '#2a1c12', 0, 1.3, 4.62, 1.1, 1.9, 0.08); box(f, BEAMS, 0, 2.35, 4.62, 1.3, 0.14, 0.1);
     win(f, 0, 5.6, 4.62, 0.5, 0.9, 0.06); win(f, 1.22, 5.6, 3.4, 0.06, 0.9, 0.5); win(f, -1.22, 5.6, 3.4, 0.06, 0.9, 0.5);
@@ -11272,7 +11294,7 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
     for (const sx of [-3.9, -1.3, 1.3, 3.9]) box(f, BEAMS, sx, 1.6, 2.1, 0.22, 2.8, 0.22);
     box(f, BEAMS, 0, 2.9, 2.1, 8.1, 0.22, 0.22);
     for (const sx of [-1.3, 1.3]) box(f, OAK, sx, 0.95, 0, 0.12, 1.5, 3.8);
-    part(f, roofG(5.6, 8.9, 1.7), THATCH[2], 0, 2.95, 0);
+    roofOn(f, [5.6, 8.9, 1.7], THATCH[2], 0, 2.95, 0);
     box(f, '#c9a84a', -2.6, 0.55, -1.2, 1.8, 0.9, 1.4); box(f, '#b8973e', 2.7, 0.4, -1.4, 1.5, 0.6, 1.0);
     box(f, OAK2, 0, 0.45, 3.2, 2.6, 0.5, 0.6); box(f, '#3f7486', 0, 0.66, 3.2, 2.3, 0.1, 0.4);
     for (const sx of [-3.2, 3.2]) box(f, BEAMS, sx, 0.6, 4.4, 0.16, 1.2, 0.16); box(f, BEAMS, 0, 1.1, 4.4, 6.6, 0.12, 0.12);
@@ -11293,7 +11315,7 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
     for (let k = 0; k < 4; k++) box(f, ['#c9692b', '#7fa04a', '#d9c46a', '#a84a3a'][k], -0.9 + k * 0.6, 1.0, 0.5, 0.4, 0.22, 0.4); };
   stall(7.6, -1.6, -Math.PI / 2, '#b0483a', '#efe6d0'); stall(-7.6, 9.6, Math.PI / 2, '#3d6a8a', '#efe6d0');
   { const f = fr(-3.4, 10.6, 0.3); box(f, BEAMS, -0.8, 0.8, 0, 0.16, 1.6, 0.16); box(f, BEAMS, 0.8, 0.8, 0, 0.16, 1.6, 0.16); box(f, OAK, 0, 1.25, 0, 1.9, 0.5, 0.14); box(f, '#2a1c12', 0, 1.25, 0.08, 0.26, 0.26, 0.02); box(f, '#2a1c12', -0.55, 1.25, 0.08, 0.16, 0.16, 0.02); box(f, '#2a1c12', 0.55, 1.25, 0.08, 0.16, 0.16, 0.02); box(f, '#7d776a', 0, 0.08, 0, 2.4, 0.16, 1.2); }
-  { const f = fr(4.6, -3.2, 0); box(f, BEAMS, -0.7, 1, 0, 0.14, 2, 0.14); box(f, BEAMS, 0.7, 1, 0, 0.14, 2, 0.14); box(f, '#8a6d48', 0, 1.45, 0, 1.5, 1, 0.08); part(f, roofG(0.5, 1.9, 0.3), THATCH[0], 0, 2.0, 0); for (let k = 0; k < 4; k++) box(f, '#e8dcbc', -0.4 + (k % 2) * 0.8, 1.25 + Math.floor(k / 2) * 0.42, 0.05, 0.5, 0.34, 0.02, 0, 0, (hash2(k, 11) - 0.5) * 0.2); }
+  { const f = fr(4.6, -3.2, 0); box(f, BEAMS, -0.7, 1, 0, 0.14, 2, 0.14); box(f, BEAMS, 0.7, 1, 0, 0.14, 2, 0.14); box(f, '#8a6d48', 0, 1.45, 0, 1.5, 1, 0.08); roofOn(f, [0.5, 1.9, 0.3], THATCH[0], 0, 2.0, 0); for (let k = 0; k < 4; k++) box(f, '#e8dcbc', -0.4 + (k % 2) * 0.8, 1.25 + Math.floor(k / 2) * 0.42, 0.05, 0.5, 0.34, 0.02, 0, 0, (hash2(k, 11) - 0.5) * 0.2); }
 })();
 (function manor() {
   // Varrow Manor on its rise, behind a garden wall; the gate faces the lane up from the square
@@ -11303,7 +11325,7 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   box(f, '#8b877c', -7.2, 4, 0.8, 4.2, 8.4, 4.2);
   box(f, '#5e5850', -7.2, 8.4, 0.8, 4.8, 0.5, 4.8);
   for (let i = 0; i < 4; i++) box(f, '#8b877c', -9.1 + (i % 2) * 3.8, 8.95, -1.1 + Math.floor(i / 2) * 3.8, 0.6, 0.6, 0.6);
-  part(f, roofG(7, 13.6, 3), '#3f4a5a', 0, 5.4, 0);
+  roofOn(f, [7, 13.6, 3], '#3f4a5a', 0, 5.4, 0);
   for (let i = -2; i <= 2; i++) { win(f, i * 2.3, 2.2, 3.22, 0.6, 0.9, 0.06); win(f, i * 2.3, 4.2, 3.22, 0.6, 0.8, 0.06); }
   box(f, '#3b2a1c', 0, 1.2, 3.25, 1.4, 2.2, 0.1);
   box(f, '#7c776d', 0, 0.3, 4.3, 3.4, 0.5, 1.8);
@@ -11331,7 +11353,7 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   box(f, '#8b877c', 0, 1.7, 0, 6.4, 2.6, 5);
   box(f, '#b9a47a', 0, 4, 0, 6.6, 2, 5.2);
   for (let i = -3; i <= 3; i++) box(f, BEAMS, i * 1.05, 4, 2.62, 0.16, 2, 0.08);
-  part(f, roofG(6.4, 7.4, 2.6), '#7a6440', 0, 5, 0);
+  roofOn(f, [6.4, 7.4, 2.6], '#7a6440', 0, 5, 0);
   box(f, '#3b2a1c', -1, 1.3, 2.52, 1.6, 2, 0.1);
   win(f, 1.6, 1.9, 2.52, 0.6, 0.6, 0.06); win(f, -1.6, 4.2, 2.62, 0.6, 0.6, 0.06); win(f, 1.6, 4.2, 2.62, 0.6, 0.6, 0.06);
   for (let i = 0; i < 8; i++) part(f, GEO.sack, '#e6dcc0', -2.6 + (i % 4) * 0.55, 0.32 + Math.floor(i / 4) * 0.4, 3.1, 0, 0, 0, 1, 0.95, 0.9);
@@ -11349,7 +11371,7 @@ function GEO_SACK() { return GEO_SACK.g || (GEO_SACK.g = flat(new THREE.SphereGe
   const f = fr(L.barn.x, L.barn.z + 2, facing(L.barn.x, L.barn.z, 20, -26));
   box(f, '#7d776a', 0, 0.1, 0, 9, 0.5, 6.4);
   box(f, '#7a4a32', 0, 2, 0, 8.4, 3.4, 6);
-  part(f, roofG(7.2, 9.2, 3.2), '#6b4a2e', 0, 3.7, 0);
+  roofOn(f, [7.2, 9.2, 3.2], '#6b4a2e', 0, 3.7, 0);
   box(f, '#4a3424', 0, 1.6, 3.02, 3, 3, 0.1); box(f, '#8a6d48', 0, 1.6, 3.06, 0.12, 3, 0.04); box(f, '#8a6d48', 0, 1.6, 3.06, 3, 0.12, 0.04);
   for (let i = 0; i < 5; i++) part(f, new THREE.CylinderGeometry(0.55, 0.55, 1, 8), '#c9a64e', 5.6 + (i % 3) * 0.6, 0.55 + Math.floor(i / 3) * 0.9, 1.5 - (i % 3) * 1.1, 0, 0, Math.PI / 2);
   box(f, '#d2b260', -5.4, 0.9, 0, 1.8, 1.8, 2.2);                                                  // a haystack
@@ -11398,7 +11420,7 @@ const CROPS = [
   // the waystation: a drovers' rest with a well, a trough and a stable
   const W0 = Sim.WAYSTATION, wf = fr(W0.x, W0.z, facing(W0.x, W0.z, 240, -58));
   cottage(wf, { w: 8, d: 5.4, h: 2.8, wall: '#c9b48a', roof: '#7a6440', door: '#5a3a28', yard: false, rh: 2.4 });
-  box(wf, '#6b4a2e', 6.4, 1.2, -0.5, 4, 2.4, 5); part(wf, roofG(5.6, 4.6, 1.4), '#7a6440', 6.4, 2.4, -0.5);
+  box(wf, '#6b4a2e', 6.4, 1.2, -0.5, 4, 2.4, 5); roofOn(wf, [5.6, 4.6, 1.4], '#7a6440', 6.4, 2.4, -0.5);
   box(wf, '#6b4a2e', 0, 0.35, 5.2, 3, 0.5, 0.9); box(wf, '#4f7d8c', 0, 0.62, 5.2, 2.7, 0.05, 0.7);
   box(wf, BEAMS, -3.8, 1.4, 4.4, 0.16, 2.8, 0.16); box(wf, '#d8c69a', -3.8, 2.5, 4.48, 1.4, 0.5, 0.06);
   // Old Barrow Keep: a ruined tower on a knoll, long abandoned
@@ -11477,13 +11499,13 @@ const CROPS = [
   O.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i, { stone: STONE, stone2: STONE2, slate: SLATE, tile: '#7a3f2b', roofs: ['#7a3f2b', '#5e4a2c', SLATE], sign: SIGN[b.trade] }));
   // the town hall, with its clock tower, on the hall square
   const hf = at(O.hall.x, O.hall.z, O.hall.face);
-  box(hf, '#7d776a', 0, 0.3, 0, 15, 1, 10); box(hf, STONE, 0, 3.6, 0, 14, 6.4, 9); part(hf, roofG(9.6, 14.6, 3.6), SLATE, 0, 6.8, 0);
+  box(hf, '#7d776a', 0, 0.3, 0, 15, 1, 10); box(hf, STONE, 0, 3.6, 0, 14, 6.4, 9); roofOn(hf, [9.6, 14.6, 3.6], SLATE, 0, 6.8, 0);
   box(hf, STONE, 0, 7.5, -1.2, 3.8, 15, 3.8); part(hf, new THREE.ConeGeometry(3.2, 5.4, 4), SLATE, 0, 17.7, -1.2, Math.PI / 4); part(hf, new THREE.CylinderGeometry(1.2, 1.2, 0.1, 14), '#e8dcbc', 0, 12, 0.72, 0, Math.PI / 2);
   box(hf, '#3b2a1c', 0, 1.9, 4.52, 2.2, 3.2, 0.1); [-5, -3, 3, 5].forEach(x => win(hf, x, 3.8, 4.52, 0.9, 1.7, 0.06));
   box(hf, '#7c776d', 0, 0.35, 5.6, 6, 0.4, 2.2); [-6, 6].forEach(x => { box(hf, BEAMS, x, 2.6, 5.4, 0.14, 5.2, 0.14); box(hf, '#2f5a2e', x + 0.45, 4.4, 5.42, 0.9, 1.6, 0.04); });
   // the guildhall
   const gf = at(O.guildhall.x, O.guildhall.z, O.guildhall.face);
-  box(gf, '#7d776a', 0, 0.3, 0, 12, 1, 9); box(gf, '#b9a47a', 0, 3.2, 0, 11, 5.4, 8); [-4.5, -2.25, 0, 2.25, 4.5].forEach(x => box(gf, BEAMS, x, 3.2, 4.02, 0.18, 5.4, 0.08)); part(gf, roofG(8.8, 11.6, 5), '#5e4a2c', 0, 5.9, 0);
+  box(gf, '#7d776a', 0, 0.3, 0, 12, 1, 9); box(gf, '#b9a47a', 0, 3.2, 0, 11, 5.4, 8); [-4.5, -2.25, 0, 2.25, 4.5].forEach(x => box(gf, BEAMS, x, 3.2, 4.02, 0.18, 5.4, 0.08)); roofOn(gf, [8.8, 11.6, 5], '#5e4a2c', 0, 5.9, 0);
   box(gf, '#8a6a2a', 0, 9.2, 4.1, 1.2, 2.2, 0.06); box(gf, '#3b2a1c', 0, 1.6, 4.02, 1.8, 2.8, 0.1); win(gf, -3.2, 2.2, 4.02, 1, 1.2, 0.06); win(gf, 3.2, 2.2, 4.02, 1, 1.2, 0.06);
   // the keep, on the east bank
   const kf = at(O.keep.x, O.keep.z, 0);
@@ -11532,7 +11554,7 @@ const CROPS = [
   // the maypole, ribbons streaming, and the well
   const mp = at(H.green.x + 3, H.green.z - 2); box(mp, '#e8dcbc', 0, 4.5, 0, 0.26, 9, 0.26); part(mp, new THREE.CylinderGeometry(0.7, 0.7, 0.3, 10), '#3f6b3a', 0, 8.6, 0);
   ['#c2412d', '#2f5d7a', '#e8d36a', '#4f6b3a', '#e8dcbc', '#6d5a78'].forEach((c, i) => { const a = i / 6 * Math.PI * 2; box(mp, c, Math.cos(a) * 1.6, 5, Math.sin(a) * 1.6, 0.06, 7.6, 0.04, 0, Math.sin(a) * 0.2, -Math.cos(a) * 0.2); });
-  const wl = at(H.green.x - 6, H.green.z + 5); part(wl, new THREE.CylinderGeometry(1.1, 1.2, 0.9, 10), '#8b877c', 0, 0.45, 0); box(wl, BEAMS, -0.9, 1.4, 0, 0.12, 2, 0.12); box(wl, BEAMS, 0.9, 1.4, 0, 0.12, 2, 0.12); part(wl, roofG(1.4, 2.4, 0.6), '#6b5636', 0, 2.4, 0, Math.PI / 2);
+  const wl = at(H.green.x - 6, H.green.z + 5); part(wl, new THREE.CylinderGeometry(1.1, 1.2, 0.9, 10), '#8b877c', 0, 0.45, 0); box(wl, BEAMS, -0.9, 1.4, 0, 0.12, 2, 0.12); box(wl, BEAMS, 0.9, 1.4, 0, 0.12, 2, 0.12); roofOn(wl, [1.4, 2.4, 0.6], '#6b5636', 0, 2.4, 0, Math.PI / 2);
   const ot = (x, z, sc, c) => { const g = M4(x, groundH(x, z), z, rr() * 6); box(g, '#5b4029', 0, 1.3 * sc, 0, 0.45 * sc, 2.6 * sc, 0.45 * sc); part(g, GEO.sack, c || '#4f6b3a', 0, 3.4 * sc, 0, 0, 0, 0, 7 * sc, 5.6 * sc, 7 * sc); };
   ot(H.green.x - 9, H.green.z - 7, 1.4);
   [[-4, 9, 0.4], [7, 9, -0.3]].forEach(([u, v, ry]) => { const g = M4(H.green.x + u, groundH(H.green.x, H.green.z), H.green.z + v, ry); box(g, '#6b4a2e', 0, 0.45, 0, 2, 0.12, 0.5); box(g, '#5b4029', -0.8, 0.22, 0, 0.12, 0.45, 0.4); box(g, '#5b4029', 0.8, 0.22, 0, 0.12, 0.45, 0.4); });
@@ -11540,7 +11562,7 @@ const CROPS = [
   // cottages, thatched and limewashed, a few larger farmhouses
   H.houses.forEach((h, i) => {
     const f = at(h.x, h.z, h.face);
-    if (h.tall) { cottage(f, { w: 7, d: 5, h: 3, wall: WALLS[(i + 2) % 4], roof: THATCH[i % 4], yard: false, door: '#3b2a1c', rh: 2.6 }); box(f, '#6b4a2e', 4.6, 1.1, -0.5, 2.4, 2.2, 3.6); part(f, roofG(4, 2.8, 1.1), THATCH[(i + 1) % 4], 4.6, 2.2, -0.5, Math.PI / 2); }
+    if (h.tall) { cottage(f, { w: 7, d: 5, h: 3, wall: WALLS[(i + 2) % 4], roof: THATCH[i % 4], yard: false, door: '#3b2a1c', rh: 2.6 }); box(f, '#6b4a2e', 4.6, 1.1, -0.5, 2.4, 2.2, 3.6); roofOn(f, [4, 2.8, 1.1], THATCH[(i + 1) % 4], 4.6, 2.2, -0.5, Math.PI / 2); }
     else cottage(f, { w: 5.2, d: 4.2, h: 2.3, wall: WALLS[i % 4], roof: THATCH[(i + 1) % 4], yard: false, door: ['#3b2a1c', '#5a3a28', '#2f4f6a', '#4f6b3a'][i % 4] });
     if (i % 2 === 0) { const b = M4(h.x - Math.sin(h.face) * 6, groundH(h.x, h.z) + 0.04, h.z - Math.cos(h.face) * 6, h.face); box(b, '#6e5a36', 0, 0, 0, 4.4, 0.1, 2.6); for (let k = 0; k < 6; k++) part(b, GEO.sack, k % 2 ? '#5f8a3e' : '#7aa04a', -1.8 + (k % 3) * 1.8, 0.2, -0.6 + Math.floor(k / 3) * 1.2, 0, 0, 0, 0.9, 0.7, 0.9); }
   });
@@ -11550,7 +11572,7 @@ const CROPS = [
   // the Great Mill: stone below, timber above, and its wheel turning in the river
   const mb = H.biz.find(b => b.id === 'g_mill'), mf = at(mb.x, mb.z, mb.face);
   box(mf, '#8b877c', 0, 2.4, 0, 10, 4.8, 9); box(mf, '#b9a47a', 0, 6.4, 0, 10.4, 3.2, 9.4); [-5, -2.5, 0, 2.5, 5].forEach(x => box(mf, BEAMS, x, 6.4, 4.72, 0.18, 3.2, 0.08));
-  part(mf, roofG(10, 11, 4), '#5e4a2c', 0, 8, 0); box(mf, '#2a1f16', 0, 1.6, 4.52, 2.4, 3.2, 0.08); win(mf, -3, 3, 4.52, 0.9, 0.9, 0.06); win(mf, 3, 3, 4.52, 0.9, 0.9, 0.06);
+  roofOn(mf, [10, 11, 4], '#5e4a2c', 0, 8, 0); box(mf, '#2a1f16', 0, 1.6, 4.52, 2.4, 3.2, 0.08); win(mf, -3, 3, 4.52, 0.9, 0.9, 0.06); win(mf, 3, 3, 4.52, 0.9, 0.9, 0.06);
   box(mf, BEAMS, 0, 9.4, 4.8, 0.2, 0.2, 1.4); box(mf, '#d8c69a', 0, 8.6, 5.4, 0.7, 1.2, 0.5);
   for (let k = 0; k < 8; k++) part(mf, GEO.sack, k % 2 ? '#e8dcbc' : '#d8c69a', -4 + (k % 4) * 0.8, 0.35, 5.5 + Math.floor(k / 4) * 0.7, 0, 0, 0, 1, 0.9, 1);
   { const ax = mb.x - Math.sin(mb.face) * 6.2, az = mb.z - Math.cos(mb.face) * 6.2, wg = new THREE.Group(); wg.position.set(ax, waterLevelGreen(az) + 1.4, az); wg.rotation.y = mb.face + Math.PI / 2; scene.add(wg);
@@ -11564,12 +11586,12 @@ const CROPS = [
   const hf = at(H.hall.x, H.hall.z, H.hall.face);
   [-4, -1.3, 1.3, 4].forEach(x => [-2.5, 2.5].forEach(z => box(hf, '#8b877c', x, 1.2, z, 0.6, 2.4, 0.6)));
   box(hf, '#6b4a2e', 0, 2.5, 0, 10, 0.25, 6.4); box(hf, '#c9b48a', 0, 3.9, 0, 9.6, 2.6, 6); [-4.8, -2.4, 0, 2.4, 4.8].forEach(x => box(hf, BEAMS, x, 3.9, 3.02, 0.16, 2.6, 0.08));
-  part(hf, roofG(7, 10.6, 2.8), '#5e4a2c', 0, 5.2, 0); box(hf, '#d8c69a', 0, 6.6, 0, 0.8, 1, 0.8); part(hf, new THREE.ConeGeometry(0.7, 1.2, 4), '#3f4a5a', 0, 7.7, 0, Math.PI / 4);
+  roofOn(hf, [7, 10.6, 2.8], '#5e4a2c', 0, 5.2, 0); box(hf, '#d8c69a', 0, 6.6, 0, 0.8, 1, 0.8); part(hf, new THREE.ConeGeometry(0.7, 1.2, 4), '#3f4a5a', 0, 7.7, 0, Math.PI / 4);
   win(hf, -2.6, 4, 3.02, 0.8, 0.8, 0.06); win(hf, 2.6, 4, 3.02, 0.8, 0.8, 0.06); box(hf, '#6b4a2e', 4.6, 1.3, 3.6, 1.2, 0.12, 2.4, 0, -0.5);
   // Ashcombe Hall, behind its garden wall on the rise
   const eb = H.biz.find(b => b.id === 'g_estate'), ef = at(eb.x, eb.z, eb.face);
   box(ef, '#7d776a', 0, 0.3, 0, 18, 1, 11); box(ef, '#a39d90', 0, 3.4, 0, 16, 6.2, 10); box(ef, '#a39d90', -9, 2.8, -2, 4, 5, 13); box(ef, '#a39d90', 9, 2.8, -2, 4, 5, 13);
-  part(ef, roofG(10.6, 16.6, 3.6), '#3f4a5a', 0, 6.5, 0); part(ef, roofG(13.4, 4.6, 2.4), '#3f4a5a', -9, 5.3, -2, Math.PI / 2); part(ef, roofG(13.4, 4.6, 2.4), '#3f4a5a', 9, 5.3, -2, Math.PI / 2);
+  roofOn(ef, [10.6, 16.6, 3.6], '#3f4a5a', 0, 6.5, 0); roofOn(ef, [13.4, 4.6, 2.4], '#3f4a5a', -9, 5.3, -2, Math.PI / 2); roofOn(ef, [13.4, 4.6, 2.4], '#3f4a5a', 9, 5.3, -2, Math.PI / 2);
   [-6, 6].forEach(x => box(ef, '#8b877c', x, 7.6, -2, 0.8, 3, 0.8)); box(ef, '#3b2a1c', 0, 1.9, 5.02, 2.2, 3.2, 0.1); [-5.5, -3, 3, 5.5].forEach(x => { win(ef, x, 2.4, 5.02, 1, 1.4, 0.06); win(ef, x, 5, 5.02, 0.9, 1.1, 0.06); });
   box(ef, '#2f5a2e', 0, 6.2, 5.06, 1.4, 1.4, 0.04); box(ef, '#d9b04a', 0, 6.2, 5.1, 0.6, 0.6, 0.02);
   for (let k = -1; k <= 1; k += 2) { box(ef, '#8b877c', k * 12, 1, 6, 0.6, 2, 18); box(ef, '#8b877c', k * 7.5, 1, 15, 9, 2, 0.6); box(ef, '#8b877c', k * 2.2, 1.3, 15, 0.9, 2.6, 0.9); }
@@ -11599,7 +11621,7 @@ const CROPS = [
   });
   const O = H.orchard; for (let x = O.x - O.w / 2 + 2; x < O.x + O.w / 2; x += 4) for (let z = O.z - O.d / 2 + 2; z < O.z + O.d / 2; z += 4) ot(x, z, 0.6, rr() < 0.5 ? '#5d7a40' : '#6b8a44');
   // barns and haystacks at the edges of town
-  [[-176, -840, 0.2], [-202, -768, 1.4], [-290, -800, 0.6]].forEach(([x, z, ry]) => { const f = at(x, z, ry); box(f, '#6b4a2e', 0, 2.2, 0, 8, 4.4, 6); part(f, roofG(7, 8.6, 3), '#5e4a2c', 0, 4.4, 0); box(f, '#4a3424', 0, 1.6, 3.02, 3, 3.2, 0.1); box(f, '#d2b260', 6, 0.9, 0, 1.8, 1.8, 2.2); });
+  [[-176, -840, 0.2], [-202, -768, 1.4], [-290, -800, 0.6]].forEach(([x, z, ry]) => { const f = at(x, z, ry); box(f, '#6b4a2e', 0, 2.2, 0, 8, 4.4, 6); roofOn(f, [7, 8.6, 3], '#5e4a2c', 0, 4.4, 0); box(f, '#4a3424', 0, 1.6, 3.02, 3, 3.2, 0.1); box(f, '#d2b260', 6, 0.9, 0, 1.8, 1.8, 2.2); });
   // trees along the river and in the hedgerows
   for (let k = 0; k < 160; k++) { const z = T.z - 110 + rr() * 220, x = H.riverX(z) + (rr() < 0.5 ? -1 : 1) * (8 + rr() * 6); if (Math.abs(z - H.bridge.z) < 8 || Math.abs(z - (mb.z)) < 9 || rr() < 0.55) continue; ot(x, z, 0.8 + rr() * 0.5, rr() < 0.5 ? '#4f6b3a' : '#56703c'); GH_TREES.push([x, z]); }
   flushBuild();
@@ -11664,7 +11686,7 @@ const CM_Y = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), CM_TREES = [];
     }
   });
   // smaller squares: a well, a cross, a tree
-  later(O.oldSq.x, O.oldSq.z, () => { const wl = fr(O.oldSq.x, O.oldSq.z); part(wl, new THREE.CylinderGeometry(1.4, 1.5, 1, 10), STONE2, 0, 0.5, 0); box(wl, BEAMS, -1.1, 1.6, 0, 0.14, 2.2, 0.14); box(wl, BEAMS, 1.1, 1.6, 0, 0.14, 2.2, 0.14); part(wl, roofG(1.6, 2.8, 0.7), '#6b5636', 0, 2.7, 0, Math.PI / 2); });
+  later(O.oldSq.x, O.oldSq.z, () => { const wl = fr(O.oldSq.x, O.oldSq.z); part(wl, new THREE.CylinderGeometry(1.4, 1.5, 1, 10), STONE2, 0, 0.5, 0); box(wl, BEAMS, -1.1, 1.6, 0, 0.14, 2.2, 0.14); box(wl, BEAMS, 1.1, 1.6, 0, 0.14, 2.2, 0.14); roofOn(wl, [1.6, 2.8, 0.7], '#6b5636', 0, 2.7, 0, Math.PI / 2); });
   [O.guildSq, O.southSq, O.courtSq].forEach((q, i) => later(q.x, q.z, () => { const c = fr(q.x, q.z); part(c, new THREE.CylinderGeometry(2, 2.4, 0.6, 8), '#86847a', 0, 0.3, 0); box(c, STONE2, 0, 2.6, 0, 0.6, 4.2, 0.6); box(c, i === 2 ? GOLD : STONE2, 0, 4, 0, 1.8, 0.45, 0.45); }));
   // homes: tall timber townhouses and stone cottages; kept simple, there are hundreds of them
   O.houses.forEach((h, i) => later(h.x, h.z, () => {
@@ -11676,7 +11698,7 @@ const CM_Y = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), CM_TREES = [];
   // the great houses of the Court Quarter, behind their walls
   O.mansions.forEach((m, i) => later(m.x, m.z, () => {
     const f = at(m.x, m.z, m.face);
-    box(f, STONE, 0, 3.4, 0, 14, 6.8, 9); part(f, roofG(9.6, 14.6, 3.6), SLATE, 0, 6.8, 0); box(f, STONE, -5, 5, -2, 4, 10, 4); part(f, new THREE.ConeGeometry(3, 3.6, 4), SLATE, -5, 11.8, -2, Math.PI / 4);
+    box(f, STONE, 0, 3.4, 0, 14, 6.8, 9); roofOn(f, [9.6, 14.6, 3.6], SLATE, 0, 6.8, 0); box(f, STONE, -5, 5, -2, 4, 10, 4); part(f, new THREE.ConeGeometry(3, 3.6, 4), SLATE, -5, 11.8, -2, Math.PI / 4);
     box(f, '#3b2a1c', 0, 1.8, 4.52, 2, 3, 0.1); [-4.5, -2.2, 2.2, 4.5].forEach(x => { win(f, x, 2.4, 4.52, 0.9, 1.3, 0.06); win(f, x, 5, 4.52, 0.8, 1, 0.06); });
     box(f, ['#8e2b22', BLUE, '#2f5a2e', '#6d5a78', '#8a6a2a'][i % 5], 0, 5.2, 4.56, 1.4, 1.8, 0.04);
     box(f, STONE2, -9, 1, 4, 0.5, 2, 12); box(f, STONE2, 9, 1, 4, 0.5, 2, 12); box(f, STONE2, -5.5, 1, 10, 7, 2, 0.5); box(f, STONE2, 5.5, 1, 10, 7, 2, 0.5);
@@ -11684,7 +11706,7 @@ const CM_Y = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), CM_TREES = [];
   // the Great Hall of the Realm: a tall stone hall with twin towers, where the court sits in state
   later(O.cathedral.x, O.cathedral.z, () => {
     const f = at(O.cathedral.x, O.cathedral.z, O.cathedral.face);
-    box(f, '#7d776a', 0, 0.4, 0, 26, 1, 15); box(f, STONE, 0, 6, 0, 24, 11, 13); part(f, roofG(14, 25, 7), SLATE, 0, 11.5, 0);
+    box(f, '#7d776a', 0, 0.4, 0, 26, 1, 15); box(f, STONE, 0, 6, 0, 24, 11, 13); roofOn(f, [14, 25, 7], SLATE, 0, 11.5, 0);
     [-1, 1].forEach(k => { box(f, STONE, k * 9, 10, 7.6, 5, 20, 5); part(f, new THREE.ConeGeometry(4, 8, 4), SLATE, k * 9, 24, 7.6, Math.PI / 4); box(f, BLUE, k * 9, 14, 10.14, 1.6, 3, 0.06); box(f, GOLD, k * 9, 14.4, 10.18, 0.7, 0.7, 0.02); });
     box(f, '#2a1f16', 0, 3.2, 6.55, 3.6, 6, 0.1); part(f, new THREE.CylinderGeometry(2.2, 2.2, 0.12, 16), '#d8c69a', 0, 8.8, 6.55, 0, Math.PI / 2);
     for (let k = -3; k <= 3; k++) if (k) win(f, k * 3.2, 6.6, 6.55, 1.1, 3.4, 0.06);
@@ -11693,7 +11715,7 @@ const CM_Y = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), CM_TREES = [];
   // the Guildhall: seat of the Lord Mayor and council
   later(O.hall.x, O.hall.z, () => {
     const f = at(O.hall.x, O.hall.z, O.hall.face);
-    box(f, '#7d776a', 0, 0.4, 0, 17, 1, 11); box(f, '#b9a47a', 0, 3.6, 0, 16, 6.4, 10); [-8, -4, 0, 4, 8].forEach(x => box(f, BEAMS, x, 3.6, 5.02, 0.2, 6.4, 0.08)); part(f, roofG(10.6, 16.6, 5), '#5e4a2c', 0, 6.8, 0);
+    box(f, '#7d776a', 0, 0.4, 0, 17, 1, 11); box(f, '#b9a47a', 0, 3.6, 0, 16, 6.4, 10); [-8, -4, 0, 4, 8].forEach(x => box(f, BEAMS, x, 3.6, 5.02, 0.2, 6.4, 0.08)); roofOn(f, [10.6, 16.6, 5], '#5e4a2c', 0, 6.8, 0);
     box(f, STONE, 0, 9, -2, 4, 18, 4); part(f, new THREE.ConeGeometry(3.2, 5, 4), SLATE, 0, 20.5, -2, Math.PI / 4); part(f, new THREE.CylinderGeometry(1.3, 1.3, 0.1, 14), '#e8dcbc', 0, 14, 0.02, 0, Math.PI / 2);
     box(f, '#3b2a1c', 0, 1.8, 5.02, 2.2, 3, 0.1); box(f, '#8a6a2a', 0, 7.4, 5.06, 1.6, 2.4, 0.04);
   });
@@ -11763,14 +11785,14 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
   O.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#857d70', m: new THREE.Matrix4() }));
   O.plazas.forEach(q => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: '#8a8478', kind: 4, smooth: true }));
   // the square: a well and a market cross
-  { const c = fr(700, -1258); part(c, new THREE.CylinderGeometry(1.4, 1.5, 1, 10), STONE2, 0, 0.5, 0); box(c, BEAMS, -1.1, 1.6, 0, 0.14, 2.2, 0.14); box(c, BEAMS, 1.1, 1.6, 0, 0.14, 2.2, 0.14); part(c, roofG(1.6, 2.8, 0.7), SLATE, 0, 2.7, 0, Math.PI / 2); }
+  { const c = fr(700, -1258); part(c, new THREE.CylinderGeometry(1.4, 1.5, 1, 10), STONE2, 0, 0.5, 0); box(c, BEAMS, -1.1, 1.6, 0, 0.14, 2.2, 0.14); box(c, BEAMS, 1.1, 1.6, 0, 0.14, 2.2, 0.14); roofOn(c, [1.6, 2.8, 0.7], SLATE, 0, 2.7, 0, Math.PI / 2); }
   O.houses.forEach((h, i) => townHouse(at(h.x, h.z, h.face), h, i + 3, { stone: STONE, stone2: STONE2, slate: SLATE, tile: '#6b4a2e', stoneTown: true, roofs: [SLATE, SLATE, '#5e4a2c'], walls: ['#a89a80', '#9a948a', '#b9a47a', '#8b877c'] }));
   const SIGN = { armourer: '#5a5f66', weaponsmith: '#6b2f2f', bowyer: '#4f6b3a', bakery: '#c48a3f', tavern: '#3f6b3a', smithy: '#4a4744', butcher: '#8e2b22', chandler: '#e8d36a', cooper: '#6b4a2e', carter: '#5b4029', apothecary: '#4f6b3a', mason: '#8b877c' };
   O.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 2, { stone: STONE, stone2: STONE2, slate: SLATE, roofs: [SLATE, '#5e4a2c'], sign: SIGN[b.trade] }));
   // Stane Keep: a square tower and its hall, flying the realm's banner
   { const k = O.keep, f = at(k.x, k.z, k.face);
     box(f, STONE, 0, 6, -2, 9, 12, 9); box(f, STONE2, 0, 12.4, -2, 9.8, 0.8, 9.8); for (let a = -4; a <= 4; a += 2) { box(f, STONE2, a, 13.2, 2.8, 0.9, 0.8, 0.4); box(f, STONE2, a, 13.2, -6.8, 0.9, 0.8, 0.4); }
-    box(f, STONE, 0, 3, 5, 12, 6, 6); part(f, roofG(6.8, 12.4, 3), SLATE, 0, 6, 5); box(f, '#2a1f16', 0, 1.6, 8.02, 2, 3, 0.1); [-3.6, 3.6].forEach(x => win(f, x, 3.4, 8.02, 0.8, 1.2, 0.06));
+    box(f, STONE, 0, 3, 5, 12, 6, 6); roofOn(f, [6.8, 12.4, 3], SLATE, 0, 6, 5); box(f, '#2a1f16', 0, 1.6, 8.02, 2, 3, 0.1); [-3.6, 3.6].forEach(x => win(f, x, 3.4, 8.02, 0.8, 1.2, 0.06));
     realmBanner(f, 0, 13.6, -2, 0, 3); }
   // the gate into the town, where the road comes up
   { const f = at(O.entry.x, O.entry.z, 0); [-5, 5].forEach(x => { box(f, STONE, x, 3, 0, 3, 6, 3); box(f, STONE2, x, 6.3, 0, 3.4, 0.6, 3.4); }); box(f, STONE, 0, 5.4, 0, 7, 1.4, 2); realmBanner(f, -5, 6.6, 0, 0, 2); realmBanner(f, 5, 6.6, 0, 0, 2); }
@@ -11821,7 +11843,7 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
   later(1134, -300, () => {
     for (let z = -430; z < -170; z += 10) between(1136, z, 1136, z + 10, SEA_Y + 0.6, 3, 3.2, STONE2);
     for (const pz of [-350, -300, -250]) { between(1138, pz, 1172, pz, SEA_Y + 0.9, 4, 0.4, '#6b4a2e'); for (let x = 1140; x <= 1172; x += 4) [-1.8, 1.8].forEach(dz => box(fr(x, pz + dz, 0, 0), '#4a3424', 0, SEA_Y - groundH(x, pz + dz) + 0.2, 0, 0.3, 2.4, 0.3)); for (let x = 1142; x < 1172; x += 6) part(fr(x, pz + 1.6, 0, 0), G_CYL, '#3a3128', 0, SEA_Y - groundH(x, pz + 1.6) + 1.3, 0, 0, 0, 0, 0.2, 0.5, 0.2); }
-    for (let z = -400; z < -200; z += 26) { const f = at(1127, z, Math.PI / 2); box(f, '#8a7a5a', 0, 2.2, 0, 11, 4.4, 6.4); part(f, roofG(7, 11.4, 2.2), TILE, 0, 4.4, 0); box(f, '#2a1f16', 0, 1.6, 3.22, 3.2, 3, 0.08); for (let k = 0; k < 4; k++) part(f, G_BARREL, '#6b4a2e', -4 + k * 1.1, 0.35, 4.2); }
+    for (let z = -400; z < -200; z += 26) { const f = at(1127, z, Math.PI / 2); box(f, '#8a7a5a', 0, 2.2, 0, 11, 4.4, 6.4); roofOn(f, [7, 11.4, 2.2], TILE, 0, 4.4, 0); box(f, '#2a1f16', 0, 1.6, 3.22, 3.2, 3, 0.08); for (let k = 0; k < 4; k++) part(f, G_BARREL, '#6b4a2e', -4 + k * 1.1, 0.35, 4.2); }
   });
   // ships at the piers and boats in the harbour
   const ship = (x, z, ry, big) => { const L0 = big ? 18 : 12, B0 = big ? 4.6 : 3.4, f = new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry, 0)), new THREE.Vector3(1, 1, 1));
@@ -11874,14 +11896,14 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
   O.biz.forEach((b, i) => later(b.x, b.z, () => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 31, { stone: SAND, stone2: SAND2, slate: RED, tile: RED, roofs: [RED, RED2], sign: SIGN[b.trade] })));
   // the Consul's palace on its rise: a sandstone hall, arcaded below, with towers and red and gold banners
   later(O.palace.x, O.palace.z, () => { const f = at(O.palace.x, O.palace.z, O.palace.face);
-    box(f, SAND, 0, 5, 0, 26, 10, 14); box(f, SAND2, 0, 10.3, 0, 27, 0.6, 15); part(f, roofG(15.5, 27.5, 3.4), RED, 0, 10.6, 0);
+    box(f, SAND, 0, 5, 0, 26, 10, 14); box(f, SAND2, 0, 10.3, 0, 27, 0.6, 15); roofOn(f, [15.5, 27.5, 3.4], RED, 0, 10.6, 0);
     for (let k = -11; k <= 11; k += 3.6) { box(f, SAND2, k, 2, 7.6, 0.8, 4, 0.8); } box(f, SAND2, 0, 4.3, 7.6, 25, 0.6, 1.2);
     [[-13, -7], [13, -7], [-13, 7], [13, 7]].forEach(([x, z]) => { box(f, SAND2, x, 7.5, z, 4, 15, 4); part(f, new THREE.ConeGeometry(3.2, 4, 4), RED, x, 17, z, Math.PI / 4); });
     for (let k = -9; k <= 9; k += 3) win(f, k, 7.4, 7.04, 1, 1.8, 0.06); box(f, '#3b2a1c', 0, 1.7, 7.3, 2.6, 3.4, 0.1);
     valBanner(f, -13, 15, 9, 0, 3); valBanner(f, 13, 15, 9, 0, 3);
     for (let s0 = 0; s0 < 5; s0++) box(f, SAND2, 0, 0.2 + s0 * 0.35, 9 + s0 * 1.6, 8, 0.4, 1.6); });
   // the customs house on the quay, long and arcaded, where goods from Alderwyn pay the queen's duty
-  later(O.customs.x, O.customs.z, () => { const f = at(O.customs.x, O.customs.z, O.customs.face); box(f, SAND, 0, 3, 0, 20, 6, 9); part(f, roofG(9.6, 20.6, 2.6), RED, 0, 6, 0); for (let k = -9; k <= 9; k += 3) box(f, SAND2, k, 1.6, 4.9, 0.7, 3.2, 0.7); box(f, SAND2, 0, 3.4, 4.9, 20, 0.5, 1); box(f, '#2a1f16', 0, 1.6, 4.52, 2.4, 3, 0.08); valBanner(f, 0, 6.4, 4.6, 0, 2.6); for (let k = 0; k < 6; k++) part(f, G_BARREL, '#6b4a2e', -8 + k * 1.1, 0.35, 6.4); });
+  later(O.customs.x, O.customs.z, () => { const f = at(O.customs.x, O.customs.z, O.customs.face); box(f, SAND, 0, 3, 0, 20, 6, 9); roofOn(f, [9.6, 20.6, 2.6], RED, 0, 6, 0); for (let k = -9; k <= 9; k += 3) box(f, SAND2, k, 1.6, 4.9, 0.7, 3.2, 0.7); box(f, SAND2, 0, 3.4, 4.9, 20, 0.5, 1); box(f, '#2a1f16', 0, 1.6, 4.52, 2.4, 3, 0.08); valBanner(f, 0, 6.4, 4.6, 0, 2.6); for (let k = 0; k < 6; k++) part(f, G_BARREL, '#6b4a2e', -8 + k * 1.1, 0.35, 6.4); });
   // the quay: a stone wall at the water's edge, timber piers, and ships alongside, Valdorian and Alderwyn
   later(1912, -300, () => {
     for (let z = -392; z < -208; z += 10) between(1909, z, 1909, z + 10, SEA_Y + 0.6, 3, 3.2, SAND2);
@@ -11900,7 +11922,7 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
 (function buildStormrest() {
   const I = Sim.ISLE, at = (x, z, ry) => fr(x, z, ry), STONE2 = '#8b877c';
   // the inn and the harbour wall on the lee side, the lighthouse on the headland, wind-bent pines and bare rock
-  { const f = at(I.x - 12, I.z, Math.PI / 2); box(f, '#a39d90', 0, 2.4, 0, 10, 4.8, 7); part(f, roofG(7.6, 10.6, 2.6), '#3f4a5a', 0, 4.8, 0); box(f, '#3b2a1c', 0, 1.4, 3.55, 1.2, 2.4, 0.08); win(f, -3, 2.6, 3.52, 1, 0.9, 0.06); win(f, 3, 2.6, 3.52, 1, 0.9, 0.06); box(f, BEAMS, 5.6, 2.8, 3.6, 0.12, 2, 0.12); box(f, '#2f5d7a', 5.6, 3.5, 4, 1.1, 0.7, 0.06); }
+  { const f = at(I.x - 12, I.z, Math.PI / 2); box(f, '#a39d90', 0, 2.4, 0, 10, 4.8, 7); roofOn(f, [7.6, 10.6, 2.6], '#3f4a5a', 0, 4.8, 0); box(f, '#3b2a1c', 0, 1.4, 3.55, 1.2, 2.4, 0.08); win(f, -3, 2.6, 3.52, 1, 0.9, 0.06); win(f, 3, 2.6, 3.52, 1, 0.9, 0.06); box(f, BEAMS, 5.6, 2.8, 3.6, 0.12, 2, 0.12); box(f, '#2f5d7a', 5.6, 3.5, 4, 1.1, 0.7, 0.06); }
   { const x0 = I.x - 30; for (let z = I.z - 14; z < I.z + 14; z += 4) box(fr(x0 - 4, z, 0, 0), '#6b4a2e', 0, SEA_Y - groundH(x0 - 4, z) + 0.9, 0, 9, 0.35, 4.2); seaShip(x0 - 16, I.z + 6, 0.2, false, ALDERWYN); }
   { const lx = I.x + 30, lz = I.z - 22, f = new THREE.Matrix4().compose(new THREE.Vector3(lx, groundH(lx, lz), lz), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)); part(f, new THREE.CylinderGeometry(2, 2.8, 16, 12), '#e9e1cc', 0, 8, 0); [5, 10].forEach(y => part(f, new THREE.CylinderGeometry(2.6 - y * 0.04, 2.7 - y * 0.04, 1.1, 12), '#2b4a7a', 0, y, 0)); part(f, new THREE.CylinderGeometry(1.6, 1.6, 1.8, 10), '#3a3632', 0, 16.9, 0); box(f, '#ffd36a', 0, 16.9, 0, 2, 1.1, 2); part(f, new THREE.ConeGeometry(2, 1.6, 10), '#3a3632', 0, 18.6, 0); }
   const rr = tileRand(57, 3); for (let k = 0; k < 40; k++) { const a = rr() * 6.28, d = 6 + rr() * 34, x = I.x + Math.cos(a) * d, z = I.z + Math.sin(a) * d / 1.3; if (Math.abs(x - (I.x - 12)) < 9 && Math.abs(z - I.z) < 8) continue; const g = fr(x, z, rr() * 6);
@@ -11947,7 +11969,7 @@ const VAL_TREES = [];
   flushBuild();
   // Thornwick: timber houses at the forest's edge, the sawmill and the charcoal clamps, and the forest all round
   town(Sim.TW, 83, { street: '#8a7454', plaza: '#9a8462', sign: SIGN, house: { stone: STONE, stone2: STONE2, slate: '#5e4a2c', tile: '#6b4a2e', roofs: ['#5e4a2c', '#6b4a2e', RED2], walls: ['#c9b48a', '#b99f74', '#d1bf96', '#a88e64'] } });
-  { const m = Sim.TW.sawmill, f = at(m.x, m.z, 0.4); box(f, '#7a5634', 0, 2, 0, 8, 4, 6); part(f, roofG(6.6, 8.6, 2), '#5e4a2c', 0, 4, 0); for (let k = 0; k < 10; k++) part(f, GEO.log, '#9a7650', -6 + (k % 5) * 0.5, 0.2 + Math.floor(k / 5) * 0.4, 5, 0, Math.PI / 2, 0, 1.2, 5, 1.2);
+  { const m = Sim.TW.sawmill, f = at(m.x, m.z, 0.4); box(f, '#7a5634', 0, 2, 0, 8, 4, 6); roofOn(f, [6.6, 8.6, 2], '#5e4a2c', 0, 4, 0); for (let k = 0; k < 10; k++) part(f, GEO.log, '#9a7650', -6 + (k % 5) * 0.5, 0.2 + Math.floor(k / 5) * 0.4, 5, 0, Math.PI / 2, 0, 1.2, 5, 1.2);
     [[30, -8], [36, -2]].forEach(([dx, dz]) => part(at(m.x + dx, m.z + dz), new THREE.ConeGeometry(2.4, 2, 9), '#3a3632', 0, 1, 0)); }
   flushBuild();
   for (let k = 0, n = 0; k < 4000 && n < 220; k++) { const a = rr() * Math.PI * 2, d = 60 + rr() * 170, x = Sim.TW.C.x + 30 + Math.cos(a) * d, z = Sim.TW.C.z + Math.sin(a) * d; if (segDist(x, z, Sim.ROADS.vthorn) < 7 || segDist(x, z, Sim.ROADS.vqueen) < 8 || Math.hypot(x - Sim.VD.C.x, z - Sim.VD.C.z) < 128 || Math.hypot(x - Sim.STAGE.valdor.x, z - Sim.STAGE.valdor.z) < 14 || Math.hypot(x - Sim.TW.C.x, z - Sim.TW.C.z) < 58) continue; n++; VAL_TREES.push([x, z]); const g = fr(x, z, rr() * 6), sc = 0.8 + rr() * 0.6;
@@ -11968,7 +11990,7 @@ const VAL_TREES = [];
     { const F = O.fountain, f = at(F.x, F.z); part(f, new THREE.CylinderGeometry(3.4, 3.6, 0.7, 20), STONE, 0, 0.35, 0); part(f, new THREE.CylinderGeometry(2.9, 2.9, 0.08, 20), '#4f7d8c', 0, 0.68, 0); part(f, new THREE.CylinderGeometry(0.4, 0.6, 2.4, 10), STONE2, 0, 1.6, 0); part(f, new THREE.CylinderGeometry(1.2, 0.5, 0.4, 12), STONE, 0, 2.9, 0);
       for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4, g = at(F.x + Math.cos(a) * 12, F.z + Math.sin(a) * 12); box(g, '#2a2420', 0, 1.6, 0, 0.14, 3.2, 0.14); box(g, '#e8d36a', 0, 3.3, 0, 0.4, 0.5, 0.4); } }
     // the cathedral: a long nave, a rose window, a bell tower with a spire
-    { const c = O.cathedral, f = at(c.x, c.z, c.face); box(f, '#cbb894', 0, 0.3, 0, 16, 0.6, 30); box(f, '#e4d6b6', 0, 6, 0, 13, 11, 26); part(f, roofG(9.4, 26.4, 5), RED, 0, 11.5, 0);
+    { const c = O.cathedral, f = at(c.x, c.z, c.face); box(f, '#cbb894', 0, 0.3, 0, 16, 0.6, 30); box(f, '#e4d6b6', 0, 6, 0, 13, 11, 26); roofOn(f, [9.4, 26.4, 5], RED, 0, 11.5, 0);
       part(f, new THREE.CylinderGeometry(2, 2, 0.2, 16), '#7a5aa8', 0, 8, 13.1, 0, Math.PI / 2, 0); box(f, '#3b2a1c', 0, 2.6, 13.05, 3, 5, 0.1);
       box(f, '#e4d6b6', 8, 10, 10, 6, 20, 6); part(f, new THREE.ConeGeometry(4.2, 9, 4), '#8f897c', 8, 24.5, 10, Math.PI / 4, 0, 0); box(f, '#2a2420', 8, 16, 13.05, 1.6, 2.4, 0.1); part(f, new THREE.SphereGeometry(0.5, 8, 6), GOLD, 8, 29.4, 10);
       for (const dz of [-8, 0, 8]) [-6.6, 6.6].forEach(x => box(f, '#cbb894', x, 4, dz, 0.8, 8, 1.4)); }
@@ -11976,7 +11998,7 @@ const VAL_TREES = [];
     { const A = O.alcazar, f = at(A.x, A.z, A.face); box(f, STONE2, 0, 0.9, 0, 46, 1.8, 46); box(f, STONE, 0, 1.9, 23.6, 14, 0.4, 2);
       box(f, WHITE, 0, 8, -2, 34, 12.4, 26); box(f, OCH2, 0, 14.4, -2, 35, 0.8, 27); for (let k = -16; k <= 16; k += 2.6) { box(f, STONE, k, 15.2, 11.3, 1.2, 1, 0.8); box(f, STONE, k, 15.2, -15.3, 1.2, 1, 0.8); }
       [[-17, 11], [17, 11], [-17, -15], [17, -15]].forEach(([x, z]) => { part(f, new THREE.CylinderGeometry(3, 3.2, 20, 12), WHITE, x, 11, z); part(f, new THREE.ConeGeometry(3.6, 6, 12), RED, x, 24, z); valBanner(f, x, 27, z, 0, 2.4); });
-      box(f, WHITE, 0, 14, -6, 10, 24, 10); part(f, roofG(6, 10.6, 3), RED, 0, 26, -6); valBanner(f, 0, 29, -6, 0, 3.2);
+      box(f, WHITE, 0, 14, -6, 10, 24, 10); roofOn(f, [6, 10.6, 3], RED, 0, 26, -6); valBanner(f, 0, 29, -6, 0, 3.2);
       box(f, '#3b2a1c', 0, 4.2, 11.06, 4.4, 6.4, 0.12);
       for (let k = -14; k <= 14; k += 4.6) if (Math.abs(k) > 3) { win(f, k, 6, 11.06, 1.2, 2, 0.08); win(f, k, 10.6, 11.06, 1.2, 2, 0.08); }
       [-5, 5].forEach(x => { box(f, '#7a1f1f', x, 1.9, 21, 0.6, 0.12, 4); valBanner(f, x, 1.8, 22, 0, 3); }); }
@@ -12012,7 +12034,7 @@ function syncSkylines(px, pz) {
   for (const id in Sim.STAGE) {
     const st = Sim.STAGE[id], f = fr(st.x, st.z, st.face);
     // the office
-    box(f, '#7d776a', -4, 0.2, -2, 5.4, 0.5, 4.2); box(f, '#c9b48a', -4, 1.6, -2, 5, 2.6, 3.8); part(f, roofG(4.6, 5.6, 1.8), '#5e4a2c', -4, 2.9, -2);
+    box(f, '#7d776a', -4, 0.2, -2, 5.4, 0.5, 4.2); box(f, '#c9b48a', -4, 1.6, -2, 5, 2.6, 3.8); roofOn(f, [4.6, 5.6, 1.8], '#5e4a2c', -4, 2.9, -2);
     box(f, '#3b2a1c', -4, 1.1, -0.08, 1, 1.9, 0.08); win(f, -5.6, 1.6, -0.08, 0.7, 0.6, 0.06); box(f, BEAMS, -1.2, 1.6, 0, 0.14, 3.2, 0.14); box(f, '#2f4f6a', -0.55, 2.6, 0, 1.1, 0.6, 0.06); box(f, '#e8d36a', -0.55, 2.6, 0.04, 0.5, 0.25, 0.02);
     // the coach
     const c = new THREE.Matrix4().copy(f).multiply(M(3, 0, 0.5, Math.PI / 2));
@@ -17012,7 +17034,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.11.2356';
+const BUILD = '2026.11.12.0013';
 const NOTES = [
   { v: '0.84', date: '11 November', title: 'Streets first', items: [
     'A new painterly, warmer look: softer light, richer colour and a brushed finish on the land and buildings.',
