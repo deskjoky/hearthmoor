@@ -497,6 +497,8 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
   background: linear-gradient(#efdfbd, var(--parch)); border: 1px solid var(--line); border-radius: 6px; padding: 4px 4px 4px 14px; box-shadow: 0 3px 12px rgba(0,0,0,.4); max-width: calc(100vw - 32px); }
 .maptop h2 { margin: 0; font-family: var(--f-caps); font-weight: 400; font-size: 22px; white-space: nowrap; }
 .maptop span { color: var(--ink-soft); font-size: 13px; }
+body.mapping .panel { z-index: 19; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); max-height: 62vh; overflow-y: auto; }
+.pin.town span { font-family: var(--f-display); font-size: 15px; border-left-color: #2b4a7a; } .pin.who { pointer-events: none; } .pin.who span { background: var(--ink); color: #f5cf73; border-color: #e2b552; }
 .maptop .close { color: var(--ink); }
 .mapzoom { position: absolute; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 8px); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
 .mapzoom button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--parch); font-size: 20px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
@@ -510,7 +512,7 @@ textarea { min-height: 90px; font: 12px/1.3 ui-monospace, Menlo, monospace; }
 .mapcard { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); pointer-events: auto; display: flex; align-items: center; gap: 14px;
   width: min(560px, calc(100vw - 32px)); background: linear-gradient(var(--parch), #e3cea4); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
 .mapcard div { flex: 1; min-width: 0; } .mapcard b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 20px; } .mapcard span { font-size: 14px; color: var(--ink-soft); }
-@media (orientation: landscape) and (max-height: 520px) { .maptop span { display: none; } }
+@media (orientation: landscape) and (max-height: 520px) { .maptop span.maphint { display: none; } }
 .benchhud { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); background: rgba(32, 26, 20, .86); color: #f1e3c2; border-radius: 8px; padding: 6px 12px; font-size: 13px; max-width: calc(100vw - 32px); pointer-events: none; }
 .benchhud.done { background: var(--parch); color: var(--ink); pointer-events: auto; width: min(560px, calc(100vw - 32px)); font-size: 14px; }
 .benchhud textarea { display: block; width: 100%; height: 64px; margin-top: 6px; font: 11px ui-monospace, monospace; }
@@ -840,7 +842,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   <div class="mapveil"></div>
   <div class="pins" id="pins"></div>
   <div class="worldmap" id="worldmap" hidden><div class="worldsvg" id="worldsvg"></div><div class="worldcard" id="worldcard" hidden></div></div>
-  <div class="maptop"><h2 id="mapTitle">Hearthmoor</h2><div class="maptabs" id="mapTabs" role="group" aria-label="Which map"><button type="button" data-m="village" aria-pressed="true" data-c='["ui","mapMode","village"]'>Village</button><button type="button" data-m="world" aria-pressed="false" data-c='["ui","mapMode","world"]'>World</button></div><span>Drag to look around &middot; pinch to zoom &middot; tap a place</span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the map">&times;</button></div>
+  <div class="maptop"><h2 id="mapTitle">Hearthmoor</h2><span id="mapClock" class="num"></span><div class="maptabs" id="mapTabs" role="group" aria-label="Which map" hidden><button type="button" data-m="village" aria-pressed="true" data-c='["ui","mapMode","village"]'>Village</button><button type="button" data-m="world" aria-pressed="false" data-c='["ui","mapMode","world"]'>World</button></div><span class="maphint">Drag to look around &middot; pinch out for the whole world, in to land &middot; tap a place or a person</span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the map">&times;</button></div>
   <div class="mapzoom" id="mapzoomBox"><button type="button" id="mzin" aria-label="Zoom in">+</button><button type="button" id="mzout" aria-label="Zoom out">&minus;</button></div>
   <div class="mapcard" id="mapcard" hidden></div>
 </div>
@@ -1314,8 +1316,8 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     return s;
   }
 
-  function jobSpot(s, job) {
-    const j = () => (rand(s) - 0.5);
+  function jobSpot(s, job, jf) {
+    const j = jf || (() => (rand(s) - 0.5));
     if (job === 'field') return { x: LOCS.field.x + j() * 8, z: LOCS.field.z + j() * 6 };
     if (job === 'forest') return { x: LOCS.forest.x + 3 + j() * 5, z: LOCS.forest.z + 2 + j() * 5 };
     if (job === 'pit') return { x: LOCS.pit.x + j() * 4, z: LOCS.pit.z + j() * 3 };
@@ -3388,6 +3390,19 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   function personRoutine(s, a, dt) {
     const p = s.people[a.pid];
     if (!p || p.status !== 'here') { a.gone = true; return; }
+    const R = routinePlan(s, p, a), tgt = R.tgt, doing = R.doing, working = R.working, night = R.night, home = R.home, town = townOf(p);
+    const way = LAYOUT[town] ? townWay(LAYOUT[town], a, tgt) : tgt;
+    if (way !== tgt) a.settle = false;
+    const arrived = moveTo(a, way.x, way.z, 0.9 * dt) && way === tgt;
+    a.doing = arrived ? doing : doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + doing.toLowerCase();
+    a.working = arrived && working;
+    a.indoors = arrived && night && !!home;
+    if (arrived && a.faceTo != null && working) a.face = a.faceTo;
+    else if (arrived && tgt.look) a.face = Math.atan2(tgt.look.x - a.x, tgt.look.z - a.z);
+  }
+  // where someone means to be at this hour, and what they are doing there. It reads the clock and their life and rolls no dice,
+  // so the town you stand in (walked step by step) and every other town (placed on the living map) follow the same day
+  function routinePlan(s, p, a) {
     const h = hourOf(s), night = h < 6 || h >= 20.2 + h01(a.id, s.day, 31) * 0.7, j = p.job, town = townOf(p), ts = townSpots(town);
     const home = homePoint(s, p);
     let tgt = null, doing = '', working = false;
@@ -3429,14 +3444,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
       else if (!j && !p.retired && !p.kid && (!ts || h01(a.id, s.day * 24 + Math.floor(h), 71) < 0.3)) { const bd = ts ? ts.board : { x: -4.5, z: -2.5 }; tgt = ts ? ringSpot(bd.x, bd.z, 2, 6.5, a.id, s.day, 17) : ringSpot(bd.x, bd.z + 1.5, 1.2, 3, a.id, s.day, 17); tgt.look = bd; doing = 'At the notice board, looking for work'; }
       else { tgt = wellSpot(s, a.id, 21, town); doing = ts ? 'Passing the time in town' : 'Passing the time by the well'; }
     }
-    const way = LAYOUT[town] ? townWay(LAYOUT[town], a, tgt) : tgt;
-    if (way !== tgt) a.settle = false;
-    const arrived = moveTo(a, way.x, way.z, 0.9 * dt) && way === tgt;
-    a.doing = arrived ? doing : doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + doing.toLowerCase();
-    a.working = arrived && working;
-    a.indoors = arrived && night && !!home;
-    if (arrived && a.faceTo != null && working) a.face = a.faceTo;
-    else if (arrived && tgt.look) a.face = Math.atan2(tgt.look.x - a.x, tgt.look.z - a.z);
+    return { tgt, doing, working, night, home };
   }
 
   /* ---------- who rules, and how they fall: debt, respect, approval and the moot ----------
@@ -10438,7 +10446,75 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     return Object.keys(X.key).filter(id => X.key[id].t === t && s.people[id] && s.people[id].status === 'here').map(id => { const p = s.people[id], o = pplOf(s, p); return { id, name: p.name, what: occupation(s, p), why: o.why, want: o.want, loyal: o.loyal, stance: o.stance, stanceWhy: o.stanceWhy, bloc: o.bloc, secret: o.secret, owes: o.owes }; }).sort((a, b) => b.bloc - a.bloc || a.name.localeCompare(b.name));
   }
 
+  /* ================= ONE LIVING MAP (Stage IV): where everyone is, everywhere, at this minute =================
+     The town you stand in is walked step by step, as before. Everyone else is placed from the same daily plan (routinePlan)
+     and walks toward wherever it sends them, so the whole world can be drawn at once. None of it is saved: it is rebuilt
+     from the clock and each person's own life whenever it is asked for. Travellers on the roads come from the clock alone. */
+  const FARS = new WeakMap();
+  function farState(s) { let F = FARS.get(s); if (!F) { F = { m: new Map(), t: -1, n: 0, cap: 0, x: null, z: null, fl: null, pal: null, ids: [] }; FARS.set(s, F); } return F; }
+  function farGrow(F, n) { if (n <= F.cap) return; F.cap = Math.ceil(n * 1.25) + 64; F.x = new Float32Array(F.cap); F.z = new Float32Array(F.cap); F.fl = new Uint8Array(F.cap); F.pal = new Uint8Array(F.cap); }
+  const FAR_IN = 1, FAR_KEY = 2, FAR_KID = 4, FAR_BODY = 8, FAR_MOVING = 16, FAR_KIN = 32;
+  function farPlan(s, p, r) {
+    let R = null;
+    try { R = routinePlan(s, p, r); } catch (e) { R = null; }
+    const tg = R && R.tgt && Number.isFinite(R.tgt.x) && Number.isFinite(R.tgt.z) ? R.tgt : (homePoint(s, p) || LOCS[MARKET_AT[townOf(p)]] || P.center);
+    r.gx = tg.x; r.gz = tg.z; r.doing = R ? R.doing : ''; r.night = !!(R && R.night && R.home); r.next = s.t + 8 + (r.id % 7);
+  }
+  function farFolk(s) {
+    const F = farState(s), L = living(s), X = s.ppl, bodies = s.bodiesIn || 'hearthmoor';
+    const dtm = F.t < 0 ? -1 : s.t - F.t, snap = dtm < 0 || dtm > 45; F.t = s.t;
+    farGrow(F, L.length); F.ids.length = 0;
+    const seen = F.seen = (F.seen || 0) + 1; let n = 0;
+    const byPid = F.dayIdx === s.agents ? F.idx : (F.dayIdx = s.agents, F.idx = null), agents = indexOf(s.agents, 'pid');
+    for (const p of L) {
+      let x, z, fl = 0;
+      const a = townOf(p) === bodies ? agents.get(p.id) : null;
+      if (a && a.pid === p.id) { x = a.x; z = a.z; fl = FAR_BODY | (a.indoors ? FAR_IN : 0) | (a.moving ? FAR_MOVING : 0); F.m.delete(p.id); }
+      else {
+        let r = F.m.get(p.id);
+        if (!r) { r = { id: 100000 + pidNum(p), pid: p.id, x: 0, z: 0, face: 0, spot: null, next: -1, fresh: true }; if (p.job && p.job.type === 'commons') r.spot = jobSpot(s, p.job.what, () => h01(r.id, 3, r.k = (r.k || 0) + 1) - 0.5); F.m.set(p.id, r); }
+        if (r.next <= s.t || snap) farPlan(s, p, r);
+        if (r.fresh || snap) { r.x = r.gx; r.z = r.gz; r.fresh = false; r.moving = false; r.tx = null; }
+        else if (dtm > 0) moveTo(r, r.gx, r.gz, 0.9 * dtm);
+        r.seen = seen; x = r.x; z = r.z; fl = (r.night && !r.moving ? FAR_IN : 0) | (r.moving ? FAR_MOVING : 0);
+      }
+      if (X && X.key[p.id]) fl |= FAR_KEY; if (p.kid) fl |= FAR_KID; if (p.home === 'you') fl |= FAR_KIN;
+      F.x[n] = x; F.z[n] = z; F.fl[n] = fl; F.pal[n] = (p.palette || 0) % 10; F.ids.push(p.id); n++;
+    }
+    if (F.m.size > n + 200) for (const [id, r] of F.m) if (r.seen !== seen) F.m.delete(id);
+    F.n = n;
+    return F;
+  }
+  // one person on the living map: where they are and what they are doing, for their card
+  function farOne(s, pid) {
+    const a = indexOf(s.agents, 'pid').get(pid); if (a && a.pid === pid) return a;
+    const r = farState(s).m.get(pid); return r ? { x: r.x, z: r.z, face: r.face || 0, doing: r.moving ? (r.doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + String(r.doing || '').toLowerCase()) : r.doing, moving: !!r.moving, far: true } : null;
+  }
+  const ROAD_NAME = { east: 'the east road to Oakbridge', north: 'the north road to Greenhaven', crown: 'the King’s Road to Crownmere', westcm: 'the west road to Crownmere', iron: 'the mountain road to Ironcrest', coast: 'the coast road to Eastwatch', vgold: 'the Goldmeadow road', vthorn: 'the Thornwick road', vqueen: 'the Queen’s Road to Valdor', vstone: 'the Stonewatch road' };
+  const ROAD_LEN = {};
+  function roadLen(k) { let R = ROAD_LEN[k]; if (!R) { const pts = ROADS[k], cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); R = ROAD_LEN[k] = { cum, L: cum[cum.length - 1] }; } return R; }
+  // travellers between the towns: carters, riders and folk on foot, out by day and off the road by dark
+  function roadFolk(s) {
+    const out = [], h = hourOf(s); if (h < 5.5 || h >= 20) return out;
+    let ri = 0;
+    for (const k in ROADS) {
+      ri++; const pts = ROADS[k], R = roadLen(k), n = Math.max(2, Math.round(R.L / 150));
+      for (let i = 0; i < n; i++) {
+        const kind = ['walker', 'cart', 'walker', 'rider', 'cart'][Math.floor(h01(i, ri, 5) * 5)], sp = kind === 'rider' ? 13 : kind === 'cart' ? 6 : 4.5;
+        const period = 2 * R.L / sp + 90, ph = (s.t + h01(i, ri, 9) * period) % period, run = R.L / sp;
+        let d, back = false;
+        if (ph < run) d = ph * sp; else if (ph < run + 45) continue; else if (ph < 2 * run + 45) { d = R.L - (ph - run - 45) * sp; back = true; } else continue;   // resting in town between journeys
+        let j = 1; while (j < R.cum.length - 1 && R.cum[j] < d) j++;
+        const u = (d - R.cum[j - 1]) / Math.max(1e-6, R.cum[j] - R.cum[j - 1]), ax = pts[j - 1][0], az = pts[j - 1][1], bx = pts[j][0], bz = pts[j][1];
+        const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz) || 1, side = (back ? -1 : 1) * 1.3;
+        out.push({ id: k + i, kind, x: ax + dx * u + dz / l * side, z: az + dz * u - dx / l * side, face: Math.atan2(back ? -dx : dx, back ? -dz : dz), pal: Math.floor(h01(i, ri, 3) * 10), label: (kind === 'cart' ? 'A carter with a loaded cart' : kind === 'rider' ? 'A rider' : 'A traveller on foot') + ' on ' + ROAD_NAME[k] });
+      }
+    }
+    return out;
+  }
+
   const api = {
+    farFolk, farOne, roadFolk, routinePlan, FAR_IN, FAR_KEY, FAR_KID, FAR_BODY, FAR_MOVING, FAR_KIN, ROAD_NAME,
     setupPpl, pplOf, crowdOf, notables, stanceOf, blocOf, patronOf, pickKey, pplDay, riot, keyAct, risers, keyCap, PPL_SECRETS, CROWD_WORD, youGovern, officeOf, raceTown,
     GRANT_PRICE, VILLAGE_MILESTONES, amendsCost, bribeCost, WEALTH, LAND, BIZ_TOWN_PRICE, spotMul, prestigeIds, isPrestige, setupFolk, folkDay, wrong, kindness, deed, hateStep, hateIdx, HATE_STEPS, FAIR_WAGE, fairWage, PRICE_MODES, moralName, moralWord, fameName, fameTarget, yourTitle, regardOf, nemeses, nemWhere, confrontOpts, threatOdds, authOver, yourGuards, fightOf, willWork, AUDIENCE, townOwnership, DENS, isForeign, warGrief, leaveTown, temperOf, townName,
     GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
@@ -13173,9 +13249,10 @@ function resize() {
 window.addEventListener('resize', resize);
 function syncCamera(s, dt, t) {
   if (UI.overlay === 'map') {
-    const pitch = 1.0, d = mapCam.dist;
-    camera.position.set(mapCam.x, Math.sin(pitch) * d, mapCam.z + Math.cos(pitch) * d);
-    camera.lookAt(mapCam.x, 0, mapCam.z);
+    const pitch = 1.0, d = mapCam.dist, gy = d < 300 ? groundH(mapCam.x, mapCam.z) * (1 - d / 300) : 0;
+    camera.position.set(mapCam.x, gy + Math.sin(pitch) * d, mapCam.z + Math.cos(pitch) * d);
+    camera.lookAt(mapCam.x, gy, mapCam.z);
+    if (LM.blend) { const B = LM.blend; B.t += dt / 0.45; if (B.t >= 1) LM.blend = null; else { const e = B.t * B.t * (3 - 2 * B.t), tp = camera.position.clone(), tq = camera.quaternion.clone(); camera.position.copy(B.p).lerp(tp, e); camera.quaternion.copy(B.q).slerp(tq, e); } }
     return;
   }
   if (UI.inside && UI.mode === 'play') { Interior.camera(); return; }
@@ -13393,7 +13470,7 @@ let mapPinch = null;
 canvas.addEventListener('pointerdown', e => {
   if (UI.overlay === 'map') {
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
-    mapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    mapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t0: performance.now(), moved: false });
     if (mapPtr.size === 2) { const [a, b] = [...mapPtr.values()]; mapPinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: mapCam.dist }; }
     return;
   }
@@ -13411,11 +13488,11 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   if (UI.overlay === 'map' && mapPtr.has(e.pointerId)) {
-    const prev = mapPtr.get(e.pointerId); mapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (mapPtr.size === 2 && mapPinch) { const [a, b] = [...mapPtr.values()]; mapCam.dist = clamp(mapPinch.dist * mapPinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 18, MAP_C.r === 300 ? 460 : 250); return; }
+    const prev = mapPtr.get(e.pointerId), cur = Object.assign({}, prev, { x: e.clientX, y: e.clientY }); if (Math.hypot(e.clientX - prev.sx, e.clientY - prev.sy) > 10) cur.moved = true; mapPtr.set(e.pointerId, cur);
+    if (mapPtr.size === 2 && mapPinch) { const [a, b] = [...mapPtr.values()], want = mapPinch.dist * mapPinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)); if (want < LM_MIN * 0.8 && lmNearYou()) { mapPtr.clear(); mapPinch = null; lmLand2(); return; } lmZoom(want); return; }
+    if (!cur.moved) return;
     const k = mapCam.dist / window.innerHeight;
-    mapCam.x = clamp(mapCam.x - (e.clientX - prev.x) * k * 0.78, MAP_C.x - (MAP_C.r === 300 ? 240 : 85), MAP_C.x + (MAP_C.r === 300 ? 240 : 85));
-    mapCam.z = clamp(mapCam.z - (e.clientY - prev.y) * k * 0.9, MAP_C.z - (MAP_C.r === 300 ? 260 : 90), MAP_C.z + (MAP_C.r === 300 ? 240 : 70));
+    lmPan(mapCam.x - (e.clientX - prev.x) * k * 0.78, mapCam.z - (e.clientY - prev.y) * k * 0.9);
     return;
   }
   if (UI.overlay === 'fight' && FIGHT.ptr && FIGHT.ptr.id === e.pointerId) { fightPointerMove(e); return; }
@@ -13424,7 +13501,10 @@ canvas.addEventListener('pointermove', e => {
   if (d > 10) t.moved = true;
   if (t.look) {
     const mx = e.clientX - t.lx, my = e.clientY - t.ly; t.lx = e.clientX; t.ly = e.clientY;
-    if (look.size === 2 && lookPinch) { const [a, b] = [...look.values()]; cam.dist = clamp(lookPinch.dist * lookPinch.d / Math.max(20, Math.hypot(a.lx - b.lx, a.ly - b.ly)), camLim().d0, camLim().d1); return; }
+    if (look.size === 2 && lookPinch) { const [a, b] = [...look.values()], want = lookPinch.dist * lookPinch.d / Math.max(20, Math.hypot(a.lx - b.lx, a.ly - b.ly));
+      // pinch out past the widest street view and the camera lifts into the map
+      if (want > camLim().d1 * 1.35 && !UI.inside && !FIGHT.on && UI.overlay == null) { lmLift([...look.entries()].map(([id, q]) => ({ id, x: q.lx, y: q.ly }))); return; }
+      cam.dist = clamp(want, camLim().d0, camLim().d1); return; }
     if (t.moved) lookDrag(mx, my);
     return;
   }
@@ -13435,7 +13515,7 @@ canvas.addEventListener('pointermove', e => {
 });
 function endTouch(e) {
   if (UI.overlay === 'fight' && fightPointerUp(e)) return;
-  if (mapPtr.has(e.pointerId)) { mapPtr.delete(e.pointerId); if (mapPtr.size < 2) mapPinch = null; return; }
+  if (mapPtr.has(e.pointerId)) { const q = mapPtr.get(e.pointerId), one = mapPtr.size === 1; mapPtr.delete(e.pointerId); if (mapPtr.size < 2) mapPinch = null; if (one && UI.overlay === 'map' && !q.moved && q.t0 && performance.now() - q.t0 < 350) lmTap(e.clientX, e.clientY); return; }
   const t = touches.get(e.pointerId); if (!t) return;
   touches.delete(e.pointerId);
   if (t.look) { look.delete(e.pointerId); if (look.size < 2) lookPinch = null; }
@@ -13444,7 +13524,7 @@ function endTouch(e) {
 }
 canvas.addEventListener('pointerup', endTouch);
 canvas.addEventListener('pointercancel', endTouch);
-canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); mapCam.dist = clamp(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 18, MAP_C.r === 300 ? 460 : 250); return; } if (UI.mode !== 'play') return; e.preventDefault(); cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), camLim().d0, camLim().d1); }, { passive: false });
+canvas.addEventListener('wheel', e => { if (UI.overlay === 'map') { e.preventDefault(); if (e.deltaY < 0 && mapCam.dist <= LM_MIN * 1.02 && lmNearYou()) { lmLand2(); return; } lmZoom(mapCam.dist * (e.deltaY > 0 ? 1.1 : 0.9)); return; } if (UI.mode !== 'play') return; e.preventDefault(); if (e.deltaY > 0 && cam.dist >= camLim().d1 * 0.999 && !UI.inside && !FIGHT.on && UI.overlay == null) { lmLift(null); return; } cam.dist = clamp(cam.dist * (e.deltaY > 0 ? 1.08 : 0.93), camLim().d0, camLim().d1); }, { passive: false });
 // on a computer, drag with the right mouse button to look
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -14448,6 +14528,12 @@ function relationActs(s, pr, body) {
 }
 function renderCard(force) {
   if (!G || UI.mode !== 'play') return;
+  if (UI.overlay === 'map') {   // on the map: the same card for whoever you tapped, wherever they are
+    const pr = UI.mapPid && G.people[UI.mapPid], body = pr && pr.status === 'here' ? Sim.farOne(G, pr.id) : null;
+    const info = pr ? personCard(G, pr, body) : '';
+    if (force || info !== UI.ci) { $('cardInfo').innerHTML = info; UI.ci = info; } if (UI.cr !== '') { $('cardActs').innerHTML = ''; UI.cr = ''; }
+    $('card').classList.remove('tab'); $('panel').classList.remove('tabbed'); $('panel').hidden = !info; return;
+  }
   // whoever you are speaking with stops where they are and turns to you; they walk on when you close the card
   for (const ag of G.agents) { if (ag.id === UI.sel && UI.sel != null && !UI.overlay) { ag.held = true; ag.moving = false; const dx = G.player.x - ag.x, dz = G.player.z - ag.z; if (dx * dx + dz * dz < 144) ag.face = Math.atan2(dx, dz); } else if (ag.held) delete ag.held; }
   let html = UI.inside && UI.sel == null ? Interior.card() : cardHTML(G);
@@ -14576,7 +14662,7 @@ const sectionOf = k => (SECTIONS.find(x => x[2].some(y => y[0] === k)) || (k ===
 function openBook(tab) { if (tab) UI.tab = tab; UI.overlay = 'book'; $('panel').hidden = true; $('book').hidden = false; $('pause').hidden = true; renderBook(true); }
 function closeOverlay() {
   if (G && G.pendingDeath) { UI.tab = 'family'; renderBook(true); return; }
-  UI.overlay = null; UI.confirm = null; UI.mapSel = null;
+  UI.overlay = null; UI.confirm = null; UI.mapSel = null; UI.mapPid = null; document.body.classList.remove('mapping');
   ['book', 'pause', 'mapui', 'scene', 'waresSheet'].forEach(id => $(id).hidden = true); UI.throne = false;
   $('toasts').hidden = false;
   if (UI.mode === 'play') ['hud', 'sticks'].forEach(id => $(id).hidden = false);
@@ -16105,6 +16191,7 @@ const MAPNAME = { gerd: 'Bakehouse', forge: 'Forge', tankard: 'Tankard', ash: 'J
 function pinLabel(k) {
   const s = G, v = s.village, Lk = L[k];
   if (k === 'you') return s.name;
+  if (k.startsWith('p:')) return (s.people[k.slice(2)] || {}).name || '';
   if (Lk.plot != null) { const sh = Sim.shopOnPlot(s, Lk.plot); return sh ? 'Your ' + TR[sh.trade].name.toLowerCase() : Sim.PLOTS[Lk.plot].grant && !v.landGranted ? 'Council land' : Lk.name; }
   if (Lk.emp) return MAPNAME[Lk.emp];
   return { well: 'The square', home: 'Your hut', cottage: v.cottage === 'forsale' ? 'Cottage for sale' : 'Your cottage', tower: 'Watchtower', manor: 'Varrow Manor', market: 'Trading Post', forest: 'Pine Woods', field: 'Wheat Field', pit: 'Iron Pit', hall: 'Village Hall', granary: 'Granary' }[k] || Lk.name;
@@ -16112,6 +16199,7 @@ function pinLabel(k) {
 function pinKind(k) {
   const Lk = L[k];
   if (k === 'you') return 'you';
+  if (k.startsWith('p:')) return 'who';
   if (Lk.plot != null) return Sim.shopOnPlot(G, Lk.plot) ? 'mine' : 'lot';
   if (Lk.emp) return 'work';
   if (Lk.biz && Lk.town) return G.biz[Lk.biz] && G.biz[Lk.biz].owner === 'player' ? 'mine' : 'work';
@@ -16121,19 +16209,22 @@ function pinKind(k) {
   return 'place';
 }
 function pinPos(k) {
-  if (k === 'you') return new THREE.Vector3(G.player.x, standH(G.player.x, G.player.z), G.player.z);
+  if (k === 'you') return new THREE.Vector3(G.player.x, LM.far ? 0 : standH(G.player.x, G.player.z), G.player.z);
+  if (k.startsWith('town:')) { const T = TOWNS[k.slice(5)]; return new THREE.Vector3(T.x, LM.far ? 0 : groundH(T.x, T.z) + 8, T.z - T.r * 0.5); }
+  if (k.startsWith('p:')) { const w = lmWhere(k.slice(2)) || G.player; return new THREE.Vector3(w.x, LM.far ? 0 : groundH(w.x, w.z) + 2.6, w.z); }
   const Lk = L[k], h = { manor: 10, tower: 8.5, hall: 7.5, granary: 5, mill: 7.5, barn: 7 }[k] || (Lk.plot != null || Lk.emp || Lk.biz ? 4.6 : 3);
   const at = Lk.plot != null ? Sim.PLOTS[Lk.plot] : Lk.emp ? Sim.empById(Lk.emp) : Lk;
   return new THREE.Vector3(at.x, groundH(at.x, at.z) + h, at.z);
 }
 const pinV = new THREE.Vector3();
 function buildPins() {
-  const keys = Object.keys(L).filter(k => !L[k].sign && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']);
+  if (LM.townPins) { $('pins').innerHTML = Object.keys(TOWNS).map(id => `<button type="button" class="pin town" data-k="town:${id}" data-c='${esc(JSON.stringify(['ui', 'mapFly', id]))}'><span>${esc(TOWN_NAMES[id])}</span></button>`).join('') + `<button type="button" class="pin you" data-k="you" tabindex="-1"><span>${esc(G.name)}</span></button>` + (UI.mapPid && G.people[UI.mapPid] ? `<button type="button" class="pin who" data-k="p:${UI.mapPid}" tabindex="-1"><span>${esc(G.people[UI.mapPid].name)}</span></button>` : ''); return; }
+  const keys = Object.keys(L).filter(k => !L[k].sign && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']).concat(UI.mapPid && G.people[UI.mapPid] ? ['p:' + UI.mapPid] : []);
   $('pins').innerHTML = keys.map(k => `<button type="button" class="pin ${pinKind(k)} ${UI.mapSel === k ? 'sel' : ''}" data-k="${esc(k)}" ${k === 'you' ? 'tabindex="-1"' : `data-c='${esc(JSON.stringify(['ui', 'mapSel', k]))}'`}><span>${esc(pinLabel(k))}</span></button>`).join('');
 }
 // labels never sit on top of one another: places and halls are placed first, then shops; a label that would overlap one
 // already placed is lifted above it (a few steps at most), so every pin can be tapped
-const PIN_RANK = { you: 0, realm: 1, mine: 2, place: 3, lot: 4, work: 5 };
+const PIN_RANK = { you: 0, who: 0, town: 1, realm: 1, mine: 2, place: 3, lot: 4, work: 5 };
 function updatePins() {
   const w = window.innerWidth, h = window.innerHeight, placed = [];
   const els = [...$('pins').children].map(el => { if (!el._w) { el._w = el.offsetWidth || 90; el._h = el.offsetHeight || 22; } return el; })
@@ -16176,10 +16267,11 @@ function renderMapCard() {
   el.hidden = false;
 }
 function openMap() {
-  UI.overlay = 'map'; UI.mapSel = null;
+  UI.overlay = 'map'; UI.mapSel = null; UI.mapPid = null; UI.sel = null; LM.townPins = false; LM.title = null;
   ['book', 'pause', 'panel', 'hud', 'sticks'].forEach(id => $(id).hidden = true);
   setMapTown(townHere());
-  $('mapui').hidden = false; $('toasts').hidden = true; setMapMode(UI.mapMode || 'village');
+  document.body.classList.add('mapping');
+  $('mapui').hidden = false; setMapMode('village');
 }
 // point the local map at any open town: your own, or one you are only looking at from afar
 function setMapTown(id) {
@@ -16345,13 +16437,201 @@ function applyWorldView() {
   box.addEventListener('wheel', e => { e.preventDefault(); worldView.s *= e.deltaY > 0 ? 0.9 : 1.1; applyWorldView(); }, { passive: false });
 })();
 function setMapMode(m) {
-  UI.mapMode = m;
+  m = 'village'; UI.mapMode = m;   // one map now: the world is the same map, further out
   $('worldmap').hidden = m !== 'world'; $('pins').hidden = m === 'world'; $('mapcard').hidden = m === 'world' || !UI.mapSel; $('mapzoomBox').hidden = m === 'world';
   $('mapTitle').textContent = m === 'world' ? 'The World' : MAP_C.name || 'Hearthmoor'; document.querySelector('[data-m=village]').textContent = MAP_C.x ? 'Town' : 'Village';
   if (m !== 'world' && MAP_C.town && MAP_C.town !== townHere()) $('mapTitle').textContent = MAP_C.name + ' (from afar)';
   document.querySelectorAll('#mapTabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
   if (m === 'world') { worldView.s = 1; worldView.x = 0; worldView.y = 0; renderWorld(); } else renderMapCard();
 }
+
+/* ================= ONE LIVING MAP (Stage IV) =================
+   There is one map. Pinch out from the street and the camera lifts over the town, then the kingdom, then both kingdoms and the
+   sea between; pinch in over yourself and you are walking again. The clock runs while you look (at 1x), and everyone is on it:
+   full figures up close, small figures over a town, dots over the whole world. Far out, the land is one painted picture of the
+   real world (drawn once from the real buildings, roads and rivers), so a phone draws the whole map as cheaply as one picture. */
+const WORLD_B = { x0: -520, x1: 3000, z0: -1800, z1: 420 };
+const LM = { far: false, land: null, rt: null, farScene: null, quad: null, pts: null, inst: null, cart: null, near: new Map(), t: 0, n: 0, ids: [], prevIds: [], x: null, z: null, px: null, pz: null, fl: null, pal: null, roads: [], bakeKey: '', savedSpeed: null, blend: null, townPins: false, shown: 0 };
+const LM_FAR_IN = 950, LM_FAR_OUT = 850, LM_MAX = () => Math.max(2700, 2700 * (window.innerHeight / Math.max(1, window.innerWidth)) * 1.9), LM_MIN = 18;
+const LM_COL = TUNIC.map(c => new THREE.Color(c).lerp(new THREE.Color('#f3e6c8'), 0.35)), LM_KEY = new THREE.Color('#f2c14e'), LM_KIN = new THREE.Color('#ffffff'), LM_ROAD = new THREE.Color('#d9c9a0');
+function lmLand() {
+  if (LM.land) return LM.land;
+  const W = WORLD_B.x1 - WORLD_B.x0, D = WORLD_B.z1 - WORLD_B.z0, nx = Math.round(W / 22), nz = Math.round(D / 22);
+  const g = new THREE.PlaneGeometry(W, D, nx, nz); g.rotateX(-Math.PI / 2); g.translate(WORLD_B.x0 + W / 2, 0, WORLD_B.z0 + D / 2);
+  const p = g.attributes.position, col = new Float32Array(p.count * 3), C = new THREE.Color(), WOOD = new THREE.Color('#2f4a2c');
+  for (let k = 0; k < p.count; k++) {
+    const x = p.getX(k), z = p.getZ(k), y = groundH(x, z); p.setY(k, y - 1.6);
+    const gv = (0.5 + 0.5 * Math.sin(x * 0.19 + 1.7) * Math.cos(z * 0.23 - 0.6)) * 0.7 + 0.3 * (0.5 + 0.5 * Math.sin((x + z) * 0.071)), gk = gv * (GREENS.length - 1), g0 = Math.floor(gk);
+    C.copy(GREENS[g0]).lerp(GREENS[Math.min(GREENS.length - 1, g0 + 1)], gk - g0);
+    const wood = Math.sin(x * 0.013 + 1.3) * Math.cos(z * 0.011 - 0.4) + 0.5 * Math.sin((x + z) * 0.021);
+    if (wood > 0.35 && y < 14 && wildClear(x, z)) C.lerp(WOOD, Math.min(0.7, (wood - 0.3) * 1.6));
+    if (x > 1880) C.lerp(C_DRY, 0.45);
+    if (y > 12) C.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
+    if (y > 40) C.lerp(C_SNOW, Math.min(1, (y - 40) / 10));
+    col[k * 3] = C.r; col[k * 3 + 1] = C.g; col[k * 3 + 2] = C.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, groundMat); m.receiveShadow = false; m.visible = false; m.frustumCulled = false; m.renderOrder = -5; scene.add(m);
+  return (LM.land = m);
+}
+function lmLayers() {
+  if (LM.inst) return;
+  const cap = 6000;
+  const body = new THREE.BoxGeometry(0.62, 1.15, 0.42); body.translate(0, 0.62, 0);
+  const head = new THREE.BoxGeometry(0.4, 0.4, 0.4); head.translate(0, 1.42, 0);
+  const fg = new THREE.BufferGeometry(); { const a = body.toNonIndexed(), b = head.toNonIndexed(), cat = k => { const x = a.attributes[k].array, y = b.attributes[k].array, o = new Float32Array(x.length + y.length); o.set(x); o.set(y, x.length); return new THREE.BufferAttribute(o, 3); }; fg.setAttribute('position', cat('position')); fg.setAttribute('normal', cat('normal')); }
+  LM.inst = new THREE.InstancedMesh(fg, new THREE.MeshLambertMaterial({ color: 0xffffff }), cap); LM.inst.frustumCulled = false; LM.inst.setColorAt(0, LM_KIN); LM.inst.count = 0; LM.inst.visible = false; LM.inst.userData.noShadow = true; scene.add(LM.inst);
+  const cg = new THREE.BoxGeometry(1.5, 1.1, 2.6); cg.translate(0, 0.8, 0);
+  LM.cart = new THREE.InstancedMesh(cg, new THREE.MeshLambertMaterial({ color: 0x8a6a44 }), 120); LM.cart.frustumCulled = false; LM.cart.count = 0; LM.cart.visible = false; scene.add(LM.cart);
+  // the far view: one picture of the world, and a dot for everyone
+  LM.farScene = new THREE.Scene();
+  const W = WORLD_B.x1 - WORLD_B.x0, D = WORLD_B.z1 - WORLD_B.z0;
+  const maxT = renderer.capabilities.maxTextureSize || 2048, tw = Math.min(3072, maxT), th = Math.round(tw * D / W);
+  LM.rt = new THREE.WebGLRenderTarget(tw, th, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true }); LM.rt.texture.encoding = renderer.outputEncoding;
+  const qg = new THREE.PlaneGeometry(W, D); qg.rotateX(-Math.PI / 2); qg.translate(WORLD_B.x0 + W / 2, 0, WORLD_B.z0 + D / 2);
+  LM.quad = new THREE.Mesh(qg, new THREE.MeshBasicMaterial({ map: LM.rt.texture, fog: false })); LM.farScene.add(LM.quad);
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cap * 3), 3)); pg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cap * 3), 3)); pg.setDrawRange(0, 0);
+  LM.pts = new THREE.Points(pg, new THREE.PointsMaterial({ size: 3.2 * Math.min(2.5, window.devicePixelRatio || 1), sizeAttenuation: false, vertexColors: true, fog: false, depthTest: false })); LM.pts.frustumCulled = false; LM.farScene.add(LM.pts);
+}
+// the far picture: the real world seen from straight above, drawn once (and again when the season turns or days have passed)
+function lmBake() {
+  const key = Sim.seasonOf(G) + ':' + Math.floor(G.day / 4);
+  if (LM.bakeKey === key) return;
+  LM.bakeKey = key; lmLayers(); const land = lmLand();
+  const W = WORLD_B.x1 - WORLD_B.x0, D = WORLD_B.z1 - WORLD_B.z0, cx = WORLD_B.x0 + W / 2, cz = WORLD_B.z0 + D / 2;
+  const oc = new THREE.OrthographicCamera(-W / 2, W / 2, D / 2, -D / 2, 1, 1400); oc.position.set(cx, 700, cz); oc.up.set(0, 0, -1); oc.lookAt(cx, 0, cz); oc.updateMatrixWorld();
+  const keep = { fn: scene.fog.near, ff: scene.fog.far, sky: skyDome.visible, land: land.visible, inst: LM.inst.visible, cart: LM.cart.visible, sh: renderer.shadowMap.autoUpdate };
+  scene.fog.near = 5000; scene.fog.far = 9000; skyDome.visible = false; land.visible = true; LM.inst.visible = false; LM.cart.visible = false;
+  for (const k of SKYLINES) k.me.visible = false;
+  renderer.setRenderTarget(LM.rt); renderer.setClearColor(0x4f7f9a, 1); renderer.clear(); renderer.render(scene, oc); renderer.setRenderTarget(null);
+  scene.fog.near = keep.fn; scene.fog.far = keep.ff; skyDome.visible = keep.sky; land.visible = keep.land; LM.inst.visible = keep.inst; LM.cart.visible = keep.cart;
+}
+function lmSample(now) {
+  const F = Sim.farFolk(G), n = F.n;
+  if (!LM.x || LM.x.length < F.x.length) { LM.x = new Float32Array(F.x.length); LM.z = new Float32Array(F.x.length); LM.px = new Float32Array(F.x.length); LM.pz = new Float32Array(F.x.length); LM.fl = new Uint8Array(F.x.length); LM.pal = new Uint8Array(F.x.length); LM.y = new Float32Array(F.x.length); LM.prevIds = []; }
+  const same = LM.ids.length === n;
+  const hy = !LM.far;   // the height of the ground under each of them, found a few times a second and not every frame
+  for (let i = 0; i < n; i++) { if (same && LM.ids[i] === F.ids[i]) { LM.px[i] = LM.x[i]; LM.pz[i] = LM.z[i]; } else { LM.px[i] = F.x[i]; LM.pz[i] = F.z[i]; } LM.x[i] = F.x[i]; LM.z[i] = F.z[i]; if (hy && !(F.fl[i] & 1)) LM.y[i] = groundH(F.x[i], F.z[i]); }
+  for (const r of LM.roads = Sim.roadFolk(G)) r.y = hy ? groundH(r.x, r.z) : 0;
+  LM.fl.set(F.fl.subarray(0, n)); LM.pal.set(F.pal.subarray(0, n)); LM.ids = F.ids.slice(); LM.n = n; LM.t = now;
+}
+const lmM = new THREE.Matrix4(), lmQ = new THREE.Quaternion(), lmS = new THREE.Vector3(), lmP = new THREE.Vector3(), lmV = new THREE.Vector3(), lmUp = new THREE.Vector3(0, 1, 0);
+function lmPos(i, k) { return [LM.px[i] + (LM.x[i] - LM.px[i]) * k, LM.pz[i] + (LM.z[i] - LM.pz[i]) * k]; }
+// every frame the map is open: place the figures or the dots
+function lmFrame(now, t) {
+  const open = UI.overlay === 'map' && UI.mode === 'play' && G;
+  if (!open) { if (LM.inst && LM.inst.visible) { LM.inst.visible = false; LM.cart.visible = false; } if (LM.land && LM.land.visible) LM.land.visible = false; LM.far = false; lmNear(null, t); lmWalkRoads(t); return; }
+  lmLayers();
+  const d = mapCam.dist;
+  if (!LM.far && d > LM_FAR_IN) { lmBake(); LM.far = true; } else if (LM.far && d < LM_FAR_OUT) { LM.far = false; LM.t = 0; }
+  lmLand().visible = !LM.far && d > 150;
+  if (now - LM.t > 240 || !LM.n) lmSample(now);
+  const k = clamp((now - LM.t) / 240, 0, 1), IN = Sim.FAR_IN, KEY = Sim.FAR_KEY, BODY = Sim.FAR_BODY, KIN = Sim.FAR_KIN;
+  if (LM.far) {
+    LM.inst.visible = false; LM.cart.visible = false;
+    const pa = LM.pts.geometry.attributes.position, ca = LM.pts.geometry.attributes.color; let m = 0;
+    for (let i = 0; i < LM.n; i++) { const f = LM.fl[i]; if (f & IN) continue; const c = f & KEY ? LM_KEY : f & KIN ? LM_KIN : LM_COL[LM.pal[i]]; pa.setXYZ(m, LM.px[i] + (LM.x[i] - LM.px[i]) * k, 3, LM.pz[i] + (LM.z[i] - LM.pz[i]) * k); ca.setXYZ(m, c.r, c.g, c.b); m++; }
+    for (const r of LM.roads) { pa.setXYZ(m, r.x, 3, r.z); ca.setXYZ(m, LM_ROAD.r, LM_ROAD.g, LM_ROAD.b); m++; }
+    pa.needsUpdate = true; ca.needsUpdate = true; LM.pts.geometry.setDrawRange(0, m); LM.shown = m;
+    lmNear(null, t);
+    return;
+  }
+  // figures: larger than life as the camera lifts, so a person is always a few pixels tall
+  const sc = Math.max(1, d / 95), close = d < 150, R2 = (d * 2.2 + 120) ** 2; let m = 0;
+  const near = close ? lmNear(k, t) : (lmNear(null, t), null);
+  for (let i = 0; i < LM.n && m < 5990; i++) {
+    const f = LM.fl[i]; if (f & IN) continue; if (close && (f & BODY)) continue;
+    const x = LM.px[i] + (LM.x[i] - LM.px[i]) * k, z = LM.pz[i] + (LM.z[i] - LM.pz[i]) * k, dx = x - mapCam.x, dz = z - mapCam.z;
+    if (dx * dx + dz * dz > R2) continue; if (near && near.has(LM.ids[i])) continue;
+    lmP.set(x, LM.y[i], z); lmS.set(sc, sc, sc); lmM.compose(lmP, lmQ, lmS); LM.inst.setMatrixAt(m, lmM); LM.inst.setColorAt(m, f & KEY ? LM_KEY : f & KIN ? LM_KIN : LM_COL[LM.pal[i]]); m++;
+  }
+  let c = 0;
+  for (const r of LM.roads) {
+    lmP.set(r.x, r.y || 0, r.z); lmQ.setFromAxisAngle(lmUp, r.face); lmS.set(sc, sc, sc); lmM.compose(lmP, lmQ, lmS);
+    if (r.kind === 'cart') LM.cart.setMatrixAt(c++, lmM); else { LM.inst.setMatrixAt(m, lmM); LM.inst.setColorAt(m, LM_ROAD); m++; }
+  }
+  lmQ.identity();
+  LM.inst.count = m; LM.inst.instanceMatrix.needsUpdate = true; if (LM.inst.instanceColor) LM.inst.instanceColor.needsUpdate = true; LM.inst.visible = m > 0;
+  LM.cart.count = c; LM.cart.instanceMatrix.needsUpdate = true; LM.cart.visible = c > 0; LM.shown = m + c;
+}
+// up close over a town you are not standing in: the nearest people become full figures
+function lmNear(k, t) {
+  if (k == null) { if (LM.near.size) { for (const [, e] of LM.near) dropChar(e.g); LM.near.clear(); } return null; }
+  const want = [], BODY = Sim.FAR_BODY, IN = Sim.FAR_IN, R2 = 95 * 95;
+  for (let i = 0; i < LM.n; i++) { const f = LM.fl[i]; if (f & (BODY | IN)) continue; const dx = LM.x[i] - mapCam.x, dz = LM.z[i] - mapCam.z, q = dx * dx + dz * dz; if (q < R2) want.push([q, i]); }
+  want.sort((a, b) => a[0] - b[0]); want.length = Math.min(want.length, 36);
+  const keep = new Set();
+  for (const [, i] of want) {
+    const pid = LM.ids[i], pr = G.people[pid]; if (!pr) continue; keep.add(pid);
+    let e = LM.near.get(pid);
+    if (!e) { const fa = { id: 500000 + (+pid.slice(1) || 0), pid, palette: pr.palette || 0, kid: !!pr.kid, x: LM.x[i], z: LM.z[i], face: 0 }, look = lookOf(G, fa); e = { fa, g: makeChar(Object.assign({ tunic: TUNIC[fa.palette % TUNIC.length], skin: SKIN[(+pid.slice(1) || 0) % SKIN.length], pick: null }, look)) }; if (pr.kid) e.g.scale.setScalar(0.42 + Math.min(16, pr.age) / 16 * 0.55); LM.near.set(pid, e); }
+    const x = LM.px[i] + (LM.x[i] - LM.px[i]) * k, z = LM.pz[i] + (LM.z[i] - LM.pz[i]) * k, mv = !!(LM.fl[i] & Sim.FAR_MOVING);
+    if (mv && (Math.abs(x - e.fa.x) + Math.abs(z - e.fa.z)) > 1e-4) e.fa.face = Math.atan2(x - e.fa.x, z - e.fa.z);
+    e.fa.x = x; e.fa.z = z; placeChar(e.g, e.fa, t, { moving: mv, working: false, icon: null, hidden: false, selected: UI.mapPid === pid });
+  }
+  for (const [pid, e] of LM.near) if (!keep.has(pid)) { dropChar(e.g); LM.near.delete(pid); }
+  return keep;
+}
+// walking the roads yourself, you meet the same travellers
+const lmRoadChars = new Map(); let lmRoadT = 0;
+function lmWalkRoads(t) {
+  const on = UI.mode === 'play' && G && !UI.inside && !FIGHT.on;
+  if (!on) { if (lmRoadChars.size) { for (const [, e] of lmRoadChars) dropChar(e.g); lmRoadChars.clear(); } return; }
+  const now = performance.now(); if (now - lmRoadT > 200) { lmRoadT = now; LM.walkRoads = Sim.roadFolk(G).filter(r => Math.hypot(r.x - G.player.x, r.z - G.player.z) < 130); }
+  const keep = new Set();
+  for (const r of LM.walkRoads || []) {
+    keep.add(r.id); let e = lmRoadChars.get(r.id);
+    if (!e) { e = { fa: { x: r.x, z: r.z, face: r.face }, g: makeChar({ tunic: TUNIC[r.pal % TUNIC.length], skin: SKIN[r.pal % SKIN.length], pick: null, gear: r.kind === 'rider' ? { cloak: '#4a3a2a' } : null, hair: 'short' }) }; lmRoadChars.set(r.id, e); }
+    e.fa.x += (r.x - e.fa.x) * 0.2; e.fa.z += (r.z - e.fa.z) * 0.2; e.fa.face = r.face; if (Math.hypot(r.x - e.fa.x, r.z - e.fa.z) > 12) { e.fa.x = r.x; e.fa.z = r.z; }
+    placeChar(e.g, e.fa, t, { moving: true, working: false, icon: null, hidden: false, selected: false });
+  }
+  for (const [id, e] of lmRoadChars) if (!keep.has(id)) { dropChar(e.g); lmRoadChars.delete(id); }
+}
+// a tap on the map: the person under your finger, or far out the nearest one
+function lmTap(cx, cy) {
+  if (!LM.n) return false;
+  const w = window.innerWidth, h = window.innerHeight, k = clamp((performance.now() - LM.t) / 240, 0, 1), reach = LM.far ? 46 : mapCam.dist > 150 ? 34 : 30;
+  let best = -1, bd = reach * reach;
+  for (let i = 0; i < LM.n; i++) {
+    if (LM.fl[i] & Sim.FAR_IN) continue;
+    const x = LM.px[i] + (LM.x[i] - LM.px[i]) * k, z = LM.pz[i] + (LM.z[i] - LM.pz[i]) * k; if (Math.abs(x - mapCam.x) > mapCam.dist * 3 || Math.abs(z - mapCam.z) > mapCam.dist * 3) continue;
+    lmV.set(x, (LM.far ? 0 : LM.y[i]) + 1, z).project(camera); if (lmV.z > 1) continue;
+    const sx = (lmV.x + 1) / 2 * w - cx, sy = (1 - lmV.y) / 2 * h - cy, q = sx * sx + sy * sy; if (q < bd) { bd = q; best = i; }
+  }
+  if (best >= 0) { UI.mapPid = LM.ids[best]; UI.mapSel = null; UI.ptab = 'about'; renderMapCard(); renderCard(true); return true; }
+  for (const r of LM.roads) { lmV.set(r.x, 1, r.z).project(camera); const sx = (lmV.x + 1) / 2 * w - cx, sy = (1 - lmV.y) / 2 * h - cy; if (sx * sx + sy * sy < reach * reach) { toast(r.label + '.', 'info', true); return true; } }
+  if (UI.mapPid) { UI.mapPid = null; renderMapCard(); renderCard(true); }
+  return false;
+}
+function lmWhere(pid) { const i = LM.ids.indexOf(pid); if (i < 0) return null; const k = clamp((performance.now() - LM.t) / 240, 0, 1); return { x: LM.px[i] + (LM.x[i] - LM.px[i]) * k, z: LM.pz[i] + (LM.z[i] - LM.pz[i]) * k, in: !!(LM.fl[i] & Sim.FAR_IN) }; }
+// which town the map is over, for its pins and title
+function lmTownAt() { let best = null, bd = 1e9; for (const id in TOWNS) { const T = TOWNS[id], q = Math.hypot(mapCam.x - T.x, mapCam.z - T.z) - T.r; if (q < 150 && q < bd) { bd = q; best = id; } } return best; }
+function lmZoom(d) { mapCam.dist = clamp(d, LM_MIN, LM_MAX()); }
+function lmPan(x, z) { mapCam.x = clamp(x, WORLD_B.x0 + 60, WORLD_B.x1 - 60); mapCam.z = clamp(z, WORLD_B.z0 + 60, WORLD_B.z1 - 20); }
+function lmNearYou() { return Math.hypot(mapCam.x - G.player.x, mapCam.z - G.player.z) < Math.max(60, mapCam.dist * 1.2); }
+// keep the map's pins and title in step with where the camera is
+function lmChrome() {
+  const d = mapCam.dist, town = d <= 430 ? lmTownAt() : null, wantTown = !town;
+  if (wantTown !== LM.townPins || (town && town !== MAP_C.town)) {
+    LM.townPins = wantTown;
+    if (town) { const T = TOWNS[town]; MAP_C.town = town; MAP_C.x = town === 'hearthmoor' ? 0 : T.x; MAP_C.z = town === 'hearthmoor' ? 0 : T.z; MAP_C.name = TOWN_NAMES[town]; MAP_C.r = town === 'crownmere' ? 300 : 150; }
+    UI.mapSel = null; renderMapCard();
+  }
+  const name = town ? MAP_C.name + (town !== townHere() ? ' (from afar)' : '') : d > 1500 ? 'The World' : mapCam.x > 1880 ? 'Valdoria' : mapCam.x > 1150 ? 'The Sundering Sea' : 'Alderwyn';
+  const txt = name, hr = Sim.hourOf(G), sub = 'Day ' + G.day + ' · ' + Sim.clock(G.t) + ' · time runs at 1×' + (hr < 5.5 || hr >= 21.5 ? ' · night: most people are indoors' : '');
+  if (LM.title !== txt) { LM.title = txt; $('mapTitle').textContent = txt; }
+  if (LM.sub !== sub) { LM.sub = sub; $('mapClock').textContent = sub; }
+}
+// lifting off from the street into the map, carrying a pinch that is still going
+function lmLift(fingers) {
+  const from = { p: camera.position.clone(), q: camera.quaternion.clone() };
+  openMap(); mapCam.x = G.player.x; mapCam.z = G.player.z - 4; mapCam.dist = 46;
+  LM.blend = { t: 0, p: from.p, q: from.q };
+  touches.clear(); look.clear(); lookPinch = null; stick.move.x = stick.move.y = 0; if (stick.move.id != null) { stick.move.id = null; restStick('move'); }
+  mapPtr.clear(); mapPinch = null;
+  if (fingers && fingers.length === 2) { fingers.forEach(f => mapPtr.set(f.id, { x: f.x, y: f.y, sx: f.x, sy: f.y, t0: 0, moved: true })); mapPinch = { d: Math.hypot(fingers[0].x - fingers[1].x, fingers[0].y - fingers[1].y), dist: mapCam.dist }; }
+}
+function lmLand2() { LM.blend = null; closeOverlay(); }
 
 /* ----- pause menu ----- */
 function openPause(view) { UI.overlay = 'pause'; $('panel').hidden = true; UI.pauseView = view || 'main'; UI.confirm = null; $('pause').hidden = false; $('book').hidden = true; renderPause(true); }
@@ -16565,7 +16845,8 @@ function resetMeshes() { for (const [, g] of agentMeshes) dropChar(g); agentMesh
 const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 function fullNewName() { const f = cap1((UI.newFirst || '').replace(/\s+/g, '')) || 'Wren', l = cap1((UI.newLast || '').replace(/\s+/g, '')); return l ? f + ' ' + l : f; }
 function uiCmd(k, v) {
-  if (k === 'deselect') { UI.sel = null; renderCard(true); return; }
+  if (k === 'deselect') { UI.sel = null; UI.mapPid = null; if (UI.overlay === 'map') renderMapCard(); renderCard(true); return; }
+  if (k === 'mapFly') { const T = TOWNS[v]; if (T) { mapCam.x = v === 'hearthmoor' ? 0 : T.x; mapCam.z = (v === 'hearthmoor' ? 0 : T.z) + 10; mapCam.dist = v === 'crownmere' ? 330 : 170; } return; }
   if (k === 'ptab') { UI.ptab = v; renderCard(true); return; }
   if (k === 'tab') { UI.tab = v; UI.confirm = null; UI.focus = null; UI.staffSel = null; renderBook(true); return; }
   if (k === 'bset') { const d = UI.bdraft; if (!d) return; if (v[0] === 'random') { const H = Sim.HERALDRY, pick = o => { const ks = Object.keys(o); return ks[Math.floor(Math.random() * ks.length)]; }; d.div = pick(H.divisions); d.charge = pick(H.charges); d.field = pick(H.tinctures); do d.second = pick(H.tinctures); while (d.second === d.field); do d.mark = pick(H.tinctures); while (d.mark === d.field); } else d[v[0]] = v[1]; renderBook(false); return; }
@@ -16682,8 +16963,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.duty) { act(['jDuty', e.target.dataset.duty, e.target.value]); return; } const id = e.target.id || ''; if (id.startsWith('pol-')) act(['policy', +e.target.dataset.shop, 'supplyRuns', e.target.checked]); if (id.startsWith('res-')) act(['policy', +e.target.dataset.shop, 'reserve', e.target.checked]); });
 $('bookBtn').onclick = () => openBook();
 $('taskBtn').onclick = () => openBook('tasks');
-$('mzin').onclick = () => { mapCam.dist = clamp(mapCam.dist * 0.8, 18, MAP_C.r === 300 ? 460 : 250); };
-$('mzout').onclick = () => { mapCam.dist = clamp(mapCam.dist * 1.25, 18, MAP_C.r === 300 ? 460 : 250); };
+$('mzin').onclick = () => { if (mapCam.dist <= LM_MIN * 1.02 && lmNearYou()) { lmLand2(); return; } lmZoom(mapCam.dist * 0.72); };
+$('mzout').onclick = () => { lmZoom(mapCam.dist * 1.4); };
 $('menuBtn').onclick = () => openPause();
 $('goal').onclick = () => openBook('goals');
 function setSpeed(n) { UI.speed = n; document.querySelectorAll('#speeds .fast').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.speed === n))); }
@@ -17192,24 +17473,28 @@ function frameBody(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
-  if (UI.mode === 'play' && !UI.overlay && !document.hidden && !UI.dialog.length) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { walkPlayer(G, dt); SignKit.step(G, t); } const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * UI.speed * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  const onMap = UI.overlay === 'map';
+  if (UI.mode === 'play' && (!UI.overlay || onMap) && !document.hidden && !UI.dialog.length && !(G && G.pendingDeath)) { if (!onMap) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { walkPlayer(G, dt); SignKit.step(G, t); } } const s0 = performance.now(); Sim.advance(G, dt * Sim.rate(G) * (onMap ? 1 : UI.speed) * PACE[meta.settings.pace]); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (UI.mode === 'play' && G && !G.pendingDeath) { checkScene(); stepDuel(dt); }
   if (UI.mode === 'play' && G && FIGHT.on) stepFight(dt, t);
   if (HOL.flames.length) stepHoliday(dt, now / 1000);
-  if (G) updateTiles(UI.mode === 'title' ? 0 : G.player.x, UI.mode === 'title' ? 0 : G.player.z, tiles.size < 9 ? 25 : 1);
+  if (G) { const mapEye = onMap && UI.mode === 'play' && mapCam.dist < 460; if (!(onMap && LM.far)) updateTiles(UI.mode === 'title' ? 0 : mapEye ? mapCam.x : G.player.x, UI.mode === 'title' ? 0 : mapEye ? mapCam.z : G.player.z, tiles.size < 9 ? 25 : 1); }
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t); if (!UI.inside) syncWild(G, t, dt); if (!FIGHT.on) stepShots(dt);
   syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); syncHeraldry(G); }
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
-  if (UI.overlay === 'map') { scene.fog.near = mapCam.dist + 60; scene.fog.far = mapCam.dist + 280; updatePins(); }
   syncCamera(G, dt, t);
+  if (UI.overlay === 'map') { scene.fog.near = mapCam.dist * 1.6 + 60; scene.fog.far = mapCam.dist * 3.2 + 280; lmChrome(); updatePins(); }
+  if (UI.overlay !== 'map' && document.body.classList.contains('mapping')) { document.body.classList.remove('mapping'); $('mapui').hidden = true; UI.mapPid = null; }   // something else took the screen while the map was up
+  lmFrame(now, t);
   if (G) Mini.update(dt);
   if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); }
   uiTimer -= dt;
-  if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay) renderCard(false); }
+  if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay || UI.overlay === 'map') renderCard(false); }
   if (FIGHT.on && G && G.fight) poseFight(dt, t);
   gfxFrame(dt, t);
-  if (!(UI.overlay === 'map' && UI.mapMode === 'world')) renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
+  if (UI.overlay === 'map' && LM.far && LM.farScene) { LM.farScene.background = scene.fog.color; renderer.render(LM.farScene, camera); }
+  else renderer.render(UI.inside && UI.overlay !== 'map' ? Interior.scene : scene, camera);
   if (bench) bench.frame(now);
 }
 /* ================= sound: everything is synthesized, nothing is downloaded ================= */
@@ -17497,8 +17782,17 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.12.0444';
+const BUILD = '2026.11.12.1312';
 const NOTES = [
+  { v: '0.87', date: '12 November', title: 'One living map', items: [
+    'There is one map now. Pinch out while you walk and the camera lifts over the street, then the town, then the kingdom, then both kingdoms and the sea between them. Pinch in over yourself and you are walking again. The minimap and the zoom buttons do the same.',
+    'The old parchment chart is gone. Far out you see the real land in the painted look: coasts, rivers, roads, woods, and every town as its own roofs and walls, with its name. Tap a name to fly there.',
+    'The map is alive. The clock keeps running while you look, at 1\u00d7 whatever speed you were on, and the day and time are in the corner.',
+    'Everyone is on it, in every town at once: about 3,400 people going from home to work, to market and back, by the same day they always lived. They show as dots over the world, small figures over a town, and full people when you come in close. At night they are indoors.',
+    'Tap anyone, anywhere, to open their card. Far out, a tap picks the nearest person.',
+    'Travellers are on the roads between the towns by day: carters, riders and folk on foot. You pass them when you walk the roads yourself.',
+    'Your save needs nothing: where people stand is worked out from the clock and their own lives, and is not stored.'
+  ] },
   { v: '0.86', date: '12 November', title: 'The people', items: [
     'A few people in every town now matter more than the rest: lords, officials, guild wardens and the richest merchants. A village has a handful and a capital a few dozen. Each has an aim, a loyalty, sometimes a debt and sometimes a secret, and each makes a move every week.',
     'They act for you or against you. A rival in your trade may hire away your worker or sell below your prices for a few days; someone who wants your office may stir up the town or back another candidate; a friend speaks well of you. Every time, the news names who did it and why.',

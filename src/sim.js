@@ -452,8 +452,8 @@
     return s;
   }
 
-  function jobSpot(s, job) {
-    const j = () => (rand(s) - 0.5);
+  function jobSpot(s, job, jf) {
+    const j = jf || (() => (rand(s) - 0.5));
     if (job === 'field') return { x: LOCS.field.x + j() * 8, z: LOCS.field.z + j() * 6 };
     if (job === 'forest') return { x: LOCS.forest.x + 3 + j() * 5, z: LOCS.forest.z + 2 + j() * 5 };
     if (job === 'pit') return { x: LOCS.pit.x + j() * 4, z: LOCS.pit.z + j() * 3 };
@@ -2526,6 +2526,19 @@
   function personRoutine(s, a, dt) {
     const p = s.people[a.pid];
     if (!p || p.status !== 'here') { a.gone = true; return; }
+    const R = routinePlan(s, p, a), tgt = R.tgt, doing = R.doing, working = R.working, night = R.night, home = R.home, town = townOf(p);
+    const way = LAYOUT[town] ? townWay(LAYOUT[town], a, tgt) : tgt;
+    if (way !== tgt) a.settle = false;
+    const arrived = moveTo(a, way.x, way.z, 0.9 * dt) && way === tgt;
+    a.doing = arrived ? doing : doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + doing.toLowerCase();
+    a.working = arrived && working;
+    a.indoors = arrived && night && !!home;
+    if (arrived && a.faceTo != null && working) a.face = a.faceTo;
+    else if (arrived && tgt.look) a.face = Math.atan2(tgt.look.x - a.x, tgt.look.z - a.z);
+  }
+  // where someone means to be at this hour, and what they are doing there. It reads the clock and their life and rolls no dice,
+  // so the town you stand in (walked step by step) and every other town (placed on the living map) follow the same day
+  function routinePlan(s, p, a) {
     const h = hourOf(s), night = h < 6 || h >= 20.2 + h01(a.id, s.day, 31) * 0.7, j = p.job, town = townOf(p), ts = townSpots(town);
     const home = homePoint(s, p);
     let tgt = null, doing = '', working = false;
@@ -2567,14 +2580,7 @@
       else if (!j && !p.retired && !p.kid && (!ts || h01(a.id, s.day * 24 + Math.floor(h), 71) < 0.3)) { const bd = ts ? ts.board : { x: -4.5, z: -2.5 }; tgt = ts ? ringSpot(bd.x, bd.z, 2, 6.5, a.id, s.day, 17) : ringSpot(bd.x, bd.z + 1.5, 1.2, 3, a.id, s.day, 17); tgt.look = bd; doing = 'At the notice board, looking for work'; }
       else { tgt = wellSpot(s, a.id, 21, town); doing = ts ? 'Passing the time in town' : 'Passing the time by the well'; }
     }
-    const way = LAYOUT[town] ? townWay(LAYOUT[town], a, tgt) : tgt;
-    if (way !== tgt) a.settle = false;
-    const arrived = moveTo(a, way.x, way.z, 0.9 * dt) && way === tgt;
-    a.doing = arrived ? doing : doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + doing.toLowerCase();
-    a.working = arrived && working;
-    a.indoors = arrived && night && !!home;
-    if (arrived && a.faceTo != null && working) a.face = a.faceTo;
-    else if (arrived && tgt.look) a.face = Math.atan2(tgt.look.x - a.x, tgt.look.z - a.z);
+    return { tgt, doing, working, night, home };
   }
 
   /* ---------- who rules, and how they fall: debt, respect, approval and the moot ----------
@@ -9576,7 +9582,75 @@
     return Object.keys(X.key).filter(id => X.key[id].t === t && s.people[id] && s.people[id].status === 'here').map(id => { const p = s.people[id], o = pplOf(s, p); return { id, name: p.name, what: occupation(s, p), why: o.why, want: o.want, loyal: o.loyal, stance: o.stance, stanceWhy: o.stanceWhy, bloc: o.bloc, secret: o.secret, owes: o.owes }; }).sort((a, b) => b.bloc - a.bloc || a.name.localeCompare(b.name));
   }
 
+  /* ================= ONE LIVING MAP (Stage IV): where everyone is, everywhere, at this minute =================
+     The town you stand in is walked step by step, as before. Everyone else is placed from the same daily plan (routinePlan)
+     and walks toward wherever it sends them, so the whole world can be drawn at once. None of it is saved: it is rebuilt
+     from the clock and each person's own life whenever it is asked for. Travellers on the roads come from the clock alone. */
+  const FARS = new WeakMap();
+  function farState(s) { let F = FARS.get(s); if (!F) { F = { m: new Map(), t: -1, n: 0, cap: 0, x: null, z: null, fl: null, pal: null, ids: [] }; FARS.set(s, F); } return F; }
+  function farGrow(F, n) { if (n <= F.cap) return; F.cap = Math.ceil(n * 1.25) + 64; F.x = new Float32Array(F.cap); F.z = new Float32Array(F.cap); F.fl = new Uint8Array(F.cap); F.pal = new Uint8Array(F.cap); }
+  const FAR_IN = 1, FAR_KEY = 2, FAR_KID = 4, FAR_BODY = 8, FAR_MOVING = 16, FAR_KIN = 32;
+  function farPlan(s, p, r) {
+    let R = null;
+    try { R = routinePlan(s, p, r); } catch (e) { R = null; }
+    const tg = R && R.tgt && Number.isFinite(R.tgt.x) && Number.isFinite(R.tgt.z) ? R.tgt : (homePoint(s, p) || LOCS[MARKET_AT[townOf(p)]] || P.center);
+    r.gx = tg.x; r.gz = tg.z; r.doing = R ? R.doing : ''; r.night = !!(R && R.night && R.home); r.next = s.t + 8 + (r.id % 7);
+  }
+  function farFolk(s) {
+    const F = farState(s), L = living(s), X = s.ppl, bodies = s.bodiesIn || 'hearthmoor';
+    const dtm = F.t < 0 ? -1 : s.t - F.t, snap = dtm < 0 || dtm > 45; F.t = s.t;
+    farGrow(F, L.length); F.ids.length = 0;
+    const seen = F.seen = (F.seen || 0) + 1; let n = 0;
+    const byPid = F.dayIdx === s.agents ? F.idx : (F.dayIdx = s.agents, F.idx = null), agents = indexOf(s.agents, 'pid');
+    for (const p of L) {
+      let x, z, fl = 0;
+      const a = townOf(p) === bodies ? agents.get(p.id) : null;
+      if (a && a.pid === p.id) { x = a.x; z = a.z; fl = FAR_BODY | (a.indoors ? FAR_IN : 0) | (a.moving ? FAR_MOVING : 0); F.m.delete(p.id); }
+      else {
+        let r = F.m.get(p.id);
+        if (!r) { r = { id: 100000 + pidNum(p), pid: p.id, x: 0, z: 0, face: 0, spot: null, next: -1, fresh: true }; if (p.job && p.job.type === 'commons') r.spot = jobSpot(s, p.job.what, () => h01(r.id, 3, r.k = (r.k || 0) + 1) - 0.5); F.m.set(p.id, r); }
+        if (r.next <= s.t || snap) farPlan(s, p, r);
+        if (r.fresh || snap) { r.x = r.gx; r.z = r.gz; r.fresh = false; r.moving = false; r.tx = null; }
+        else if (dtm > 0) moveTo(r, r.gx, r.gz, 0.9 * dtm);
+        r.seen = seen; x = r.x; z = r.z; fl = (r.night && !r.moving ? FAR_IN : 0) | (r.moving ? FAR_MOVING : 0);
+      }
+      if (X && X.key[p.id]) fl |= FAR_KEY; if (p.kid) fl |= FAR_KID; if (p.home === 'you') fl |= FAR_KIN;
+      F.x[n] = x; F.z[n] = z; F.fl[n] = fl; F.pal[n] = (p.palette || 0) % 10; F.ids.push(p.id); n++;
+    }
+    if (F.m.size > n + 200) for (const [id, r] of F.m) if (r.seen !== seen) F.m.delete(id);
+    F.n = n;
+    return F;
+  }
+  // one person on the living map: where they are and what they are doing, for their card
+  function farOne(s, pid) {
+    const a = indexOf(s.agents, 'pid').get(pid); if (a && a.pid === pid) return a;
+    const r = farState(s).m.get(pid); return r ? { x: r.x, z: r.z, face: r.face || 0, doing: r.moving ? (r.doing === 'Asleep' ? 'Walking home for the night' : 'On the way: ' + String(r.doing || '').toLowerCase()) : r.doing, moving: !!r.moving, far: true } : null;
+  }
+  const ROAD_NAME = { east: 'the east road to Oakbridge', north: 'the north road to Greenhaven', crown: 'the King’s Road to Crownmere', westcm: 'the west road to Crownmere', iron: 'the mountain road to Ironcrest', coast: 'the coast road to Eastwatch', vgold: 'the Goldmeadow road', vthorn: 'the Thornwick road', vqueen: 'the Queen’s Road to Valdor', vstone: 'the Stonewatch road' };
+  const ROAD_LEN = {};
+  function roadLen(k) { let R = ROAD_LEN[k]; if (!R) { const pts = ROADS[k], cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); R = ROAD_LEN[k] = { cum, L: cum[cum.length - 1] }; } return R; }
+  // travellers between the towns: carters, riders and folk on foot, out by day and off the road by dark
+  function roadFolk(s) {
+    const out = [], h = hourOf(s); if (h < 5.5 || h >= 20) return out;
+    let ri = 0;
+    for (const k in ROADS) {
+      ri++; const pts = ROADS[k], R = roadLen(k), n = Math.max(2, Math.round(R.L / 150));
+      for (let i = 0; i < n; i++) {
+        const kind = ['walker', 'cart', 'walker', 'rider', 'cart'][Math.floor(h01(i, ri, 5) * 5)], sp = kind === 'rider' ? 13 : kind === 'cart' ? 6 : 4.5;
+        const period = 2 * R.L / sp + 90, ph = (s.t + h01(i, ri, 9) * period) % period, run = R.L / sp;
+        let d, back = false;
+        if (ph < run) d = ph * sp; else if (ph < run + 45) continue; else if (ph < 2 * run + 45) { d = R.L - (ph - run - 45) * sp; back = true; } else continue;   // resting in town between journeys
+        let j = 1; while (j < R.cum.length - 1 && R.cum[j] < d) j++;
+        const u = (d - R.cum[j - 1]) / Math.max(1e-6, R.cum[j] - R.cum[j - 1]), ax = pts[j - 1][0], az = pts[j - 1][1], bx = pts[j][0], bz = pts[j][1];
+        const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz) || 1, side = (back ? -1 : 1) * 1.3;
+        out.push({ id: k + i, kind, x: ax + dx * u + dz / l * side, z: az + dz * u - dx / l * side, face: Math.atan2(back ? -dx : dx, back ? -dz : dz), pal: Math.floor(h01(i, ri, 3) * 10), label: (kind === 'cart' ? 'A carter with a loaded cart' : kind === 'rider' ? 'A rider' : 'A traveller on foot') + ' on ' + ROAD_NAME[k] });
+      }
+    }
+    return out;
+  }
+
   const api = {
+    farFolk, farOne, roadFolk, routinePlan, FAR_IN, FAR_KEY, FAR_KID, FAR_BODY, FAR_MOVING, FAR_KIN, ROAD_NAME,
     setupPpl, pplOf, crowdOf, notables, stanceOf, blocOf, patronOf, pickKey, pplDay, riot, keyAct, risers, keyCap, PPL_SECRETS, CROWD_WORD, youGovern, officeOf, raceTown,
     GRANT_PRICE, VILLAGE_MILESTONES, amendsCost, bribeCost, WEALTH, LAND, BIZ_TOWN_PRICE, spotMul, prestigeIds, isPrestige, setupFolk, folkDay, wrong, kindness, deed, hateStep, hateIdx, HATE_STEPS, FAIR_WAGE, fairWage, PRICE_MODES, moralName, moralWord, fameName, fameTarget, yourTitle, regardOf, nemeses, nemWhere, confrontOpts, threatOdds, authOver, yourGuards, fightOf, willWork, AUDIENCE, townOwnership, DENS, isForeign, warGrief, leaveTown, temperOf, townName,
     GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,

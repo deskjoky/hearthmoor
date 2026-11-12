@@ -1750,5 +1750,42 @@ const faults50 = Sim.faults().length;   // earlier sections break things on purp
   check(ms < 60, 'a day of the people system for all eleven towns takes ' + Math.round(ms) + ' ms');
 }
 
+console.log('51. Stage IV: one living map. Everyone placed from their day, everywhere, and travellers on the roads');
+{
+  const s = Sim.newGame(5101); Sim.advance(s, 60 * 5);   // 11:00
+  const rng0 = s.rng, save0 = Sim.serialize(s);
+  let F = Sim.farFolk(s);
+  check(F.n === Sim.living(s).length && F.ids.length === F.n, 'everyone alive is on the map (' + F.n + ' people)');
+  check(s.rng === rng0 && Sim.serialize(s) === save0, 'placing them rolls no dice and changes nothing in the save');
+  let stray = 0, bad = 0, out = 0; for (let i = 0; i < F.n; i++) { const p = s.people[F.ids[i]], T = Sim.TOWNS[Sim.townOf(p)]; if (!Number.isFinite(F.x[i]) || !Number.isFinite(F.z[i])) bad++; else if (Math.hypot(F.x[i] - T.x, F.z[i] - T.z) > T.r * 2.2) stray++; if (!(F.fl[i] & Sim.FAR_IN)) out++; }
+  check(bad === 0 && stray === 0, 'each stands in or about their own town');
+  check(out > F.n * 0.9, 'by day they are out of doors (' + out + ')');
+  const here = F.ids.filter((id, i) => F.fl[i] & Sim.FAR_BODY).length; check(here >= 20 && here === s.agents.filter(a => a.pid && s.people[a.pid] && s.people[a.pid].status === 'here').length, 'the town you stand in is still walked step by step (' + here + ' people)');
+  // they walk, they do not jump
+  const far = F.ids.findIndex((id, i) => !(F.fl[i] & Sim.FAR_BODY)); let maxStep = 0, moved = 0; const x0 = Array.from(F.x.subarray(0, F.n)), z0 = Array.from(F.z.subarray(0, F.n)), ids0 = F.ids.slice();
+  const mv = new Set();
+  for (let k = 0; k < 70; k++) {
+    Sim.advance(s, 1); F = Sim.farFolk(s);
+    for (let i = 0; i < F.n; i++) { if (F.ids[i] !== ids0[i] || (F.fl[i] & Sim.FAR_BODY)) continue; const d = Math.hypot(F.x[i] - x0[i], F.z[i] - z0[i]); if (d > maxStep) maxStep = d; if (d > 0.01) mv.add(F.ids[i]); x0[i] = F.x[i]; z0[i] = F.z[i]; }
+  }
+  moved = mv.size;
+  check(maxStep < 2.5 && moved > 300, 'over the next hour ' + moved + ' of them walk somewhere new, a step at a time (never more than ' + maxStep.toFixed(1) + ' a minute)');
+  const one = Sim.farOne(s, F.ids[far]); check(one && typeof one.doing === 'string' && one.doing.length > 0 && one.far, 'anyone far away can be asked what they are doing: "' + (one && one.doing) + '"');
+  // travellers on the roads
+  const R = Sim.roadFolk(s), onRoad = r => Object.values(Sim.ROADS).some(pts => { for (let i = 1; i < pts.length; i++) { const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1], l2 = (bx - ax) ** 2 + (bz - az) ** 2, u = Math.max(0, Math.min(1, ((r.x - ax) * (bx - ax) + (r.z - az) * (bz - az)) / l2)); if (Math.hypot(r.x - ax - (bx - ax) * u, r.z - az - (bz - az) * u) < 2) return true; } return false; });
+  check(R.length >= 10 && R.every(onRoad) && R.some(r => r.kind === 'cart') && R.every(r => /road|Road/.test(r.label)), 'by day there are travellers on the roads between the towns (' + R.length + ')');
+  const R2 = Sim.roadFolk(s); check(JSON.stringify(R) === JSON.stringify(R2), 'the same clock gives the same travellers');
+  Sim.advance(s, 2); const R3 = Sim.roadFolk(s), same = R3.filter(r => { const q = R.find(x => x.id === r.id); return q && Math.hypot(q.x - r.x, q.z - r.z) > 1 && Math.hypot(q.x - r.x, q.z - r.z) < 40; }).length;
+  check(same >= R3.length * 0.7, 'and two minutes on they have moved along');
+  // night
+  Sim.advance(s, 60 * 12 - 12); F = Sim.farFolk(s); for (let k = 0; k < 6; k++) { Sim.advance(s, 10); F = Sim.farFolk(s); } let inn = 0; for (let i = 0; i < F.n; i++) if (F.fl[i] & Sim.FAR_IN) inn++;
+  check(Sim.hourOf(s) < 3 && inn > F.n * 0.9 && Sim.roadFolk(s).length === 0, 'in the small hours nearly everyone is indoors (' + inn + ' of ' + F.n + ') and the roads are empty');
+  // the map is live: a long look at it costs little
+  const t0 = process.cpuUsage(); for (let i = 0; i < 40; i++) { Sim.advance(s, 0.3); Sim.farFolk(s); Sim.roadFolk(s); } const ms = (process.cpuUsage(t0).user + process.cpuUsage(t0).system) / 1000 / 40;
+  check(ms < 30, 'placing everyone in all eleven towns takes ' + ms.toFixed(1) + ' ms, a few times a second');
+  // nothing about the map is kept in the save, so old saves need nothing
+  check(!/"FARS"|farFolk/.test(Sim.serialize(s)) && Sim.deserialize(Sim.serialize(s)).v === Sim.VERSION, 'the map keeps nothing in the save: older saves load as they are');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
