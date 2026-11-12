@@ -535,8 +535,8 @@
   function skillLabel(skill) { return skill < 0.85 ? 'Slow but cheap' : skill < 1.1 ? 'Steady' : 'Quick hands'; }
 
   // the part of today's coin that already has its own line in the books
-  function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0) + (st.deals || 0) - (st.investors || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { dealTake: 'A deal from the board', investIn: 'Sold a share to an investor', investOut: 'Bought back an investor’s share', improveBiz: 'Improved a business', pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0) + (st.deals || 0) - (st.investors || 0) + (st.bank || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
+  const FLOW_LABEL = { bankBorrow: 'Borrowed from a bank', bankRepay: 'Paid off a bank loan', bankRefi: 'Paid off the moneylender with a bank loan', bankFound: 'Founded a bank', bankBuy: 'Bought a bank', bankAdd: 'Coin put into your bank', bankTake: 'Coin taken from your bank', dealTake: 'A deal from the board', investIn: 'Sold a share to an investor', investOut: 'Bought back an investor’s share', improveBiz: 'Improved a business', pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
   // one broken part of a day must not stop the whole game: record it, tell the player once, and carry on
   const FAULTS = [];
   let STRICT = false;
@@ -569,9 +569,10 @@
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
     if (s.people) guard(s, 'reputation was reckoned', () => repDay(s));
+    if (s.people && s.towns) guard(s, 'the banks closed their books', () => bankDay(s));
     guard(s, 'the businesses were reckoned', () => { renownDay(s); if (s.people) { dealsDay(s); wealthDay(s); } });
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
-    entry.deals = st.deals || 0; entry.investors = st.investors || 0;
+    entry.deals = st.deals || 0; entry.investors = st.investors || 0; entry.bank = st.bank || 0;
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
       const ss = shopStats(s, shop), Ti = tierOf(shop), w = shop.worker;
@@ -609,8 +610,8 @@
     const c0 = s.coins;
     if (s.people) managersDay(s, entry);
     entry.managers = c0 - s.coins;
-    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized + entry.fines + entry.restitution + entry.bribes + Math.max(0, entry.lands) + entry.partner + Math.max(0, entry.deals);
-    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling + (entry.ship || 0) + entry.hush + Math.max(0, -entry.lands) + entry.investors + Math.max(0, -entry.deals);
+    entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized + entry.fines + entry.restitution + entry.bribes + Math.max(0, entry.lands) + entry.partner + Math.max(0, entry.deals) + Math.max(0, entry.bank);
+    entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling + (entry.ship || 0) + entry.hush + Math.max(0, -entry.lands) + entry.investors + Math.max(0, -entry.deals) + Math.max(0, -entry.bank);
     if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of ' + (s.rep ? Math.round(loanRate(s) * 1000) / 10 : 2) + '% a day is added every evening (less with a good name)' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
@@ -1622,6 +1623,7 @@
     const h = houseById(s, p.home); return h ? { x: h.x, z: h.z } : null;
   }
   function occupation(s, p) {
+    if (p.banker && p.status === 'here') return 'Banker: keeps ' + (BANK_NAME[p.banker] || 'a bank');
     const j = p.job;
     if (s.realm && p.status !== 'dead') {
       const R = s.realm, f = sexOf(p) === 'f';
@@ -7111,6 +7113,7 @@
     if (/^f[A-Z]/.test(name)) return folkCmd(s, name, a, b, c);
     if (/^p[A-Z]/.test(name)) return pplCmd(s, name, a, b, c);
     if (name === 'dealTake') return dealCmd(s, name, a);
+    if (/^bank[A-Z]/.test(name)) return bankCmd(s, name, a, b, c);
     if (name === 'investIn' || name === 'investOut' || name === 'improveBiz') return investCmd(s, name, a, b);
     if (name === 'shopDial') { const sh = shopById(s, a); if (!sh || !DIAL[b]) return fail('No.'); sh.price = clamp(Math.round(shopBase(sh) * DIAL[b]), 1, TRADES[sh.trade].wtp * 3); return ok(TRADES[sh.trade].name + ': prices set to ' + DIAL_NAME[b].toLowerCase() + ', ' + sh.price + 'c.'); }
     if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
@@ -9919,7 +9922,7 @@
       p.purse -= 15;
       const fair = w.shop ? Math.max(1, Math.round(wtpMean(w.shop, false) * 0.85)) : null;
       R.wars.push({ until, theirs: w.theirs.id, yours: w.yours ? w.yours.id : null, shop: w.shop ? w.shop.id : null, fair, start: s.day });
-      rlog(s, 'Price war! ' + p.name + ' has cut the prices at ' + empById(w.theirs.id).name + ' in ' + townName(bt) + ' to steal the custom of your ' + (w.yours ? empById(w.yours.id).name : 'your ' + TRADES[w.shop.trade].name.toLowerCase()) + '. ' + (w.shop ? 'Sell at ' + fair + 'c or less until day ' + until + ' to win it.' : 'Set your prices there to Cheap, or out-earn ' + pos + ' shop, until day ' + until + ' to win it.'), 'bad');
+      rlog(s, 'Price war! ' + p.name + ' has cut the prices at ' + empById(w.theirs.id).name + ' in ' + townName(bt) + ' to steal the custom of ' + (w.yours ? empById(w.yours.id).name : 'your ' + TRADES[w.shop.trade].name.toLowerCase()) + '. ' + (w.shop ? 'Sell at ' + fair + 'c or less until day ' + until + ' to win it.' : 'Set your prices there to Cheap, or out-earn ' + pos + ' shop, until day ' + until + ' to win it.'), 'bad');
     } else if (k === 'poach') {
       R.tried = R.tried || {}; const pool = ws.filter(W => !(s.day - (R.tried[W.w.id] || -99) < 30)); if (!pool.length) return;
       const W = pool.slice().sort((a, b) => (a.w.opinion || 0) - (b.w.opinion || 0))[0], w = W.w, fair = fairWage(W.town), offer = W.wage + 2; R.tried[w.id] = s.day;
@@ -9943,11 +9946,11 @@
       foulAdd(s, 'charge', W.town, p.name + ' accused ' + w.name + ' of a theft that never happened, to hurt you.', { caseId: c.id, court: C.id });
       rlog(s, p.name + ' has accused ' + w.name + ', who works at ' + W.at + ', of stealing ' + value + 'c. If ' + an + ' is convicted, you lose. See the case in Justice.', 'bad');
     } else if (k === 'plot') {
-      const Rm = s.realm; Rm.support.lords = clamp(Rm.support.lords - 4, 0, 100);
+      const Rm = s.realm; Rm.support.lords = clamp(Rm.support.lords - 3, 0, 100);
       foulAdd(s, 'plot', 'crownmere', p.name + ' paid lords in secret to turn against your crown.');
       rlog(s, 'Some of the lords have grown cold toward your crown. Someone has been at work among them.', 'bad');
     } else if (k === 'court') {
-      const Rm = s.realm; Rm.support.lords = clamp(Rm.support.lords - 2, 0, 100);
+      const Rm = s.realm; Rm.support.lords = clamp(Rm.support.lords - 1, 0, 100);
       rlog(s, p.name + ' spoke against you before the lords at court, and some of them listened.', 'bad');
     }
   }
@@ -10382,8 +10385,8 @@
   /* ---------- one plain page about money ---------- */
   function moneyView(s) {
     const L = (s.ledger || []).slice(-7), sum = f => L.reduce((a, e) => a + (f(e) || 0), 0), shopSum = k => sum(e => (e.shops || []).reduce((a, x) => a + (x[k] || 0), 0));
-    const ins = [['Your shops', shopSum('revenue')], ['Your businesses', sum(e => Math.max(0, e.owned))], ['Rent', sum(e => e.rent)], ['Wages from your job', sum(e => e.jobPay)], ['Goods sold at market', sum(e => e.rawSales)], ['Orders and contracts', sum(e => e.contract)], ['Deals', sum(e => Math.max(0, e.deals || 0))], ['Everything else', sum(e => (e.seized || 0) + (e.fines || 0) + (e.restitution || 0) + (e.bribes || 0) + Math.max(0, e.lands || 0) + (e.partner || 0))]];
-    const outs = [['Supplies', shopSum('supplies') + sum(e => e.marketBuys)], ['Wages', shopSum('wages') + sum(e => (e.salaries || 0) + (e.managers || 0))], ['Upkeep', shopSum('upkeep')], ['Losses at your businesses', sum(e => Math.max(0, -e.owned))], ['Tax', sum(e => e.tax)], ['Interest', sum(e => e.interest)], ['Investors’ shares', sum(e => e.investors || 0)], ['Household, horse and ship', sum(e => (e.family || 0) + (e.stabling || 0) + (e.ship || 0))], ['Gifts and alms', sum(e => (e.given || 0) + (e.hush || 0))], ['Deals that went wrong', sum(e => Math.max(0, -(e.deals || 0)))], ['Land', sum(e => Math.max(0, -(e.lands || 0)))]];
+    const ins = [['Your shops', shopSum('revenue')], ['Your businesses', sum(e => Math.max(0, e.owned))], ['Rent', sum(e => e.rent)], ['Wages from your job', sum(e => e.jobPay)], ['Goods sold at market', sum(e => e.rawSales)], ['Orders and contracts', sum(e => e.contract)], ['Deals', sum(e => Math.max(0, e.deals || 0))], ['From the bank', sum(e => Math.max(0, e.bank || 0))], ['Everything else', sum(e => (e.seized || 0) + (e.fines || 0) + (e.restitution || 0) + (e.bribes || 0) + Math.max(0, e.lands || 0) + (e.partner || 0))]];
+    const outs = [['Supplies', shopSum('supplies') + sum(e => e.marketBuys)], ['Wages', shopSum('wages') + sum(e => (e.salaries || 0) + (e.managers || 0))], ['Upkeep', shopSum('upkeep')], ['Losses at your businesses', sum(e => Math.max(0, -e.owned))], ['Tax', sum(e => e.tax)], ['Interest', sum(e => e.interest)], ['Investors’ shares', sum(e => e.investors || 0)], ['Household, horse and ship', sum(e => (e.family || 0) + (e.stabling || 0) + (e.ship || 0))], ['Gifts and alms', sum(e => (e.given || 0) + (e.hush || 0))], ['Deals that went wrong', sum(e => Math.max(0, -(e.deals || 0)))], ['Bank loans paid back', sum(e => Math.max(0, -(e.bank || 0)))], ['Land', sum(e => Math.max(0, -(e.lands || 0)))]];
     const other = {}; for (const e of L) for (const x of e.otherItems || []) other[x.label] = (other[x.label] || 0) + x.amount;
     const unexpl = sum(e => e.unexplained || 0); if (Math.abs(unexpl) >= 1) other['Not accounted for'] = (other['Not accounted for'] || 0) + unexpl;
     const tIn = ins.reduce((a, x) => a + x[1], 0), tOut = outs.reduce((a, x) => a + x[1], 0), tOther = Object.values(other).reduce((a, x) => a + x, 0);
@@ -10394,16 +10397,242 @@
     if (wages) due.push({ when: 'Tonight', what: 'Wages', n: -wages }); if (upkeep) due.push({ when: 'Tonight', what: 'Shop upkeep', n: -upkeep });
     if (s.player.horse) due.push({ when: 'Tonight', what: 'Stabling', n: -STABLING }); if (s.ship) due.push({ when: 'Tonight', what: 'Your ship’s crew and upkeep', n: -SHIP_UPKEEP });
     if (s.coins < 0) due.push({ when: 'Tonight', what: 'Interest on your debt', n: -Math.max(1, Math.ceil(-s.coins * loanRate(s))) });
+    for (const L of yourLoans(s)) due.push({ when: 'Day ' + L.next, what: 'Payment to ' + BANK_NAME[L.bank] + (L.missed ? ' (' + L.missed + ' missed)' : ''), n: -Math.ceil(Math.min(L.balance, Math.ceil(L.principal / LOAN_N)) + L.interest + L.arrears + L.balance * L.rate * Math.max(0, L.next - s.day)) });
     for (const d of (s.deals ? s.deals.list : [])) if (d.taken && !d.done) due.push({ when: 'Day ' + d.due, what: d.kind === 'ship' ? 'Your cargo comes back (likely ' + Math.round(d.cost * 1.35) + 'c)' : d.kind === 'feast' ? 'The feast order (' + d.reward + 'c)' : d.title, n: null });
     if (s.village && s.village.contract) due.push({ when: 'Day ' + s.village.contract.until, what: 'Deliver ' + goodsName(s.village.contract.trade, s.village.contract.qty) + ' (' + s.village.contract.reward + 'c)', n: null });
     for (const c of (s.realm && s.realm.contracts || []).filter(c => c.taken)) due.push({ when: 'Day ' + c.until, what: c.what.charAt(0).toUpperCase() + c.what.slice(1) + ' (' + c.reward + 'c)', n: null });
     const owe = [];
     if (s.coins < 0) owe.push({ what: 'The Ashford moneylender, at ' + Math.round(loanRate(s) * 1000) / 10 + '% a day', n: -s.coins });
+    for (const L of yourLoans(s)) owe.push({ what: BANK_NAME[L.bank].charAt(0).toUpperCase() + BANK_NAME[L.bank].slice(1) + ', at ' + Math.round(L.rate * 1000) / 10 + '% a day' + (L.pledge ? ', against ' + L.pledge.name : ''), n: Math.ceil(L.balance + L.interest) });
     for (const b of ownedBy(s, 'player')) if (b.investor) owe.push({ what: b.investor.name + ' holds ' + Math.round(b.investor.share * 100) + '% of ' + empById(b.id).name + ' (buy back for ' + buyBackPrice(s, b) + 'c)', n: null });
     return { coins: s.coins, worth: yourWorth(s), wealth: wealthTitle(s), days: L.length, ins: ins.filter(x => x[1]), outs: outs.filter(x => x[1]), other: Object.entries(other).filter(x => Math.round(x[1])), tIn, tOut, tOther, net: tIn - tOut + tOther, due, owe, tonight: -(wages + upkeep), deals: s.deals ? s.deals.list.map(d => Object.assign({}, d)) : [] };
   }
 
+  /* ================= BANKING (Stage VIII) =================
+     A bank in each of the five big towns, each with a named banker who remembers how you paid. Walk in and borrow against a
+     house or business you own (and a little on your name), at a rate set by your reputation and the banker's memory; a payment
+     falls due every five days and comes out of your purse wherever you are. Miss one and you are warned; miss two and there is a
+     fee and a dearer rate; miss three and the bank takes what you pledged, sells it, keeps what you owed and hands back the rest.
+     The Ashford moneylender is still there, worse and faster: spend more than you have and he lends without asking. Or become the
+     bank: found or buy one, set its rates, take the town's deposits and lend them to townsfolk, shopkeepers, lords and the crown.
+     Borrowers default; a bank short of coin can suffer a run and fail. And a crown deep in your debt can be made to pay in favours. */
+  const BANK_TOWNS = ['oakbridge', 'crownmere', 'eastwatch', 'dawnport', 'valdor'];
+  const BANK_NAME = { oakbridge: 'the Alder Bank', crownmere: 'the Crown Lake Bank', eastwatch: 'the Harbour Bank', dawnport: 'the Bank of Dawnport', valdor: 'the House of Valdor', hearthmoor: 'the Hearthmoor Bank', greenhaven: 'the Greenhaven Bank', ironcrest: 'the Ironcrest Bank', goldmeadow: 'the Goldmeadow Bank', thornwick: 'the Thornwick Bank', stonewatch: 'the Stonewatch Bank' };
+  const LOAN_DAYS = 30, LOAN_EVERY = 5, LOAN_N = LOAN_DAYS / LOAN_EVERY;
+  const LEND_RATE = { low: 0.005, fair: 0.008, high: 0.012 }, SAVE_RATE = { low: 0.001, fair: 0.0025, high: 0.004 };
+  function brand(s) { const D = s.bankDice = s.bankDice || { d: -1, x: 0, b: (s.rng ^ 0xba4c) | 0 }; if (D.d !== s.day) { D.d = s.day; D.x = (Math.imul(s.day + 5, 3266489917) ^ D.b) | 0; } D.x = (D.x + 0x6D2B79F5) | 0; let x = D.x; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
+  function setupBanks(s) {
+    if (s.bank) return s.bank;
+    const B = s.bank = { banks: {}, loans: [], nextId: 1, mine: null, log: [], past: [] };
+    for (const t of BANK_TOWNS) {
+      if (!TOWNS[t] || !s.towns || !s.towns[t]) continue;
+      const k = s.rng, sex = brand(s) < 0.5 ? 'f' : 'm', F = FIRST.filter(n => (sex === 'f') === FEMALE.has(n)), first = F[Math.floor(brand(s) * F.length)], last = (t === 'dawnport' || t === 'valdor' ? VAL_FAMILY : FAMILY)[Math.floor(brand(s) * (t === 'dawnport' || t === 'valdor' ? VAL_FAMILY.length : FAMILY.length))];
+      const p = newPerson(s, { name: (t === 'dawnport' || t === 'valdor' ? (sex === 'f' ? VAL_F : VAL_M)[Math.floor(brand(s) * 20)] : first) + ' ' + last, sex, age: 44 + Math.floor(brand(s) * 18), purse: 900, town: t, retired: true, rep: 70, mood: 65, skill: 1, palette: 6, log: [] });
+      s.rng = k; const h = vacancy(s, 999, t); if (h) moveIn(s, p, h);
+      p.banker = t; plog(s, p, 'Keeps ' + BANK_NAME[t] + '.');
+      B.banks[t] = { pid: p.id, trust: 50, repaid: 0, late: 0, seized: 0 };
+    }
+    return B;
+  }
+  const bankBlog = (s, text, kind) => { const B = s.bank; B.log.unshift({ d: s.day, x: text }); if (B.log.length > 30) B.log.length = 30; event(s, text, kind || 'info'); };
+  const bankerOf = (s, t) => { const k = s.bank && s.bank.banks[t]; return k && s.people[k.pid]; };
+  // what you can pledge, and what the bank lends on it
+  function pledges(s) {
+    const taken = new Set((s.bank ? s.bank.loans : []).filter(L => L.status === 'open' && L.pledge).map(L => L.pledge.kind + ':' + L.pledge.id));
+    const out = [];
+    for (const h of (s.houses || []).filter(h => h.owner === 'player')) if (!taken.has('house:' + h.id)) out.push({ kind: 'house', id: h.id, name: h.name + ' (' + townName(h.town) + ')', value: Math.round(houseValue(s, h) * 0.6) });
+    for (const sh of s.shops || []) if (!taken.has('shop:' + sh.id)) out.push({ kind: 'shop', id: sh.id, name: 'your ' + TRADES[sh.trade].name.toLowerCase() + ' (Hearthmoor)', value: Math.round(shopRefund(sh) * 0.8) });
+    for (const b of ownedBy(s, 'player')) if (!taken.has('biz:' + b.id)) out.push({ kind: 'biz', id: b.id, name: empById(b.id).name + ' (' + townName(b.town) + ')', value: Math.round(bizPrice(s, b.id) * 0.5 * (1 - (b.investor ? b.investor.share : 0))) });
+    return out;
+  }
+  const shopRefund = shop => Math.floor(TRADES[shop.trade].tiers.slice(0, shop.tier + 1).reduce((t, x, i) => t + (i === 0 && shop.starter ? STARTER_PRICE : (x.cost.coin || 0)), 0) / 2);
+  function bankTerms(s, t, pledge) {
+    const B = setupBanks(s), K = B.banks[t]; if (!K) return null;
+    const k = repK(s, t), trust = K.trust, onName = Math.max(0, Math.round(150 * Math.max(0, k) + (trust - 50) * 2));
+    const rate = Math.round(clamp(0.008 - 0.003 * k - (trust - 50) / 50 * 0.002, 0.004, 0.014) * 10000) / 10000;
+    const owing = B.loans.filter(L => L.status === 'open' && L.bank === t).reduce((a, L) => a + L.balance, 0), onNameOwing = B.loans.filter(L => L.status === 'open' && L.bank === t && !L.pledge).reduce((a, L) => a + L.balance, 0);
+    const max = Math.max(0, (pledge ? pledge.value : 0) + Math.max(0, onName - onNameOwing));   // each pledge backs its own loan; what you owe on your name alone comes off your name
+    return { rate, max, onName, trust, owing, refuse: K.seized >= 2 && K.trust < 25 };
+  }
+  function yourLoans(s) { return s.bank ? s.bank.loans.filter(L => L.status === 'open') : []; }
+  function bankNow(s, n, kind) { if (n >= 0) earn(s, n); else spend(s, -n); s.stats.bank = (s.stats.bank || 0) + n; }
+  // a payment falls due: from your purse, wherever you are
+  function loanDay(s) {
+    for (const L of yourLoans(s)) {
+      L.interest = Math.round((L.interest + L.balance * L.rate) * 100) / 100;
+      if (s.day < L.next) continue;
+      const part = Math.min(L.balance, Math.ceil(L.principal / LOAN_N)), due = Math.round((part + L.interest + L.arrears) * 100) / 100, K = s.bank.banks[L.bank], nm = (bankerOf(s, L.bank) || { name: 'the banker' }).name;
+      if (s.coins >= due) {
+        spend(s, Math.round(L.interest * 100) / 100); s.stats.interest = (s.stats.interest || 0) + Math.round(L.interest * 100) / 100;
+        bankNow(s, -(part + L.arrears)); L.balance = Math.round((L.balance - part) * 100) / 100; L.arrears = 0; L.interest = 0; L.missed = 0; L.next = s.day + LOAN_EVERY; L.paid++;
+        if (L.balance <= 0.5) { L.status = 'paid'; L.closed = s.day; K.repaid++; K.trust = Math.min(100, K.trust + 8); bankBlog(s, 'Your loan from ' + BANK_NAME[L.bank] + ' is paid off. ' + nm + ' will remember it.', 'good'); }
+        continue;
+      }
+      // missed
+      L.missed++; L.arrears = Math.round((L.arrears + part) * 100) / 100; K.late++; L.next = s.day + LOAN_EVERY;
+      if (L.missed === 1) { K.trust = Math.max(0, K.trust - 10); bankBlog(s, nm + ' of ' + BANK_NAME[L.bank] + ': "You missed a payment of ' + Math.round(due) + 'c. Pay it with the next, on day ' + L.next + ', or there will be a fee."', 'bad'); }
+      else if (L.missed === 2) { const fee = Math.round(due * 0.1); L.interest += fee; L.rate = Math.round((L.rate + 0.002) * 10000) / 10000; K.trust = Math.max(0, K.trust - 15); bankBlog(s, nm + ': "Two payments missed. There is a fee of ' + fee + 'c and your rate goes up. Miss the next, on day ' + L.next + ', and we take ' + (L.pledge ? L.pledge.name : 'what you owe from wherever we can') + '."', 'bad'); }
+      else seizePledge(s, L);
+    }
+  }
+  function seizePledge(s, L) {
+    const K = s.bank.banks[L.bank], P = L.pledge, banker = bankerOf(s, L.bank), owed = Math.round(L.balance + L.interest + L.balance * 0.05);
+    let sale = 0, what = 'nothing';
+    if (P && P.kind === 'house') { const h = houseById(s, P.id); if (h && h.owner === 'player') { sale = Math.round(houseValue(s, h) * 0.8); h.owner = banker ? banker.id : 'town:' + (h.town || 'hearthmoor'); if (s.player.house === h.id) s.player.house = null; what = h.name; } }
+    if (P && P.kind === 'biz') { const b = s.biz[P.id]; if (b && b.owner === 'player') { sale = Math.round(bizPrice(s, b.id) * 0.75 * (1 - (b.investor ? b.investor.share : 0))); delete b.investor; b.manager = null; b.owner = banker ? banker.id : b.owner; b.lease = null; what = empById(b.id).name; } }
+    if (P && P.kind === 'shop') { const sh = shopById(s, P.id); if (sh) { const c0 = s.coins; cmd0(s, 'sellShop', sh.id); const got = s.coins - c0; s.stats.bank = (s.stats.bank || 0) + got; what = 'your ' + TRADES[sh.trade].name.toLowerCase(); bankNow(s, -Math.min(got, owed)); sale = got; } }
+    L.status = 'seized'; L.closed = s.day; K.seized++; K.trust = Math.max(0, K.trust - 30);
+    let surplus = sale - owed; if (P && P.kind === 'shop') { const rest = Math.min(0, surplus); if (rest) bankNow(s, rest); }
+    if (surplus >= 0) { if (surplus && !(P && P.kind === 'shop')) bankNow(s, surplus); bankBlog(s, BANK_NAME[L.bank].charAt(0).toUpperCase() + BANK_NAME[L.bank].slice(1) + ' has taken ' + what + ' for your unpaid loan. It sold for ' + sale + 'c; after the ' + owed + 'c you owed, ' + surplus + 'c comes back to you. The debt is closed.', 'bad'); }
+    else { if (!(P && P.kind === 'shop')) bankNow(s, surplus); bankBlog(s, BANK_NAME[L.bank].charAt(0).toUpperCase() + BANK_NAME[L.bank].slice(1) + ' has taken ' + (sale ? what + ' (sold for ' + sale + 'c)' : 'what it could') + ' for your unpaid loan. ' + (-surplus) + 'c is still owed, and it comes out of your purse' + (s.coins < 0 ? ': the moneylender carries the rest' : '') + '.', 'bad'); }
+    addStanding(s, -3, 'the bank seizing ' + what);
+  }
+  /* ---------- your own bank ---------- */
+  function bankPrice(s, t) { return t && BANK_TOWNS.includes(t) ? Math.round(1600 + (WEALTH[t] || 2) * 300) : null; }
+  function myBankDay(s) {
+    const M = s.bank && s.bank.mine; if (!M || M.failed) return;
+    const t = M.town, lr = LEND_RATE[M.lend], sr = SAVE_RATE[M.save], folk = townFolk(s, t).length || folkIn(s, t).length || 30;
+    // deposits come and go with the rate you pay and how far the town trusts you
+    if (!M.run) { const target = Math.round(folk * 6 * (0.6 + sr * 150) * (0.5 + M.trust / 100)); const d = Math.round((target - M.deposits) * 0.06); M.deposits += d; M.cash += d; }
+    M.cash -= Math.round(M.deposits * sr * 100) / 100; M.paidOut = (M.paidOut || 0) + M.deposits * sr;
+    M.cash -= 2 + M.loans.reduce((a, L) => a + L.amount, 0) * 0.001;
+    // borrowers repay, or do not
+    for (const L of M.loans) {
+      if (L.status !== 'open') continue;
+      L.owed = Math.round((L.owed + L.amount * L.rate) * 100) / 100;
+      if (s.day < L.due) continue;
+      const q = L.pid === 'crown' ? null : s.people[L.pid], can = L.pid === 'crown' ? (s.realm.treasury >= L.owed) : (q && q.status === 'here' && q.purse >= L.owed);
+      const p = L.risk * (M.lend === 'high' ? 1.6 : M.lend === 'low' ? 0.7 : 1);
+      if (L.pid === 'crown') { L.due = s.day + 10; continue; }   // the crown rolls its debt over: it is called in, not paid
+      if (can && brand(s) > p) { q.purse -= L.owed; M.cash += L.owed; M.earned = (M.earned || 0) + (L.owed - L.amount); L.status = 'repaid'; }
+      else if (!can && q && q.status === 'here' && q.purse >= L.amount * 0.5 && brand(s) > p) { const got = Math.min(Math.floor(L.owed), Math.floor(q.purse * 0.9)); q.purse -= got; M.cash += got; M.lost = (M.lost || 0) + Math.max(0, L.amount - got); M.earned = (M.earned || 0) + Math.max(0, got - L.amount); L.status = 'repaid'; L.part = true; bankBlog(s, q.name + ' could only repay ' + got + 'c of ' + Math.round(L.owed) + 'c to your bank.', 'info'); }
+      else { L.status = 'defaulted'; const got = q && q.status === 'here' ? Math.min(Math.floor(L.owed), Math.floor(Math.max(0, q.purse) * 0.3)) : 0; if (q) { q.purse -= got; plog(s, q, 'Could not repay ' + s.name + '’s bank.'); } M.cash += got; M.lost = (M.lost || 0) + Math.max(0, L.amount - got); if (L.amount - got > 0) bankBlog(s, (q ? q.name : 'A borrower') + ' cannot repay your bank: ' + Math.round(L.amount - got) + 'c is lost.', 'bad'); else L.status = 'repaid'; if (L.amount - got > M.capital * 0.15) M.shaken = s.day; }
+    }
+    M.loans = M.loans.filter(L => L.status === 'open' || s.day - L.due < 10);
+    // new borrowers: townsfolk, shopkeepers, lords and the crown, if you have coin to spare above a reserve
+    const reserve = Math.max(100, M.deposits * 0.35 + M.capital * 0.2), spare = M.cash - reserve, want = M.lend === 'low' ? 0.8 : M.lend === 'high' ? 0.35 : 0.55;
+    if (spare > 30 && brand(s) < want) {
+      const r = brand(s); let q = null, amount = 0, risk = 0.06, kind = '';
+      if (r < 0.45) { const L0 = folkIn(s, t).filter(x => !x.kid && x.age >= 18 && !yourFamily(s, x) && !M.loans.some(L => L.pid === x.id && L.status === 'open')); q = L0[Math.floor(brand(s) * L0.length)]; amount = q ? Math.min(20 + Math.round(brand(s) * 40), Math.max(15, Math.round(q.purse * 0.5 + 20))) : 0; risk = 0.06 + (q && q.purse < 10 ? 0.06 : 0); kind = 'townsperson'; }
+      else if (r < 0.85) { const L0 = Object.values(s.biz).filter(b => (b.town || 'hearthmoor') === t && b.owner !== 'player' && !b.closed && s.people[b.owner] && !M.loans.some(L => L.pid === b.owner && L.status === 'open')).map(b => s.people[b.owner]); q = L0[Math.floor(brand(s) * L0.length)]; amount = q ? Math.min(100 + Math.round(brand(s) * 300), Math.round(q.purse * 0.6 + 60)) : 0; risk = 0.04; kind = 'shopkeeper'; }
+      else if (s.realm) { const lords = Object.keys(s.realm.regions).map(id => regionLord(s, id)).filter(id => id && id !== 'player' && s.people[id] && s.people[id].status === 'here' && !M.loans.some(L => L.pid === id && L.status === 'open')).map(id => s.people[id]); q = lords[Math.floor(brand(s) * lords.length)]; amount = q ? Math.min(400 + Math.round(brand(s) * 800), Math.round(q.purse * 0.7)) : 0; risk = 0.03; kind = 'lord'; }
+      amount = Math.min(amount, Math.floor(spare * 0.35));
+      if (q && amount >= 15) { q.purse += amount; M.cash -= amount; M.loans.push({ id: s.bank.nextId++, pid: q.id, who: q.name, kind, amount, owed: amount, rate: lr, due: s.day + 20, risk, status: 'open', day: s.day }); plog(s, q, 'Borrowed ' + amount + 'c from ' + s.name + '’s bank.'); }
+    }
+    // a crown short of coin comes to you, if you are not the crown
+    if (s.realm && !isRuler(s) && s.realm.treasury < 300 && !M.loans.some(L => L.pid === 'crown' && L.status === 'open') && kingdomOf(t) === 'alderwyn' && spare > 400 && brand(s) < 0.3) {
+      const amount = Math.min(Math.floor(spare * 0.8), 2500); s.realm.treasury += amount; M.cash -= amount;
+      M.loans.push({ id: s.bank.nextId++, pid: 'crown', who: 'the crown of Alderwyn', kind: 'crown', amount, owed: amount, rate: lr, due: s.day + 10, risk: 0.02, status: 'open', day: s.day });
+      bankBlog(s, 'The crown of Alderwyn, short of coin, borrows ' + amount + 'c from your bank.', 'story');
+    }
+    // trust, and a run when it fails
+    M.trust = clamp(M.trust + (M.cash >= M.deposits * 0.25 ? 0.5 : -1.5) - (M.shaken === s.day ? 15 : 0), 0, 100);
+    if (!M.run && M.deposits > 50 && (M.cash < M.deposits * 0.12 || M.trust < 25)) { M.run = { day: s.day }; bankBlog(s, 'A run on your bank in ' + townName(t) + '! People queue at the door to take their savings out. Put in coin, or call in loans, before the strongroom is empty.', 'bad'); }
+    if (M.run && M.run.day < s.day) {   // the day it starts is your warning; the queue forms the next morning
+      const out = Math.round(M.deposits * 0.15); M.deposits -= out; M.cash -= out;
+      if (M.cash < 0) {   // before the doors close, the bank calls in whatever loans can be paid at once
+        for (const L of M.loans) { if (M.cash >= 0) break; const q = L.status === 'open' && L.pid !== 'crown' && s.people[L.pid]; if (q && q.status === 'here' && q.purse >= L.owed) { q.purse -= L.owed; M.cash += L.owed; L.status = 'repaid'; plog(s, q, 'Had their loan called in by ' + s.name + '’s bank during a run.'); } }
+      }
+      if (M.cash < 0) return bankFail(s, M);
+      if (s.day - M.run.day >= 2 && M.cash >= M.deposits * 0.3) { M.run = null; M.trust = Math.max(M.trust, 40); bankBlog(s, 'The run on your bank is over. It paid everyone who asked, and people trust it the more for that.', 'good'); }
+    }
+    M.cash = Math.round(M.cash * 100) / 100; M.deposits = Math.max(0, Math.round(M.deposits));
+  }
+  function bankFail(s, M) {
+    const t = M.town, lostDeposits = Math.round(M.deposits);
+    M.failed = s.day; M.deposits = 0; M.cash = 0; M.run = null;
+    for (const L of M.loans) if (L.status === 'open') L.status = 'sold';
+    s.bank.past.unshift({ town: t, founded: M.since, failed: s.day, capital: M.capital });
+    deed(s, -15, 4, 'your bank failed with ' + lostDeposits + 'c of people’s savings');
+    withWhy('your bank failed, taking people’s savings with it', () => { if (t === 'hearthmoor') addStanding(s, -25, null); else repAdd(s, t, -30, 'your bank failed, taking people’s savings with it'); });
+    if (s.ppl) { const C = s.ppl.crowd[t]; if (C) { C.heat = Math.min(100, C.heat + 35); } }
+    bankBlog(s, 'Your bank in ' + townName(t) + ' has failed. The strongroom is empty, ' + lostDeposits + 'c of people’s savings is gone, and so is everything you put in. The town is furious.', 'bad');
+    s.bank.mine = null;
+  }
+  function crownOwes(s) { const M = s.bank && s.bank.mine; const L = M && M.loans.find(x => x.pid === 'crown' && x.status === 'open'); return L || null; }
+  function bankCmd(s, name, a, b, c) {
+    const B = setupBanks(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    switch (name) {
+      case 'bankBorrow': {   // a: amount, b: pledge key 'house:id' | 'biz:id' | null
+        const K = B.banks[here]; if (!K) return fail('There is no bank here. Banks are in ' + BANK_TOWNS.filter(t => B.banks[t]).map(townName).join(', ') + '.');
+        const pl = b ? pledges(s).find(x => x.kind + ':' + x.id === b) : null; if (b && !pl) return fail('You cannot pledge that.');
+        const T = bankTerms(s, here, pl), banker = bankerOf(s, here), nm = banker ? banker.name : 'The banker';
+        if (T.refuse) return fail(nm + ' will not lend to you again. You have lost too much to this bank.');
+        const n = Math.round(a || 0); if (n < 20) return fail('The bank lends 20c or more.');
+        if (n > T.max) return fail(nm + ' will lend you at most ' + Math.floor(T.max) + 'c' + (pl ? ' against ' + pl.name : ' on your name alone') + '.');
+        earn(s, n); B.loans.push({ id: B.nextId++, bank: here, principal: n, balance: n, interest: 0, arrears: 0, rate: T.rate, next: s.day + LOAN_EVERY, missed: 0, paid: 0, pledge: pl ? { kind: pl.kind, id: pl.id, name: pl.name } : null, status: 'open', since: s.day });
+        return ok(nm + ' counts out ' + n + 'c. You pay back about ' + Math.ceil(n / LOAN_N + n * T.rate * LOAN_EVERY) + 'c every five days for ' + LOAN_DAYS + ' days, at ' + Math.round(T.rate * 1000) / 10 + '% a day' + (pl ? ', with ' + pl.name + ' pledged' : '') + '. The first payment is on day ' + (s.day + LOAN_EVERY) + '.');
+      }
+      case 'bankRepay': {   // a: loan id
+        const L = B.loans.find(x => x.id === a && x.status === 'open'); if (!L) return fail('No such loan.');
+        const due = Math.round((L.balance + L.interest + L.arrears * 0) * 100) / 100; if (s.coins < due) return fail('Paying it all off takes ' + Math.ceil(due) + 'c.');
+        spend(s, Math.round(L.interest * 100) / 100); s.stats.interest = (s.stats.interest || 0) + Math.round(L.interest * 100) / 100; spend(s, L.balance);
+        L.balance = 0; L.interest = 0; L.arrears = 0; L.status = 'paid'; L.closed = s.day; const K = B.banks[L.bank]; K.repaid++; K.trust = Math.min(100, K.trust + (L.missed ? 3 : 8));
+        return ok('Paid off. ' + (bankerOf(s, L.bank) || { name: 'The banker' }).name + ' nods: your name is good at ' + BANK_NAME[L.bank] + '.');
+      }
+      case 'bankRefi': {   // clear the moneylender with a bank loan: a: pledge key
+        if (s.coins >= 0) return fail('You owe the moneylender nothing.');
+        const r = bankCmd(s, 'bankBorrow', Math.ceil(-s.coins), a); return r.ok ? ok('The moneylender is paid off with a loan from ' + BANK_NAME[here] + '. ' + r.msg) : r;
+      }
+      case 'bankFound': case 'bankBuy': {   // a: capital (found)
+        if (B.mine) return fail('You already have a bank, in ' + townName(B.mine.town) + '.');
+        const t = here, own = B.banks[t];
+        if (name === 'bankFound') {
+          if (own) return fail(townName(t) + ' already has a bank: buy it, or found yours in a town without one.');
+          if (!TOWNS[t] && t !== 'hearthmoor') return fail('Found a bank in a town.');
+          const cap = Math.round(a || 0); if (cap < 800) return fail('A bank needs at least 800c of your own coin in its strongroom.'); if (s.coins < cap + 300) return fail('The charter costs 300c, and the strongroom ' + cap + 'c: ' + (cap + 300) + 'c in all.');
+          spend(s, cap + 300); B.mine = { town: t, name: BANK_NAME[t] || 'the ' + townName(t) + ' Bank', capital: cap, cash: cap, deposits: 0, lend: 'fair', save: 'fair', loans: [], trust: 55, since: s.day, run: null, failed: null };
+          deed(s, 0, 4, 'founding ' + B.mine.name); return ok('You found ' + B.mine.name + ' with ' + cap + 'c in its strongroom. Townsfolk will bring their savings as they come to trust it; set its rates on the Bank page.');
+        }
+        if (!own) return fail('There is no bank here to buy.');
+        const price = bankPrice(s, t); if (s.coins < price) return fail(BANK_NAME[t] + ' costs ' + price + 'c.');
+        const bk = bankerOf(s, t); spend(s, price); if (bk) bk.purse += price;
+        B.mine = { town: t, name: BANK_NAME[t], capital: price, cash: Math.round(price * 0.7), deposits: Math.round(price * 0.6), lend: 'fair', save: 'fair', loans: [], trust: 65, since: s.day, run: null, failed: null, banker: bk ? bk.id : null };
+        if (bk) plog(s, bk, 'Sold ' + BANK_NAME[t] + ' to ' + s.name + ', and stays on to keep it.');
+        deed(s, 0, 5, 'buying ' + BANK_NAME[t]); return ok('You buy ' + BANK_NAME[t] + ' for ' + price + 'c, with its strongroom, its depositors and ' + (bk ? bk.name + ' to keep the books' : 'its books') + '.');
+      }
+    }
+    const M = B.mine; if (!M) return fail('You have no bank.');
+    switch (name) {
+      case 'bankRates': { const tbl = a === 'lend' ? LEND_RATE : SAVE_RATE; if (!tbl[b]) return fail('No such rate.'); M[a === 'lend' ? 'lend' : 'save'] = b; return ok(a === 'lend' ? 'Your bank now lends at ' + Math.round(LEND_RATE[b] * 1000) / 10 + '% a day.' : 'Your bank now pays savers ' + Math.round(SAVE_RATE[b] * 1000) / 10 + '% a day.'); }
+      case 'bankAdd': { const n = Math.round(a || 0); if (n <= 0 || s.coins < n) return fail('You do not have that much.'); spend(s, n); M.cash += n; M.capital += n; M.trust = Math.min(100, M.trust + Math.min(20, n / Math.max(50, M.deposits) * 30)); return ok('You put ' + n + 'c into your bank’s strongroom.'); }
+      case 'bankTake': { const n = Math.round(a || 0), free = Math.floor(M.cash - Math.max(50, M.deposits * 0.2)); if (M.run) return fail('Not during a run.'); if (n <= 0 || n > free) return fail('You can take out at most ' + Math.max(0, free) + 'c and leave the bank its reserve.'); M.cash -= n; M.capital = Math.max(0, M.capital - n); earn(s, n); return ok('You take ' + n + 'c from your bank.'); }
+      case 'bankCall': {
+        const L = M.loans.find(x => x.id === a && x.status === 'open'); if (!L) return fail('No such loan.');
+        if (L.pid === 'crown') return fail('The crown’s debt is a matter for the king. Use the choices below it.');
+        const q = s.people[L.pid]; if (q && q.status === 'here' && q.purse >= L.owed) { q.purse -= L.owed; M.cash += L.owed; L.status = 'repaid'; q.opinion = clamp((q.opinion || 0) - 10, -100, 100); return ok(q.name + ' pays the ' + Math.round(L.owed) + 'c, sourly.'); }
+        const got = q ? Math.floor(Math.max(0, q.purse) * 0.8) : 0; if (q) { q.purse -= got; wrong(s, q, L.kind === 'lord' ? 25 : 10, 'You called in their loan when they could not pay.'); } M.cash += got; L.status = 'defaulted'; M.lost = (M.lost || 0) + L.amount - got;
+        return ok((q ? q.name : 'They') + ' cannot pay it all: you get ' + got + 'c of ' + Math.round(L.owed) + 'c, and an enemy.');
+      }
+      case 'bankRansom': {   // a: seat | lordship | law | tax | call ; b: detail
+        const L = crownOwes(s); if (!L) return fail('The crown owes your bank nothing.'); const R = s.realm, king = s.people[R.king];
+        if (L.owed < 1500 && a !== 'call') return fail('The crown owes you ' + Math.round(L.owed) + 'c: not yet enough to bargain with. At 1,500c it will listen.');
+        const close = why => { L.status = 'forgiven'; L.why = why; M.lost = (M.lost || 0) + L.owed; if (king) { king.opinion = clamp((king.opinion || 0) - 15, -100, 100); remember(s, king, 'You made the crown pay its debt in ' + why + '.', -8); } };
+        if (a === 'seat') { const k = b && COUNCIL[b] ? b : Object.keys(COUNCIL).find(x => R.council[x] !== 'player'); if (!k || R.council[k] === 'player') return fail('No seat to give.'); vacateYours(s, { office: 'seat', region: k }); seat(s, 'seat', k, 'player'); close('a seat on the royal council'); realmLog(s, 'To clear its debt to your bank, the crown names you ' + COUNCIL[k] + '.', 'story'); return ok('You are ' + COUNCIL[k] + '. The debt is forgiven.'); }
+        if (a === 'lordship') { const id = b && R.regions[b] ? b : lordRegions(s).find(x => regionLord(s, x) !== 'player' && R.regions[x].lord !== 'office'); if (!id || regionLord(s, id) === 'player' || R.regions[id].lord === 'office') return fail('No lordship to give.'); const old = regionLord(s, id); vacateYours(s, { office: 'lord', region: id }); if (old && s.people[old]) { s.people[old].noble = null; s.people[old].retired = true; wrong(s, s.people[old], 40, 'You took their lordship by holding the crown’s debts.', { raw: true }); } R.regions[id].lord = null; seat(s, 'lord', id, 'player'); close('the lordship of ' + REGIONS[id]); realmLog(s, 'To clear its debt to your bank, the crown grants you the lordship of ' + REGIONS[id] + '.', 'story'); return ok('You are lord of ' + REGIONS[id] + '. The debt is forgiven.'); }
+        if (a === 'law') { if (!LAWS[b]) return fail('Which law?'); R.laws[b] = !R.laws[b]; close(R.laws[b] ? 'a new law, ' + LAWS[b].name : 'the repeal of ' + LAWS[b].name); realmLog(s, 'To clear its debt to your bank, the crown ' + (R.laws[b] ? 'proclaims ' : 'repeals ') + LAWS[b].name + '.', 'story'); return ok('Done. The debt is forgiven.'); }
+        if (a === 'tax') { R.taxRate = Math.max(0.5, Math.round((R.taxRate - 0.25) * 100) / 100); close('lower taxes for the realm'); realmLog(s, 'To clear its debt to your bank, the crown lowers the taxes of the realm.', 'story'); withWhy('the crown lowering taxes at your demand', () => { for (const t of Object.keys(s.towns || {})) townApprove(s, t, 2); }); return ok('The realm’s taxes fall. The towns cheer; the debt is forgiven.'); }
+        if (a === 'call') { const n = Math.round(L.owed); R.treasury -= n; M.cash += n; L.status = 'repaid'; R.kingSupport = clamp(R.kingSupport - 10, 0, 100); if (king) wrong(s, king, 45, 'You called in the crown’s debt and emptied the treasury.', { raw: true }); realmLog(s, 'You call in the crown’s debt: ' + n + 'c leaves the treasury for your bank. The king will not forget it.', 'bad'); return ok('The crown pays ' + n + 'c. The treasury stands at ' + Math.round(R.treasury) + 'c.'); }
+        return fail('What do you want from the crown?');
+      }
+    }
+    return fail('Unknown.');
+  }
+  function bankDay(s) {
+    if (!s.bank) { const here = townAt(s.player.x, s.player.z); if (!here || !BANK_TOWNS.includes(here)) return; setupBanks(s); }
+    loanDay(s); myBankDay(s);
+  }
+  function bankView(s) {
+    const B = setupBanks(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor', K = B.banks[here], pl = pledges(s);
+    const banks = Object.keys(B.banks).map(t => { const k = B.banks[t], p = s.people[k.pid]; return { t, name: BANK_NAME[t], banker: p ? p.name : '?', trust: k.trust, word: k.trust >= 75 ? 'Trusts you' : k.trust >= 50 ? 'Will deal with you' : k.trust >= 30 ? 'Wary of you' : 'Does not trust you', repaid: k.repaid, late: k.late, seized: k.seized }; });
+    const loans = B.loans.filter(L => L.status === 'open').map(L => ({ id: L.id, bank: BANK_NAME[L.bank], balance: Math.round(L.balance), interest: Math.round(L.interest), arrears: Math.round(L.arrears), next: L.next, nextPay: Math.ceil(Math.min(L.balance, Math.ceil(L.principal / LOAN_N)) + L.interest + L.arrears), rate: L.rate, pledge: L.pledge && L.pledge.name, missed: L.missed, payoff: Math.ceil(L.balance + L.interest) }));
+    const M = B.mine && { town: B.mine.town, name: B.mine.name, capital: Math.round(B.mine.capital), cash: Math.round(B.mine.cash), deposits: Math.round(B.mine.deposits), lend: B.mine.lend, save: B.mine.save, trust: Math.round(B.mine.trust), run: !!B.mine.run, earned: Math.round(B.mine.earned || 0), lost: Math.round(B.mine.lost || 0), paidOut: Math.round(B.mine.paidOut || 0), free: Math.max(0, Math.floor(B.mine.cash - Math.max(50, B.mine.deposits * 0.2))),
+      loans: B.mine.loans.filter(L => L.status === 'open').map(L => ({ id: L.id, who: L.who, kind: L.kind, owed: Math.round(L.owed), due: L.due })), crown: crownOwes(s) ? Math.round(crownOwes(s).owed) : 0 };
+    return { here, bankHere: K ? { name: BANK_NAME[here], terms: bankTerms(s, here, null), banker: (bankerOf(s, here) || {}).name, pledges: pl.map(p => Object.assign({}, p, { terms: bankTerms(s, here, p) })) } : null, banks, loans, moneylender: s.coins < 0 ? { owed: -s.coins, rate: loanRate(s) } : null, mine: M, past: B.past, log: B.log.slice(0, 10), canFound: !B.mine && !K && !!(TOWNS[here]), canBuy: !B.mine && !!K, buyPrice: K ? bankPrice(s, here) : null, LEND_RATE, SAVE_RATE };
+  }
+
   const api = {
+    setupBanks, bankDay, bankView, bankTerms, pledges, yourLoans, BANK_TOWNS, BANK_NAME, LEND_RATE, SAVE_RATE, LOAN_DAYS, LOAN_EVERY, crownOwes, bankPrice,
     shopDial, shopBase, DIAL, DIAL_NAME, renownOf, renownWord, LADDER, LADDER_GAIN, bizLevel, levelCost, renownTarget, renownDay, dealsDay, dealOffers, yourWorth, investPrice, buyBackPrice, WEALTH_STEPS, wealthTitle, moneyView, INVEST_SHARES,
     setupRep, repView, standing, standingWord, charWord, repK, loanRate, repAdd, repInstall, repPriceMul, wontDeal, yourBuyPrice, yourSellPrice, yourBizPrice, yourHousePrice, officeIn,
     setupRival, rivalDay, rivalView, yourRung, rivalRung, RUNG_NAME, FOUL_NAME, isRival, isAlly, proofOf, rivalPrice, pactScore, contest, rivalMove, bizPrice, nerveWord,

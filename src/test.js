@@ -1074,7 +1074,7 @@ console.log('34. Silence that wears off, mercy with true reasons, and preparing 
 
 console.log('35. Petitions to the crown, and markets that draw traders when short');
 {
-  const s = newGameRaw(36); s.ageRate = 0; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440);
+  const s = newGameRaw(36); s.ageRate = 0; s.rivalOff = true; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440);
   const R = s.realm, X = (...a) => Sim.cmd(s, ...a);
   const folk = Sim.living(s).filter(p => p.town === 'oakbridge' && !p.kid); folk.slice(0, 8).forEach(p => p.hungry = true);
   R.treasury = 500; const t0 = R.treasury, ap0 = s.towns.oakbridge.approval;
@@ -2007,6 +2007,73 @@ console.log('54. Stage VII: business. A price dial, a name for every business, a
   check(bad === 0 && s.ledger.length, '150 days of trading, deals and an investor: the ledger adds up every day');
   const rs = Object.values(s.biz).filter(b => b.owner === 'player').map(b => b.renown).concat(s.shops.map(x => x.renown));
   check(rs.every(r => Number.isFinite(r) && r >= 0 && r <= 100), 'and every business’s name stays between 0 and 100 (' + rs.map(Math.round).join(', ') + ')');
+}
+
+console.log('55. Stage VIII: banking. Loans against what you own, the missed-payment ladder, your own bank, runs, and the crown in debt');
+{
+  const faults55 = Sim.faults().length;
+  const at = (s, loc) => { const L = Sim.LOCS[loc]; s.player.x = L.x; s.player.z = L.z; };
+  const s = Sim.newGame(5501); Sim.applyStart(s, 'merchant'); s.coins = 6000; Sim.advance(s, 2); holdElections(s);
+  at(s, 'oaksq'); Sim.cmd(s, 'buyBiz', 'o_wicks'); Sim.advance(s, 1440);
+  const V = Sim.bankView(s), B = V.bankHere;
+  check(B && /Alder Bank/.test(B.name) && B.banker && s.people[s.bank.banks.oakbridge.pid].banker === 'oakbridge', 'Oakbridge has a bank, kept by ' + (B && B.banker));
+  check(Sim.BANK_TOWNS.every(t => s.bank.banks[t]) && !s.bank.banks.hearthmoor, 'all five big towns have one; Hearthmoor has only the moneylender');
+  const pl = B.pledges.find(p => p.kind === 'biz');
+  check(pl && pl.terms.max >= pl.value && pl.terms.rate >= 0.004 && pl.terms.rate <= 0.014, 'you can borrow against a business you own: up to ' + Math.floor(pl.terms.max) + 'c at ' + Math.round(pl.terms.rate * 1000) / 10 + '% a day');
+  at(s, 'market'); check(!Sim.cmd(s, 'bankBorrow', 100, 'biz:o_wicks').ok, 'but only by walking into the bank');
+  at(s, 'oaksq'); const c0 = s.coins, n = Math.floor(pl.terms.max * 0.5); check(Sim.cmd(s, 'bankBorrow', n, 'biz:o_wicks').ok && s.coins === c0 + n, 'borrowing ' + n + 'c puts it in your purse');
+  check(!Sim.cmd(s, 'bankBorrow', 50, 'biz:o_wicks').ok, 'the same pledge cannot back two loans');
+  at(s, 'market'); for (let d = 0; d < 31; d++) Sim.advance(s, 1440);
+  const L0 = s.bank.loans[0];
+  check(L0.status === 'paid' && L0.paid >= 6 && s.bank.banks.oakbridge.repaid === 1 && s.bank.banks.oakbridge.trust > 50, 'paid every five days from wherever you are, it is cleared in thirty days, and the banker remembers');
+  check(s.ledger.every(e => Math.abs(e.unexplained || 0) < 0.01), 'the ledger adds up to the coin with a loan running');
+  // the ladder: warned, fined, then the pledge is taken and the rest handed back
+  at(s, 'oaksq'); const t2 = Sim.bankTerms(s, 'oakbridge', Sim.pledges(s).find(p => p.kind === 'biz')); Sim.cmd(s, 'bankBorrow', Math.floor(t2.max * 0.5), 'biz:o_wicks'); at(s, 'market');
+  const L1 = s.bank.loans[s.bank.loans.length - 1], keep = s.coins; let seen = [];
+  for (let d = 0; d < 16 && L1.status === 'open'; d++) { s.coins = 0; Sim.advance(s, 1440); seen.push(L1.missed); }
+  s.coins = Math.max(s.coins, 0) + keep;
+  check(seen.includes(1) && seen.includes(2) && L1.status === 'seized', 'unpaid: a warning, then a fee, then the bank takes the pledge (missed: ' + seen.filter((x, i, a) => a.indexOf(x) === i).join(', ') + ')');
+  check(s.biz.o_wicks.owner !== 'player' && s.bank.log.some(l => /comes back to you|still owed/.test(l.x)), 'the business is gone, sold, and what was left over came back: ' + (s.bank.log.find(l => /taken/.test(l.x)) || { x: '' }).x.slice(0, 90));
+  check(s.bank.banks.oakbridge.seized === 1 && Sim.bankTerms(s, 'oakbridge', null).rate > t2.rate, 'and the next loan from that bank costs more');
+  { // the books through a seizure: every coin that moves is booked to the bank or to interest
+    at(s, 'oaksq'); s.coins = 3000; const pk = Sim.pledges(s)[0]; Sim.cmd(s, 'bankBorrow', Math.min(200, Math.floor(Sim.bankTerms(s, 'oakbridge', pk).max)), pk.kind + ':' + pk.id); const L2 = s.bank.loans[s.bank.loans.length - 1];
+    L2.missed = 2; L2.next = s.day; s.coins = 5; const c0 = s.coins, b0 = s.stats.bank || 0, i0 = s.stats.interest || 0; Sim.bankDay(s);
+    check(L2.status === 'seized' && Math.abs((s.coins - c0) - ((s.stats.bank - b0) - ((s.stats.interest || 0) - i0))) < 0.01, 'the ledger books every coin of a seizure (' + Math.round(s.coins - c0) + 'c back)'); }
+  check(Sim.faults().length === faults55, 'no faults');
+}
+{
+  // your own bank: deposits, loans, defaults; a run; and failing
+  const at = (s, loc) => { const L = Sim.LOCS[loc]; s.player.x = L.x; s.player.z = L.z; };
+  const s = Sim.newGame(5502); s.coins = 6000; Sim.advance(s, 2); holdElections(s); at(s, 'ghgreen');
+  check(!Sim.cmd(s, 'bankFound', 500).ok && Sim.cmd(s, 'bankFound', 1500).ok && s.coins === 6000 - 1800, 'you can found a bank in Greenhaven: 1,500c in its strongroom and a 300c charter');
+  for (let d = 0; d < 60; d++) Sim.advance(s, 1440);
+  const M = s.bank.mine, V = Sim.bankView(s).mine;
+  check(M && M.deposits > 100 && (M.earned > 0) && M.loans.length > 0, 'in sixty days the town has saved ' + Math.round(M.deposits) + 'c with you, and you have lent to ' + new Set(M.loans.map(L => L.kind)).size + ' kinds of borrower');
+  const worth = M.cash + M.loans.filter(L => L.status === 'open').reduce((a, L) => a + L.owed, 0) - M.deposits;
+  check(worth > M.capital * 0.95 && worth < M.capital * 1.6, 'a careful bank makes a modest return: ' + Math.round(worth) + 'c on ' + M.capital + 'c in sixty days');
+  check(s.ledger.every(e => Math.abs(e.unexplained || 0) < 0.01), 'your own ledger still adds up: the bank keeps its own books');
+  // a run, met with coin
+  M.trust = 10; M.cash = Math.round(M.deposits * 0.05); Sim.advance(s, 1440);
+  check(M.run, 'with the strongroom nearly empty, people run on the bank');
+  Sim.cmd(s, 'bankAdd', 1000); for (let d = 0; d < 3; d++) Sim.advance(s, 1440);
+  check(s.bank.mine && !s.bank.mine.failed && !s.bank.mine.run, 'putting in coin sees it through');
+  // a run left alone: the bank fails
+  const g = Sim.newGame(5503); g.coins = 6000; Sim.advance(g, 2); holdElections(g); at(g, 'ghgreen'); Sim.cmd(g, 'bankFound', 1500); for (let d = 0; d < 30; d++) Sim.advance(g, 1440);
+  const G = g.bank.mine, m0 = g.folk.moral; G.cash = 1; G.trust = 0; G.loans = []; G.deposits = Math.max(G.deposits, 300); let d = 0; while (g.bank.mine && d < 10) { Sim.advance(g, 1440); d++; }
+  check(!g.bank.mine && g.bank.past.length === 1 && g.folk.moral < m0 - 10, 'left alone, the run empties it and the bank fails, and your name suffers for it');
+}
+{
+  // the crown in your debt
+  const at = (s, loc) => { const L = Sim.LOCS[loc]; s.player.x = L.x; s.player.z = L.z; };
+  const s = Sim.newGame(5504); s.coins = 9000; Sim.advance(s, 2); holdElections(s); at(s, 'ghgreen'); Sim.cmd(s, 'bankFound', 3000);
+  const M = s.bank.mine; M.loans.push({ id: 900, pid: 'crown', who: 'the crown of Alderwyn', kind: 'crown', amount: 1200, owed: 1200, rate: 0.008, due: s.day + 10, risk: 0, status: 'open', day: s.day });
+  check(!Sim.cmd(s, 'bankRansom', 'seat').ok, 'under 1,500c owed, the crown will not bargain');
+  M.loans[M.loans.length - 1].owed = 1600; const king = s.people[s.realm.king], op = king.opinion || 0;
+  const r = Sim.cmd(s, 'bankRansom', 'seat', 'trade');
+  check(r.ok && s.realm.council.trade === 'player' && Sim.crownOwes(s) === null && (king.opinion || 0) < op, 'at 1,600c, the crown names you Master of Trade to clear it, and the king resents it');
+  M.loans.push({ id: 901, pid: 'crown', who: 'the crown of Alderwyn', kind: 'crown', amount: 1500, owed: 1700, rate: 0.008, due: s.day + 10, risk: 0, status: 'open', day: s.day });
+  const t0 = s.realm.treasury, ks = s.realm.kingSupport; Sim.cmd(s, 'bankRansom', 'call');
+  check(s.realm.treasury === t0 - 1700 && s.realm.kingSupport < ks && (king.hate || 0) > 0, 'calling it in empties the treasury and makes the king your enemy');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');

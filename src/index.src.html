@@ -4978,7 +4978,7 @@ function hud(s) {
 /* the book: five sections, each with a few pages. A section remembers the page you last read in it. */
 const SECTIONS = [
   ['today', 'Today', [['tasks', 'Tasks'], ['goals', 'Goals'], ['calendar', 'Calendar']]],
-  ['money', 'Money', [['purse', 'Purse'], ['ledger', 'Ledger'], ['jobs', 'Work']]],
+  ['money', 'Money', [['purse', 'Purse'], ['bank', 'Bank'], ['ledger', 'Ledger'], ['jobs', 'Work']]],
   ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
   ['people', 'People', [['people', 'Townsfolk'], ['notables', 'Of note'], ['rival', 'Rival'], ['family', 'Family']]],
   ['you', 'You', [['skills', 'Skills'], ['gear', 'Gear'], ['renown', 'Your name']]],
@@ -5016,7 +5016,7 @@ function renderBook(turn) {
   const c0 = Sim.calendar(G);
   $('bkhead').innerHTML = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}</nav><span class="bkstat num" title="Time stands still while the book is open"><b>${money(G.coins)}</b><small>${c0.dom} ${c0.monthName} \u00b7 paused</small></span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
   const subs = '';
-  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, purse: pagePurse, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, bank: pageBank, purse: pagePurse, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   keepPlace(pg, y); turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -5503,6 +5503,53 @@ function crowdBox(s, town) {
 }
 /* Stage V: your rival, and how to deal with them */
 /* Stage VII: one plain page about money */
+/* Stage VIII: borrowing, and being the bank */
+function pageBank(s) {
+  const V = Sim.bankView(s), pct = r => Math.round(r * 1000) / 10 + '%', cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+  let h = `<h3>The Bank</h3><p class="lead">Borrow against what you own, at a rate your name earns. Pay every five days, wherever you are. Or become the bank.</p>`;
+  if (V.bankHere) {
+    const B = V.bankHere, T = B.terms, amts = m => [...new Set([Math.floor(m), Math.floor(m / 2), Math.min(100, Math.floor(m))])].filter(n => n >= 20).sort((a, b) => b - a);
+    h += `<div class="box"><h5>${esc(cap(B.name))}</h5><p>${esc(B.banker)} keeps it. ${T.refuse ? 'They will not lend to you again.' : 'They lend at <b>' + pct(T.rate) + ' a day</b>, paid back over ' + Sim.LOAN_DAYS + ' days in payments every ' + Sim.LOAN_EVERY + ' days.'}</p>`;
+    if (!T.refuse) {
+      if (T.max >= 20) h += `<p>On your name alone: up to ${Math.floor(T.max)}c.</p><div class="acts">${amts(T.max).map(n => B_('Borrow ' + n + 'c', ['bankBorrow', n, null], 'alt')).join('')}</div>`;
+      for (const p of B.pledges) if (p.terms.max >= 20) h += `<p>Against ${esc(p.name)}: up to ${Math.floor(p.terms.max)}c.</p><div class="acts">${amts(p.terms.max).map(n => B_('Borrow ' + n + 'c', ['bankBorrow', n, p.kind + ':' + p.id], 'alt')).join('')}</div>`;
+      if (!B.pledges.length && T.max < 20) h += `<p class="why">You have nothing to pledge and no name here to borrow on. A house, a shop or a business you own can be pledged.</p>`;
+      if (V.moneylender && B.pledges.length) h += `<p>Clear the moneylender’s ${V.moneylender.owed}c with a loan from here:</p><div class="acts">${B.pledges.filter(p => p.terms.max >= V.moneylender.owed).map(p => B_('Against ' + esc(p.name), ['bankRefi', p.kind + ':' + p.id], 'alt')).join('') || '<span class="hintline">Nothing you own is worth enough to cover it.</span>'}</div>`;
+    }
+    h += `</div>`;
+  } else h += `<div class="box"><p>There is no bank in ${esc(Sim.townName(V.here))}. Banks are in ${Sim.BANK_TOWNS.map(t => esc(Sim.townName(t))).join(', ')}: go there to borrow.</p></div>`;
+  if (V.loans.length || V.moneylender) {
+    h += `<h4>What you owe</h4>`;
+    for (const L of V.loans) h += `<div class="box"><dl class="kv"><dt>${esc(cap(L.bank))}</dt><dd>${L.balance}c left</dd><dt>Next payment</dt><dd>about ${L.nextPay}c on day ${L.next}</dd><dt>Rate</dt><dd>${pct(L.rate)} a day</dd>${L.pledge ? `<dt>Pledged</dt><dd>${esc(L.pledge)}</dd>` : ''}${L.missed ? `<dt class="neg">Missed</dt><dd class="neg">${L.missed} of 3: ${L.missed === 1 ? 'a fee next time' : 'they take the pledge next time'}</dd>` : ''}</dl><div class="acts">${B_('Pay it all off · ' + L.payoff + 'c', ['bankRepay', L.id], 'alt', s.coins < L.payoff)}</div></div>`;
+    if (V.moneylender) h += `<div class="box"><dl class="kv"><dt>The Ashford moneylender</dt><dd class="neg">${V.moneylender.owed}c at ${pct(V.moneylender.rate)} a day</dd></dl><p class="why">He lends without asking whenever you spend more than you have. Below 150c owed for three days, he seizes what you own. A bank loan is cheaper.</p></div>`;
+  }
+  h += `<h4>The bankers</h4><ul class="plog">${V.banks.map(b => `<li>${esc(b.banker)}, ${esc(b.name)} (${esc(Sim.townName(b.t))}): <b>${esc(b.word)}</b>${b.repaid || b.late || b.seized ? ' · ' + [b.repaid ? b.repaid + ' loan' + (b.repaid === 1 ? '' : 's') + ' repaid' : '', b.late ? b.late + ' payment' + (b.late === 1 ? '' : 's') + ' missed' : '', b.seized ? b.seized + ' pledge' + (b.seized === 1 ? '' : 's') + ' taken' : ''].filter(Boolean).join(', ') : ''}</li>`).join('')}</ul>`;
+  // your own bank
+  h += `<h4>Your own bank</h4>`;
+  const M = V.mine;
+  if (!M) {
+    h += `<div class="box"><p>Found a bank in a town without one, or buy a town’s bank outright. Townsfolk bring their savings as they come to trust it; you lend to townsfolk, shopkeepers, lords, and, when it is short, the crown. Borrowers sometimes default, and a bank short of coin can suffer a run and fail, taking your coin and the town’s savings with it.</p>
+      ${V.canFound ? `<div class="acts">${[800, 1500, 3000].map(n => B_('Found one here · ' + (n + 300) + 'c<small>' + n + 'c in the strongroom, 300c charter</small>', ['bankFound', n], 'alt', s.coins < n + 300)).join('')}</div>` : ''}${V.canBuy ? `<div class="acts">${B_('Buy ' + esc(V.bankHere.name) + ' · ' + V.buyPrice + 'c', ['bankBuy'], '', s.coins < V.buyPrice)}</div>` : ''}${!V.canFound && !V.canBuy ? '<p class="why">Stand in a town to found or buy one there.</p>' : ''}</div>`;
+  } else {
+    const seg = (k, cur, tbl) => `<div class="seg" role="group">${['low', 'fair', 'high'].map(v => `<button type="button" aria-pressed="${cur === v}" data-c='${esc(JSON.stringify(['bankRates', k, v]))}'>${cap(v)} · ${pct(tbl[v])}</button>`).join('')}</div>`;
+    h += `<div class="box"><h5>${esc(cap(M.name))}, ${esc(Sim.townName(M.town))}${M.run ? ' <span class="pill bad">a run!</span>' : ''}</h5>
+      <dl class="kv"><dt>In the strongroom</dt><dd>${M.cash}c</dd><dt>Townsfolk’s savings</dt><dd>${M.deposits}c</dd><dt>Your coin in it</dt><dd>${M.capital}c</dd><dt>Trust in it</dt><dd>${M.trust} of 100</dd><dt>Earned on loans</dt><dd>${M.earned}c</dd><dt>Lost to defaults</dt><dd class="${M.lost ? 'neg' : ''}">${M.lost}c</dd><dt>Paid to savers</dt><dd>${M.paidOut}c</dd></dl>
+      <div class="setting"><span>Lends at</span>${seg('lend', M.lend, V.LEND_RATE)}<p>Dearer loans earn more but find fewer borrowers, and more of them default.</p></div>
+      <div class="setting"><span>Pays savers</span>${seg('save', M.save, V.SAVE_RATE)}<p>Pay more and more of the town’s savings come to you, to lend out.</p></div>
+      <div class="acts">${B_('Put in 200c', ['bankAdd', 200], 'alt', s.coins < 200)}${B_('Put in 1000c', ['bankAdd', 1000], 'alt', s.coins < 1000)}${M.free > 0 ? B_('Take out ' + M.free + 'c', ['bankTake', M.free], 'alt', M.run) : ''}</div>
+      ${M.run ? '<p class="neg">People are taking their savings out. Put in coin, or call in loans, until the strongroom holds about a third of what they have saved.</p>' : ''}</div>`;
+    if (M.loans.length) h += `<h4>Your bank’s borrowers</h4><div class="box"><dl class="kv">${M.loans.map(L => `<dt>${esc(L.who)} <small>(${esc(L.kind)})</small></dt><dd>${L.owed}c${L.kind !== 'crown' ? ' · due day ' + L.due + ' ' + B_('Call it in', ['bankCall', L.id], 'alt') : ''}</dd>`).join('')}</dl></div>`;
+    if (M.crown) {
+      const ok = M.crown >= 1500;
+      h += `<h4>The crown’s debt</h4><div class="box"><p>The crown of Alderwyn owes your bank <b>${M.crown}c</b>. ${ok ? 'That is enough to bargain with. Forgive it for:' : 'At 1,500c it will listen to terms. Until then you can only call it in.'}</p>
+        ${ok ? `<div class="acts">${B_('A seat on the royal council', ['bankRansom', 'seat'])}${B_('A lordship', ['bankRansom', 'lordship'])}${B_('Lower taxes for the realm', ['bankRansom', 'tax'], 'alt')}</div><div class="acts">${Object.keys(Sim.LAWS).map(k => B_((s.realm.laws[k] ? 'Repeal ' : 'Proclaim ') + esc(Sim.LAWS[k].name), ['bankRansom', 'law', k], 'alt')).join('')}</div>` : ''}
+        <div class="acts">${UI.confirm === 'callcrown' ? B_('Yes: empty the treasury', ['bankRansom', 'call'], 'warn') : B_('Call it in · ' + M.crown + 'c', ['ui', 'confirm', 'callcrown'], 'warn')}</div><p class="why">The king will resent any of these. Calling it in empties the treasury, shakes his support, and makes him your enemy.</p></div>`;
+    }
+  }
+  if (V.past.length) h += `<h4>Banks that failed</h4><ul class="plog">${V.past.map(p => `<li>Your bank in ${esc(Sim.townName(p.town))}, founded day ${p.founded}, failed day ${p.failed}.</li>`).join('')}</ul>`;
+  if (V.log.length) h += `<h4>Lately</h4><ul class="plog">${V.log.map(l => `<li>Day ${l.d}: ${esc(l.x)}</li>`).join('')}</ul>`;
+  return h;
+}
 function pagePurse(s) {
   const M = Sim.moneyView(s), W = M.wealth, row = (l, n) => `<dt>${esc(l)}</dt><dd class="num ${n < 0 ? 'neg' : ''}">${n < 0 ? '−' : ''}${Math.abs(Math.round(n))}c</dd>`;
   let h = `<h3>Your Purse</h3><p class="lead">What came in, what went out, what you owe and what falls due.</p>`;
@@ -8186,6 +8233,15 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.91', date: '12 November', title: 'The banks', items: [
+    'Banks in Oakbridge, Crownmere, Eastwatch, Dawnport and Valdor, each kept by a named banker who remembers how you paid.',
+    'Walk in and borrow against a house, a shop or a business you own, and a little on your name alone. The rate (about half a percent to over one percent a day) depends on your reputation in that town and the banker\u2019s memory of you. You pay back every five days over thirty, out of your purse wherever you are, and can pay off early.',
+    'Miss a payment and you are warned. Miss two and there is a fee and a dearer rate. Miss three and the bank takes what you pledged, sells it, keeps what you owed and gives you back the rest. You can carry on, and borrow again later on worse terms.',
+    'The Ashford moneylender is still there for when you spend more than you have, at 1% to 3% a day. The Bank page can pay him off with a cheaper bank loan.',
+    'Become the bank. Found one in a town without a bank, or buy a town\u2019s bank. Set what it charges borrowers and pays savers; the town\u2019s savings come in as people trust it, and it lends to townsfolk, shopkeepers and lords. Some cannot pay. A bank short of coin can suffer a run: put coin in or call in loans, or it fails, and the town\u2019s savings and your coin are lost.',
+    'A crown short of coin will borrow from your bank. Once it owes you 1,500c you can forgive the debt for a seat on the royal council, a lordship, a law, or lower taxes, or call it in and empty the treasury. The king will not thank you.',
+    'A new Bank page under Money, and your loans on the Purse page.'
+  ] },
   { v: '0.90', date: '12 November', title: 'Running a business', items: [
     'Every business you own has a price dial: Cheap, Fair or Dear. On the shops you build, the dial sets the price for you (you can still fine-tune it with the slider).',
     'Every business has a name of its own, 0 to 100, shown as a word and a bar with the reason it is moving. Fair prices, a staffed counter and a fine building raise it; high prices, empty shelves and shutting when people come lower it. A good name brings people who pay a little more. Below 50, fewer people come in, even when goods are short.',
