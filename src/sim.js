@@ -10421,6 +10421,44 @@
   const LOAN_DAYS = 30, LOAN_EVERY = 5, LOAN_N = LOAN_DAYS / LOAN_EVERY;
   const LEND_RATE = { low: 0.005, fair: 0.008, high: 0.012 }, SAVE_RATE = { low: 0.001, fair: 0.0025, high: 0.004 };
   function brand(s) { const D = s.bankDice = s.bankDice || { d: -1, x: 0, b: (s.rng ^ 0xba4c) | 0 }; if (D.d !== s.day) { D.d = s.day; D.x = (Math.imul(s.day + 5, 3266489917) ^ D.b) | 0; } D.x = (D.x + 0x6D2B79F5) | 0; let x = D.x; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
+  // where a bank stands in a town: a spare plot if the town has one, otherwise the clearest street frontage near the market
+  const BANK_SITE = {};
+  function bankSite(t) {
+    if (BANK_SITE[t] !== undefined) return BANK_SITE[t];
+    const L0 = LAYOUT[t], mk = LOCS[MARKET_AT[t]]; if (!L0 || !mk) return (BANK_SITE[t] = null);
+    const taken = [];
+    for (const b of L0.biz || []) taken.push([b.x, b.z, 12.5]); for (const h of L0.houses || []) taken.push([h.x, h.z, h.tall ? 11.5 : 10.5]);
+    for (const k in LOCS) { const q = LOCS[k]; if (q.town === t && !q.bank) taken.push([q.x, q.z, (q.r || 3) + 6]); }
+    for (const k of ['hall', 'keep', 'church', 'guildhall', 'castle', 'cathedral', 'palace', 'customs', 'alcazar', 'estate', 'lighthouse', 'shipyard', 'fountain']) { const q = L0[k]; if (q && q.x != null) taken.push([q.x, q.z, 16]); }
+    for (const m of L0.mansions || []) taken.push([m.x, m.z, 12]);
+    const clear = (x, z) => taken.every(([a, b, r]) => Math.hypot(x - a, z - b) >= r) && (!L0.inside || L0.inside(x, z)) && (!L0.riverDist || L0.riverDist(x, z) > 9) && (!L0.lakeDist || L0.lakeDist(x, z) > 9) && (L0.shoreX == null || x < L0.shoreX - 8) && (L0.quayX == null || Math.abs(x - L0.quayX) > 8);
+    const streetAt = (x, z) => { let best = null; for (const st of L0.streets || []) { const pts = st.pts || st; for (let i = 1; i < pts.length; i++) { const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1], l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1, u = clamp(((x - ax) * (bx - ax) + (z - az) * (bz - az)) / l2, 0, 1), px = ax + (bx - ax) * u, pz = az + (bz - az) * u, d = Math.hypot(x - px, z - pz); if (!best || d < best.d) best = { d, px, pz, w: st.w || 3 }; } } return best; };
+    let site = null;
+    const roomAt = (x, z) => Math.min(...taken.map(([a, b, r]) => Math.hypot(x - a, z - b) - r + 8));
+    for (let r = 14; r <= 120 && !site; r += 4) for (let k = 0; k < 28 && !site; k++) {
+      const a = k / 28 * Math.PI * 2 + r * 0.37, x = mk.x + Math.cos(a) * r, z = mk.z + Math.sin(a) * r; if (!clear(x, z)) continue;
+      const st = streetAt(x, z); if (!st || st.d < st.w / 2 + 5.5 || st.d > st.w / 2 + 10) continue;
+      site = { x, z, face: Math.atan2(st.px - x, st.pz - z) };
+    }
+    if (!site && L0.spare && L0.spare.length) {   // a crowded town: the roomiest spare plot, set a little back from the street
+      const sp = L0.spare.slice().sort((a, b) => roomAt(b.x, b.z) - roomAt(a.x, a.z))[0]; site = { x: sp.x - Math.sin(sp.face) * 1.2, z: sp.z - Math.cos(sp.face) * 1.2, face: sp.face, room: roomAt(sp.x, sp.z) };
+    }
+    if (site) { site.door = { x: site.x + Math.sin(site.face) * 5.2, z: site.z + Math.cos(site.face) * 5.2 }; LOCS['bank:' + t] = { x: site.door.x, z: site.door.z, r: 3.2, name: BANK_NAME[t].replace(/^the /, 'The '), town: t, bank: t }; }
+    return (BANK_SITE[t] = site);
+  }
+  for (const t of Object.keys(LAYOUT)) bankSite(t);
+  const bankIn = (s, t) => !!(s.bank && (s.bank.banks[t] || (s.bank.mine && s.bank.mine.town === t)));
+  // the bank whose door you are at (or inside), if any
+  function atBank(s) { for (const t in BANK_SITE) { const b = BANK_SITE[t]; if (b && bankIn(s, t) && Math.hypot(s.player.x - b.door.x, s.player.z - b.door.z) < 9) return t; } return null; }
+  // what it takes to become a bank: a fortune, a name, a banker's trust and the crown's charter
+  const BANK_CHARTER = 5000, BANK_STRONGROOM = 5000;
+  function bankReady(s, t) {
+    const W = wealthTitle(s), B = setupBanks(s), trusted = Object.keys(B.banks).filter(k => B.banks[k].repaid >= 1 && B.banks[k].trust >= 55 && B.banks[k].seized === 0);
+    const need = [];
+    need.push({ ok: W.i >= 3, text: 'Be called ' + WEALTH_STEPS[3].t[you(s).sex === 'f' ? 1 : 0] + ' (' + WEALTH_STEPS[3].w + 'c of worth and a good name at home)' });
+    need.push({ ok: t && B.banks[t] ? trusted.includes(t) : trusted.length > 0, text: t && B.banks[t] ? 'Have repaid a loan in full to this bank, and never had a pledge taken by it' : 'Have repaid a loan in full to a bank, and be trusted by its banker' });
+    return { ok: need.every(n => n.ok), need };
+  }
   function setupBanks(s) {
     if (s.bank) return s.bank;
     const B = s.bank = { banks: {}, loans: [], nextId: 1, mine: null, log: [], past: [] };
@@ -10488,7 +10526,7 @@
     addStanding(s, -3, 'the bank seizing ' + what);
   }
   /* ---------- your own bank ---------- */
-  function bankPrice(s, t) { return t && BANK_TOWNS.includes(t) ? Math.round(1600 + (WEALTH[t] || 2) * 300) : null; }
+  function bankPrice(s, t) { return t && BANK_TOWNS.includes(t) ? Math.round((14000 + (WEALTH[t] || 2) * 2000) / 100) * 100 : null; }
   function myBankDay(s) {
     const M = s.bank && s.bank.mine; if (!M || M.failed) return;
     const t = M.town, lr = LEND_RATE[M.lend], sr = SAVE_RATE[M.save], folk = townFolk(s, t).length || folkIn(s, t).length || 30;
@@ -10551,10 +10589,10 @@
   }
   function crownOwes(s) { const M = s.bank && s.bank.mine; const L = M && M.loans.find(x => x.pid === 'crown' && x.status === 'open'); return L || null; }
   function bankCmd(s, name, a, b, c) {
-    const B = setupBanks(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    const B = setupBanks(s), town = townAt(s.player.x, s.player.z) || 'hearthmoor', here = atBank(s);
     switch (name) {
       case 'bankBorrow': {   // a: amount, b: pledge key 'house:id' | 'biz:id' | null
-        const K = B.banks[here]; if (!K) return fail('There is no bank here. Banks are in ' + BANK_TOWNS.filter(t => B.banks[t]).map(townName).join(', ') + '.');
+        const K = here && B.banks[here]; if (!K) return fail(here ? 'This is your own bank: it does not lend to you.' : 'Go to a bank and speak with the banker. Banks are in ' + BANK_TOWNS.filter(t => B.banks[t]).map(townName).join(', ') + '.');
         const pl = b ? pledges(s).find(x => x.kind + ':' + x.id === b) : null; if (b && !pl) return fail('You cannot pledge that.');
         const T = bankTerms(s, here, pl), banker = bankerOf(s, here), nm = banker ? banker.name : 'The banker';
         if (T.refuse) return fail(nm + ' will not lend to you again. You have lost too much to this bank.');
@@ -10576,23 +10614,29 @@
       }
       case 'bankFound': case 'bankBuy': {   // a: capital (found)
         if (B.mine) return fail('You already have a bank, in ' + townName(B.mine.town) + '.');
-        const t = here, own = B.banks[t];
+        const t = name === 'bankBuy' ? here : town, own = B.banks[t], RDY = bankReady(s, name === 'bankBuy' ? t : null);
+        if (name === 'bankBuy' && !t) return fail('Go to the bank you mean to buy.');
+        if (!RDY.ok) return fail('You are not ready to become a bank. You must: ' + RDY.need.filter(n => !n.ok).map(n => n.text.charAt(0).toLowerCase() + n.text.slice(1)).join('; ') + '.');
         if (name === 'bankFound') {
           if (own) return fail(townName(t) + ' already has a bank: buy it, or found yours in a town without one.');
-          if (!TOWNS[t] && t !== 'hearthmoor') return fail('Found a bank in a town.');
-          const cap = Math.round(a || 0); if (cap < 800) return fail('A bank needs at least 800c of your own coin in its strongroom.'); if (s.coins < cap + 300) return fail('The charter costs 300c, and the strongroom ' + cap + 'c: ' + (cap + 300) + 'c in all.');
-          spend(s, cap + 300); B.mine = { town: t, name: BANK_NAME[t] || 'the ' + townName(t) + ' Bank', capital: cap, cash: cap, deposits: 0, lend: 'fair', save: 'fair', loans: [], trust: 55, since: s.day, run: null, failed: null };
-          deed(s, 0, 4, 'founding ' + B.mine.name); return ok('You found ' + B.mine.name + ' with ' + cap + 'c in its strongroom. Townsfolk will bring their savings as they come to trust it; set its rates on the Bank page.');
+          if (!bankSite(t)) return fail('There is nowhere to build a bank here. Found it in one of the towns.');
+          const cap = Math.round(a || 0); if (cap < BANK_STRONGROOM) return fail('A bank needs at least ' + BANK_STRONGROOM + 'c of your own coin in its strongroom.'); if (s.coins < cap + BANK_CHARTER) return fail('The royal charter costs ' + BANK_CHARTER + 'c, and the strongroom ' + cap + 'c: ' + (cap + BANK_CHARTER) + 'c in all.');
+          spend(s, cap + BANK_CHARTER); if (s.realm) s.realm.treasury += BANK_CHARTER;
+          B.mine = { town: t, name: BANK_NAME[t] || 'the ' + townName(t) + ' Bank', capital: cap, cash: cap, deposits: 0, lend: 'fair', save: 'fair', loans: [], trust: 55, since: s.day, run: null, failed: null };
+          deed(s, 0, 8, 'founding ' + B.mine.name); event(s, 'By royal charter you found ' + B.mine.name + '. Masons raise it on the street in ' + townName(t) + '; walk in, and through the door at the back is your strongroom.', 'story');
+          return ok('You found ' + B.mine.name + ' with ' + cap + 'c in its strongroom. Townsfolk will bring their savings as they come to trust it. Go in and see it.');
         }
         if (!own) return fail('There is no bank here to buy.');
         const price = bankPrice(s, t); if (s.coins < price) return fail(BANK_NAME[t] + ' costs ' + price + 'c.');
-        const bk = bankerOf(s, t); spend(s, price); if (bk) bk.purse += price;
-        B.mine = { town: t, name: BANK_NAME[t], capital: price, cash: Math.round(price * 0.7), deposits: Math.round(price * 0.6), lend: 'fair', save: 'fair', loans: [], trust: 65, since: s.day, run: null, failed: null, banker: bk ? bk.id : null };
+        const bk = bankerOf(s, t); spend(s, price); if (bk) bk.purse += Math.round(price * 0.2);
+        delete B.banks[t]; B.loans.filter(L => L.bank === t && L.status === 'open').forEach(L => { L.status = 'paid'; L.closed = s.day; });   // it is yours now: what you owed it is settled
+        B.mine = { town: t, name: BANK_NAME[t], capital: price, cash: Math.round(price * 0.5), deposits: Math.round(price * 0.25), lend: 'fair', save: 'fair', loans: [], trust: 65, since: s.day, run: null, failed: null, banker: bk ? bk.id : null };
         if (bk) plog(s, bk, 'Sold ' + BANK_NAME[t] + ' to ' + s.name + ', and stays on to keep it.');
-        deed(s, 0, 5, 'buying ' + BANK_NAME[t]); return ok('You buy ' + BANK_NAME[t] + ' for ' + price + 'c, with its strongroom, its depositors and ' + (bk ? bk.name + ' to keep the books' : 'its books') + '.');
+        deed(s, 0, 8, 'buying ' + BANK_NAME[t]); return ok('You buy ' + BANK_NAME[t] + ' for ' + price + 'c, with its strongroom, its depositors and ' + (bk ? bk.name + ' to keep the books' : 'its books') + '.');
       }
     }
     const M = B.mine; if (!M) return fail('You have no bank.');
+    if ((name === 'bankAdd' || name === 'bankTake') && here !== M.town) return fail('Coin goes in and out of the strongroom in person. Go to your bank in ' + townName(M.town) + '.');
     switch (name) {
       case 'bankRates': { const tbl = a === 'lend' ? LEND_RATE : SAVE_RATE; if (!tbl[b]) return fail('No such rate.'); M[a === 'lend' ? 'lend' : 'save'] = b; return ok(a === 'lend' ? 'Your bank now lends at ' + Math.round(LEND_RATE[b] * 1000) / 10 + '% a day.' : 'Your bank now pays savers ' + Math.round(SAVE_RATE[b] * 1000) / 10 + '% a day.'); }
       case 'bankAdd': { const n = Math.round(a || 0); if (n <= 0 || s.coins < n) return fail('You do not have that much.'); spend(s, n); M.cash += n; M.capital += n; M.trust = Math.min(100, M.trust + Math.min(20, n / Math.max(50, M.deposits) * 30)); return ok('You put ' + n + 'c into your bank’s strongroom.'); }
@@ -10619,19 +10663,20 @@
     return fail('Unknown.');
   }
   function bankDay(s) {
-    if (!s.bank) { const here = townAt(s.player.x, s.player.z); if (!here || !BANK_TOWNS.includes(here)) return; setupBanks(s); }
+    setupBanks(s);
     loanDay(s); myBankDay(s);
   }
   function bankView(s) {
-    const B = setupBanks(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor', K = B.banks[here], pl = pledges(s);
+    const B = setupBanks(s), town = townAt(s.player.x, s.player.z) || 'hearthmoor', here = atBank(s), K = here && B.banks[here], pl = pledges(s);
     const banks = Object.keys(B.banks).map(t => { const k = B.banks[t], p = s.people[k.pid]; return { t, name: BANK_NAME[t], banker: p ? p.name : '?', trust: k.trust, word: k.trust >= 75 ? 'Trusts you' : k.trust >= 50 ? 'Will deal with you' : k.trust >= 30 ? 'Wary of you' : 'Does not trust you', repaid: k.repaid, late: k.late, seized: k.seized }; });
     const loans = B.loans.filter(L => L.status === 'open').map(L => ({ id: L.id, bank: BANK_NAME[L.bank], balance: Math.round(L.balance), interest: Math.round(L.interest), arrears: Math.round(L.arrears), next: L.next, nextPay: Math.ceil(Math.min(L.balance, Math.ceil(L.principal / LOAN_N)) + L.interest + L.arrears), rate: L.rate, pledge: L.pledge && L.pledge.name, missed: L.missed, payoff: Math.ceil(L.balance + L.interest) }));
     const M = B.mine && { town: B.mine.town, name: B.mine.name, capital: Math.round(B.mine.capital), cash: Math.round(B.mine.cash), deposits: Math.round(B.mine.deposits), lend: B.mine.lend, save: B.mine.save, trust: Math.round(B.mine.trust), run: !!B.mine.run, earned: Math.round(B.mine.earned || 0), lost: Math.round(B.mine.lost || 0), paidOut: Math.round(B.mine.paidOut || 0), free: Math.max(0, Math.floor(B.mine.cash - Math.max(50, B.mine.deposits * 0.2))),
       loans: B.mine.loans.filter(L => L.status === 'open').map(L => ({ id: L.id, who: L.who, kind: L.kind, owed: Math.round(L.owed), due: L.due })), crown: crownOwes(s) ? Math.round(crownOwes(s).owed) : 0 };
-    return { here, bankHere: K ? { name: BANK_NAME[here], terms: bankTerms(s, here, null), banker: (bankerOf(s, here) || {}).name, pledges: pl.map(p => Object.assign({}, p, { terms: bankTerms(s, here, p) })) } : null, banks, loans, moneylender: s.coins < 0 ? { owed: -s.coins, rate: loanRate(s) } : null, mine: M, past: B.past, log: B.log.slice(0, 10), canFound: !B.mine && !K && !!(TOWNS[here]), canBuy: !B.mine && !!K, buyPrice: K ? bankPrice(s, here) : null, LEND_RATE, SAVE_RATE };
+    return { here, bankHere: K ? { name: BANK_NAME[here], terms: bankTerms(s, here, null), banker: (bankerOf(s, here) || {}).name, pledges: pl.map(p => Object.assign({}, p, { terms: bankTerms(s, here, p) })) } : null, banks, loans, moneylender: s.coins < 0 ? { owed: -s.coins, rate: loanRate(s) } : null, mine: M, past: B.past, log: B.log.slice(0, 10), town, atMine: !!(here && B.mine && B.mine.town === here), canFound: !B.mine && !bankIn(s, town) && !!bankSite(town), canBuy: !B.mine && !!K, buyPrice: K ? bankPrice(s, here) : null, ready: bankReady(s, K ? here : null), charter: BANK_CHARTER, strongroom: BANK_STRONGROOM, LEND_RATE, SAVE_RATE };
   }
 
   const api = {
+    bankSite, BANK_SITE, atBank, bankIn, bankReady, BANK_CHARTER, BANK_STRONGROOM,
     setupBanks, bankDay, bankView, bankTerms, pledges, yourLoans, BANK_TOWNS, BANK_NAME, LEND_RATE, SAVE_RATE, LOAN_DAYS, LOAN_EVERY, crownOwes, bankPrice,
     shopDial, shopBase, DIAL, DIAL_NAME, renownOf, renownWord, LADDER, LADDER_GAIN, bizLevel, levelCost, renownTarget, renownDay, dealsDay, dealOffers, yourWorth, investPrice, buyBackPrice, WEALTH_STEPS, wealthTitle, moneyView, INVEST_SHARES,
     setupRep, repView, standing, standingWord, charWord, repK, loanRate, repAdd, repInstall, repPriceMul, wontDeal, yourBuyPrice, yourSellPrice, yourBizPrice, yourHousePrice, officeIn,

@@ -11285,6 +11285,44 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   const LOAN_DAYS = 30, LOAN_EVERY = 5, LOAN_N = LOAN_DAYS / LOAN_EVERY;
   const LEND_RATE = { low: 0.005, fair: 0.008, high: 0.012 }, SAVE_RATE = { low: 0.001, fair: 0.0025, high: 0.004 };
   function brand(s) { const D = s.bankDice = s.bankDice || { d: -1, x: 0, b: (s.rng ^ 0xba4c) | 0 }; if (D.d !== s.day) { D.d = s.day; D.x = (Math.imul(s.day + 5, 3266489917) ^ D.b) | 0; } D.x = (D.x + 0x6D2B79F5) | 0; let x = D.x; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
+  // where a bank stands in a town: a spare plot if the town has one, otherwise the clearest street frontage near the market
+  const BANK_SITE = {};
+  function bankSite(t) {
+    if (BANK_SITE[t] !== undefined) return BANK_SITE[t];
+    const L0 = LAYOUT[t], mk = LOCS[MARKET_AT[t]]; if (!L0 || !mk) return (BANK_SITE[t] = null);
+    const taken = [];
+    for (const b of L0.biz || []) taken.push([b.x, b.z, 12.5]); for (const h of L0.houses || []) taken.push([h.x, h.z, h.tall ? 11.5 : 10.5]);
+    for (const k in LOCS) { const q = LOCS[k]; if (q.town === t && !q.bank) taken.push([q.x, q.z, (q.r || 3) + 6]); }
+    for (const k of ['hall', 'keep', 'church', 'guildhall', 'castle', 'cathedral', 'palace', 'customs', 'alcazar', 'estate', 'lighthouse', 'shipyard', 'fountain']) { const q = L0[k]; if (q && q.x != null) taken.push([q.x, q.z, 16]); }
+    for (const m of L0.mansions || []) taken.push([m.x, m.z, 12]);
+    const clear = (x, z) => taken.every(([a, b, r]) => Math.hypot(x - a, z - b) >= r) && (!L0.inside || L0.inside(x, z)) && (!L0.riverDist || L0.riverDist(x, z) > 9) && (!L0.lakeDist || L0.lakeDist(x, z) > 9) && (L0.shoreX == null || x < L0.shoreX - 8) && (L0.quayX == null || Math.abs(x - L0.quayX) > 8);
+    const streetAt = (x, z) => { let best = null; for (const st of L0.streets || []) { const pts = st.pts || st; for (let i = 1; i < pts.length; i++) { const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1], l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1, u = clamp(((x - ax) * (bx - ax) + (z - az) * (bz - az)) / l2, 0, 1), px = ax + (bx - ax) * u, pz = az + (bz - az) * u, d = Math.hypot(x - px, z - pz); if (!best || d < best.d) best = { d, px, pz, w: st.w || 3 }; } } return best; };
+    let site = null;
+    const roomAt = (x, z) => Math.min(...taken.map(([a, b, r]) => Math.hypot(x - a, z - b) - r + 8));
+    for (let r = 14; r <= 120 && !site; r += 4) for (let k = 0; k < 28 && !site; k++) {
+      const a = k / 28 * Math.PI * 2 + r * 0.37, x = mk.x + Math.cos(a) * r, z = mk.z + Math.sin(a) * r; if (!clear(x, z)) continue;
+      const st = streetAt(x, z); if (!st || st.d < st.w / 2 + 5.5 || st.d > st.w / 2 + 10) continue;
+      site = { x, z, face: Math.atan2(st.px - x, st.pz - z) };
+    }
+    if (!site && L0.spare && L0.spare.length) {   // a crowded town: the roomiest spare plot, set a little back from the street
+      const sp = L0.spare.slice().sort((a, b) => roomAt(b.x, b.z) - roomAt(a.x, a.z))[0]; site = { x: sp.x - Math.sin(sp.face) * 1.2, z: sp.z - Math.cos(sp.face) * 1.2, face: sp.face, room: roomAt(sp.x, sp.z) };
+    }
+    if (site) { site.door = { x: site.x + Math.sin(site.face) * 5.2, z: site.z + Math.cos(site.face) * 5.2 }; LOCS['bank:' + t] = { x: site.door.x, z: site.door.z, r: 3.2, name: BANK_NAME[t].replace(/^the /, 'The '), town: t, bank: t }; }
+    return (BANK_SITE[t] = site);
+  }
+  for (const t of Object.keys(LAYOUT)) bankSite(t);
+  const bankIn = (s, t) => !!(s.bank && (s.bank.banks[t] || (s.bank.mine && s.bank.mine.town === t)));
+  // the bank whose door you are at (or inside), if any
+  function atBank(s) { for (const t in BANK_SITE) { const b = BANK_SITE[t]; if (b && bankIn(s, t) && Math.hypot(s.player.x - b.door.x, s.player.z - b.door.z) < 9) return t; } return null; }
+  // what it takes to become a bank: a fortune, a name, a banker's trust and the crown's charter
+  const BANK_CHARTER = 5000, BANK_STRONGROOM = 5000;
+  function bankReady(s, t) {
+    const W = wealthTitle(s), B = setupBanks(s), trusted = Object.keys(B.banks).filter(k => B.banks[k].repaid >= 1 && B.banks[k].trust >= 55 && B.banks[k].seized === 0);
+    const need = [];
+    need.push({ ok: W.i >= 3, text: 'Be called ' + WEALTH_STEPS[3].t[you(s).sex === 'f' ? 1 : 0] + ' (' + WEALTH_STEPS[3].w + 'c of worth and a good name at home)' });
+    need.push({ ok: t && B.banks[t] ? trusted.includes(t) : trusted.length > 0, text: t && B.banks[t] ? 'Have repaid a loan in full to this bank, and never had a pledge taken by it' : 'Have repaid a loan in full to a bank, and be trusted by its banker' });
+    return { ok: need.every(n => n.ok), need };
+  }
   function setupBanks(s) {
     if (s.bank) return s.bank;
     const B = s.bank = { banks: {}, loans: [], nextId: 1, mine: null, log: [], past: [] };
@@ -11352,7 +11390,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     addStanding(s, -3, 'the bank seizing ' + what);
   }
   /* ---------- your own bank ---------- */
-  function bankPrice(s, t) { return t && BANK_TOWNS.includes(t) ? Math.round(1600 + (WEALTH[t] || 2) * 300) : null; }
+  function bankPrice(s, t) { return t && BANK_TOWNS.includes(t) ? Math.round((14000 + (WEALTH[t] || 2) * 2000) / 100) * 100 : null; }
   function myBankDay(s) {
     const M = s.bank && s.bank.mine; if (!M || M.failed) return;
     const t = M.town, lr = LEND_RATE[M.lend], sr = SAVE_RATE[M.save], folk = townFolk(s, t).length || folkIn(s, t).length || 30;
@@ -11415,10 +11453,10 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   }
   function crownOwes(s) { const M = s.bank && s.bank.mine; const L = M && M.loans.find(x => x.pid === 'crown' && x.status === 'open'); return L || null; }
   function bankCmd(s, name, a, b, c) {
-    const B = setupBanks(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    const B = setupBanks(s), town = townAt(s.player.x, s.player.z) || 'hearthmoor', here = atBank(s);
     switch (name) {
       case 'bankBorrow': {   // a: amount, b: pledge key 'house:id' | 'biz:id' | null
-        const K = B.banks[here]; if (!K) return fail('There is no bank here. Banks are in ' + BANK_TOWNS.filter(t => B.banks[t]).map(townName).join(', ') + '.');
+        const K = here && B.banks[here]; if (!K) return fail(here ? 'This is your own bank: it does not lend to you.' : 'Go to a bank and speak with the banker. Banks are in ' + BANK_TOWNS.filter(t => B.banks[t]).map(townName).join(', ') + '.');
         const pl = b ? pledges(s).find(x => x.kind + ':' + x.id === b) : null; if (b && !pl) return fail('You cannot pledge that.');
         const T = bankTerms(s, here, pl), banker = bankerOf(s, here), nm = banker ? banker.name : 'The banker';
         if (T.refuse) return fail(nm + ' will not lend to you again. You have lost too much to this bank.');
@@ -11440,23 +11478,29 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
       }
       case 'bankFound': case 'bankBuy': {   // a: capital (found)
         if (B.mine) return fail('You already have a bank, in ' + townName(B.mine.town) + '.');
-        const t = here, own = B.banks[t];
+        const t = name === 'bankBuy' ? here : town, own = B.banks[t], RDY = bankReady(s, name === 'bankBuy' ? t : null);
+        if (name === 'bankBuy' && !t) return fail('Go to the bank you mean to buy.');
+        if (!RDY.ok) return fail('You are not ready to become a bank. You must: ' + RDY.need.filter(n => !n.ok).map(n => n.text.charAt(0).toLowerCase() + n.text.slice(1)).join('; ') + '.');
         if (name === 'bankFound') {
           if (own) return fail(townName(t) + ' already has a bank: buy it, or found yours in a town without one.');
-          if (!TOWNS[t] && t !== 'hearthmoor') return fail('Found a bank in a town.');
-          const cap = Math.round(a || 0); if (cap < 800) return fail('A bank needs at least 800c of your own coin in its strongroom.'); if (s.coins < cap + 300) return fail('The charter costs 300c, and the strongroom ' + cap + 'c: ' + (cap + 300) + 'c in all.');
-          spend(s, cap + 300); B.mine = { town: t, name: BANK_NAME[t] || 'the ' + townName(t) + ' Bank', capital: cap, cash: cap, deposits: 0, lend: 'fair', save: 'fair', loans: [], trust: 55, since: s.day, run: null, failed: null };
-          deed(s, 0, 4, 'founding ' + B.mine.name); return ok('You found ' + B.mine.name + ' with ' + cap + 'c in its strongroom. Townsfolk will bring their savings as they come to trust it; set its rates on the Bank page.');
+          if (!bankSite(t)) return fail('There is nowhere to build a bank here. Found it in one of the towns.');
+          const cap = Math.round(a || 0); if (cap < BANK_STRONGROOM) return fail('A bank needs at least ' + BANK_STRONGROOM + 'c of your own coin in its strongroom.'); if (s.coins < cap + BANK_CHARTER) return fail('The royal charter costs ' + BANK_CHARTER + 'c, and the strongroom ' + cap + 'c: ' + (cap + BANK_CHARTER) + 'c in all.');
+          spend(s, cap + BANK_CHARTER); if (s.realm) s.realm.treasury += BANK_CHARTER;
+          B.mine = { town: t, name: BANK_NAME[t] || 'the ' + townName(t) + ' Bank', capital: cap, cash: cap, deposits: 0, lend: 'fair', save: 'fair', loans: [], trust: 55, since: s.day, run: null, failed: null };
+          deed(s, 0, 8, 'founding ' + B.mine.name); event(s, 'By royal charter you found ' + B.mine.name + '. Masons raise it on the street in ' + townName(t) + '; walk in, and through the door at the back is your strongroom.', 'story');
+          return ok('You found ' + B.mine.name + ' with ' + cap + 'c in its strongroom. Townsfolk will bring their savings as they come to trust it. Go in and see it.');
         }
         if (!own) return fail('There is no bank here to buy.');
         const price = bankPrice(s, t); if (s.coins < price) return fail(BANK_NAME[t] + ' costs ' + price + 'c.');
-        const bk = bankerOf(s, t); spend(s, price); if (bk) bk.purse += price;
-        B.mine = { town: t, name: BANK_NAME[t], capital: price, cash: Math.round(price * 0.7), deposits: Math.round(price * 0.6), lend: 'fair', save: 'fair', loans: [], trust: 65, since: s.day, run: null, failed: null, banker: bk ? bk.id : null };
+        const bk = bankerOf(s, t); spend(s, price); if (bk) bk.purse += Math.round(price * 0.2);
+        delete B.banks[t]; B.loans.filter(L => L.bank === t && L.status === 'open').forEach(L => { L.status = 'paid'; L.closed = s.day; });   // it is yours now: what you owed it is settled
+        B.mine = { town: t, name: BANK_NAME[t], capital: price, cash: Math.round(price * 0.5), deposits: Math.round(price * 0.25), lend: 'fair', save: 'fair', loans: [], trust: 65, since: s.day, run: null, failed: null, banker: bk ? bk.id : null };
         if (bk) plog(s, bk, 'Sold ' + BANK_NAME[t] + ' to ' + s.name + ', and stays on to keep it.');
-        deed(s, 0, 5, 'buying ' + BANK_NAME[t]); return ok('You buy ' + BANK_NAME[t] + ' for ' + price + 'c, with its strongroom, its depositors and ' + (bk ? bk.name + ' to keep the books' : 'its books') + '.');
+        deed(s, 0, 8, 'buying ' + BANK_NAME[t]); return ok('You buy ' + BANK_NAME[t] + ' for ' + price + 'c, with its strongroom, its depositors and ' + (bk ? bk.name + ' to keep the books' : 'its books') + '.');
       }
     }
     const M = B.mine; if (!M) return fail('You have no bank.');
+    if ((name === 'bankAdd' || name === 'bankTake') && here !== M.town) return fail('Coin goes in and out of the strongroom in person. Go to your bank in ' + townName(M.town) + '.');
     switch (name) {
       case 'bankRates': { const tbl = a === 'lend' ? LEND_RATE : SAVE_RATE; if (!tbl[b]) return fail('No such rate.'); M[a === 'lend' ? 'lend' : 'save'] = b; return ok(a === 'lend' ? 'Your bank now lends at ' + Math.round(LEND_RATE[b] * 1000) / 10 + '% a day.' : 'Your bank now pays savers ' + Math.round(SAVE_RATE[b] * 1000) / 10 + '% a day.'); }
       case 'bankAdd': { const n = Math.round(a || 0); if (n <= 0 || s.coins < n) return fail('You do not have that much.'); spend(s, n); M.cash += n; M.capital += n; M.trust = Math.min(100, M.trust + Math.min(20, n / Math.max(50, M.deposits) * 30)); return ok('You put ' + n + 'c into your bank’s strongroom.'); }
@@ -11483,19 +11527,20 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     return fail('Unknown.');
   }
   function bankDay(s) {
-    if (!s.bank) { const here = townAt(s.player.x, s.player.z); if (!here || !BANK_TOWNS.includes(here)) return; setupBanks(s); }
+    setupBanks(s);
     loanDay(s); myBankDay(s);
   }
   function bankView(s) {
-    const B = setupBanks(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor', K = B.banks[here], pl = pledges(s);
+    const B = setupBanks(s), town = townAt(s.player.x, s.player.z) || 'hearthmoor', here = atBank(s), K = here && B.banks[here], pl = pledges(s);
     const banks = Object.keys(B.banks).map(t => { const k = B.banks[t], p = s.people[k.pid]; return { t, name: BANK_NAME[t], banker: p ? p.name : '?', trust: k.trust, word: k.trust >= 75 ? 'Trusts you' : k.trust >= 50 ? 'Will deal with you' : k.trust >= 30 ? 'Wary of you' : 'Does not trust you', repaid: k.repaid, late: k.late, seized: k.seized }; });
     const loans = B.loans.filter(L => L.status === 'open').map(L => ({ id: L.id, bank: BANK_NAME[L.bank], balance: Math.round(L.balance), interest: Math.round(L.interest), arrears: Math.round(L.arrears), next: L.next, nextPay: Math.ceil(Math.min(L.balance, Math.ceil(L.principal / LOAN_N)) + L.interest + L.arrears), rate: L.rate, pledge: L.pledge && L.pledge.name, missed: L.missed, payoff: Math.ceil(L.balance + L.interest) }));
     const M = B.mine && { town: B.mine.town, name: B.mine.name, capital: Math.round(B.mine.capital), cash: Math.round(B.mine.cash), deposits: Math.round(B.mine.deposits), lend: B.mine.lend, save: B.mine.save, trust: Math.round(B.mine.trust), run: !!B.mine.run, earned: Math.round(B.mine.earned || 0), lost: Math.round(B.mine.lost || 0), paidOut: Math.round(B.mine.paidOut || 0), free: Math.max(0, Math.floor(B.mine.cash - Math.max(50, B.mine.deposits * 0.2))),
       loans: B.mine.loans.filter(L => L.status === 'open').map(L => ({ id: L.id, who: L.who, kind: L.kind, owed: Math.round(L.owed), due: L.due })), crown: crownOwes(s) ? Math.round(crownOwes(s).owed) : 0 };
-    return { here, bankHere: K ? { name: BANK_NAME[here], terms: bankTerms(s, here, null), banker: (bankerOf(s, here) || {}).name, pledges: pl.map(p => Object.assign({}, p, { terms: bankTerms(s, here, p) })) } : null, banks, loans, moneylender: s.coins < 0 ? { owed: -s.coins, rate: loanRate(s) } : null, mine: M, past: B.past, log: B.log.slice(0, 10), canFound: !B.mine && !K && !!(TOWNS[here]), canBuy: !B.mine && !!K, buyPrice: K ? bankPrice(s, here) : null, LEND_RATE, SAVE_RATE };
+    return { here, bankHere: K ? { name: BANK_NAME[here], terms: bankTerms(s, here, null), banker: (bankerOf(s, here) || {}).name, pledges: pl.map(p => Object.assign({}, p, { terms: bankTerms(s, here, p) })) } : null, banks, loans, moneylender: s.coins < 0 ? { owed: -s.coins, rate: loanRate(s) } : null, mine: M, past: B.past, log: B.log.slice(0, 10), town, atMine: !!(here && B.mine && B.mine.town === here), canFound: !B.mine && !bankIn(s, town) && !!bankSite(town), canBuy: !B.mine && !!K, buyPrice: K ? bankPrice(s, here) : null, ready: bankReady(s, K ? here : null), charter: BANK_CHARTER, strongroom: BANK_STRONGROOM, LEND_RATE, SAVE_RATE };
   }
 
   const api = {
+    bankSite, BANK_SITE, atBank, bankIn, bankReady, BANK_CHARTER, BANK_STRONGROOM,
     setupBanks, bankDay, bankView, bankTerms, pledges, yourLoans, BANK_TOWNS, BANK_NAME, LEND_RATE, SAVE_RATE, LOAN_DAYS, LOAN_EVERY, crownOwes, bankPrice,
     shopDial, shopBase, DIAL, DIAL_NAME, renownOf, renownWord, LADDER, LADDER_GAIN, bizLevel, levelCost, renownTarget, renownDay, dealsDay, dealOffers, yourWorth, investPrice, buyBackPrice, WEALTH_STEPS, wealthTitle, moneyView, INVEST_SHARES,
     setupRep, repView, standing, standingWord, charWord, repK, loanRate, repAdd, repInstall, repPriceMul, wontDeal, yourBuyPrice, yourSellPrice, yourBizPrice, yourHousePrice, officeIn,
@@ -14386,7 +14431,7 @@ const VAL_SOLIDS = (function () {
 })();
 const ISLE_SOLIDS = (function () { const I = Sim.ISLE, out = []; for (let a = 0; a < Math.PI * 2; a += 0.05) out.push({ c: 1, x: I.x + Math.cos(a) * 50, z: I.z + Math.sin(a) * 50 / 1.3, r: 1.6 }); out.push({ c: 1, x: I.x - 12, z: I.z, r: 5.6 }, { c: 1, x: I.x + 30, z: I.z - 22, r: 3 }); return out; })();
 function solidsNow(s) {
-  const out = staticSolids.slice(); out.push(...STAGE_SOLIDS);
+  const out = staticSolids.slice(); out.push(...STAGE_SOLIDS); out.push(...BankHouses.solids);
   out.push(...tileSolidsNear(s.player.x, s.player.z));
   if (Math.hypot(s.player.x - TOWNS.greenhaven.x, s.player.z - TOWNS.greenhaven.z) < TOWNS.greenhaven.r + 60) out.push(...GH_SOLIDS, ...GH_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.crownmere.x, s.player.z - TOWNS.crownmere.z) < TOWNS.crownmere.r + 40) { const px = s.player.x, pz = s.player.z; out.push(...CM_SOLIDS.filter(o => Math.abs(o.x - px) < 60 && Math.abs(o.z - pz) < 60), ...CM_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
@@ -14596,7 +14641,7 @@ function toast(text, kind, force) {
 }
 // the place you chose to go to wins over any other place you happen to be standing in
 function nearLoc(p) { const k = UI.loc, Lk = k && L[k]; return Lk && Math.hypot(p.x - Lk.x, p.z - Lk.z) < (Lk.r || 3) + 1.5 ? k : null; }
-function where(s) { const p = s.player; return Object.keys(L).find(k => Math.hypot(p.x - L[k].x, p.z - L[k].z) < L[k].r) || null; }
+function where(s) { const p = s.player; return Object.keys(L).find(k => Math.hypot(p.x - L[k].x, p.z - L[k].z) < L[k].r && !(L[k].bank && !Sim.bankIn(s, L[k].bank))) || null; }
 function carryText(s) {
   const inv = s.player.inv, parts = Sim.GOODS.filter(g => inv[g]).map(g => inv[g] + ' ' + g);
   return parts.length ? 'You carry ' + parts.join(', ') + ' (' + Sim.carried(s) + '/' + Sim.CARRY + ').' : 'Your hands are empty.';
@@ -16183,7 +16228,9 @@ function crowdBox(s, town) {
 function pageBank(s) {
   const V = Sim.bankView(s), pct = r => Math.round(r * 1000) / 10 + '%', cap = t => t.charAt(0).toUpperCase() + t.slice(1);
   let h = `<h3>The Bank</h3><p class="lead">Borrow against what you own, at a rate your name earns. Pay every five days, wherever you are. Or become the bank.</p>`;
-  if (V.bankHere) {
+  const inBank = !!(UI.inside && UI.inside.kind === 'bank');
+  if (V.bankHere && !inBank) h += `<div class="box"><p>You are at the door of ${esc(V.bankHere.name)}. Go inside and speak with ${esc(V.bankHere.banker || 'the banker')} to borrow.</p></div>`;
+  else if (V.bankHere) {
     const B = V.bankHere, T = B.terms, amts = m => [...new Set([Math.floor(m), Math.floor(m / 2), Math.min(100, Math.floor(m))])].filter(n => n >= 20).sort((a, b) => b - a);
     h += `<div class="box"><h5>${esc(cap(B.name))}</h5><p>${esc(B.banker)} keeps it. ${T.refuse ? 'They will not lend to you again.' : 'They lend at <b>' + pct(T.rate) + ' a day</b>, paid back over ' + Sim.LOAN_DAYS + ' days in payments every ' + Sim.LOAN_EVERY + ' days.'}</p>`;
     if (!T.refuse) {
@@ -16193,7 +16240,7 @@ function pageBank(s) {
       if (V.moneylender && B.pledges.length) h += `<p>Clear the moneylender’s ${V.moneylender.owed}c with a loan from here:</p><div class="acts">${B.pledges.filter(p => p.terms.max >= V.moneylender.owed).map(p => B_('Against ' + esc(p.name), ['bankRefi', p.kind + ':' + p.id], 'alt')).join('') || '<span class="hintline">Nothing you own is worth enough to cover it.</span>'}</div>`;
     }
     h += `</div>`;
-  } else h += `<div class="box"><p>There is no bank in ${esc(Sim.townName(V.here))}. Banks are in ${Sim.BANK_TOWNS.map(t => esc(Sim.townName(t))).join(', ')}: go there to borrow.</p></div>`;
+  } else if (!V.atMine) h += `<div class="box"><p>You borrow at a bank, in person. Banks stand in ${Sim.BANK_TOWNS.map(t => esc(Sim.townName(t))).join(', ')}: find the stone building with the columns, go inside, and speak with the banker.</p></div>`;
   if (V.loans.length || V.moneylender) {
     h += `<h4>What you owe</h4>`;
     for (const L of V.loans) h += `<div class="box"><dl class="kv"><dt>${esc(cap(L.bank))}</dt><dd>${L.balance}c left</dd><dt>Next payment</dt><dd>about ${L.nextPay}c on day ${L.next}</dd><dt>Rate</dt><dd>${pct(L.rate)} a day</dd>${L.pledge ? `<dt>Pledged</dt><dd>${esc(L.pledge)}</dd>` : ''}${L.missed ? `<dt class="neg">Missed</dt><dd class="neg">${L.missed} of 3: ${L.missed === 1 ? 'a fee next time' : 'they take the pledge next time'}</dd>` : ''}</dl><div class="acts">${B_('Pay it all off · ' + L.payoff + 'c', ['bankRepay', L.id], 'alt', s.coins < L.payoff)}</div></div>`;
@@ -16204,15 +16251,17 @@ function pageBank(s) {
   h += `<h4>Your own bank</h4>`;
   const M = V.mine;
   if (!M) {
-    h += `<div class="box"><p>Found a bank in a town without one, or buy a town’s bank outright. Townsfolk bring their savings as they come to trust it; you lend to townsfolk, shopkeepers, lords, and, when it is short, the crown. Borrowers sometimes default, and a bank short of coin can suffer a run and fail, taking your coin and the town’s savings with it.</p>
-      ${V.canFound ? `<div class="acts">${[800, 1500, 3000].map(n => B_('Found one here · ' + (n + 300) + 'c<small>' + n + 'c in the strongroom, 300c charter</small>', ['bankFound', n], 'alt', s.coins < n + 300)).join('')}</div>` : ''}${V.canBuy ? `<div class="acts">${B_('Buy ' + esc(V.bankHere.name) + ' · ' + V.buyPrice + 'c', ['bankBuy'], '', s.coins < V.buyPrice)}</div>` : ''}${!V.canFound && !V.canBuy ? '<p class="why">Stand in a town to found or buy one there.</p>' : ''}</div>`;
+    const RD = V.ready, tick = n => `<li class="${n.ok ? 'pos' : 'neg'}">${n.ok ? '✓' : '✗'} ${esc(n.text)}</li>`;
+    h += `<div class="box"><p>A bank of your own is the work of a career. The town’s savings come to you as people trust it; you lend them to townsfolk, shopkeepers, lords and, when it is short, the crown. Borrowers sometimes default, and a bank short of coin can suffer a run and fail, taking your coin and the town’s savings with it.</p>
+      <p><b>What it takes:</b></p><ul class="plog">${RD.need.map(tick).join('')}<li>Then either a royal charter (${V.charter}c) and at least ${V.strongroom}c in the strongroom of a new bank, in a town without one; or the price of an existing bank${V.buyPrice ? ' (' + V.buyPrice + 'c for this one)' : ', about 20,000c'}.</li></ul>
+      ${RD.ok && V.canFound ? `<div class="acts">${[V.strongroom, V.strongroom * 2].map(n => B_('Found one in ' + esc(Sim.townName(V.town)) + ' · ' + (n + V.charter) + 'c<small>' + n + 'c in the strongroom</small>', ['bankFound', n], 'alt', s.coins < n + V.charter)).join('')}</div>` : ''}${RD.ok && V.canBuy && inBank ? `<div class="acts">${B_('Buy ' + esc(V.bankHere.name) + ' · ' + V.buyPrice + 'c', ['bankBuy'], '', s.coins < V.buyPrice)}</div>` : ''}${RD.ok && !V.canFound && !(V.canBuy && inBank) ? '<p class="why">Stand in a town without a bank to found one, or go into a bank to buy it.</p>' : ''}</div>`;
   } else {
     const seg = (k, cur, tbl) => `<div class="seg" role="group">${['low', 'fair', 'high'].map(v => `<button type="button" aria-pressed="${cur === v}" data-c='${esc(JSON.stringify(['bankRates', k, v]))}'>${cap(v)} · ${pct(tbl[v])}</button>`).join('')}</div>`;
     h += `<div class="box"><h5>${esc(cap(M.name))}, ${esc(Sim.townName(M.town))}${M.run ? ' <span class="pill bad">a run!</span>' : ''}</h5>
       <dl class="kv"><dt>In the strongroom</dt><dd>${M.cash}c</dd><dt>Townsfolk’s savings</dt><dd>${M.deposits}c</dd><dt>Your coin in it</dt><dd>${M.capital}c</dd><dt>Trust in it</dt><dd>${M.trust} of 100</dd><dt>Earned on loans</dt><dd>${M.earned}c</dd><dt>Lost to defaults</dt><dd class="${M.lost ? 'neg' : ''}">${M.lost}c</dd><dt>Paid to savers</dt><dd>${M.paidOut}c</dd></dl>
       <div class="setting"><span>Lends at</span>${seg('lend', M.lend, V.LEND_RATE)}<p>Dearer loans earn more but find fewer borrowers, and more of them default.</p></div>
       <div class="setting"><span>Pays savers</span>${seg('save', M.save, V.SAVE_RATE)}<p>Pay more and more of the town’s savings come to you, to lend out.</p></div>
-      <div class="acts">${B_('Put in 200c', ['bankAdd', 200], 'alt', s.coins < 200)}${B_('Put in 1000c', ['bankAdd', 1000], 'alt', s.coins < 1000)}${M.free > 0 ? B_('Take out ' + M.free + 'c', ['bankTake', M.free], 'alt', M.run) : ''}</div>
+      <p class="why">Go into your bank and through the door at the back to see the strongroom, and to put coin in or take it out.</p>
       ${M.run ? '<p class="neg">People are taking their savings out. Put in coin, or call in loans, until the strongroom holds about a third of what they have saved.</p>' : ''}</div>`;
     if (M.loans.length) h += `<h4>Your bank’s borrowers</h4><div class="box"><dl class="kv">${M.loans.map(L => `<dt>${esc(L.who)} <small>(${esc(L.kind)})</small></dt><dd>${L.owed}c${L.kind !== 'crown' ? ' · due day ' + L.due + ' ' + B_('Call it in', ['bankCall', L.id], 'alt') : ''}</dd>`).join('')}</dl></div>`;
     if (M.crown) {
@@ -17319,7 +17368,7 @@ function pinPos(k) {
 const pinV = new THREE.Vector3();
 function buildPins() {
   if (LM.townPins) { $('pins').innerHTML = Object.keys(TOWNS).map(id => `<button type="button" class="pin town" data-k="town:${id}" data-c='${esc(JSON.stringify(['ui', 'mapFly', id]))}'><span>${esc(TOWN_NAMES[id])}</span></button>`).join('') + `<button type="button" class="pin you" data-k="you" tabindex="-1"><span>${esc(G.name)}</span></button>` + (UI.mapPid && G.people[UI.mapPid] ? `<button type="button" class="pin who" data-k="p:${UI.mapPid}" tabindex="-1"><span>${esc(G.people[UI.mapPid].name)}</span></button>` : ''); return; }
-  const keys = Object.keys(L).filter(k => !L[k].sign && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']).concat(UI.mapPid && G.people[UI.mapPid] ? ['p:' + UI.mapPid] : []);
+  const keys = Object.keys(L).filter(k => !L[k].sign && !(L[k].bank && !Sim.bankIn(G, L[k].bank)) && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']).concat(UI.mapPid && G.people[UI.mapPid] ? ['p:' + UI.mapPid] : []);
   $('pins').innerHTML = keys.map(k => `<button type="button" class="pin ${pinKind(k)} ${UI.mapSel === k ? 'sel' : ''}" data-k="${esc(k)}" ${k === 'you' ? 'tabindex="-1"' : `data-c='${esc(JSON.stringify(['ui', 'mapSel', k]))}'`}><span>${esc(pinLabel(k))}</span></button>`).join('');
 }
 // labels never sit on top of one another: places and halls are placed first, then shops; a label that would overlap one
@@ -17345,6 +17394,7 @@ function updatePins() {
   }
 }
 const PLACE_NOTE = {
+  'bank:oakbridge': 'Stone columns and a barred door. Go inside to borrow against what you own.', 'bank:crownmere': 'The greatest bank in Alderwyn, under the castle’s eye. Go inside to borrow.', 'bank:eastwatch': 'Where the shipowners keep their gold. Go inside to borrow.', 'bank:dawnport': 'Valdoria’s merchants bank here. Go inside to borrow.', 'bank:valdor': 'The oldest banking house in Valdoria. Go inside to borrow.',
   field: 'Free grain for anyone who gathers it.', forest: 'Free wood for anyone who cuts it.', pit: 'Free iron ore for anyone who digs it.',
   market: 'Buy and sell grain, wood and ore. Merchant orders are handed in here.', home: 'Your hut on the west side, near the Pine Woods.',
   well: 'The heart of the village. Villagers lunch at the well at noon.', hall: 'Elder Brannoch and the village council meet here.',
@@ -17990,6 +18040,7 @@ function uiCmd(k, v) {
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
   if (k === 'enter') { const d = insideOf(v); if (d) Interior.enter(d); return; }
   if (k === 'leave') { Interior.leave(); return; }
+  if (k === 'vault') { if (UI.inside && UI.inside.kind === 'bank' && UI.inside.mine) Interior.enter(Interior.vaultOf(UI.inside)); return; }
   if (k === 'openCard') { UI.openLoc = UI.lastHere; renderCard(true); return; }
   if (k === 'foldCard') { UI.openLoc = null; renderCard(true); return; }
   if (k === 'mapMode') { setMapMode(v); return; }
@@ -18254,11 +18305,11 @@ const Interior = (function () {
   let R = null; const av = { x: 0, z: 0, face: Math.PI, g: null, moving: false };
   const KIND = Object.assign({}, TRADE_KIND, { mill: 'mill', estate: 'home' });
   const SIZE = { great: [14, 10], hall: [11, 8], hut: [5.6, 4.6], home: [7.2, 5.6], tall: [8, 6.4], manor: [10, 7], tavern: [11, 8], smithy: [9, 7], bakery: [8.4, 6.6], butcher: [7.4, 6], fine: [7.4, 6.2], weaver: [9, 6.6], potter: [8.4, 6.4], tanner: [8.4, 7], yard: [10, 7.4], mason: [9, 7], dairy: [8, 6.2], mill: [9.4, 8], shop: [8, 6.4] };
-  const FLOOR = { castle: '#6e6a62', home: '#7a5a3a', hut: '#6b5a40', smithy: '#5a554e', mason: '#6e6a62', tanner: '#6a5a44', mill: '#7a6a52', yard: '#7a6448' };
+  const FLOOR = { bank: '#6e6a62', vault: '#5a554e', castle: '#6e6a62', home: '#7a5a3a', hut: '#6b5a40', smithy: '#5a554e', mason: '#6e6a62', tanner: '#6a5a44', mill: '#7a6a52', yard: '#7a6448' };
 
   function build(d) {
-    const kind = d.kind === 'home' ? 'home' : d.kind === 'castle' ? 'castle' : (KIND[d.trade] || 'shop');
-    const sz = SIZE[d.kind === 'home' || d.kind === 'castle' ? d.size : kind] || SIZE.shop, W = sz[0], D = sz[1];
+    const kind = d.kind === 'home' ? 'home' : d.kind === 'castle' ? 'castle' : d.kind === 'bank' ? 'bank' : d.kind === 'vault' ? 'vault' : (KIND[d.trade] || 'shop');
+    const sz = kind === 'bank' ? [12, 9] : kind === 'vault' ? [8, 7] : SIZE[d.kind === 'home' || d.kind === 'castle' ? d.size : kind] || SIZE.shop, W = sz[0], D = sz[1];
     const grp = new THREE.Group(); grp.position.set(OX, 0, OZ); sc.add(grp);
     const parts = [], solids = [], spots = [], seats = [], beds = [], glows = [], walls = { n: [], s: [], e: [], w: [] };
     const M = (x, y, z, ry, rx, rz, sx, sy, sz2) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx == null ? 1 : sx, sy == null ? 1 : sy, sz2 == null ? 1 : sz2));
@@ -18266,7 +18317,7 @@ const Interior = (function () {
     const P = (geo, c, x, y, z, ry, rx, rz, sx, sy, sz2) => parts.push({ geo, color: c, m: M(x, y, z, ry, rx, rz, sx, sy, sz2) });
     const S = (x, z, hx, hz) => solids.push({ x, z, hx, hz });
     const glow = (m, x, y, z, w, h, dd) => { const g = new THREE.Mesh(G_BOX, m); g.position.set(x, y, z); g.scale.set(w, h, dd); grp.add(g); glows.push(g); return g; };
-    const wallC = d.wall || (kind === 'smithy' || kind === 'mason' || kind === 'castle' ? '#8b877c' : kind === 'bakery' || kind === 'dairy' ? '#e6dcc4' : '#c9b48a');
+    const wallC = d.wall || (kind === 'vault' ? '#6c675e' : kind === 'bank' ? '#d9cfb4' : kind === 'smithy' || kind === 'mason' || kind === 'castle' ? '#8b877c' : kind === 'bakery' || kind === 'dairy' ? '#e6dcc4' : '#c9b48a');
     // floor, and the four walls kept apart so the ones in front of the camera can fade
     const fl = FLOOR[d.kind === 'home' ? d.size === 'hut' ? 'hut' : 'home' : kind] || '#7a5a3a';
     B(fl, 0, -0.05, 0, W + 0.5, 0.1, D + 0.5);
@@ -18376,6 +18427,40 @@ const Interior = (function () {
       [0.8, 2.4].forEach(x => { B('#4a3424', x - 0.8, 1.0, -D / 2 + 0.6, 0.1, 2.0, 0.1); B('#4a3424', x + 0.8, 1.0, -D / 2 + 0.6, 0.1, 2.0, 0.1); B('#9a6a44', x, 1.2, -D / 2 + 0.6, 1.5, 1.3, 0.04); });
       table(W / 2 - 1.3, 0.6, 1.8, 1.0, '#7a6448'); B('#a8784a', W / 2 - 1.3, 0.86, 0.6, 1.4, 0.03, 0.8); spot(W / 2 - 1.3, 1.4, Math.PI, 'work');
       for (let k = 0; k < 5; k++) B('#8a5a34', -W / 2 + 0.6 + k * 0.1, 0.1 + k * 0.08, D / 2 - 0.9, 1.0, 0.06, 0.8);
+    } else if (kind === 'bank') {
+      // the banking hall: a long counter with a brass grille, clerks behind it, the banker's desk, and the strongroom door at the back
+      const GOLD = '#c9a24a', DARK = '#3a2a1c';
+      counter(-1.2, -1.2, 7.2, 0, '#5b4029'); B(GOLD, -1.2, 1.1, -1.2, 7.3, 0.05, 0.72);
+      for (let x = -4.6; x <= 2.3; x += 0.35) B(GOLD, x, 1.55, -1.2, 0.04, 0.9, 0.04); B(GOLD, -1.2, 2.02, -1.2, 7.2, 0.06, 0.08);
+      [-3.4, -1.2, 1.0].forEach(x => { B('#efe6c8', x, 1.09, -0.95, 0.5, 0.02, 0.36); P(G_CYL, GOLD, x + 0.5, 1.12, -1.0, 0, 0, 0, 0.09, 0.1, 0.09); });
+      spot(-3.4, -2.0, 0, 'work'); spot(-1.2, -2.0, 0, 'work');
+      shelf(-2.6, -D / 2 + 0.3, 3.4, 0, (x, y, z, k) => B(k % 3 ? '#6b2f2a' : '#2f4f3a', x, y + 0.16, z, 0.12, 0.3, 0.24));
+      // the banker's desk, on a rug, with a chair for whoever comes to borrow
+      rug(3.6, 1.2, 3.2, 3.0, '#2b4a7a'); table(3.6, 0.8, 2.0, 1.0, DARK); B('#efe6c8', 3.3, 0.83, 0.8, 0.5, 0.02, 0.36); candle(4.3, 0.82, 0.6); P(G_CYL, GOLD, 3.9, 0.9, 1.0, 0, 0, 0, 0.1, 0.14, 0.1);
+      spot(3.6, 0.0, 0, 'stand'); stool(3.6, 1.9); seat(3.6, 1.95, Math.PI);
+      chest(W / 2 - 0.7, -D / 2 + 0.6, 0, DARK); chest(W / 2 - 0.7, -D / 2 + 1.5, 0, DARK);
+      bench(-W / 2 + 0.5, 2.2, 2.6, Math.PI / 2); seat(-W / 2 + 0.55, 1.6, Math.PI / 2); seat(-W / 2 + 0.55, 2.8, Math.PI / 2);
+      [-1, 1].forEach(sd => { P(G_CYL, '#b9b2a2', sd * 2.6, WH / 2, 2.6, 0, 0, 0, 0.3, WH, 0.3); S(sd * 2.6, 2.6, 0.3, 0.3); });
+      // the strongroom door: iron, banded, in the back wall
+      const vx = 3.6; B('#3a3632', vx, 1.15, -D / 2 + 0.06, 1.5, 2.3, 0.1); [0.5, 1.2, 1.9].forEach(y => B('#57534c', vx, y, -D / 2 + 0.13, 1.5, 0.1, 0.04)); P(G_CYL, GOLD, vx + 0.45, 1.15, -D / 2 + 0.16, 0, Math.PI / 2, 0, 0.16, 0.06, 0.16);
+      R0.vaultDoor = d.mine ? { x: vx, z: -D / 2 } : null;
+      for (let k = 0; k < 3; k++) { const x = -W / 2 + 1.6 + k * 2.2; B('#2b4a7a', x, 2.3, -D / 2 + 0.06, 0.8, 1.2, 0.04); B(GOLD, x, 2.3, -D / 2 + 0.08, 0.36, 0.36, 0.02); }
+    } else if (kind === 'vault') {
+      // the strongroom: what your bank holds, in gold you can see. The more it holds, the more of the floor is covered.
+      const GOLD = '#e0b83a', GOLD2 = '#c99a22', cash = Math.max(0, d.cash || 0), dep = Math.max(0, d.deposits || 0);
+      for (let x = -W / 2 + 0.5; x <= W / 2 - 0.4; x += 1.0) { B('#3a3632', x, WH / 2, -D / 2 + 0.05, 0.08, WH, 0.08); }
+      [[-W / 2 + 0.7, -D / 2 + 0.6], [W / 2 - 0.7, -D / 2 + 0.6]].forEach(([x, z]) => { chest(x, z, 0, '#3a2a1c'); B(GOLD, x, 0.66, z, 0.8, 0.14, 0.4); });
+      candle(-W / 2 + 0.4, 1.4, 0); candle(W / 2 - 0.4, 1.4, 0); B('#4a3424', -W / 2 + 0.36, 1.36, 0, 0.3, 0.05, 0.3); B('#4a3424', W / 2 - 0.36, 1.36, 0, 0.3, 0.05, 0.3);
+      // piles: one for every 400c or so, tallest in the middle of the room, up to a room heaped to the knees
+      const n = Math.min(70, Math.ceil(cash / 400)), big = cash > 28000 ? Math.min(1, (cash - 28000) / 60000) : 0, cols = 10, rows = 7;
+      const order = []; for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) { const x = -W / 2 + 0.9 + i * (W - 1.8) / (cols - 1), z = -D / 2 + 1.5 + j * (D - 3.6) / (rows - 1); order.push([Math.hypot(x, z + 0.6), x, z, i * 7 + j]); }
+      order.sort((a, b) => a[0] - b[0]);
+      for (let k = 0; k < n; k++) { const [dist, x, z, hsh] = order[k], hgt = clamp(0.25 + (n - k) / 70 * 0.9 + big * 0.5 - dist * 0.05, 0.12, 1.5), r = 0.34 + (hsh % 3) * 0.04; P(G_HEMI, hsh % 2 ? GOLD : GOLD2, x + ((hsh * 13) % 7 - 3) * 0.03, 0, z + ((hsh * 5) % 7 - 3) * 0.03, 0, 0, 0, r, hgt, r); if (hgt > 0.5) for (let c = 0; c < 3; c++) P(G_CYL, GOLD, x + Math.cos(hsh + c * 2.1) * 0.22, hgt * 0.55 + c * 0.03, z + Math.sin(hsh + c * 2.1) * 0.22, 0, 0.3 * c, 0.4, 0.09, 0.03, 0.09); }
+      if (n > 12) { glow(candleM, 0, 0.05, -0.6, 2.2, 0.02, 1.6).material = new THREE.MeshBasicMaterial({ color: 0xffd36a, transparent: true, opacity: 0.18 }); }
+      // bars on a table for the first few thousand; ledgers on a stand
+      table(0, D / 2 - 1.5, 1.6, 0.8, '#3a2a1c'); for (let k = 0; k < Math.min(12, Math.ceil(cash / 1500)); k++) B(GOLD, -0.5 + (k % 4) * 0.32, 0.86 + Math.floor(k / 4) * 0.09, D / 2 - 1.5, 0.28, 0.08, 0.14);
+      B('#6b2f2a', W / 2 - 0.8, 1.0, D / 2 - 0.8, 0.5, 0.06, 0.4, 0.4); B('#4a3424', W / 2 - 0.8, 0.5, D / 2 - 0.8, 0.12, 1.0, 0.12); S(W / 2 - 0.8, D / 2 - 0.8, 0.3, 0.3);
+      R0.fire = { x: 0, y: 1.2, z: -0.6 };
     } else if (kind === 'yard' || kind === 'shop') {
       const t = d.trade;
       table(-0.4, -D / 2 + 1.2, 3.2, 1.0, '#8a6d48'); B('#6b4a2e', -0.4, 1.6, -D / 2 + 0.15, 3.2, 1.2, 0.06); for (let k = 0; k < 8; k++) B('#5a5550', -1.8 + k * 0.4, 1.6, -D / 2 + 0.22, 0.05, 0.6, 0.05);
@@ -18416,7 +18501,7 @@ const Interior = (function () {
     if (R0.fire) { fireL.position.set(OX + R0.fire.x, R0.fire.y + 0.4, OZ + R0.fire.z); fireL.intensity = 1.1; } else { fireL.position.set(OX, 2.6, OZ); fireL.intensity = 0.6; }
     // anyone not given a working spot stands about near the door, or sits
     if (!seats.length) for (let k = 0; k < 4; k++) seats.push({ x: -1.2 + k * 0.8, z: D / 2 - 1.4, face: Math.PI, stand: true });
-    return { grp, W, D, solids, spots, seats, beds, walls, glows, door, kind, mesh: mesh0 };
+    return { grp, W, D, solids, spots, seats, beds, walls, glows, door, kind, mesh: mesh0, vaultDoor: R0.vaultDoor || null };
   }
 
   // who is in here right now
@@ -18425,6 +18510,8 @@ const Interior = (function () {
     const near = (a, r) => Math.hypot(a.x - d.x, a.z - d.z) < r;
     for (const a of s.agents) {
       const p = a.pid && s.people[a.pid]; if (!p || p.status !== 'here') continue;
+      if (d.kind === 'vault') continue;
+      if (d.kind === 'bank') { if (p.id === d.banker && hr >= 7 && hr < 19) out.push({ a, p, role: 'guest', lead: true }); else if (hr >= 8 && hr < 18 && p.id !== d.banker && !a.moving && near(a, 14) && out.length < 5) out.push({ a, p, role: out.filter(o => o.role === 'staff').length < 2 && p.job && p.job.type === 'commons' ? 'staff' : 'guest' }); continue; }
       if (d.kind === 'home') { if (p.home === 'you' && (a.indoors || near(a, 12))) out.push({ a, p, role: night ? 'bed' : 'home' }); continue; }
       if (d.kind === 'castle') { if (((p.home === 'seat:' + d.seat || (d.seat === 'hearthmoor' && p.home === 'manor')) && hr >= 8 && hr < 20) || (d.lead === 'nobody' && p.home === 'you' && (a.indoors || near(a, 30)))) out.push({ a, p, role: p.id === d.lead ? 'staff' : 'guest', lead: p.id === d.lead }); continue; }
       const staff = p.job && p.job.type === 'biz' && p.job.biz === d.bizId;
@@ -18450,6 +18537,7 @@ const Interior = (function () {
       if (!x) { x = { key: k, g: charFor(o) }; }
       let at = null, pose = 'stand';
       if (o.role === 'bed' && freeBeds.length) { const b = freeBeds.shift(); at = { x: b.x, z: b.z, face: b.ry }; pose = 'bed'; if (b.big && R.beds.length && freeBeds.length === R.beds.length - 1) freeBeds.unshift({ x: b.x + Math.cos(b.ry) * 0.4, z: b.z - Math.sin(b.ry) * 0.4, ry: b.ry }); }
+      else if (o.lead && R.kind === 'bank') { const i = freeSpots.findIndex(q => q.pose === 'stand'); if (i >= 0) { at = freeSpots.splice(i, 1)[0]; pose = 'stand'; } }
       else if (o.role === 'staff' && freeSpots.length) { at = freeSpots.shift(); pose = 'work'; }
       else if (freeSeats.length) { at = freeSeats.shift(); pose = at.stand ? 'stand' : 'sit'; }
       else if (freeSpots.length) { at = freeSpots.shift(); pose = 'work'; }
@@ -18465,6 +18553,7 @@ const Interior = (function () {
   function enter(d) {
     if (R) leave(true);
     const r = build(d); R = Object.assign(r, { d, people: [], t: 0 });
+    if (d.kind === 'bank') { const hr = Sim.hourOf(G); R.clerks = hr >= 8 && hr < 18 ? R.spots.filter(q => q.pose === 'work').map((q, i) => { const g = makeChar({ tunic: i ? '#3a3f4a' : '#4a3a2c', skin: SKIN[(i * 2 + 1) % SKIN.length], hair: 'short', fem: !!i, pick: null }); g.position.set(OX + q.x, 0, OZ + q.z); g.rotation.y = q.face; sc.add(g); return g; }) : []; R.spots = R.spots.filter(q => q.pose !== 'work' || !R.clerks.length); }
     av.x = 0; av.z = R.D / 2 - 0.9; av.face = Math.PI;
     av.g = makeChar(Object.assign(lookOpts(G.look), { player: true })); sc.add(av.g);
     R.prevCam = { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist };
@@ -18477,10 +18566,11 @@ const Interior = (function () {
   }
   function leave(quiet) {
     if (!R) return;
-    R.people.forEach(x => drop(x.g)); if (av.g) drop(av.g); av.g = null;
+    R.people.forEach(x => drop(x.g)); if (av.g) drop(av.g); av.g = null; (R.clerks || []).forEach(g => drop(g));
     sc.remove(R.grp); R.grp.traverse(o => { if (o.geometry && o.geometry !== G_BOX) o.geometry.dispose(); });
     if (R.prevCam) Object.assign(cam, R.prevCam);
     const d = R.d; R = null; UI.inside = null; UI.sel = null;
+    if (!quiet && G && d.kind === 'vault' && d.back) { enter(d.back); av.x = 3.6; av.z = -R.D / 2 + 1.2; av.face = 0; return; }   // out of the strongroom is back into the hall
     if (!quiet && G) { const p = G.player; p.x = d.door.x; p.z = d.door.z; p.dest = null; focus.set(p.x, 0, p.z); renderCard(true); }
   }
   function step(dt, t) {
@@ -18500,12 +18590,15 @@ const Interior = (function () {
         for (const x of R.people) { if (x.pose === 'bed') continue; const dx = av.x - x.at.x, dz = av.z - x.at.z, dd = Math.hypot(dx, dz); if (dd < 0.5 && dd > 0.001) { av.x = x.at.x + dx / dd * 0.5; av.z = x.at.z + dz / dd * 0.5; } }
         av.x = clamp(av.x, -R.W / 2 + 0.3, R.W / 2 - 0.3);
         if (av.z > R.D / 2 - 0.3) { if (Math.abs(av.x) < 0.55 && av.z > R.D / 2 + 0.1) { leave(); return; } if (Math.abs(av.x) >= 0.55) av.z = R.D / 2 - 0.3; }
+        if (R.vaultDoor && av.z < -R.D / 2 + 0.45 && Math.abs(av.x - R.vaultDoor.x) < 0.7) { enter(vaultOf(R.d)); return; }
         av.z = Math.max(av.z, -R.D / 2 + 0.3);
       }
     }
     const g = av.g; g.position.set(OX + av.x, 0, OZ + av.z); let df = av.face - g.rotation.y; df = Math.atan2(Math.sin(df), Math.cos(df)); g.rotation.y += df * 0.3;
     animChar(g, t, { moving: av.moving });
     for (const x of R.people) if (x.pose !== 'bed') animChar(x.g, t, { working: x.pose === 'work' });
+    for (const g of R.clerks || []) animChar(g, t, { working: true });
+    if (R.kind === 'vault' && R.t > 2.9) { const M = G.bank && G.bank.mine; if (!M) { leave(); return; } if (Math.ceil(M.cash / 400) !== Math.ceil((R.d.cash || 0) / 400)) { const keep = { x: av.x, z: av.z }; enter(vaultOf(R.d.back)); av.x = keep.x; av.z = keep.z; return; } }
     if (R.glows.length && !calm()) { const f = 0.85 + Math.sin(t * 9) * 0.08 + Math.sin(t * 23) * 0.05; fireL.intensity = 1.1 * f; }
     R.t += dt; if (R.t > 3) { R.t = 0; seatPeople(); }
   }
@@ -18522,12 +18615,14 @@ const Interior = (function () {
     R.walls.e.forEach(g => g.visible = cx < R.W / 2 + 0.5);
     R.walls.w.forEach(g => g.visible = cx > -R.W / 2 - 0.5);
   }
+  function vaultOf(bd) { const M = G.bank.mine; return { kind: 'vault', title: 'The strongroom of ' + M.name.replace(/^the /, 'the '), note: '', x: bd.x, z: bd.z, door: bd.door, back: bd, cash: M.cash, deposits: M.deposits }; }
   function card() {
+    if (R.d.kind === 'bank' || R.d.kind === 'vault') return bankCard(R.d, R.people);
     const d = R.d, names = R.people.map(x => x.key.startsWith && String(x.key).startsWith('w:') ? (G.shops.find(sh => 'w:' + sh.id === x.key) || {}).worker : (G.agents.find(a => a.id === x.key) || {})).filter(Boolean).map(a => a.name);
     const who = names.length ? 'Here: ' + names.slice(0, 6).join(', ') + (names.length > 6 ? ' and ' + (names.length - 6) + ' more' : '') + '.' : d.kind === 'home' ? 'Nobody else is home.' : 'Nobody is in just now.';
     return `<h2>${esc(d.title)}</h2><div class="sub">${esc(d.note || '')} ${esc(who)}</div><div class="acts">${d.kind === 'biz' ? workBtn(G, d.bizId || (d.shop ? 'shop:' + d.shop.id : null)) : ''}${B_('Step outside', ['ui', 'leave'])}${d.kind === 'home' ? (() => { const lv = d.house ? (d.house.comfort || 0) : (G.player.hutComfort || 0); return lv < 3 ? B_('Improve this home<small>' + Sim.COMFORT[lv + 1].cost + 'c</small>', ['improveHome', d.house ? d.house.id : 'hut'], 'alt') : ''; })() : ''}${d.kind === 'castle' ? B_('The Realm', ['page', 'realm'], 'alt') : ''}</div>`;
   }
-  return { enter, leave, step, camera: camera_, card, scene: sc, active: () => !!R };
+  return { enter, leave, step, camera: camera_, card, scene: sc, active: () => !!R, vaultOf };
 })();
 
 // what is behind a door: the room to build, and who belongs in it
@@ -18537,6 +18632,7 @@ function insideOf(key) {
   const KEEPS = { manor: ['hearthmoor', 'hall', 'The hall of Varrow Manor', '#2f4f3a', '#c9a24a'], cmcastle: ['crownmere', 'great', 'The Great Hall of Crownmere Castle', '#2b4a7a', '#d9b04a'], ickeep: ['ironcrest', 'hall', 'The hall of Stane Keep', '#3a3a3a', '#c9a24a'], ewkeep: ['eastwatch', 'hall', 'The hall of Eastwatch Castle', '#2f5d7a', '#e9e1cc'], oakkeep: ['oakbridge', 'hall', 'The hall of Oakbridge Keep', '#2f6b3a', '#efe9d8'] };
   if (KEEPS[key]) { const [rg, size, title, banner, trim] = KEEPS[key], R = s.realm, lord = R ? Sim.regionLord(s, rg) : null, lp = lord && lord !== 'player' ? s.people[lord] : null, Lk = L[key];
     return { kind: 'castle', size, title, note: lord === 'player' ? 'Your hall.' : lp ? (rg === 'crownmere' ? 'King ' + lp.name.split(' ')[0] + ' holds court here.' : lp.name + '\u2019s hall.') : '', x: Lk.x, z: Lk.z, door, seat: rg, lead: lord, banner, trim }; }
+  if (Lh.bank) { if (!Sim.bankIn(s, Lh.bank)) return null; const B = Sim.setupBanks(s), K = B.banks[Lh.bank], mine = !!(B.mine && B.mine.town === Lh.bank), bk = K && s.people[K.pid], site = Sim.BANK_SITE[Lh.bank]; return { kind: 'bank', title: Lh.name, note: mine ? 'Your bank.' : bk ? bk.name + ' keeps it.' : '', x: site.x, z: site.z, door, bank: Lh.bank, mine, banker: mine ? (B.mine.banker || null) : K ? K.pid : null }; }
   if (key === 'home') return { kind: 'home', size: 'hut', title: 'Your hut', note: s.player.house ? 'Your old hut, still yours.' : 'Small and draughty, but yours.', x: Lh.x, z: Lh.z, door, comfort: s.player.hutComfort || 0 };
   if (key === 'myhome' && Sim.yourSeat(s)) { const st = Sim.yourSeat(s), hm = Sim.homeOfYou(s); return { kind: 'castle', size: st === 'crownmere' ? 'great' : 'hall', title: 'The hall of ' + hm.name, note: 'Your seat.', x: hm.x, z: hm.z, door, seat: st, lead: 'nobody', banner: '#2f6b3a', trim: '#efe9d8' }; }
   if (key === 'myhome') { const h = Sim.yourHouse(s); if (!h) return null; const sh = Sim.houseShape(h); return { kind: 'home', size: sh.tall ? 'tall' : 'home', title: h.name, note: 'Your home.', x: h.x, z: h.z, door, house: h, comfort: h.comfort || 0 }; }
@@ -18594,6 +18690,47 @@ function syncBizSigns(s, dt) {
     }
   }
 }
+/* ----- Stage IX: banks are places. The card you see inside one, the building on the street, and its pin ----- */
+function bankCard(d, people) {
+  const s = G, V = Sim.bankView(s), hr = Sim.hourOf(s), open = hr >= 7 && hr < 19;
+  if (d.kind === 'vault') {
+    const M = V.mine || { cash: 0, deposits: 0, capital: 0 };
+    return `<h2>${esc(d.title)}</h2><div class="sub">Every coin your bank holds is here: <b>${M.cash}c</b>. ${M.deposits}c of it is the town’s savings, which they can ask for; the rest stands behind your ${M.capital}c.${M.run ? ' <b class="neg">People are at the door for their savings.</b>' : ''}</div>
+      <div class="acts">${B_('Put in 500c', ['bankAdd', 500], 'alt', s.coins < 500)}${B_('Put in 2000c', ['bankAdd', 2000], 'alt', s.coins < 2000)}${M.free > 0 ? B_('Take out ' + M.free + 'c', ['bankTake', M.free], 'alt', M.run) : ''}${B_('The books', ['page', 'bank'], 'alt')}${B_('Back to the hall', ['ui', 'leave'])}</div>`;
+  }
+  const B = V.bankHere, who = d.mine ? 'Your clerks keep the counter.' : open ? (B ? esc(B.banker) + ' is at the desk.' : '') : 'The banker has gone home. Come back between seven and seven.';
+  let h = `<h2>${esc(d.title)}</h2><div class="sub">${esc(d.note || '')} ${who}</div><div class="acts">`;
+  if (d.mine) h += B_('Go into the strongroom', ['ui', 'vault']) + B_('The books', ['page', 'bank'], 'alt');
+  else if (open) h += B_('Speak with the banker', ['page', 'bank']);
+  return h + B_('Step outside', ['ui', 'leave'], 'alt') + '</div>';
+}
+const BankHouses = { key: '', group: null, t: 0, solids: [] };
+function bankMesh(site, mine) {
+  const parts = [], gy = groundH(site.x, site.z), f = site.face;
+  const Mx = (x, y, z, w, h, d, ry) => { const c = Math.cos(f), sn = Math.sin(f); return new THREE.Matrix4().compose(new THREE.Vector3(site.x + x * c + z * sn, gy + y, site.z - x * sn + z * c), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, f + (ry || 0), 0)), new THREE.Vector3(w, h, d)); };
+  const Bx = (col, x, y, z, w, h, d, ry) => parts.push({ geo: G_BOX, color: col, m: Mx(x, y, z, w, h, d, ry) });
+  const Cy = (col, x, y, z, r, h) => parts.push({ geo: G_CYL, color: col, m: Mx(x, y, z, r, h, r), smooth: true });
+  const STONE = '#b9b2a2', STONE2 = '#9a948a', SLATE = '#3f4a5a', GOLD = '#c9a24a';
+  Bx(STONE2, 0, 0.25, 0, 9.6, 0.5, 8.4); Bx(STONE, 0, 2.9, -0.4, 8.4, 4.8, 6.4);                     // plinth and hall
+  Bx(STONE2, 0, 0.55, 4.0, 5.2, 0.14, 1.2); Bx(STONE2, 0, 0.42, 4.5, 5.6, 0.14, 1.2);              // steps
+  [-2.7, -0.9, 0.9, 2.7].forEach(x => { Cy(STONE, x, 2.7, 3.4, 0.32, 4.4); Bx(STONE2, x, 0.62, 3.4, 0.9, 0.24, 0.9); Bx(STONE2, x, 4.95, 3.4, 0.9, 0.2, 0.9); });   // columns
+  Bx(STONE2, 0, 5.3, 1.4, 9.0, 0.5, 5.0); Bx(STONE, 0, 5.9, 3.3, 8.6, 0.9, 0.5);                    // entablature
+  Bx(SLATE, 0, 6.5, -0.4, 9.2, 0.5, 7.2); Bx(SLATE, 0, 7.0, -0.4, 6.4, 0.5, 6.0); Bx(SLATE, 0, 7.45, -0.4, 3.4, 0.4, 4.8);   // stepped roof
+  Bx('#3a2a1c', 0, 1.7, 2.82, 1.5, 2.6, 0.12); Bx(GOLD, 0.5, 1.7, 2.9, 0.1, 0.1, 0.06);              // the door
+  Bx(mine ? '#2f6b3a' : '#2b4a7a', 0, 5.9, 3.58, 4.2, 0.6, 0.06); Bx(GOLD, 0, 5.9, 3.62, 0.5, 0.5, 0.04); Bx(GOLD, -1.3, 5.9, 3.62, 0.9, 0.1, 0.04); Bx(GOLD, 1.3, 5.9, 3.62, 0.9, 0.1, 0.04);   // the sign: a coin between two bars
+  [-2.8, 2.8].forEach(x => [-1.6, 0.8].forEach(z => { Bx('#2a2622', x > 0 ? 4.22 : -4.22, 3.0, z, 0.06, 1.6, 0.9); for (let k = -1; k <= 1; k++) Bx('#57534c', x > 0 ? 4.26 : -4.26, 3.0, z + k * 0.28, 0.04, 1.6, 0.05); }));   // barred windows
+  const m = new THREE.Mesh(mergeColored(parts), vc); m.castShadow = true; m.receiveShadow = true; return m;
+}
+function syncBankHouses(s, dt) {
+  BankHouses.t -= dt; if (BankHouses.t > 0) return; BankHouses.t = 1.5;
+  const towns = s && s.people ? Object.keys(Sim.BANK_SITE).filter(t => Sim.BANK_SITE[t] && (Sim.BANK_TOWNS.includes(t) ? !(s.bank && !Sim.bankIn(s, t)) : Sim.bankIn(s, t))) : [];
+  const key = towns.map(t => t + (s.bank && s.bank.mine && s.bank.mine.town === t ? '*' : '')).join('|');
+  if (key === BankHouses.key) return; BankHouses.key = key;
+  if (BankHouses.group) { scene.remove(BankHouses.group); BankHouses.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  const g = BankHouses.group = new THREE.Group(); scene.add(g); BankHouses.solids = [];
+  for (const t of towns) { const site = Sim.BANK_SITE[t]; g.add(bankMesh(site, key.includes(t + '*'))); BankHouses.solids.push({ c: 1, x: site.x, z: site.z, r: 4.4 }); }
+  solidKey = '';
+}
 function frameBody(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
@@ -18613,7 +18750,7 @@ function frameBody(now) {
   if (UI.overlay !== 'map' && document.body.classList.contains('mapping')) { document.body.classList.remove('mapping'); $('mapui').hidden = true; UI.mapPid = null; }   // something else took the screen while the map was up
   lmFrame(now, t);
   if (G) Mini.update(dt);
-  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); syncBizSigns(G, dt); }
+  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); syncBizSigns(G, dt); syncBankHouses(G, dt); }
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay || UI.overlay === 'map') renderCard(false); }
   if (FIGHT.on && G && G.fight) poseFight(dt, t);
@@ -18907,7 +19044,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.12.2058';
+const BUILD = '2026.11.12.2159';
 const NOTES = [
   { v: '0.91', date: '12 November', title: 'The banks', items: [
     'Banks in Oakbridge, Crownmere, Eastwatch, Dawnport and Valdor, each kept by a named banker who remembers how you paid.',
