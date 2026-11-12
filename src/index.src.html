@@ -3387,7 +3387,7 @@ function syncChars(s, t) {
     if (g && g.userData.look !== look.key) { dropChar(g); agentMeshes.delete(a.id); g = null; }
     if (!g) { g = makeChar(Object.assign({ tunic: TUNIC[a.palette % TUNIC.length], skin: SKIN[(a.pid ? +a.pid.slice(1) : a.id) % SKIN.length], pick: a.id }, look)); g.userData.look = look.key;  agentMeshes.set(a.id, g); }
     const pp = a.pid && s.people[a.pid];
-    const icon = a.icon || (pp && !pp.home && Sim.hourOf(s) >= 20 ? 'angry' : null) || (pp && pp.job && pp.job.office === 'elder' && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null)) ? 'wait' : null);
+    const icon = a.icon || (pp && !pp.home && Sim.hourOf(s) >= 20 ? 'angry' : null) || (pp && !pp.kid && crowdIcon(s, a)) || (pp && pp.job && pp.job.office === 'elder' && (s.village.step === 0 || s.village.step === 5 || (s.village.council && s.village.dispute != null)) ? 'wait' : null);
     if (a.kid && pp) { const k = 0.42 + Math.min(16, pp.age) / 16 * 0.55; if (Math.abs(g.scale.x - k) > 0.01) g.scale.setScalar(k); } else if (!a.kid && g.scale.x < 1) g.scale.setScalar(pp && Sim.sexOf(pp) === 'f' ? 1.02 : 1.1);
     placeChar(g, a, t, { moving: a.moving, working: a.working, icon, hidden: a.indoors || (a.pid && runners.has(a.pid)), selected: UI.sel === a.id });
   }
@@ -4139,6 +4139,7 @@ function opinionText(o) { return o >= 40 ? 'Thinks highly of you' : o >= 10 ? 'L
 /* ================= your name, your enemies, and the scenes where you face them ================= */
 function fameBar(f) { return `<div class="famebar"><span>Fame</span>${progressBar(f / 100)}</div>`; }
 function moralBar(m) { const x = (m + 100) / 2; return `<div class="moral" role="img" aria-label="Your name: ${esc(Sim.moralWord(m))}"><i style="left:${x}%"></i><span>Cruel</span><span>Good</span></div>`; }
+function crowdIcon(s, a) { const C = s.ppl && s.ppl.crowd[s.bodiesIn || 'hearthmoor']; if (!C) return null; const k = (a.id * 7919) % 10; return C.mood === 'angry' ? (k < 5 ? 'angry' : null) : C.mood === 'hungry' || C.mood === 'uneasy' ? (k < 2 ? 'angry' : null) : C.mood === 'happy' && k < 1 ? 'happy' : null; }
 function hateLine(s, q) {
   const h = q.hate || 0; if (h < 15) return '';
   const st = Sim.hateStep(h), why = q.nem ? q.nem.why : (q.mem || []).find(m => m.w < 0);
@@ -4807,7 +4808,7 @@ function personCard(s, pr, body) {
   const now = doing ? `<div class="pcnow"><b>Now</b> ${esc(doing)}</div>` : '';
   // three leaves: what you can do with them, what is known of them, and the rest
   const talk = relationLine(s, pr) + relationActs(s, pr, body);
-  const about = `<div class="why">${opinionText(op)}.</div>${pr.status === 'here' && !pr.kid && G.folk ? `<div class="why">${esc(Sim.regardOf(s, pr))}</div>` : ''}${hateLine(s, pr)}${memLines(s, pr)}${log ? `<h6>Lately</h6><ul class="plog">${log}</ul>` : ''}` || '<div class="why">Nothing is known of them yet.</div>';
+  const about = `<div class="why">${opinionText(op)}.</div>${pr.status === 'here' && !pr.kid && G.folk ? `<div class="why">${esc(Sim.regardOf(s, pr))}</div>` : ''}${hateLine(s, pr)}${memLines(s, pr)}${pplLines(s, pr)}${log ? `<h6>Lately</h6><ul class="plog">${log}</ul>` : ''}` || '<div class="why">Nothing is known of them yet.</div>';
   const P = Sim.postsBelow(G).find(x => x.pid === pr.id), foe = enemyActs(s, pr, body);
   const more = `<div class="acts">${B_('Their life', ['ui', 'person', pr.id], 'alt')}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}${UI.inside && pr.id === Sim.regionLord(G, 'hearthmoor') && G.offices.elder === 'player' ? B_('Speak with the Lord', ['gate']) : ''}</div>`
     + (foe ? `<h6>Trouble between you</h6><div class="acts">${foe}</div>` : '')
@@ -4951,7 +4952,7 @@ const SECTIONS = [
   ['today', 'Today', [['tasks', 'Tasks'], ['goals', 'Goals'], ['calendar', 'Calendar']]],
   ['money', 'Money', [['ledger', 'Ledger'], ['jobs', 'Work']]],
   ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
-  ['people', 'People', [['people', 'Townsfolk'], ['family', 'Family']]],
+  ['people', 'People', [['people', 'Townsfolk'], ['notables', 'Of note'], ['family', 'Family']]],
   ['you', 'You', [['skills', 'Skills'], ['gear', 'Gear'], ['renown', 'Your name']]],
   ['power', 'Power', [['office', 'Your office'], ['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
 ];
@@ -4987,7 +4988,7 @@ function renderBook(turn) {
   const c0 = Sim.calendar(G);
   $('bkhead').innerHTML = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}</nav><span class="bkstat num" title="Time stands still while the book is open"><b>${money(G.coins)}</b><small>${c0.dom} ${c0.monthName} \u00b7 paused</small></span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
   const subs = '';
-  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   keepPlace(pg, y); turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -5455,6 +5456,37 @@ function pageJusticeHM(s) {
   if (J.closed.length) h += `<h4>Decided</h4>` + J.closed.slice(0, 8).map(c => { const A = s.people[c.accused]; return `<div class="staffrow"><span>Day ${c.day} · ${esc(Sim.CRIME[c.kind])}: ${esc(A ? A.name : '?')} · ${esc(c.outcome || '')}${c.overturned ? ' <b>Overturned on appeal.</b>' : ''}</span>${appeals && c.verdict === 'guilty' && !c.overturned ? B_('Overturn', ['jOverturn', c.id], 'alt') : ''}</div>`; }).join('');
   if (s.towns) h += `<h4>The watch across Alderwyn</h4><p>Each town keeps about one watchman for every forty people (the capital a few more), paid from its own chest.</p><table class="trades"><thead><tr><th>Town</th><th>People</th><th>Watch</th></tr></thead><tbody><tr><td>Hearthmoor</td><td>${Sim.villagers(s).length}</td><td>${J.watch.length}${wp.captain ? ' + Watchman' : ''}</td></tr>${Object.keys(Sim.TOWN_WATCH_JOB).filter(id => s.towns[id] && !TOWNS[id].foreign).map(id => `<tr><td>${TOWN_NAMES[id]}</td><td>${Sim.living(s).filter(p => p.town === id).length}</td><td>${s.towns[id].watchN != null ? s.towns[id].watchN : '\u2014'}</td></tr>`).join('')}</tbody></table>`;
   if (J.log.length) h += `<h4>Watch book</h4><ul class="notes">${J.log.slice(0, 8).map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('')}</ul>`;
+  return h;
+}
+/* Stage III: the people who matter in a town, and the mood of its crowd */
+function crowdBox(s, town) {
+  const C = Sim.crowdOf(s, town), TN = TOWN_NAMES[town] || Sim.townName(town), here = (Sim.townAt(s.player.x, s.player.z) || 'hearthmoor') === town;
+  const cls = C.mood === 'angry' || C.mood === 'hungry' ? 'bad' : C.mood === 'happy' ? 'good' : '';
+  const cost = Math.max(15, Math.round((C.n || 20) * 0.6));
+  let h = `<div class="box"><h5>The mood of ${esc(TN)}: <span class="${cls}">${esc(C.word)}</span></h5>${progressBar(C.heat / 100)}<p class="why">Anger ${C.heat} of 100. ${C.heat >= 68 ? 'Two days above 80 and it becomes a riot: shops shut and looted, fire, blood, and those who govern badly driven out.' : C.heat >= 48 ? 'People are muttering. It becomes dangerous above 68.' : 'Nothing to fear. A town turns over days, with warnings, never in one night.'}</p>`;
+  if (C.causes.length) h += `<p><b>Why:</b> ${esc(C.causes.join('; '))}.</p>`;
+  if (C.riot) h += `<p class="why"><b>Last riot, day ${C.riot.day}:</b> ${esc(C.riot.text)}</p>`;
+  if (C.heat >= 30) h += `<div class="acts">${B_('Hand out bread · ' + cost + 'c', ['pCrowd', town, 'bread'], 'alt', s.coins < cost)}${B_('Speak in the square' + (here ? '' : '<small>go there first</small>'), ['pCrowd', town, 'speak'], 'alt', !here)}${Sim.youGovern(s, town) ? B_('Send out the watch<small>quiet now, hated later</small>', ['pCrowd', town, 'watch'], 'warn') : ''}</div>`;
+  return h + '</div>';
+}
+function pageNotables(s) {
+  const [town, pick] = townPick(s), TN = TOWN_NAMES[town], L = Sim.notables(s, town), X = Sim.setupPpl(s);
+  const E = Sim.electState(s), race = Object.values(E.races).find(r => r.open && r.you && Sim.raceTown(r) === town), here = (Sim.townAt(s.player.x, s.player.z) || 'hearthmoor') === town;
+  const st = n => n.stance > 0 ? `<span class="wedbadge court">With you</span>` : n.stance < 0 ? `<span class="wedbadge" style="background:#8e2b22;color:#f6e8c8">Against you</span>` : '';
+  let h = `<h3>People of Note in ${TN}</h3>${pick}<p class="lead">A few people in every town have aims of their own and act on them each week, for you or against you. Everyone else follows someone: whoever pays their wage or owns their roof.</p>${crowdBox(s, town)}`;
+  h += L.length ? L.map(n => { const K = X.key[n.id], back = race && K ? K.backs[race.key] : null;
+    return `<div class="box"><h5>${esc(n.name)} ${st(n)}</h5><p class="why">${esc(n.what)} · ${esc(n.why)}</p>
+      <dl class="kv"><dt>Wants</dt><dd>${esc(n.want)}</dd><dt>Loyal to</dt><dd>${esc(n.loyal)}</dd><dt>Toward you</dt><dd>${esc(n.stanceWhy.charAt(0).toUpperCase() + n.stanceWhy.slice(1))}</dd><dt>Followers</dt><dd>${n.bloc} ${n.bloc === 1 ? 'person depends' : 'people depend'} on them</dd><dt>Owes</dt><dd>${n.owes == null ? 'Not known: ask around' : esc(n.owes)}</dd><dt>Hides</dt><dd>${n.secret == null ? 'Not known' : n.secret ? esc(n.secret) : 'Nothing that anyone knows of'}</dd>${race ? `<dt>In the vote</dt><dd>${back === 'player' ? 'Backs you' : back && s.people[back] ? 'Backs ' + esc(s.people[back].name) : 'Undecided'}</dd>` : ''}</dl>
+      <div class="acts">${B_('Their story', ['ui', 'person', n.id], 'alt')}${B_('Ask around · 6c' + (here ? '' : '<small>in ' + esc(TN) + '</small>'), ['pAsk', n.id], 'alt', !here || s.coins < 6 || (K && s.day - K.asked < 3))}${race && back !== 'player' ? B_('Ask for their backing', ['pBack', n.id, race.key], '', !here || (K && K.askedBack === race.poll)) : ''}</div></div>`; }).join('') : '<div class="box"><p>No one here stands out yet.</p></div>';
+  const log = X.log.filter(l => !l.pid || (X.key[l.pid] && X.key[l.pid].t === town) || /^Riot|muttering|crowds|edge of a riot/.test(l.x)).slice(0, 12);
+  if (log.length) h += `<h4>What they have been doing</h4><ul class="plog">${log.map(l => `<li>Day ${l.d}: ${esc(l.x)}</li>`).join('')}</ul>`;
+  return h;
+}
+function pplLines(s, pr) {
+  if (pr.status !== 'here') return '';
+  const o = Sim.pplOf(s, pr);
+  let h = `<h6>${o.key ? 'A person of note' : 'What they keep'}</h6>${o.key ? `<div class="why">${esc(o.why.charAt(0).toUpperCase() + o.why.slice(1))}. ${o.bloc} ${o.bloc === 1 ? 'person depends' : 'people depend'} on them.</div>` : ''}<dl class="kv"><dt>Wants</dt><dd>${esc(o.want)}</dd><dt>Loyal to</dt><dd>${esc(o.loyal)}</dd><dt>Owes</dt><dd>${o.owes == null ? 'Not known' : esc(o.owes)}</dd>${o.key ? `<dt>Hides</dt><dd>${o.secret == null ? 'Not known' : o.secret ? esc(o.secret) : 'Nothing that anyone knows of'}</dd><dt>Toward you</dt><dd>${esc(o.stanceWhy.charAt(0).toUpperCase() + o.stanceWhy.slice(1))}</dd>` : ''}${pr.kid ? '' : `<dt>Feels</dt><dd>${esc(o.feel)}: ${esc(o.feelWhy)}</dd>`}</dl>`;
+  if (o.key) h += `<div class="acts">${B_('People of note', ['ui', 'tab', 'notables'], 'alt')}</div>`;
   return h;
 }
 function pagePeople(s) {
@@ -7852,6 +7884,17 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.86', date: '12 November', title: 'The people', items: [
+    'A few people in every town now matter more than the rest: lords, officials, guild wardens and the richest merchants. A village has a handful and a capital a few dozen. Each has an aim, a loyalty, sometimes a debt and sometimes a secret, and each makes a move every week.',
+    'They act for you or against you. A rival in your trade may hire away your worker or sell below your prices for a few days; someone who wants your office may stir up the town or back another candidate; a friend speaks well of you. Every time, the news names who did it and why.',
+    'Everyone else keeps a want, a loyalty, what they owe, and how they feel about you with the reason. Open anyone\u2019s card and look under About.',
+    'Every town has a mood: happy, calm, uneasy, hungry or angry. It comes from real causes (hunger, no work, people sleeping rough, dear bread, heavy taxes, bad government) and you are told the causes. You will see it on faces in the street.',
+    'An angry town warns you twice and then riots: shops shut for two days and are looted, a building may burn, people are hurt and sometimes killed, and whoever governs badly is driven out, you included. Bread, a speech in the square or the watch can stop it. The watch works at once and is hated afterwards.',
+    'Votes have weight behind them. The people a key person pays or houses mostly vote the way that person does, and an angry town votes against whoever holds the office. Ask a key person for their backing while you stand.',
+    'People move up and down. A craftsman chosen warden of his guild, or a clerk who learns what her master hides, becomes someone who matters; those who lose their place go back to the crowd.',
+    'Secrets can be learned by asking around (6c, in their town). Using what you know comes in a later stage.',
+    'A new page in the book: People, Of note. Your old save carries over, and its people are sorted into the new tiers when you load it.'
+  ] },
   { v: '0.85', date: '11 November', title: 'Timber and thatch', items: [
     'Cottages are remade: you can see the timber frame, with plaster gables, shutters and sills at the windows, a framed door on a stone step, and a pot on the chimney.',
     'Every roof in every town has barge boards on its gables, a ridge cap and a dark line under the eaves.',

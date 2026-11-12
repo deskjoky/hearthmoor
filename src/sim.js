@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 18;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
+  const VERSION = 19;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -535,7 +535,7 @@
 
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  const FLOW_LABEL = { pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
   // one broken part of a day must not stop the whole game: record it, tell the player once, and carry on
   const FAULTS = [];
   let STRICT = false;
@@ -561,6 +561,7 @@
     if (s.towns) guard(s, 'the towns settled their evening', () => townEvening(s));
     if (s.people) guard(s, 'property was reckoned', () => propertyDay(s));
     if (s.people) guard(s, 'the folk talked it over', () => folkDay(s));
+    if (s.people) guard(s, 'the towns took their mood', () => pplDay(s));
     guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s));
     if (s.realm) guard(s, 'the realm kept its books', () => realmDay(s));
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
@@ -1942,8 +1943,8 @@
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
-      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day, HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
-      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
+      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day || (b.riot && b.riot >= s.day), HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
+      const cap = bizCap(s, b), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (b.undercut && b.undercut.until >= s.day ? 0.8 : 1) * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
       const Wt = WEALTH[t0] || 1, revenue0 = shut ? 0 : E.flat ? E.flat * Wt : Math.round(Wt * sold * PM.price * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
       // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
@@ -4990,8 +4991,8 @@
       let best = null, bs = -1e9;
       if (votes.has(p.id)) best = p.id;
       else {
-        for (const c of cands) { const q = s.people[c], sc = 40 + (q.rep || 0) * 0.45 + (c === hold ? 6 : 0) + (r.ballot === c && (p.opinion || 0) >= 30 ? 10 : 0) + (p.job && q.job && p.job.biz && p.job.biz === q.job.biz ? 8 : 0) + (p.household && p.household === q.household ? 20 : 0) + (erand(s) - 0.5) * 36; if (sc > bs) { bs = sc; best = c; } }
-        if (r.you) { const sc = you + (p.opinion || 0) * 0.45 + (staff.has(p.id) ? 15 : 0) + (erand(s) - 0.5) * 36; if (sc > bs) { bs = sc; best = 'player'; } }
+        for (const c of cands) { const q = s.people[c], sc = 40 + (q.rep || 0) * 0.45 + (c === hold ? 6 : 0) + (r.ballot === c && (p.opinion || 0) >= 30 ? 10 : 0) + (p.job && q.job && p.job.biz && p.job.biz === q.job.biz ? 8 : 0) + (p.household && p.household === q.household ? 20 : 0) + blocLean(s, r, p, c, hold) + (erand(s) - 0.5) * 36; if (sc > bs) { bs = sc; best = c; } }
+        if (r.you) { const sc = you + (p.opinion || 0) * 0.45 + (staff.has(p.id) ? 15 : 0) + blocLean(s, r, p, 'player', hold) + (erand(s) - 0.5) * 36; if (sc > bs) { bs = sc; best = 'player'; } }
       }
       votes.set(best, votes.get(best) + w); total += w;
       const tw = townOf(p); byTown[tw] = (byTown[tw] || 0) + w;
@@ -7091,6 +7092,7 @@
     if (/^j[A-Z]/.test(name)) return justiceCmd(s, name, a, b, c);
     if (/^x[A-Z]/.test(name)) return xCmd(s, name, a, b, c);
     if (/^f[A-Z]/.test(name)) return folkCmd(s, name, a, b, c);
+    if (/^p[A-Z]/.test(name)) return pplCmd(s, name, a, b, c);
     if (/^r[A-Z]/.test(name)) return rpgCmd(s, name, a, b, c);
     if (/^w[A-Z]/.test(name)) { const r = wildCmd(s, name, a, b, c); if (r) return r; }
     if (/^o[A-Z]/.test(name)) { const r = officeCmd(s, name, a, b, c); if (r) return r; }
@@ -8540,6 +8542,7 @@
     if (s.v === 15) { s.v = 16; setupNewTown(s, 'valdor'); setupValdoria(s); setupGoods(s); event(s, 'The Queen’s Road is open, east from Thornwick through the forest to Valdor, the royal capital of Valdoria. Queen Ximena holds court at the Alcázar, and Valdoria now keeps its own courts and its own watch on the roads.', 'story'); }
     if (s.v === 16) s.v = 17;
     if (s.v === 17) { s.v = 18; relayHearthmoor(s); rebuildOakbridge(s, 'Oakbridge has been rebuilt as a bridge town: a High Street from the South Gate to the bridge, a market place at the bridgehead, a church, a keep in its bailey, and three gates in the wall. Every home keeps its people and its owner.'); relayTowns(s); }
+    if (s.v === 18) { s.v = 19; if (s.people) { setupPpl(s); pickKey(s, true); crowdDay(s); for (const id in s.ppl.crowd) s.ppl.crowd[id].warn = 0; const n = Object.keys(s.ppl.key).length; event(s, 'The people have changed. ' + n + ' people across the towns now count as people who matter, each with an aim, a loyalty and plans of their own; everyone else keeps a want and a memory of how you treated them; and every town has a mood that can turn. See People of note in the book.', 'story'); } }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
     for (const C of allCourts(s)) if (Array.isArray(C.closed)) {
@@ -9146,7 +9149,435 @@
     }
   }
 
+  /* ================= THE PEOPLE (Stage III): key people, townsfolk and the crowd =================
+     Three tiers, one set of rules in every town. Key people (a handful in a village, a few dozen in a capital) have an aim,
+     a loyalty, debts, a secret and a plan they act on each week, for or against you. Townsfolk keep a simple want, a loyalty
+     and a memory of how you treated them, read from their own lives instead of stored twice. The crowd is one mood per town:
+     it warns before it turns, it leans on every vote, and at the top it riots. People move between the tiers when their lives
+     change. The people have their own dice, so nothing here changes the luck of the rest of the world. */
+  function setupPpl(s) {
+    if (!s.ppl) s.ppl = { key: {}, crowd: {}, log: [], rd: -1, rs: 0, picked: -99, acted: -99 };
+    return s.ppl;
+  }
+  function prand(s) { const X = setupPpl(s); if (X.rd !== s.day) { X.rd = s.day; X.rs = (Math.imul(s.day + 7, 40503 * 65537) ^ (s.seed || 0) ^ 0x51ed) | 0; } X.rs = (X.rs + 0x6D2B79F5) | 0; let x = X.rs; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
+  const ppick = (s, arr) => arr[Math.floor(prand(s) * arr.length)];
+  const pidNum = p => parseInt(String(p.id).replace(/\D/g, ''), 10) || 0;
+  const pplTowns = s => ['hearthmoor'].concat(Object.keys(s.towns || {}));
+  // how many key people a place carries: a village a handful, a capital a few dozen
+  function keyCap(n) { return n < 45 ? 5 : n < 110 ? 8 : n < 280 ? 14 : n < 600 ? 22 : 32; }
+  const PPL_GOALS = {
+    grow: p => 'More ' + 'shops under ' + (sexOf(p) === 'f' ? 'her' : 'his') + ' name',
+    rich: () => 'A fortune, and never to be poor again',
+    office: () => 'A seat where the town is run',
+    keep: () => 'To keep the office they hold',
+    rise: () => 'A higher office than this one',
+    reform: () => 'Honest government and fair courts',
+    line: () => 'To live well off the office they hold',
+    heir: () => 'To see their children set up for life',
+    ruin: () => 'To see you brought down',
+    guild: () => 'To lead their guild'
+  };
+  const PPL_SECRETS = {
+    debt: 'is far deeper in debt than anyone knows',
+    skim: 'takes coin that is not theirs from the books they keep',
+    bought: 'paid for the place they hold instead of earning it',
+    past: 'ran from a conviction in another town, under another name',
+    smuggle: 'has a hand in goods that pay no duty',
+    affair: 'keeps a second household in secret',
+    oath: 'is sworn in secret to a master other than the one they serve'
+  };
+  function officeOf(s, p) {   // the office someone holds, in plain words, or null
+    const t = townOf(p), R = s.realm;
+    if (R) { if (p.id === R.king && R.crown === 'king') return 'the crown'; for (const k of Object.keys(COUNCIL)) if (R.council[k] === p.id) return COUNCIL[k]; for (const id in R.regions) if (R.regions[id].lord === p.id) return 'lord of ' + REGIONS[id]; }
+    if (s.offices && s.offices.elder === p.id) return 'Elder'; if (s.offices && s.offices.lord === p.id) return 'lord of the manor';
+    const T = s.towns && s.towns[t]; if (T && T.mayor === p.id) return titleOf(T); if (T && T.council.includes(p.id)) return 'the town council';
+    if (s.gov && s.gov.council.includes(p.id)) return 'the village council';
+    if (p.job && p.job.type === 'office') return p.job.office;
+    return null;
+  }
+  function keyScore(s, p, own) {
+    let sc = 0, why = '';
+    const off = officeOf(s, p), n = own.get(p.id) || 0;
+    if (p.figure) { sc += 200; why = 'a power in the realm'; }
+    if (off) { sc += /council/.test(off) ? 70 : 110; why = why || 'holds office: ' + off; }
+    if (p.noble) { sc += 60; why = why || 'of a noble house'; }
+    if (p.nem) { sc += 90; why = why || 'your sworn enemy'; }
+    if (p.guild) { sc += 60; why = why || 'speaks for the guilds'; }
+    if (n) { sc += 22 + n * 16 + (p.rep || 0) * 0.4 + clamp(p.purse / 25, -10, 30); why = why || (n > 1 ? 'owns ' + n + ' businesses' : 'a merchant of standing'); }
+    if (!sc && (p.rep || 0) >= 60) { sc += (p.rep || 0) * 0.6; why = 'respected by everyone'; }
+    return { sc, why };
+  }
+  function newKey(s, p, why, sticky) {
+    const X = setupPpl(s), off = officeOf(s, p), own = Object.values(s.biz || {}).some(b => b.owner === p.id && !b.closed), h = pidNum(p);
+    const goals = p.nem ? ['ruin'] : p.figure === 'reformer' ? ['reform'] : off && !/council/.test(off) ? ['keep', 'keep', 'rise', 'reform', 'line', 'heir'] : off ? ['rise', 'office', 'reform', 'grow', 'heir'] : p.noble ? ['heir', 'rise', 'rich'] : p.guild ? ['guild'] : own ? ['grow', 'grow', 'rich', 'office', 'heir'] : ['office', 'rich', 'guild'];
+    const goal = goals[h % goals.length];
+    const sk = goal === 'line' ? ['skim', 'bought'] : goal === 'grow' || goal === 'rich' ? ['debt', 'smuggle', 'past'] : off ? ['bought', 'oath', 'affair', 'debt'] : ['affair', 'past', 'debt'];
+    const loyal = p.noble || /lord/.test(off || '') ? 'crown' : off ? 'lord' : own ? 'guild' : 'kin';
+    const K = X.key[p.id] = { t: townOf(p), since: s.day, why, goal, loyal, secret: ((h * 7 + (s.seed || 0)) >>> 0) % 5 < 2 ? { k: sk[(h >> 2) % sk.length], known: false } : null, owes: null, backs: {}, acted: -99, asked: -99, told: false };
+    if (sticky) K.sticky = s.day + sticky;
+    p.tier = 'k';
+    return K;
+  }
+  // who is a key person now: reckoned each week, town by town. Those whose lives have risen come up; those who have fallen go back to the crowd
+  function pickKey(s, quiet) {
+    const X = setupPpl(s), own = new Map(), byTown = {};
+    for (const b of Object.values(s.biz || {})) if (!b.closed && b.owner !== 'player') own.set(b.owner, (own.get(b.owner) || 0) + 1);
+    for (const p of living(s)) { if (p.kid || p.age < 16 || yourFamily(s, p)) continue; const k = keyScore(s, p, own); if (k.sc >= 40 || X.key[p.id]) (byTown[townOf(p)] = byTown[townOf(p)] || []).push({ p, sc: k.sc + (X.key[p.id] ? 12 : 0) + (X.key[p.id] && X.key[p.id].sticky > s.day ? 500 : 0), why: k.why }); }
+    const keep = new Set(), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    for (const t of pplTowns(s)) {
+      const L = (byTown[t] || []).sort((a, b) => b.sc - a.sc || pidNum(a.p) - pidNum(b.p)).slice(0, keyCap(townSize(s, t)));
+      for (const { p, sc, why } of L) {
+        if (sc < 40) continue;
+        keep.add(p.id);
+        if (!X.key[p.id]) { newKey(s, p, why || 'risen in the town'); if (!quiet) { plog(s, p, 'Became someone who matters in ' + townName(t) + ': ' + (why || 'risen in the town') + '.'); pplNote(s, p, p.name + ' is now someone who matters in ' + townName(t) + ' (' + (why || 'risen in the town') + ').', 'info', t === here || (p.opinion || 0) >= 30 || (p.hate || 0) >= 35); } }
+        else { X.key[p.id].t = t; if (why && !(X.key[p.id].sticky > s.day)) X.key[p.id].why = why; }
+      }
+    }
+    for (const id in X.key) if (!keep.has(id)) { const p = s.people[id]; if (p) { delete p.tier; if (!quiet && p.status === 'here') plog(s, p, 'No longer counts for much in ' + townName(townOf(p)) + '.'); } delete X.key[id]; }
+    // debts between them: some owe a richer neighbour, and a debtor leans the way their creditor leans
+    for (const t of pplTowns(s)) {
+      const ks = Object.keys(X.key).filter(id => X.key[id].t === t).map(id => s.people[id]).filter(Boolean).sort((a, b) => b.purse - a.purse);
+      ks.forEach((p, i) => { const K = X.key[p.id]; if (K.owes && (!X.key[K.owes.to] || K.owes.amt <= 0)) K.owes = null; if (!K.owes && i > 0 && (pidNum(p) + (s.seed || 0)) % 3 === 0 && ks[0].id !== p.id) K.owes = { to: ks[(pidNum(p) >> 1) % Math.min(i, 3)].id, amt: 40 + (pidNum(p) % 9) * 30 }; });
+    }
+    X.picked = s.day;
+  }
+  function pplNote(s, p, text, kind, tell) {
+    const X = setupPpl(s); X.log.unshift({ d: s.day, pid: p ? p.id : null, x: text, k: kind || 'info' }); if (X.log.length > 40) X.log.length = 40;
+    if (tell) event(s, text, kind || 'info');
+  }
+  // those who follow a key person: the people they pay and the people they house
+  function patronOf(s, p) {
+    const X = s.ppl; if (!X || !p) return null;
+    if (X.key[p.id]) return p.id;
+    const j = p.job; if (j && j.type === 'biz' && j.role !== 'owner' && s.biz[j.biz]) { const o = s.biz[j.biz].owner; if (o === 'player' || X.key[o]) return o; }
+    if (j && j.type === 'shop') return 'player';
+    if (p.home && p.home !== 'you' && typeof p.home === 'string' && !p.home.startsWith('seat:')) { const h = houseById(s, p.home); if (h && h.owner && (h.owner === 'player' || X.key[h.owner]) && h.owner !== p.id) return h.owner; }
+    return null;
+  }
+  function blocOf(s, pid) { let n = 0; const t = pid === 'player' ? null : townOf(s.people[pid]); for (const p of living(s)) if (!p.kid && p.id !== pid && (t == null || townOf(p) === t) && patronOf(s, p) === pid) n++; return n; }
+  // how a key person stands toward you, and the reason
+  function stanceOf(s, p) {
+    const X = s.ppl, K = X && X.key[p.id]; if (!K) return { v: 0, why: '' };
+    const op = p.opinion || 0, h = p.hate || 0, t = K.t;
+    if (h >= 35 || K.goal === 'ruin') return { v: -1, why: 'holds a grudge against you' };
+    const mine = Object.values(s.biz || {}).filter(b => b.owner === 'player' && !b.closed && (b.town || 'hearthmoor') === t), theirs = Object.values(s.biz || {}).filter(b => b.owner === p.id && !b.closed);
+    const m = yourOffice(s), off = officeOf(s, p);
+    if ((K.goal === 'rise' || K.goal === 'office' || K.goal === 'keep') && m && ((m.office === 'elder' && t === 'hearthmoor') || (m.office === 'lord' && m.region === t)) && op < 40) return { v: -1, why: 'wants the office you hold' };
+    if ((K.goal === 'grow' || K.goal === 'rich' || K.goal === 'guild') && mine.some(b => theirs.some(x => x.trade === b.trade)) && op < 40) return { v: -1, why: 'you are a rival in ' + (sexOf(p) === 'f' ? 'her' : 'his') + ' trade' };
+    if (K.goal === 'reform' && s.folk && s.folk.moral <= -30) return { v: -1, why: 'thinks you crooked' };
+    if (op >= 40) return { v: 1, why: 'thinks well of you' };
+    if (K.goal === 'reform' && s.folk && s.folk.moral >= 30 && s.folk.fame >= 20) return { v: 1, why: 'thinks you honest' };
+    if (off && op <= -25) return { v: -1, why: 'dislikes you' };
+    return { v: 0, why: 'has no quarrel with you' };
+  }
+  function loyalText(s, p, K) {
+    const t = K.t, R = s.realm;
+    if ((p.opinion || 0) >= 55 && stanceOf(s, p).v > 0) return 'You, as a friend';
+    if (K.secret && K.secret.k === 'oath') return K.secret.known ? 'In secret, a master other than the one they serve' : (K.loyal === 'crown' ? 'The crown' : 'Their lord');
+    if (K.told && K.owes && s.people[K.owes.to]) return s.people[K.owes.to].name + ', who holds their debt';
+    if (K.loyal === 'crown') return R ? (R.crown === 'player' ? 'The crown: you' : 'The crown') : 'The lord of the manor';
+    if (K.loyal === 'lord') { const l = R && R.regions[t] ? regionLord(s, t) : s.offices && s.offices.lord; return l === 'player' ? 'You, their lord' : l && s.people[l] ? s.people[l].name + ', their lord' : 'The town'; }
+    if (K.loyal === 'guild') return 'The guilds of ' + townName(t);
+    return 'Their own family';
+  }
+  // what anyone keeps: a want, a loyalty, what they owe, what they know, and how they feel about you and why
+  function pplOf(s, p) {
+    const X = setupPpl(s), K = X.key[p.id], out = { tier: K ? 'key' : 'folk', key: !!K };
+    const top = (p.mem || []).slice().sort((a, b) => Math.abs(b.w) - Math.abs(a.w))[0], op = p.opinion || 0;
+    out.feel = (p.hate || 0) >= 35 ? hateStep(p.hate).name : op >= 40 ? 'Admires you' : op >= 10 ? 'Likes you' : op > -10 ? 'No strong feeling' : op > -40 ? 'Resents you' : 'Hates you';
+    out.feelWhy = top ? top.text : Math.abs(op) < 10 ? 'You have had few dealings.' : 'From what is said of you.';
+    if (K) {
+      const st = stanceOf(s, p);
+      out.why = K.why; out.want = PPL_GOALS[K.goal](p); out.loyal = loyalText(s, p, K);
+      out.owes = K.owes && s.people[K.owes.to] ? (K.told ? K.owes.amt + 'c to ' + s.people[K.owes.to].name : null) : (K.told ? 'Nothing' : null);
+      out.secret = K.secret ? (K.secret.known ? p.name + ' ' + PPL_SECRETS[K.secret.k] + '.' : null) : (K.told ? '' : null);
+      out.stance = st.v; out.stanceWhy = st.why; out.bloc = blocOf(s, p.id); out.town = K.t;
+      out.knows = (K.knows || []).map(id => s.people[id] && s.people[id].name).filter(Boolean);
+      return out;
+    }
+    const j = p.job, h = pidNum(p), mine = patronOf(s, p);
+    out.want = p.kid ? 'To play, and to grow up' : p.hungry ? 'Enough to eat' : !p.home ? 'A roof over their head' : (p.arrears || 0) > 0 ? 'To clear the rent they owe' : !j && !p.retired ? 'Steady work' : p.retired ? 'A quiet old age' : !p.spouse && p.age < 36 ? 'Someone to marry' : ['A shop of their own one day', 'A better life for their children', 'To be thought well of', 'A quiet life', 'A little more in the purse'][h % 5];
+    out.loyal = p.home === 'you' ? 'You: they live under your roof' : mine === 'player' ? 'You: you pay their wage or house them' : mine && s.people[mine] ? s.people[mine].name + (j && j.type === 'biz' && s.biz[j.biz] && s.biz[j.biz].owner === mine ? ', who pays their wage' : ', their landlord') : p.spouse && s.people[p.spouse] ? 'Their family' : townName(townOf(p));
+    out.owes = (p.arrears || 0) > 0 ? p.arrears + ' day' + (p.arrears === 1 ? '' : 's') + ' of rent' : p.purse < 0 ? (-p.purse) + 'c' : 'Nothing';
+    out.knows = [];
+    return out;
+  }
+  /* ---------- the crowd: one mood for a town ---------- */
+  const CROWD_WORD = { happy: 'Happy', calm: 'Calm', uneasy: 'Uneasy', hungry: 'Hungry', angry: 'Angry', riot: 'Rioting' };
+  function yourStake(s, t) {   // do you have a reason to hear about this town?
+    if ((townAt(s.player.x, s.player.z) || 'hearthmoor') === t) return true;
+    const m = yourOffice(s); if (m && (m.office === 'crown' || (m.office === 'elder' && t === 'hearthmoor') || (m.office === 'lord' && m.region === t))) return true;
+    if (s.towns && s.towns[t] && s.towns[t].mayor === 'player') return true;
+    if ((yourTown(s) || 'hearthmoor') === t) return true;
+    return Object.values(s.biz || {}).some(b => b.owner === 'player' && (b.town || 'hearthmoor') === t) || (t === 'hearthmoor' && s.shops.length > 0);
+  }
+  function youGovern(s, t) { const m = yourOffice(s); return !!(m && ((m.office === 'elder' && t === 'hearthmoor') || (m.office === 'lord' && m.region === t) || (m.office === 'crown' && t === 'crownmere'))) || !!(s.towns && s.towns[t] && s.towns[t].mayor === 'player'); }
+  function crowdOf(s, t) {
+    const X = setupPpl(s), C = X.crowd[t || 'hearthmoor'];
+    if (!C) return { mood: 'calm', word: 'Calm', heat: 0, causes: [], warn: 0 };
+    return { mood: C.mood, word: CROWD_WORD[C.mood], heat: Math.round(C.heat), causes: C.causes || [], warn: C.warn || 0, riot: C.riot || null, n: C.n || 0, hungry: C.hungry || 0, eased: C.eased || null };
+  }
+  function crowdDay(s) {
+    const X = setupPpl(s), A = {};
+    for (const p of living(s)) {
+      if (p.kid) continue; const t = townOf(p), a = A[t] = A[t] || { n: 0, hungry: 0, homeless: 0, idle: 0, mood: 0, hate: 0 };
+      a.n++; if (p.hungry) a.hungry++; if (!p.home) a.homeless++; if (!p.job && !p.retired && p.age < 62) a.idle++; a.mood += p.mood || 0; if ((p.hate || 0) >= 35) a.hate++;
+    }
+    for (const t of pplTowns(s)) {
+      const a = A[t]; if (!a || !a.n) continue;
+      const C = X.crowd[t] = X.crowd[t] || { heat: 8, mood: 'calm', warn: 0, hot: 0 };
+      const T = s.towns && s.towns[t], R = s.realm, reg = R && R.regions[t];
+      const hun = a.hungry / a.n, hom = a.homeless / a.n, idl = a.idle / a.n, md = a.mood / a.n;
+      const grain = s.goods && s.goods[t] ? goodsPrice(s, t, 'grain') / GOODS_BASE.grain : 1;
+      const appr = T ? T.approval : s.gov ? (s.offices.elder === 'player' ? s.gov.approval.you : s.gov.approval.elder) : 60;
+      const causes = [];
+      const add = (v, text) => { if (v >= 4) causes.push({ v: Math.round(v), text }); return v; };
+      let target = add(hun * 210, 'people are going hungry') + add(hom * 130, 'people are sleeping rough') + add(Math.max(0, idl - 0.08) * 70, 'there is not enough work')
+        + add(Math.max(0, 52 - md) * 1.2, 'spirits are low') + add(grain >= 1.5 ? Math.min(18, (grain - 1.2) * 20) : 0, 'bread is dear')
+        + add(appr < 40 ? (40 - appr) * 0.6 : 0, 'they have lost faith in those who govern') + add(T && T.fee === 'high' ? 6 : 0, 'the market fees are high')
+        + add(reg && reg.tax > 1 ? (reg.tax - 1) * 16 : 0, 'the lord’s taxes are heavy') + add(youGovern(s, t) || yourStake(s, t) ? Math.min(14, a.hate / a.n * 120) : 0, 'too many of them have a grudge against you')
+        + add(s.bandits && (s.bandits[t] || 0) >= 55 ? 6 : 0, 'the roads are not safe');
+      if (C.stoke && C.stoke.until >= s.day) target += add(C.stoke.v, s.people[C.stoke.by] ? s.people[C.stoke.by].name + ' is stirring them up' : 'someone is stirring them up'); else C.stoke = null;
+      if (C.calm && C.calm.until >= s.day) target -= C.calm.v; else C.calm = null;
+      if (C.grudge && C.grudge.until >= s.day) target += add(C.grudge.v, 'they have not forgotten the watch’s clubs'); else C.grudge = null;
+      if (holidayOn(s.day, kingdomOf(t))) target -= 8;
+      target = clamp(target, 0, 100);
+      C.heat = Math.round((C.heat + (target - C.heat) * (target > C.heat ? 0.22 : 0.3)) * 10) / 10;
+      C.causes = causes.sort((x, y) => y.v - x.v).slice(0, 3).map(c => c.text); C.n = a.n; C.hungry = a.hungry;
+      const was = C.mood;
+      C.mood = C.heat >= 68 ? 'angry' : hun >= 0.18 ? 'hungry' : C.heat >= 42 ? 'uneasy' : md >= 62 && C.heat < 18 ? 'happy' : 'calm';
+      // a contented town is kinder to those who govern it
+      if (C.mood === 'happy' && T) T.approval = Math.round(clamp(T.approval + 0.4, 0, 100) * 10) / 10;
+      const tell = yourStake(s, t), why = C.causes.length ? ': ' + C.causes.join(', ') : '';
+      const lvl = C.heat >= 82 ? 3 : C.heat >= 68 ? 2 : C.heat >= 48 ? 1 : 0;
+      if (lvl > (C.warn || 0)) {
+        C.warn = lvl;
+        pplNote(s, null, lvl === 1 ? 'The people of ' + townName(t) + ' are muttering' + why + '.' : lvl === 2 ? 'Angry crowds are gathering in ' + townName(t) + why + '. If nothing changes it will come to a riot.' : townName(t) + ' is on the edge of a riot' + why + '. Bread, a fair word in the square, or the watch could still stop it.', lvl === 1 ? 'info' : 'bad', tell);
+      } else if (lvl < (C.warn || 0) && C.heat < [0, 40, 60, 76][C.warn]) { if (C.warn >= 2) pplNote(s, null, 'The crowds in ' + townName(t) + ' have gone home. The town is ' + CROWD_WORD[C.mood].toLowerCase() + ' again.', 'good', tell); C.warn = lvl; }
+      if (was !== C.mood && C.mood === 'happy' && tell && was !== undefined) pplNote(s, null, townName(t) + ' is in good heart: there is food, work and little to complain of.', 'good', false);
+      C.hot = C.heat >= 80 ? (C.hot || 0) + 1 : 0;
+      if (C.hot >= 2 && !(C.riot && s.day - C.riot.day < 12)) riot(s, t, C);
+    }
+  }
+  // a riot: shops shut and looted, a building burned, people hurt or killed, and whoever governs badly driven out
+  function riot(s, t, C) {
+    const X = setupPpl(s), tell = yourStake(s, t), TN = townName(t), folk = folkIn(s, t).filter(p => !p.kid), out = [];
+    const bizs = Object.values(s.biz || {}).filter(b => (b.town || 'hearthmoor') === t && !b.closed && !b.seized && b.trade !== 'estate');
+    for (const b of bizs) b.riot = s.day + 2;
+    let looted = 0, yoursHit = 0;
+    for (const b of bizs) {
+      if (b.owner === 'player') { yoursHit++; continue; }
+      const o = s.people[b.owner]; if (o && o.purse > 20 && prand(s) < 0.6) { const take = Math.round(o.purse * (0.1 + prand(s) * 0.2)); o.purse -= take; looted += take; }
+    }
+    // what is taken goes home with the hungriest
+    const poor = folk.filter(p => p.hungry || p.purse < 6).sort((a, b) => a.purse - b.purse).slice(0, 30);
+    if (poor.length && looted) { const each = Math.floor(looted / poor.length); poor.forEach(p => { p.purse += each; }); const rem = looted - each * poor.length; poor[0].purse += rem; }
+    out.push('Every shop is shut for two days' + (looted ? ', and ' + looted + 'c is looted from the tills' : ''));
+    if (t === 'hearthmoor') for (const sh of s.shops) { const lost = Math.floor(sh.goods * 0.5); if (lost > 0) { sh.goods -= lost; out.push('half the goods in your ' + TRADES[sh.trade].name.toLowerCase() + ' are carried off'); } }
+    if (yoursHit) out.push('your ' + (yoursHit === 1 ? 'business there takes' : yoursHit + ' businesses there take') + ' nothing while the shutters are up');
+    // fire
+    if (bizs.length && (C.heat >= 88 || prand(s) < 0.5)) {
+      const pool = bizs.filter(b => !(b.burnt && b.burnt > s.day)), greedy = pool.filter(b => b.owner === 'player' && b.prices === 'greedy');
+      const b = greedy.length ? ppick(s, greedy) : ppick(s, pool);
+      if (b) { b.burnt = s.day + 5; b.disrepair = true; b.repairCost = Math.max(b.repairCost || 0, 80); out.push(empById(b.id).name + (b.owner === 'player' ? ', which is yours,' : '') + ' is set alight and will be shut for five days'); const o = s.people[b.owner]; if (o) { plog(s, o, 'Their business was burned in the riot.'); o.mood = clamp(o.mood - 20, 0, 100); } }
+    }
+    // blood
+    const safe = p => !yourFamily(s, p) && !p.figure && !officeOf(s, p) && p.status === 'here';
+    const hurt = []; for (let i = 0; i < 1 + Math.floor(prand(s) * 3) && folk.length; i++) { const p = ppick(s, folk); if (safe(p) && !hurt.includes(p)) { hurt.push(p); p.mood = clamp(p.mood - 25, 0, 100); plog(s, p, 'Hurt in the riot in ' + TN + '.'); } }
+    let dead = null;
+    if (C.heat >= 86 && prand(s) < 0.6) { const c = folk.filter(p => safe(p) && !hurt.includes(p) && !X.key[p.id]); dead = c.length ? ppick(s, c) : null; if (dead) { plog(s, dead, 'Killed in the riot in ' + TN + '.'); dies(s, dead); } }
+    if (hurt.length || dead) out.push((hurt.length ? hurt.length + (hurt.length === 1 ? ' person is' : ' people are') + ' hurt' : '') + (dead ? (hurt.length ? ' and ' : '') + dead.name + ' is killed' : ''));
+    // those who govern
+    const T = s.towns && s.towns[t], R = s.realm;
+    let fell = '';
+    if (T) {
+      T.approval = Math.round(clamp(T.approval - 14, 0, 100) * 10) / 10;
+      if (T.mayor === 'player' && T.approval < 45) { T.mayor = null; fell = 'You are driven out as ' + titleOf(T) + ' of ' + TN; deed(s, -2, 1, 'driven out by a riot'); townVote(s, T); }
+      else if (T.mayor !== 'player' && T.approval < 45) { const m = s.people[T.mayor]; T.id = t; if (m) { m.rep = Math.max(0, (m.rep || 0) - 15); const before = T.mayor; T.approval = Math.min(T.approval, 30); townVote(s, T); if (T.mayor !== before) fell = titleOf(T) + ' ' + m.name + ' is driven from office'; } }
+    } else if (s.gov) {
+      const e = s.offices.elder;
+      if (e === 'player') { approve(s, 'you', -14); if (s.gov.approval.you < 40) { removeElder(s, 'player'); fell = 'You are driven from the Elder’s chair'; deed(s, -2, 1, 'driven out by a riot'); electElder(s, 'player', 'After the riot the moot chooses a new Elder. '); } }
+      else if (e && s.people[e]) { approve(s, 'elder', -14); if (s.gov.approval.elder < 40) { const nm = s.people[e].name; removeElder(s, e); electElder(s, e, 'After the riot the moot chooses a new Elder. '); fell = 'Elder ' + nm + ' is driven from the chair'; } }
+    }
+    const m = yourOffice(s);
+    if (!fell && m && m.office === 'lord' && m.region === t && R && R.regions[t] && R.regions[t].lord === 'player' && C.heat >= 86) { R.regions[t].lord = null; if (s.heraldry) delete s.heraldry[t]; vacantSeat(s, t); fell = 'You are driven out as lord of ' + REGIONS[t]; deed(s, -3, 2, 'driven out by a riot'); }
+    if (m && m.office === 'crown' && R && kingdomOf(t) === 'alderwyn') { R.support.towns = clamp(R.support.towns - (t === 'crownmere' ? 8 : 4), 0, 100); out.push('your support in the towns falls'); }
+    if (fell) out.push(fell);
+    C.riot = { day: s.day, text: out.join('; ') + '.' }; C.heat = Math.max(20, C.heat - 45); C.hot = 0; C.warn = 0; C.mood = 'uneasy'; C.stoke = null;
+    for (const p of folk) if (prand(s) < 0.3) p.mood = clamp(p.mood - 6, 0, 100);
+    s.rec.riots = (s.rec.riots || 0) + 1;
+    pplNote(s, null, 'Riot in ' + TN + '! ' + (C.causes && C.causes.length ? 'It began because ' + C.causes[0] + '. ' : '') + C.riot.text, 'bad', true);
+    if (!tell) return;
+  }
+  /* ---------- key people act: one move each week, for themselves, for you or against you ---------- */
+  function keyAct(s, p, K) {
+    const X = setupPpl(s), t = K.t, st = stanceOf(s, p), here = townAt(s.player.x, s.player.z) || 'hearthmoor', sub = sexOf(p) === 'f' ? 'she' : 'he', pos = sexOf(p) === 'f' ? 'her' : 'his';
+    const tellNear = t === here, C = X.crowd[t];
+    K.acted = s.day;
+    // debts first: pay a little down, or be squeezed
+    if (K.owes && s.people[K.owes.to]) { const pay = Math.min(K.owes.amt, Math.max(0, Math.floor((p.purse - 30) * 0.3))); if (pay > 0) { p.purse -= pay; s.people[K.owes.to].purse += pay; K.owes.amt -= pay; if (K.owes.amt <= 0) { plog(s, p, 'Paid off what they owed ' + s.people[K.owes.to].name + '.'); K.owes = null; } } }
+    // someone who knows a secret makes it pay
+    if (K.knows && K.knows.length) { const v = s.people[K.knows[0]], VK = v && X.key[v.id]; if (v && VK && v.status === 'here' && v.purse > 40 && (K.squeezed || 0) < 5) { const take = Math.min(30, Math.round(v.purse * 0.1)); v.purse -= take; p.purse += take; K.squeezed = (K.squeezed || 0) + 1; if (K.squeezed === 1) pplNote(s, p, p.name + ' has come into money, and ' + v.name + ' looks ill whenever ' + sub + ' is near.', 'info', false); return; } }
+    const againstOk = st.v < 0 && s.day - X.acted >= 3 && s.day - (K.hit || -99) >= 10;
+    if (againstOk) {
+      const mine = Object.values(s.biz || {}).filter(b => b.owner === 'player' && !b.closed && !b.lease && (b.town || 'hearthmoor') === t), theirs = Object.values(s.biz || {}).filter(b => b.owner === p.id && !b.closed);
+      const rivalBiz = mine.find(b => theirs.some(x => x.trade === b.trade));
+      const hit = text => { K.hit = s.day; X.acted = s.day; pplNote(s, p, text, 'bad', true); remember(s, p, 'Moved against you.', 0); };
+      if (rivalBiz && prand(s) < 0.5) {
+        if (rivalBiz.staff.length && prand(s) < 0.5 && theirs[0]) {
+          const stf = rivalBiz.staff.slice().sort((a, b) => (s.people[a.pid] ? s.people[a.pid].opinion || 0 : 0) - (s.people[b.pid] ? s.people[b.pid].opinion || 0 : 0))[0], w = s.people[stf.pid];
+          if (w && (w.opinion || 0) < 45 && stf.wage <= fairWage(t) + 1) { const wage = stf.wage + 2; loseJob(s, w, 'Hired away from ' + empById(rivalBiz.id).name + ' by ' + p.name + '.'); const tb = theirs.find(x => x.trade === rivalBiz.trade) || theirs[0]; tb.staff.push({ pid: w.id, wage }); w.job = { type: 'biz', biz: tb.id, role: 'hand' }; return hit(p.name + ' has hired ' + w.name + ' away from ' + empById(rivalBiz.id).name + ' for ' + wage + 'c a day. Why: ' + st.why + '. Paying above the fair wage, or winning ' + p.name + ' over, would stop it.'); }
+        }
+        rivalBiz.undercut = { until: s.day + 5, by: p.id };
+        return hit(p.name + ' is selling below your prices in ' + townName(t) + '. ' + empById(rivalBiz.id).name + ' will lose about a fifth of its custom for five days. Why: ' + st.why + '.');
+      }
+      if (youGovern(s, t) && C && prand(s) < 0.6) { C.stoke = { until: s.day + 5, v: 12, by: p.id }; return hit(p.name + ' is stirring up the people of ' + townName(t) + ' against you. Why: ' + st.why + '.'); }
+      const E = s.elect ? electState(s) : null, race = E && Object.values(E.races).find(r => r.open && r.you && raceTown(r) === t);
+      if (race && race.cands.length) { const c = race.cands.map(id => s.people[id]).filter(Boolean).sort((a, b) => (b.rep || 0) - (a.rep || 0))[0]; if (c && K.backs[race.key] !== c.id) { K.backs[race.key] = c.id; return hit(p.name + ' has thrown ' + pos + ' weight behind ' + (c.id === p.id ? pos + ' own name' : c.name) + ' against you, and the ' + blocOf(s, p.id) + ' people who depend on ' + (sexOf(p) === 'f' ? 'her' : 'him') + ' will mostly follow. Why: ' + st.why + '.'); } }
+      { const folk = folkIn(s, t).filter(q => !q.kid && !yourFamily(s, q) && q.id !== p.id), n = Math.min(folk.length, 4 + Math.floor(prand(s) * 3)); if (n) { for (let i = 0; i < n; i++) { const q = ppick(s, folk); q.opinion = clamp((q.opinion || 0) - 4, -100, 100); remember(s, q, 'Heard ill of you from ' + p.name + '.', -3); } return hit(p.name + ' has been speaking against you in ' + townName(t) + ', and some believe it. Why: ' + st.why + '.'); } }
+    }
+    if (st.v > 0 && s.day - (K.helped || -99) >= 12 && prand(s) < 0.5) {
+      K.helped = s.day; const folk = folkIn(s, t).filter(q => !q.kid && !yourFamily(s, q) && q.id !== p.id), n = Math.min(folk.length, 5);
+      for (let i = 0; i < n; i++) { const q = ppick(s, folk); q.opinion = clamp((q.opinion || 0) + 3, -100, 100); remember(s, q, p.name + ' speaks well of you.', 3); }
+      if (C && youGovern(s, t) && C.heat >= 40) C.calm = { until: s.day + 4, v: 8, by: p.id };
+      return pplNote(s, p, p.name + ' has been speaking well of you in ' + townName(t) + '. Why: ' + st.why + '.', 'good', yourStake(s, t));
+    }
+    // their own aims
+    const T = s.towns && s.towns[t];
+    if (K.goal === 'grow' || K.goal === 'rich') {
+      const target = Object.values(s.biz || {}).filter(b => !b.closed && !b.lease && !b.seized && b.owner !== 'player' && b.owner !== p.id && (b.town || 'hearthmoor') === t && b.trade !== 'estate' && s.people[b.owner] && !X.key[b.owner] && avg(b.profits) < 4).sort((a, b) => avg(a.profits) - avg(b.profits))[0];
+      if (K.goal === 'grow' && target && prand(s) < 0.35) { const price = bizPrice(s, target.id); if (p.purse >= price + 40) { const old = s.people[target.owner]; p.purse -= price; old.purse += price; if (old.job && old.job.biz === target.id) old.job = null; plog(s, old, 'Sold ' + empById(target.id).name + ' to ' + p.name + '.'); target.owner = p.id; plog(s, p, 'Bought ' + empById(target.id).name + '.'); return pplNote(s, p, p.name + ' buys ' + empById(target.id).name + ' in ' + townName(t) + ' from ' + old.name + ', who could not make it pay.', 'info', tellNear); } }
+      return;
+    }
+    if (K.goal === 'line' && T && T.chest > 80 && prand(s) < 0.4) { const take = Math.min(25, Math.round(T.chest * 0.04)); T.chest -= take; p.purse += take; K.took = (K.took || 0) + take; if (!K.secret) K.secret = { k: 'skim', known: false }; return; }
+    if (K.goal === 'reform' && T && prand(s) < 0.3) { T.approval = Math.round(clamp(T.approval + 1.5, 0, 100) * 10) / 10; return; }
+    if ((K.goal === 'office' || K.goal === 'rise' || K.goal === 'guild') && prand(s) < 0.4) { p.rep = Math.round(clamp((p.rep || 0) + 1.5, 0, 100) * 10) / 10; return; }
+    if (K.goal === 'heir') { const kid = living(s).find(q => (q.parents || []).includes(p.id) && !q.kid && q.purse < 30); if (kid && p.purse > 120) { p.purse -= 20; kid.purse += 20; } }
+  }
+  const raceTown = r => r.office === 'elder' || r.office === 'council' ? 'hearthmoor' : r.office === 'lord' ? r.region : r.office === 'seat' ? 'crownmere' : null;
+  // when a race opens, each key person in its ground picks a side, and those who depend on them mostly follow
+  function keyBacking(s) {
+    const X = setupPpl(s); if (!s.elect) return; const E = electState(s);
+    for (const r of Object.values(E.races)) {
+      if (!r.open) { if (r.pplSet) { r.pplSet = false; for (const id in X.key) delete X.key[id].backs[r.key]; } continue; }
+      if (r.pplSet) continue; r.pplSet = true;
+      const t = raceTown(r), cands = r.cands.map(id => s.people[id]).filter(q => q && q.status === 'here');
+      for (const id in X.key) {
+        const K = X.key[id], p = s.people[id]; if (!p || (t && K.t !== t) || (!t && kingdomOf(K.t) !== 'alderwyn')) continue;
+        if (r.cands.includes(id)) { K.backs[r.key] = id; continue; }
+        const st = stanceOf(s, p), cred = K.owes && X.key[K.owes.to] && X.key[K.owes.to].backs[r.key];
+        if (r.you && st.v > 0) K.backs[r.key] = 'player';
+        else if (cred) K.backs[r.key] = cred;
+        else if (cands.length && (st.v < 0 || !r.you || prand(s) < 0.6)) K.backs[r.key] = cands.slice().sort((a, b) => ((b.rep || 0) + (pidNum(b) * 7 + pidNum(p)) % 15) - ((a.rep || 0) + (pidNum(a) * 7 + pidNum(p)) % 15))[0].id;
+      }
+    }
+  }
+  // the weight a voter carries from the people above them, and from the mood of the streets
+  function blocLean(s, r, p, cand, hold) {
+    const X = s.ppl; if (!X) return 0; let v = 0;
+    const pat = patronOf(s, p);
+    if (pat === 'player') v += cand === 'player' ? 0 : 0;
+    else if (pat && X.key[pat]) { const b = X.key[pat].backs[r.key]; if (b && b === cand) v += pat === p.id ? 30 : 13; }
+    const C = X.crowd[townOf(p)];
+    if (C && hold && cand === hold) v += C.mood === 'angry' ? -12 : C.mood === 'hungry' ? -8 : C.mood === 'uneasy' ? -4 : C.mood === 'happy' ? 5 : 0;
+    return v;
+  }
+  // rising from the crowd: a clerk who learns what their master hides, a craftsman who rises in the guild
+  function risers(s) {
+    const X = setupPpl(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    for (const id of Object.keys(X.key)) {
+      const K = X.key[id], v = s.people[id]; if (!v || !K.secret || K.leaked || prand(s) > 0.02) continue;
+      const near = living(s).filter(q => !q.kid && !X.key[q.id] && !yourFamily(s, q) && townOf(q) === K.t && patronOf(s, q) === id && q.job);
+      if (!near.length) continue;
+      const q = ppick(s, near), NK = newKey(s, q, 'knows what ' + v.name + ' hides', 40); NK.knows = [id]; NK.goal = 'rich'; K.leaked = s.day;
+      plog(s, q, 'Learned something about ' + v.name + ' that ' + v.name + ' would pay to keep quiet.');
+      pplNote(s, q, q.name + ', who works for ' + v.name + ' in ' + townName(K.t) + ', has learned something ' + (sexOf(v) === 'f' ? 'she' : 'he') + ' hides. ' + q.name + ' now matters in the town.', 'info', K.t === here || (q.opinion || 0) >= 30);
+    }
+    for (const t of pplTowns(s)) {
+      if (prand(s) > 0.06) continue;
+      const pool = folkIn(s, t).filter(q => !q.kid && !X.key[q.id] && !yourFamily(s, q) && q.job && q.job.type === 'biz' && q.job.role !== 'owner' && (q.skill || 0) >= 0.95 && (q.tenure || 0) >= 8 && q.age >= 20 && q.age < 55 && !q.guildRank);
+      if (!pool.length) continue;
+      const q = pool.sort((a, b) => (b.skill || 0) - (a.skill || 0) || pidNum(a) - pidNum(b))[0], b = s.biz[q.job.biz], tr = b ? tradeName(b.trade).toLowerCase() : 'craft';
+      q.guildRank = s.day; q.rep = clamp((q.rep || 0) + 15, 0, 100); const NK = newKey(s, q, 'a warden of the ' + tr + ' guild', 40); NK.goal = 'guild'; NK.loyal = 'guild';
+      plog(s, q, 'Chosen a warden of the ' + tr + ' guild of ' + townName(t) + '.');
+      pplNote(s, q, q.name + ', who works at ' + (b ? empById(b.id).name : 'a bench') + ', has been chosen a warden of the ' + tr + ' guild of ' + townName(t) + ', and now has a say in the town.', 'info', t === here || patronOf(s, q) === 'player' || (q.opinion || 0) >= 30);
+    }
+  }
+  function pplDay(s) {
+    if (!s.people) return;
+    const X = setupPpl(s);
+    if (s.day - X.picked >= 7 || !Object.keys(X.key).length) pickKey(s, X.picked < 0);
+    for (const id of Object.keys(X.key)) { const p = s.people[id]; if (!p || p.status !== 'here') { if (p) delete p.tier; delete X.key[id]; } }
+    crowdDay(s);
+    keyBacking(s);
+    for (const id of Object.keys(X.key)) { const K = X.key[id], p = s.people[id]; if (p && (pidNum(p) + s.day) % 7 === 0) keyAct(s, p, K); }
+    if (s.day % 7 === 3) risers(s);
+    for (const b of Object.values(s.biz || {})) { if (b.undercut && b.undercut.until < s.day) delete b.undercut; if (b.riot && b.riot < s.day) delete b.riot; }
+  }
+  function pplCmd(s, name, a, b) {
+    const X = setupPpl(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    switch (name) {
+      case 'pAsk': {   // ask around about someone who matters: what they owe, and with luck what they hide
+        const p = s.people[a], K = p && X.key[a]; if (!K || p.status !== 'here') return fail('There is nothing to learn about them.');
+        if (K.t !== here) return fail('You would have to ask in ' + townName(K.t) + '.');
+        if (s.day - K.asked < 3) return fail('You asked about ' + p.name + ' only lately. Let the talk settle for a few days.');
+        if (s.coins < 6) return fail('It takes 6c in drinks to loosen tongues.');
+        spend(s, 6); K.asked = s.day; skillUse(s, 'speech', 2);
+        const first = !K.told; K.told = true;
+        const friend = folkIn(s, here).some(q => !q.kid && (q.opinion || 0) >= 40 && patronOf(s, q) === p.id), teller = Object.keys(X.key).map(id => X.key[id]).find(k => (k.knows || []).includes(p.id));
+        const chance = 0.12 + skillLv(s, 'speech') / 400 + (friend ? 0.3 : 0) + (teller ? 0.15 : 0);
+        if (K.secret && !K.secret.known && prand(s) < chance) { K.secret.known = true; pplNote(s, p, 'You learned that ' + p.name + ' ' + PPL_SECRETS[K.secret.k] + '.', 'story', false); return ok('Someone talks. ' + p.name + ' ' + PPL_SECRETS[K.secret.k] + '. It explains a good deal. (Using what you know comes later.)'); }
+        return ok(first ? 'You learn how ' + p.name + ' stands: ' + (K.owes && s.people[K.owes.to] ? (sexOf(p) === 'f' ? 'she' : 'he') + ' owes ' + K.owes.amt + 'c to ' + s.people[K.owes.to].name : 'no debts to speak of') + '. ' + (K.secret && !K.secret.known ? 'There is more, people say, but nobody will tell you what.' : 'Nobody has anything worse to say.') : K.secret && !K.secret.known ? 'Plenty of talk, but nothing new. People hint there is something, and stop.' : 'Nothing new is said of ' + p.name + '.');
+      }
+      case 'pBack': {   // ask a key person for their backing in a race you are standing in
+        const p = s.people[a], K = p && X.key[a], E = electState(s), r = E.races[b]; if (!K || !r || !r.open || !r.you) return fail('There is no race to ask about.');
+        if (K.t !== here) return fail('Ask them in person, in ' + townName(K.t) + '.');
+        if (K.backs[r.key] === 'player') return fail(p.name + ' is already with you.');
+        if (r.cands.includes(p.id)) return fail(p.name + ' is standing against you.');
+        if (K.askedBack === r.poll) return fail('You have had ' + (sexOf(p) === 'f' ? 'her' : 'his') + ' answer for this race.');
+        K.askedBack = r.poll; const st = stanceOf(s, p), need = st.v < 0 ? 60 : 22, have = (p.opinion || 0) + skillLv(s, 'speech') / 5 + (s.folk ? s.folk.fame / 6 : 0);
+        skillUse(s, 'speech', 3);
+        if (have >= need) { K.backs[r.key] = 'player'; const n = blocOf(s, p.id); return ok(p.name + ' gives you ' + (sexOf(p) === 'f' ? 'her' : 'his') + ' backing. ' + (n ? 'The ' + n + ' people who depend on ' + (sexOf(p) === 'f' ? 'her' : 'him') + ' will mostly follow.' : '')); }
+        return fail(p.name + ' will not back you: ' + st.why + '. A better name with ' + (sexOf(p) === 'f' ? 'her' : 'him') + ' would change that.');
+      }
+      case 'pCrowd': {   // cool a town before it boils over
+        const t = a || here, C = X.crowd[t]; if (!C) return fail('There is no crowd to speak of.');
+        if (C.heat < 30) return fail(townName(t) + ' is quiet. There is nothing to calm.');
+        if (b === 'bread') {
+          const cost = Math.max(15, Math.round((C.n || 20) * 0.6)); if (s.coins < cost) return fail('Bread for ' + townName(t) + ' costs ' + cost + 'c.');
+          if (C.eased && s.day - C.eased.day < 2) return fail('The town has just been fed. Give it a day.');
+          spend(s, cost); C.heat = Math.max(0, C.heat - 24); C.hot = 0; C.eased = { day: s.day, how: 'bread' };
+          for (const p of folkIn(s, t)) if (p.hungry) { p.hungry = false; p.ate = (p.ate || 0) + 3; p.mood = clamp(p.mood + 8, 0, 100); p.opinion = clamp((p.opinion || 0) + 3, -100, 100); remember(s, p, 'You fed the town when it was hungry.', 6); }
+          deed(s, 2, 1.5, 'bread for ' + townName(t)); townApprove(s, t, 3);
+          return ok('You pay ' + cost + 'c for bread, handed out in the square. The crowd thins, and the hungry will remember it.');
+        }
+        if (b === 'speak') {
+          if (t !== here) return fail('You must stand in the square of ' + townName(t) + ' to speak to them.');
+          if (C.eased && C.eased.how === 'speak' && s.day - C.eased.day < 2) return fail('You have said your piece. Words wear thin if you repeat them.');
+          const F = setupFolk(s), cut = Math.round(clamp(6 + skillLv(s, 'speech') / 6 + F.moral / 10 + F.fame / 12, 2, 22)); skillUse(s, 'speech', 5);
+          C.heat = Math.max(0, C.heat - cut); if (cut >= 10) C.hot = 0; C.eased = { day: s.day, how: 'speak' };
+          return ok(cut >= 12 ? 'They listen. The square is calmer when you step down.' : 'Some listen and some jeer. It helps a little.');
+        }
+        if (b === 'watch') {
+          if (!youGovern(s, t)) return fail('Only whoever governs ' + townName(t) + ' can send out the watch.');
+          C.heat = Math.max(0, C.heat - 32); C.hot = 0; C.grudge = { until: s.day + 6, v: 14 }; C.eased = { day: s.day, how: 'watch' };
+          const folk = folkIn(s, t).filter(p => !p.kid && !yourFamily(s, p)); for (let i = 0; i < Math.min(6, folk.length); i++) { const p = ppick(s, folk); wrong(s, p, 7, 'You sent the watch against the crowd.', { noKin: true }); }
+          deed(s, -3, 0.5, 'the watch sent against a crowd'); townApprove(s, t, -4);
+          return ok('The watch clears the streets with clubs. It is quiet tonight, but they will not forget it, and the anger will be back unless its cause is mended.');
+        }
+        return fail('Bread, a speech, or the watch.');
+      }
+    }
+    return fail('Unknown.');
+  }
+  // the people who matter in a town, for the book
+  function notables(s, t) {
+    const X = setupPpl(s); t = t || townAt(s.player.x, s.player.z) || 'hearthmoor';
+    return Object.keys(X.key).filter(id => X.key[id].t === t && s.people[id] && s.people[id].status === 'here').map(id => { const p = s.people[id], o = pplOf(s, p); return { id, name: p.name, what: occupation(s, p), why: o.why, want: o.want, loyal: o.loyal, stance: o.stance, stanceWhy: o.stanceWhy, bloc: o.bloc, secret: o.secret, owes: o.owes }; }).sort((a, b) => b.bloc - a.bloc || a.name.localeCompare(b.name));
+  }
+
   const api = {
+    setupPpl, pplOf, crowdOf, notables, stanceOf, blocOf, patronOf, pickKey, pplDay, riot, keyAct, risers, keyCap, PPL_SECRETS, CROWD_WORD, youGovern, officeOf, raceTown,
     GRANT_PRICE, VILLAGE_MILESTONES, amendsCost, bribeCost, WEALTH, LAND, BIZ_TOWN_PRICE, spotMul, prestigeIds, isPrestige, setupFolk, folkDay, wrong, kindness, deed, hateStep, hateIdx, HATE_STEPS, FAIR_WAGE, fairWage, PRICE_MODES, moralName, moralWord, fameName, fameTarget, yourTitle, regardOf, nemeses, nemWhere, confrontOpts, threatOdds, authOver, yourGuards, fightOf, willWork, AUDIENCE, townOwnership, DENS, isForeign, warGrief, leaveTown, temperOf, townName,
     GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,

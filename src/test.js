@@ -1679,5 +1679,76 @@ console.log('50. Staff, elections and promises (v0.57-v0.59)');
   Sim.advance(b, 1440 * 2); check(b.char.level === 1, 'and does not get them back by being credited');
 }
 
+console.log('50. Stage III: the people. Key people, townsfolk and the crowd');
+const faults50 = Sim.faults().length;   // earlier sections break things on purpose; count only what is new
+{
+  const s = Sim.newGame(4401); Sim.advance(s, 1440 * 2);
+  const X = s.ppl, per = t => Object.values(X.key).filter(k => k.t === t).length;
+  check(per('hearthmoor') >= 3 && per('hearthmoor') <= 5 && per('crownmere') >= 20 && per('crownmere') <= 32, 'a village has a handful of key people (' + per('hearthmoor') + '), the capital a few dozen (' + per('crownmere') + ')');
+  check(Object.keys(X.key).every(id => { const o = Sim.pplOf(s, s.people[id]); return o.key && o.want && o.loyal && o.why; }), 'every key person has an aim, a loyalty and a reason they matter');
+  const folk = Sim.living(s).filter(p => !X.key[p.id]).slice(0, 200);
+  check(folk.every(p => { const o = Sim.pplOf(s, p); return !o.key && o.want && o.loyal && o.owes != null && o.feel && o.feelWhy; }), 'everyone else keeps a want, a loyalty, what they owe and how they feel about you');
+  const q = folk.find(p => !p.kid && p.status === 'here'); Sim.wrong(s, q, 20, 'You cheated them at the market.');
+  check(Sim.pplOf(s, q).feelWhy === 'You cheated them at the market.', 'and the reason they feel as they do is the thing you did');
+  // the same world, healthy, stays calm
+  check(Object.values(X.crowd).every(c => c.heat < 40), 'a fed and working realm is calm in every town');
+  // a secret is learned by asking, never shown before
+  const kp = Sim.notables(s, 'hearthmoor')[0], K = X.key[kp.id]; K.secret = { k: 'debt', known: false }; s.coins = 500;
+  check(Sim.pplOf(s, s.people[kp.id]).secret === null, 'a secret is hidden until you learn it');
+  let got = false; for (let i = 0; i < 60 && !got; i++) { K.asked = -99; s.day += 0; got = /Someone talks/.test(Sim.cmd(s, 'pAsk', kp.id).msg || ''); if (!got) Sim.advance(s, 1440); }
+  check(got && K.secret.known && /deeper in debt/.test(Sim.pplOf(s, s.people[kp.id]).secret), 'asking around can uncover it, and then it is written on their card');
+  // a key person with a grudge moves against you, and you are told who and why
+  const foe = s.people[Sim.notables(s, 'hearthmoor')[1].id]; foe.hate = 70;
+  check(Sim.stanceOf(s, foe).v === -1, 'a key person who hates you stands against you');
+  const n0 = s.events.length; let told = null; for (let d = 0; d < 16 && !told; d++) { Sim.advance(s, 1440); told = X.log.find(l => l.pid === foe.id && /Why:/.test(l.x)); }
+  check(!!told && told.x.includes(foe.name), 'within a fortnight they act, and the news names them and gives the reason');
+  // people rise out of the crowd
+  const before = new Set(Object.keys(X.key)); let rose = null;
+  for (let d = 0; d < 80 && !rose; d++) { Sim.advance(s, 1440); rose = Object.keys(X.key).map(id => X.key[id]).find(k => /warden of|knows what/.test(k.why)); }
+  check(!!rose, 'a townsperson rises to matter: ' + (rose ? rose.why : 'nobody'));
+  check(Sim.faults().length === faults50, 'no faults in a hundred days of it');
+}
+{
+  // the crowd: warnings first, then a riot with real losses; bread and a speech can stop it
+  const s = Sim.newGame(4402); Sim.advance(s, 1440 * 2); holdElections(s);
+  const X = s.ppl, starve = () => { for (const p of Sim.townFolk(s, 'oakbridge')) if (!p.kid) { p.purse = -5; p.hungry = true; p.mood = 15; } };
+  const seen = []; let d = 0;
+  for (; d < 25 && !(X.crowd.oakbridge.riot); d++) { starve(); Sim.advance(s, 1440); seen.push(X.crowd.oakbridge.warn); }
+  const C = X.crowd.oakbridge;
+  check(!!C.riot && d >= 4, 'a starving town riots, but only after ' + d + ' days of building anger');
+  check(seen.includes(1) && seen.includes(2), 'with warnings on the way: muttering, then crowds gathering');
+  check(Object.values(s.biz).filter(b => b.town === 'oakbridge' && !b.closed).every(b => b.riot >= s.day - 1), 'every shop in the town is shut');
+  check(/looted|alight|hurt|killed/.test(C.riot.text), 'and there are real losses: ' + C.riot.text.slice(0, 90));
+  check(s.rec.riots === 1 && C.heat < 60, 'the anger is spent for a while afterwards');
+  const s2 = Sim.newGame(4402); Sim.advance(s2, 1440 * 2); holdElections(s2); s2.coins = 5000;
+  const st2 = () => { for (const p of Sim.townFolk(s2, 'oakbridge')) if (!p.kid) { p.purse = -5; p.hungry = true; p.mood = 15; } };
+  for (let i = 0; i < d + 3; i++) { st2(); Sim.advance(s2, 1440); if (s2.ppl.crowd.oakbridge.heat >= 55) Sim.cmd(s2, 'pCrowd', 'oakbridge', 'bread'); }
+  check(!s2.ppl.crowd.oakbridge.riot, 'bread handed out in time heads the same riot off');
+  check(!Sim.cmd(s2, 'pCrowd', 'oakbridge', 'watch').ok, 'only whoever governs a town can send out the watch');
+  check(Sim.faults().length === faults50, 'no faults');
+}
+{
+  // crowds with weight: the people who depend on a key person follow them at the vote
+  const s = Sim.newGame(4403); Sim.advance(s, 1440 * 2);
+  const X = s.ppl, r = { key: 'lord:oakbridge', office: 'lord', region: 'oakbridge', cands: [], you: true, boost: 0, open: true };
+  const ks = Sim.notables(s, 'oakbridge').filter(n => n.bloc >= 2); r.cands = [ks[0].id];
+  const share = () => { let a = 0; for (let i = 0; i < 6; i++) { s.day += 1; a += Sim.pollNow(s, r).find(x => x.id === 'player').share; } s.day -= 6; return a / 6; };
+  for (const id in X.key) X.key[id].backs[r.key] = ks[0].id; const against = share();
+  for (const id in X.key) X.key[id].backs[r.key] = 'player'; const forYou = share();
+  check(forYou > against + 3, 'with the key people behind you your share of the vote is higher (' + Math.round(against) + '% to ' + Math.round(forYou) + '%)');
+  X.crowd.oakbridge.mood = 'angry'; const hold = Sim.regionLord(s, 'oakbridge');
+  check(Sim.blocOf(s, ks[0].id) === ks[0].bloc && ks[0].bloc >= 2, 'a key person’s following is the people they pay and house');
+  // saves: the tiers survive a save, and a save from before Stage III is converted
+  const back = Sim.deserialize(Sim.serialize(s));
+  check(Object.keys(back.ppl.key).length === Object.keys(X.key).length && back.ppl.crowd.oakbridge.mood === 'angry', 'key people and the mood of each town are kept in the save');
+  const old = JSON.parse(Sim.serialize(s)); old.v = 18; delete old.ppl; for (const id in old.people) delete old.people[id].tier;
+  const conv = Sim.deserialize(JSON.stringify(old));
+  check(conv.v === Sim.VERSION && Object.keys(conv.ppl.key).length > 100 && conv.ppl.crowd.crownmere, 'an older save is converted: ' + Object.keys(conv.ppl.key).length + ' key people named, every town given a mood');
+  Sim.advance(conv, 1440 * 3); check(Sim.faults().length === faults50, 'and the converted game runs on');
+  // speed: the people do not slow the biggest town
+  const t0 = process.cpuUsage(); for (let i = 0; i < 20; i++) { Sim.pplDay(conv); } const ms = (process.cpuUsage(t0).user + process.cpuUsage(t0).system) / 1000 / 20;
+  check(ms < 60, 'a day of the people system for all eleven towns takes ' + Math.round(ms) + ' ms');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
