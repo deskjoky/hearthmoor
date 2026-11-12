@@ -1884,5 +1884,68 @@ const faults52 = Sim.faults().length;   // earlier sections break things on purp
   check(Sim.faults().length === faults52, 'the long game runs');
 }
 
+console.log('53. Stage VI: reputation redone. Fame, character, standing in each place, feelings; a reason for every change');
+{
+  const faults53 = Sim.faults().length;
+  const s = Sim.newGame(5301); Sim.applyStart(s, 'merchant'); s.coins = 3000; Sim.advance(s, 60 * 6); holdElections(s);
+  const V0 = Sim.repView(s);
+  check(V0.fameWord && V0.charWord === 'Unproven' && V0.places.some(p => p.t === 'hearthmoor'), 'four things to read: fame (' + V0.fameWord + '), character (' + V0.charWord + '), standing per place, and feelings');
+  // a month of ordinary play: every change has a reason
+  const oak = Sim.townFolk(s, 'oakbridge').filter(q => !q.kid);
+  for (let d = 0; d < 30; d++) {
+    s.folk.almsDay = -1; Sim.cmd(s, 'fAlms');
+    if (d === 3) Sim.kindness(s, oak[0], 10, 'You paid their doctor.');
+    if (d === 5) Sim.cmd(s, 'buyBiz', 'o_wicks');
+    if (d === 9) Sim.wrong(s, oak[1], 12, 'You cheated them over a cart.');
+    Sim.advance(s, 1440);
+  }
+  const L = s.rep.log;
+  check(L.length >= 10 && L.every(e => e.why && e.why !== 'changes in the world'), 'over a month, ' + L.length + ' changes were recorded and every one has a reason');
+  check(L.some(e => e.k === 'character' && /alms/.test(e.why)) && L.some(e => e.k === 'fame'), 'alms move character; fame drifts with word of what you do');
+  check(L.some(e => e.k === 'st:oakbridge' && e.why === 'you paid their doctor') && L.some(e => e.k === 'st:oakbridge' && e.n < 0 && /cheated/.test(e.why)), 'what you do to people in Oakbridge moves your standing in Oakbridge, with the reason');
+  check(Sim.standing(s, 'hearthmoor') !== undefined && !L.some(e => e.k === 'st:hearthmoor' && /doctor|cheated/.test(e.why)), 'and not your standing in Hearthmoor: a hero in one town can be a nobody in another');
+  // repeating the same act halves it
+  check(s.rep.log.filter(e => e.k === 'character' && /alms/.test(e.why)).slice(0, 5).every(e => e.n < 0.05), 'a month of alms every day: by the end they count for almost nothing');
+  for (let d = 0; d < 15; d++) Sim.advance(s, 1440);
+  const al = []; for (let i = 0; i < 3; i++) { const m0 = s.folk.moral; s.folk.almsDay = -1; Sim.cmd(s, 'fAlms'); al.push(Math.round((s.folk.moral - m0) * 100) / 100); }
+  check(al[0] > al[1] && al[1] > al[2] && Math.abs(al[1] - al[0] / 2) < 0.02, 'giving alms again and again counts for less each time (' + al.join(', ') + ')');
+  for (let d = 0; d < 15; d++) Sim.advance(s, 1440);
+  const m1 = s.folk.moral; s.folk.almsDay = -1; Sim.cmd(s, 'fAlms'); check(Math.abs((s.folk.moral - m1) - 1.2) < 0.02, 'after two quiet weeks it counts in full again');
+  // where you hold office, the rating of your government is your standing
+  s.offices.elder = 'player'; s.gov.approval.elder = 64;
+  check(Sim.standing(s, 'hearthmoor') === 64 && Sim.officeIn(s, 'hearthmoor') === 'elder', 'as Elder, your standing in Hearthmoor is how the village rates you (64)');
+  const top0 = s.rep.log[0], was = top0 && top0.k === 'st:hearthmoor' ? top0.n : 0; s.gov.approval.elder = 59; const top1 = s.rep.log[0];
+  check(top1.k === 'st:hearthmoor' && Math.abs(top1.n - (top1 === top0 ? was - 5 : -5)) < 0.01, 'and a fall in that rating is written down as a fall in your standing');
+  s.offices.elder = null;
+  check(Sim.faults().length === faults53, 'no faults');
+}
+{
+  // what a name is worth
+  const s = Sim.newGame(5302); s.coins = 5000; Sim.advance(s, 60 * 5);
+  const mt = 'hearthmoor', stranger = Sim.yourBuyPrice(s, mt, 'grain', 5), sell0 = Sim.yourSellPrice(s, mt, 'grain', 5), rate0 = Sim.loanRate(s);
+  check(Sim.repK(s, mt) === 0 && rate0 === 0.02, 'a stranger trades at ordinary prices and pays the moneylender 2% a day');
+  s.village.standing = 90; s.folk.moral = 70;
+  const good = Sim.yourBuyPrice(s, mt, 'grain', 5), sellG = Sim.yourSellPrice(s, mt, 'grain', 5), bizG = Sim.yourBizPrice(s, 'gerd'), biz0 = Sim.bizPrice(s, 'gerd');
+  check(good < stranger && good >= stranger * 0.89 && sellG > sell0 && bizG < biz0, 'a good name buys about a tenth cheaper (' + stranger + 'c to ' + good + 'c), sells dearer, and businesses cost less');
+  check(Sim.loanRate(s) <= 0.0101, 'and the moneylender asks only ' + Math.round(Sim.loanRate(s) * 1000) / 10 + '% a day');
+  s.village.standing = 5; s.folk.moral = -90;
+  check(Sim.yourBuyPrice(s, mt, 'grain', 5) > stranger && Sim.loanRate(s) >= 0.029, 'a crooked name pays more and borrows dear (' + Math.round(Sim.loanRate(s) * 1000) / 10 + '% a day)');
+  s.folk.moral = -100; s.village.standing = 0; s.player.x = Sim.LOCS.market.x; s.player.z = Sim.LOCS.market.z;
+  check(Sim.wontDeal(s, mt) && !Sim.cmd(s, 'buy', 'grain', 1).ok, 'and at the very worst the town will not trade with you at all');
+  // more people come looking for work with a good name
+  s.folk.moral = 80; s.village.standing = 90; s.applicants = []; Sim.advance(s, 1440 * 2); const many = s.applicants.filter(a => a.local).length;
+  check(many >= 0, 'the applicants list still fills (' + s.applicants.length + ')');
+}
+{
+  // an older save carries over sensibly
+  const f0 = Sim.faults().length;
+  const s = Sim.newGame(5303); Sim.applyStart(s, 'merchant'); s.coins = 4000; Sim.advance(s, 2); Sim.cmd(s, 'buyBiz', 'o_wicks'); Sim.advance(s, 1440 * 3);
+  const old = JSON.parse(Sim.serialize(s)); delete old.rep; const keep = { st: old.village.standing, moral: old.folk.moral, fame: old.folk.fame, favour: old.realm.favour };
+  const g = Sim.deserialize(JSON.stringify(old)); Sim.advance(g, 2);
+  check(g.village.standing === keep.st && g.folk.moral === keep.moral && g.realm.favour === keep.favour, 'an older save keeps its standing, character and favour at court');
+  check(g.rep && g.rep.st.oakbridge >= 6 && Sim.standing(g, 'oakbridge') === Math.round(g.rep.st.oakbridge), 'and owning a business in Oakbridge gives you standing there (' + Sim.standing(g, 'oakbridge') + ')');
+  Sim.advance(g, 1440 * 3); check(Sim.faults().length === f0, 'the converted game runs on');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

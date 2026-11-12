@@ -1248,8 +1248,9 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     return null;
   }
   function addStanding(s, n, why) {
-    if (n && s.gov) approveHolder(s, 'player', n * 0.5);
-    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) { s.rec.standingEarned += n; v.earnedDay = s.day; }
+    withWhy(why, () => { if (n && s.gov) approveHolder(s, 'player', n * 0.5);
+    const v = s.village; v.standing = clamp(v.standing + n, 0, 100); if (n > 0) { s.rec.standingEarned += n; v.earnedDay = s.day; } });
+    const v = s.village;
     if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
   }
   function shopLabel(shop) { return tierOf(shop).name + ', ' + PLOTS[shop.plot].name; }
@@ -1386,7 +1387,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     const taken = s.shops.filter(x => x.worker).map(x => x.worker.name).concat(Object.values(s.people || {}).map(p => p.name));
     const seekers = s.people ? villagers(s).filter(p => idleAdult(p) && refuses(s, p) === null) : [];
     seekers.sort((a, b) => (s.village.jobless.includes(b.name) ? 1 : 0) - (s.village.jobless.includes(a.name) ? 1 : 0));
-    for (const p of seekers.slice(0, 4)) s.applicants.push({ name: p.name, pid: p.id, skill: Math.round((0.7 + p.skill * 0.5) * 100) / 100, ask: Math.round(4 + p.skill * 5), local: true });
+    for (const p of seekers.slice(0, s.rep ? clamp(4 + Math.round(2 * repK(s, 'hearthmoor')), 1, 6) : 4)) s.applicants.push({ name: p.name, pid: p.id, skill: Math.round((0.7 + p.skill * 0.5) * 100) / 100, ask: Math.round(4 + p.skill * 5), local: true });
     for (let i = 0; i < (s.applicants.length >= 2 ? 1 : 2); i++) {
       const skill = Math.round((0.7 + rand(s) * 0.6) * 100) / 100;
       const ask = Math.round(3 + skill * 6);
@@ -1404,12 +1405,13 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   const FAULTS = [];
   let STRICT = false;
   function guard(s, name, fn) {
+    const c0 = REPX.ctx; REPX.ctx = name;
     try { return fn(); } catch (e) {
       if (STRICT) throw e;
       FAULTS.push({ day: s && s.day, name, msg: String(e && e.message || e) }); if (FAULTS.length > 50) FAULTS.shift();
       if (s) { s.faultDay = s.faultDay || {}; if (s.faultDay[name] !== s.day) { s.faultDay[name] = s.day; try { event(s, 'Something went wrong while ' + name + ' (' + String(e && e.message || e).slice(0, 80) + '). The game has carried on, and your progress is kept.', 'bad'); } catch (e2) {} } }
       return undefined;
-    }
+    } finally { REPX.ctx = c0; }
   }
   // money that leaves your purse without a command of yours: named in the books all the same
   function flow(s, key, n) { if (!s.stats || !n) return; const f = s.stats.flows = s.stats.flows || {}; f[key] = (f[key] || 0) + n; }
@@ -1430,6 +1432,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     if (s.realm) guard(s, 'the realm kept its books', () => realmDay(s));
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
+    if (s.people) guard(s, 'reputation was reckoned', () => repDay(s));
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
@@ -1470,7 +1473,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     entry.managers = c0 - s.coins;
     entry.income = entry.shops.reduce((a, e) => a + e.revenue, 0) + entry.jobPay + entry.rawSales + entry.rent + entry.contract + Math.max(0, entry.owned) + entry.seized + entry.fines + entry.restitution + entry.bribes + Math.max(0, entry.lands) + entry.partner;
     entry.costs = entry.shops.reduce((a, e) => a + e.costs, 0) + entry.marketBuys + entry.tax + entry.given + Math.max(0, -entry.owned) + entry.salaries + entry.interest + entry.managers + entry.family + entry.stabling + (entry.ship || 0) + entry.hush + Math.max(0, -entry.lands);
-    if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of 2% a day is added every evening' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
+    if (s.coins < 0) entry.notes.push({ text: 'You are ' + (-s.coins) + 'c in debt to the Ashford moneylender. Interest of ' + (s.rep ? Math.round(loanRate(s) * 1000) / 10 : 2) + '% a day is added every evening (less with a good name)' + (s.coins <= SEIZE_AT ? ', and creditors will seize your property if you stay below ' + SEIZE_AT + 'c.' : '.') });
     entry.profit = entry.income - entry.costs;
     if (!entry.shops.length && !entry.notes.length) {
       entry.notes.push({ text: s.job ? 'Wages from your job are your income for now. Save up for a shop of your own.' : 'Ask for work at one of the shops across the square to start earning.' });
@@ -3783,7 +3786,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   function govEvening(s) {
     const g = s.gov, v = s.village, st = s.stats;
     if (s.coins < 0) {
-      const i = Math.max(1, Math.ceil(-s.coins * INTEREST)); spend(s, i); st.interest = (st.interest || 0) + i; s.rec.interestPaid += i;
+      const i = Math.max(1, Math.ceil(-s.coins * (s.rep ? loanRate(s) : INTEREST))); spend(s, i); st.interest = (st.interest || 0) + i; s.rec.interestPaid += i;
       g.debtDays = s.coins <= SEIZE_AT ? g.debtDays + 1 : 0;
       if (g.debtDays >= SEIZE_DAYS) seize(s);
       else if (g.debtDays) event(s, 'You owe the Ashford moneylender ' + (-s.coins) + 'c. ' + (SEIZE_DAYS - g.debtDays) + ' more day' + (SEIZE_DAYS - g.debtDays === 1 ? '' : 's') + ' this deep in debt and your creditors will seize what you own.', 'bad');
@@ -5843,7 +5846,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   function yourPull(s, r) {
     const F = s.folk, fame = F ? F.fame : 0, moral = F ? F.moral : 0, E = electState(s), mine = yourOffice(s);
     let b = 40 + Math.min(25, fame * 0.3) + moral * 0.08 + r.boost + E.kept * 4 - E.broken * 8;
-    if (r.office === 'elder' || r.office === 'council' || r.region === 'hearthmoor') b += (s.village.standing - 30) * 0.5 + (s.village.council ? 5 : 0);
+    if (r.office === 'elder' || r.office === 'council' || r.region === 'hearthmoor') b += (standing(s, 'hearthmoor') - 30) * 0.5 + (s.village.council ? 5 : 0);
     if (r.office === 'lord') b += Math.min(20, deedsIn(s, r.region) * 4) + (s.realm ? (s.realm.favour - 40) * 0.1 : 0);
     if (r.office === 'crown') b += (computeSupport(s) - 50) * 0.5;
     if (r.office === 'seat') b += (s.realm.favour - 40) * 0.25 + Math.min(15, totalDeeds(s) * 2);
@@ -6813,7 +6816,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   const REGION_GOODS = { hearthmoor: 'grain', greenhaven: 'grain', oakbridge: 'wood', crownmere: 'grain', ironcrest: 'wood', eastwatch: 'wood' };
   function deedsIn(s, id) { const R = s.realm; return (R.deeds && R.deeds[id]) || 0; }
   const totalDeeds = s => s.realm && s.realm.deeds ? Object.values(s.realm.deeds).reduce((a, b) => a + b, 0) : 0;
-  function addDeed(s, id, text) { const R = s.realm; R.deeds = R.deeds || {}; R.deeds[id] = (R.deeds[id] || 0) + 1; realmLog(s, text, 'good'); }
+  function addDeed(s, id, text) { const R = s.realm; R.deeds = R.deeds || {}; R.deeds[id] = (R.deeds[id] || 0) + 1; realmLog(s, text, 'good'); repAdd(s, id, 4, String(text).split(/[.:]/)[0].replace(/^./, ch => ch.toLowerCase())); }
   // repeated gifts and feasts count for less: each one in the last fortnight halves the next
   function diminish(s, key) { const R = s.realm; R.patron = R.patron || {}; const recent = (R.patron[key] || []).filter(d => s.day - d < 14); R.patron[key] = recent.concat([s.day]); return Math.pow(0.5, recent.length); }
   function alliesOf(s) {
@@ -7953,7 +7956,10 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
 
   // every command's effect on your purse is noted, so the books can name each coin that is not a day's trade
   function cmd(s, name, a, b, c) {
-    const k0 = s.coins, n0 = s.stats ? trackedNet(s) : 0, r = cmd0(s, name, a, b, c), d = s.coins - k0 - (s.stats ? trackedNet(s) - n0 : 0);
+    if (s.people) { repInstall(s); setupRep(s).inv++; }
+    const c0 = REPX.cmd; REPX.cmd = name;
+    let r; const k0 = s.coins, n0 = s.stats ? trackedNet(s) : 0; try { r = cmd0(s, name, a, b, c); } finally { REPX.cmd = c0; }
+    const d = s.coins - k0 - (s.stats ? trackedNet(s) - n0 : 0);
     if (d && s.stats) { const f = s.stats.flows = s.stats.flows || {}; f[name] = (f[name] || 0) + d; }
     return r;
   }
@@ -8086,7 +8092,8 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
         if (!GOODS.includes(a)) return fail('They do not trade that.');
         const n = b || 1;
         if (name === 'buy') {
-          const cost = Math.round(buyPrice(s, mt, a, n) * (1 - 0.05 * perk(s, 'haggling')) * (perk(s, 'bulkBuyer') ? 0.9 : 1) * 10) / 10;
+          if (wontDeal(s, mt)) return fail('No one in ' + townName(mt) + ' will trade with you. Your name is too black here.');
+          const cost = yourBuyPrice(s, mt, a, n);
           if (s.goods[mt][a] < n) return fail('The market has only ' + s.goods[mt][a] + ' ' + a + '.');
           if (s.coins < cost) return fail('You need ' + cost + 'c for that.');
           if (carried(s) + n > carryCap(s)) return fail('You can carry ' + carryCap(s) + ' at most.');
@@ -8094,7 +8101,8 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
           return ok('Bought ' + n + ' ' + a + ' for ' + cost + 'c.');
         }
         if (p.inv[a] < n || n <= 0) return fail('You have only ' + p.inv[a] + ' ' + a + '.');
-        p.inv[a] -= n; const got = Math.round(sellPrice(s, mt, a, n) * (1 + 0.05 * perk(s, 'haggling')) * 10) / 10; skillUse(s, 'trade', got / 6); s.goods[mt][a] += n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
+        if (wontDeal(s, mt)) return fail('No one in ' + townName(mt) + ' will trade with you. Your name is too black here.');
+        p.inv[a] -= n; const got = yourSellPrice(s, mt, a, n); skillUse(s, 'trade', got / 6); s.goods[mt][a] += n; earn(s, got); s.stats.rawSales += got; s.rec.rawSales += got;
         return ok('Sold ' + n + ' ' + a + ' for ' + got + 'c.');
       }
       case 'setPrice': if (shop) shop.price = clamp(Math.round(b), 1, TRADES[shop.trade].wtp * 3); return ok();
@@ -8329,7 +8337,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
         const owner = s.people[bz.owner];
         if (owner && owner.status !== 'here') return fail('Nobody is left who can sell it.');
         if (!sellerWilling(s, bz.owner)) return fail(owner.name + ' will not sell to you.');
-        const price = bizPrice(s, a);
+        const price = yourBizPrice(s, a);
         if (s.coins < price) return fail(empById(a).name + ' costs ' + price + 'c.');
         spend(s, price); s.rec.invested += price; owner.purse += price; s.rec.bizBought++;
         bz.owner = 'player';
@@ -8376,7 +8384,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
         if (h.owner === 'player') return fail('It is already yours.');
         if (h.owner && h.owner !== 'office:lord' && h.tenants.includes(h.owner)) return fail(s.people[h.owner].name + ' lives there and will not sell their home.');
         if (h.owner && h.owner !== 'office:lord' && !sellerWilling(s, h.owner)) return fail('The owner will not sell to you.');
-        const price = housePrice(s, h);
+        const price = yourHousePrice(s, h);
         if (s.coins < price) return fail(h.name + ' costs ' + price + 'c.');
         spend(s, price); s.rec.invested += price; s.rec.housesOwned++;
         const seller = h.owner === 'office:lord' ? s.offices.lord : h.owner;
@@ -9176,6 +9184,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     s.t += dt;
     updateJob(s, before);
     if (!s.rival && s.people && !s.rivalOff && s.player) guard(s, 'a rival arrived', () => setupRival(s));
+    if (s.people) repInstall(s);
     if (crossed(before, s.t, 21 * 60)) guard(s, 'the day ended', () => closeDay(s));
     if (crossed(before, s.t, 6 * 60)) guard(s, 'the day began', () => openDay(s));
     const h = hourOf(s);
@@ -9457,7 +9466,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     const F = setupFolk(s), k = o.raw ? 1 : temperOf(p) * (1 + Math.max(0, -F.moral) / 250);
     p.hate = Math.min(140, Math.round(((p.hate || 0) + w * k) * 10) / 10);
     p.opinion = clamp((p.opinion || 0) - w * 0.8, -100, 100);
-    remember(s, p, text, -w);
+    remember(s, p, text, -w); repAdd(s, townOf(p), -w * 0.15, text.replace(/\.$/, '').replace(/^./, ch => ch.toLowerCase()));
     if (!o.noKin) for (const q of kinOf(s, p)) wrong(s, q, w * 0.4, o.kinText || ('What you did to ' + p.name + ': ' + text.charAt(0).toLowerCase() + text.slice(1)), { noKin: true });
     checkNem(s, p, o.why || text);
   }
@@ -9465,13 +9474,13 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     if (!p || p.status === 'dead' || yourFamily(s, p) || w <= 0) return;
     p.hate = Math.max(0, Math.round(((p.hate || 0) - w * 1.2) * 10) / 10);
     p.opinion = clamp((p.opinion || 0) + w * 0.8, -100, 100);
-    remember(s, p, text, w);
+    remember(s, p, text, w); repAdd(s, townOf(p), w * 0.15, text.replace(/\.$/, '').replace(/^./, ch => ch.toLowerCase()));
     if (p.nem && p.hate < 50) endNem(s, p, p.name + ' no longer counts you an enemy.');
   }
   // what everyone says about you
   function deed(s, dm, df, why) {
     const F = setupFolk(s); gainXP(s, Math.abs(dm) * 2 + Math.max(0, df || 0) * 3);
-    F.moral = Math.round(clamp(F.moral + dm, -100, 100) * 100) / 100; F.renown = Math.round(clamp(F.renown + (df || 0), -20, 60) * 100) / 100;
+    withWhy(why, () => { F.moral = Math.round(clamp(F.moral + dm, -100, 100) * 100) / 100; }); F.renown = Math.round(clamp(F.renown + (df || 0), -20, 60) * 100) / 100;
     if (Math.abs(dm) >= 2 || (df || 0) >= 2) { F.deeds.unshift({ day: s.day, why, dm: Math.round(dm * 10) / 10, df: Math.round((df || 0) * 10) / 10 }); if (F.deeds.length > 25) F.deeds.length = 25; }
   }
   const MORAL_NAMES = [[-85, 'the Wicked'], [-60, 'the Cruel'], [-30, 'the Hard'], [-10, 'the Sharp'], [10, ''], [30, 'the Fair'], [60, 'the Kind'], [101, 'the Good']];
@@ -9500,7 +9509,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     return lean >= 45 ? 'They smile and bow: "Good day to you, ' + (F.moral >= 30 ? 'friend' : 'master') + '!"' : lean >= 15 ? 'They nod warmly.' : lean > -15 ? 'They nod.' : lean > -45 ? 'They keep their eyes down as you pass.' : 'They spit on the ground as you pass.';
   }
   function townName(t) { return (TOWNS[t] && TOWNS[t].name) || REGIONS[t] || 'Hearthmoor'; }
-  function townApprove(s, t, n) { if (!n) return; if ((t || 'hearthmoor') === 'hearthmoor') { if (s.gov) approveHolder(s, 'player', n); } else if (s.towns && s.towns[t]) s.towns[t].approval = clamp((s.towns[t].approval || 50) + n, 0, 100); }
+  function townApprove(s, t, n) { if (!n) return; if ((t || 'hearthmoor') === 'hearthmoor') { if (s.gov) approveHolder(s, 'player', n); } else if (s.towns && s.towns[t]) { if (s.towns[t].mayor !== 'player') repAdd(s, t, n, repWhyNow()); s.towns[t].approval = clamp((s.towns[t].approval || 50) + n, 0, 100); } }
 
   /* ---------- your enemies ---------- */
   function checkNem(s, p, why) {
@@ -9603,7 +9612,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   function folkDay(s) {
     if (!s.people) return;
     const F = setupFolk(s);
-    F.fame = Math.round((F.fame + (fameTarget(s) - F.fame) * 0.12) * 10) / 10;
+    { const tg = fameTarget(s); withWhy(tg > F.fame ? 'word of what you have and do spreads' : 'people forget you', () => { F.fame = Math.round((F.fame + (tg - F.fame) * 0.12) * 10) / 10; }); }
     // your workers: pay below what is fair in their town sours them, and some walk out; pay above wins them
     for (const id in s.biz) {
       const b = s.biz[id]; if (b.owner !== 'player' || b.lease || b.seized || b.closed) continue;
@@ -10937,7 +10946,139 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
       log: R.log.slice(0, 10), allies, past, RUNG_NAME };
   }
 
+  /* ================= REPUTATION, REDONE (Stage VI) =================
+     Four things you can read. Fame: how widely you are known. Character: honest or crooked. Standing: in each town, at the royal
+     court and in Valdoria; where you hold office, how people rate your government is your standing there. And each person's own
+     feeling toward you. Every change carries a one-line reason, read from what caused it: the act, the command you gave, or the
+     day's business. The old numbers stay where they were (so every system that reads them still works) but every write to them
+     passes through one gate that records the reason, and halves a gain that repeats the same act in the same place within two
+     weeks. Reputation moves prices, purchases, the moneylender's rate, who comes looking for work and who will deal with you. */
+  const REPX = { why: null, cmd: null, ctx: null, inv: 0, quiet: false };
+  function withWhy(why, fn) { const w = REPX.why; if (why) REPX.why = why; try { return fn(); } finally { REPX.why = w; } }
+  const REP_PLACES = () => ['hearthmoor'].concat(Object.keys(TOWNS).filter(t => t !== 'hearthmoor')).concat(['court', 'valdoria']);
+  const PLACE_NAME = t => t === 'court' ? 'the royal court' : t === 'valdoria' ? 'Valdoria' : townName(t);
+  const CTX_WHY = { 'the village government met': 'how the village judges its government', 'the folk talked it over': 'what people say about you', 'the towns took their mood': 'the mood of the town', 'the elections were counted': 'the elections', 'the realm kept its books': 'the business of the realm', 'standing was reviewed': 'nothing done for the town lately', 'office business was done': 'the daily business of your office', 'your rival made a move': 'your rival', 'the watch and the courts sat': 'the courts', 'the royal courts sat': 'the royal courts', 'the businesses closed for the day': 'how your businesses are run', 'the evening in the village': 'life in the village', 'property was reckoned': 'your property and tenants', 'by-elections were held': 'a by-election', 'the vote went on': 'the vote' };
+  const CMD_WHY = { fAlms: 'alms you gave', fFestival: 'the festival you paid for', fulfil: 'a delivery you made', pCrowd: 'how you handled the crowd', buyBiz: 'buying a business', buyHouse: 'buying a house', stand: 'your campaign', speech: 'your speech', work: 'your work', evict: 'an eviction', fire: 'letting a worker go', hire: 'taking on a worker', setRent: 'the rent you set', settle: 'the dispute you settled', pRivalExpose: 'exposing your rival', jHear: 'a judgment you gave', jVerdict: 'a judgment you gave' };
+  const cmdWhy = c => c ? (CMD_WHY[c] || (FLOW_LABEL[c] ? FLOW_LABEL[c].charAt(0).toLowerCase() + FLOW_LABEL[c].slice(1) : 'what you did')) : null;
+  function setupRep(s) {
+    if (!s.rep) {
+      const F = s.folk, R = s.realm, st = {};
+      for (const t of Object.keys(TOWNS)) if (t !== 'hearthmoor') {
+        const own = Object.values(s.biz || {}).filter(b => b.owner === 'player' && (b.town || 'hearthmoor') === t).length;
+        st[t] = clamp(own * 6 + (F && F.towns && F.towns[t] && F.towns[t].all ? 20 : 0) + (R ? deedsIn(s, t) * 4 : 0) + (F && F.fests && F.fests[t] ? 8 : 0) + ((yourTown(s) || 'hearthmoor') === t ? 10 : 0), 0, 60);
+      }
+      s.rep = { st, log: [], rpt: {}, last: {}, earned: {}, inv: 0 };
+    }
+    return s.rep;
+  }
+  // which of the old numbers is yours, and where it counts
+  function officeIn(s, t) {
+    if (t === 'hearthmoor') return s.offices && s.offices.lord === 'player' ? 'lord' : s.offices && s.offices.elder === 'player' ? 'elder' : s.village && s.village.council && s.gov && s.gov.council.includes('player') ? 'you' : s.village && s.village.council ? 'you' : null;
+    const T = s.towns && s.towns[t]; return T && T.mayor === 'player' ? 'mayor' : null;
+  }
+  // your standing in a place: where you govern, how they rate your government; elsewhere, what they think of you
+  function standing(s, t) {
+    t = t || 'hearthmoor';
+    if (t === 'court') return s.realm ? Math.round(s.realm.favour) : 0;
+    if (t === 'valdoria') return s.valdoria ? Math.round(s.valdoria.standing || 0) : 0;
+    const o = officeIn(s, t);
+    if (o === 'mayor') return Math.round(s.towns[t].approval);
+    if (o && s.gov) return Math.round(s.gov.approval[o] == null ? 50 : s.gov.approval[o]);
+    if (t === 'hearthmoor') return Math.round(s.village ? s.village.standing : 0);
+    return Math.round(setupRep(s).st[t] || 0);
+  }
+  function standingWord(st, moral) { if (moral <= -60 && st < 55) return 'Feared'; if (moral <= -30 && st < 55) return 'Distrusted'; return st < 10 ? 'Unknown' : st < 25 ? 'Known by sight' : st < 40 ? 'Known' : st < 55 ? 'Respected' : st < 70 ? 'Well regarded' : st < 85 ? 'Admired' : 'Beloved'; }
+  function charWord(m) { return m <= -60 ? 'Crooked' : m <= -30 ? 'Shady' : m <= -10 ? 'Sharp' : m < 10 ? 'Unproven' : m < 30 ? 'Decent' : m < 60 ? 'Honest' : 'Upright'; }
+  // the journal: every change, and why
+  function repNote(s, key, d, why, drift) {
+    const R = setupRep(s); if (!d) return;
+    why = why || 'changes in the world';
+    const L = R.log, win = drift || key === 'fame' ? 6 : 0, i = L.slice(0, 8).findIndex(e => e.k === key && e.why === why && s.day - (e.d0 == null ? e.d : e.d0) <= win && (win || e.d === s.day));
+    if (i >= 0) { const e = L[i]; e.n = Math.round((e.n + d) * 100) / 100; e.d = s.day; if (i) { L.splice(i, 1); L.unshift(e); } }   // a slow drift is one line, not one a day
+    else { L.unshift({ d: s.day, d0: s.day, k: key, n: Math.round(d * 100) / 100, why }); if (L.length > 150) L.length = 150; }
+    R.last[key] = { d: s.day, why, n: Math.round(d * 100) / 100 };
+  }
+  const repWhyNow = () => REPX.why || cmdWhy(REPX.cmd) || (REPX.ctx && (CTX_WHY[REPX.ctx] || REPX.ctx)) || null;
+  // the gate every change passes through: a gain that repeats the same act in the same place within two weeks counts half as much each time
+  function repGate(s, key, old, v) {
+    if (REPX.quiet || typeof v !== 'number' || !Number.isFinite(v) || typeof old !== 'number' || !Number.isFinite(old)) return v;
+    let d = v - old; if (Math.abs(d) < 1e-9) return v;
+    const R = setupRep(s);
+    if (d > 0 && REPX.cmd && key !== 'fame') {
+      const k = REPX.cmd + '|' + key, L = (R.rpt[k] || []).filter(x => s.day - x[0] < 14), prior = new Set(L.filter(x => x[1] !== R.inv).map(x => x[1])).size;
+      if (!L.some(x => x[1] === R.inv)) L.push([s.day, R.inv]); R.rpt[k] = L.slice(-8);
+      if (prior) { d = d * Math.pow(0.5, prior); v = Math.round((old + d) * 100) / 100; }
+    }
+    if (key.startsWith('st:')) R.earned[key.slice(3)] = d > 0 ? s.day : R.earned[key.slice(3)];
+    repNote(s, key, d, repWhyNow(), !REPX.why && !REPX.cmd);
+    return v;
+  }
+  function repWatch(s, obj, prop, key, mine) {
+    if (!obj) return; const d0 = Object.getOwnPropertyDescriptor(obj, prop); if (d0 && d0.get) return;
+    let val = obj[prop];
+    Object.defineProperty(obj, prop, { configurable: true, enumerable: true, get() { return val; }, set(v) { val = mine && !mine() ? v : repGate(s, typeof key === 'function' ? key() : key, val, v); } });
+  }
+  // put the gate on every number that is yours (cheap: each object is done once)
+  const REP_SIG = new WeakMap();
+  function repInstall(s) {
+    if (!s.people) return;
+    const g = REP_SIG.get(s), n = (g ? g.n : 0) + 1;
+    if (g && n % 2000 && g.v === s.village && g.a === (s.gov && s.gov.approval) && g.r === s.realm && g.d === s.valdoria && g.f === s.folk && g.t === s.towns) { g.n = n; return; }
+    REP_SIG.set(s, { n, v: s.village, a: s.gov && s.gov.approval, r: s.realm, d: s.valdoria, f: s.folk, t: s.towns });
+    setupRep(s);
+    repWatch(s, s.village, 'standing', 'st:hearthmoor', () => !officeIn(s, 'hearthmoor'));
+    if (s.gov && s.gov.approval) for (const o of ['you', 'elder', 'lord']) repWatch(s, s.gov.approval, o, 'st:hearthmoor', () => officeIn(s, 'hearthmoor') === o);
+    for (const t in (s.towns || {})) repWatch(s, s.towns[t], 'approval', 'st:' + t, () => s.towns[t].mayor === 'player');
+    if (s.realm) repWatch(s, s.realm, 'favour', 'st:court');
+    if (s.valdoria) repWatch(s, s.valdoria, 'standing', 'st:valdoria');
+    if (s.folk) { repWatch(s, s.folk, 'moral', 'character'); repWatch(s, s.folk, 'fame', 'fame'); }
+  }
+  // standing in a town where it is not an office's approval: changed directly, with its reason
+  function repAdd(s, t, n, why) {
+    if (!n || !t || t === 'hearthmoor' || !TOWNS[t]) return;
+    if (officeIn(s, t) === 'mayor') return;   // there, the town's rating of your government is your standing, and moves on its own
+    const R = setupRep(s), old = R.st[t] || 0, v = withWhy(why, () => repGate(s, 'st:' + t, old, clamp(old + n, 0, 100))); R.st[t] = Math.round(clamp(v, 0, 100) * 100) / 100;
+  }
+  // a good name eases every bargain; a crooked one makes folk wary. -1 (crooked and known) to +1 (upright and beloved); a stranger is 0
+  function repK(s, t) {
+    t = t || townAt(s.player.x, s.player.z) || 'hearthmoor';
+    const st = standing(s, t), m = s.folk ? s.folk.moral : 0;
+    const sp = m > -30 ? clamp((st - 20) / 60, 0, 1) : -clamp((50 - st) / 50, 0, 1);   // a crooked name with few friends here counts against you
+    return Math.round(clamp(sp * 0.5 + clamp(m / 60, -1, 1) * 0.5, -1, 1) * 100) / 100;
+  }
+  const repPriceMul = (s, t, buying) => 1 + (buying ? -0.1 : 0.1) * repK(s, t);
+  const loanRate = s => Math.round((INTEREST - 0.01 * repK(s, yourTown(s) || 'hearthmoor')) * 10000) / 10000;
+  const wontDeal = (s, t) => repK(s, t) <= -0.85;
+  // standing in other towns fades when you do nothing there, as Hearthmoor's does
+  function repDay(s) {
+    const R = setupRep(s);
+    for (const t in R.st) {
+      if (officeIn(s, t)) continue;
+      const v = R.st[t], quiet = s.day - (R.earned[t] == null ? -99 : R.earned[t]);
+      if (v > 20 && quiet >= 4) withWhy('nothing done in ' + townName(t) + ' lately', () => { const old = R.st[t]; R.st[t] = Math.round(Math.max(20, v - (1 + (v - 20) / 30)) * 100) / 100; repNote(s, 'st:' + t, R.st[t] - old, 'nothing done in ' + townName(t) + ' lately'); });
+    }
+    // where you hold office in Hearthmoor, the village's old standing follows the rating, so nothing jumps when you step down
+    if (officeIn(s, 'hearthmoor') && s.gov) { const a = s.gov.approval[officeIn(s, 'hearthmoor')]; if (Number.isFinite(a)) s.village.standing = a; }   // not journalled: while you hold office it is not the number you see
+  }
+  // the whole picture, for the book
+  function repView(s) {
+    const R = setupRep(s), F = setupFolk(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    const places = REP_PLACES().filter(t => t !== 'court' || s.realm).filter(t => t !== 'valdoria' || s.valdoria).map(t => {
+      const v = standing(s, t), o = officeIn(s, t), L = R.last['st:' + t];
+      return { t, name: PLACE_NAME(t), v, word: standingWord(v, F.moral), office: o ? (o === 'mayor' ? titleOf(s.towns[t]) : o === 'you' ? 'councillor' : o === 'elder' ? 'Elder' : 'lord of the manor') : null, last: L || null, k: t === 'court' || t === 'valdoria' ? null : repK(s, t) };
+    }).filter(p => p.v > 0 || p.office || p.t === here || p.last);
+    const lf = R.last.fame, lc = R.last.character;
+    return { fame: Math.round(F.fame), fameWord: fameName(F.fame), fameLast: lf || null, moral: Math.round(F.moral), charWord: charWord(F.moral), charLast: lc || null, places,
+      here, k: repK(s, here), rate: loanRate(s), wont: wontDeal(s, here), log: R.log.slice(0, 30).map(e => ({ d: e.d, n: e.n, why: e.why, what: e.k === 'fame' ? 'Fame' : e.k === 'character' ? 'Character' : 'Standing in ' + PLACE_NAME(e.k.slice(3)) })) };
+  }
+  // what you pay and are paid, with your name counted in (the screens show the same numbers)
+  const yourBuyPrice = (s, t, g, n) => Math.round(buyPrice(s, t, g, n) * (1 - 0.05 * perk(s, 'haggling')) * (perk(s, 'bulkBuyer') ? 0.9 : 1) * repPriceMul(s, t, true) * 10) / 10;
+  const yourSellPrice = (s, t, g, n) => Math.round(sellPrice(s, t, g, n) * (1 + 0.05 * perk(s, 'haggling')) * repPriceMul(s, t, false) * 10) / 10;
+  const yourBizPrice = (s, id) => Math.round(bizPrice(s, id) * repPriceMul(s, (s.biz[id] && s.biz[id].town) || 'hearthmoor', true));
+  const yourHousePrice = (s, h) => Math.round(housePrice(s, h) * repPriceMul(s, h.town || 'hearthmoor', true));
+
   const api = {
+    setupRep, repView, standing, standingWord, charWord, repK, loanRate, repAdd, repInstall, repPriceMul, wontDeal, yourBuyPrice, yourSellPrice, yourBizPrice, yourHousePrice, officeIn,
     setupRival, rivalDay, rivalView, yourRung, rivalRung, RUNG_NAME, FOUL_NAME, isRival, isAlly, proofOf, rivalPrice, pactScore, contest, rivalMove, bizPrice, nerveWord,
     farFolk, farOne, roadFolk, routinePlan, FAR_IN, FAR_KEY, FAR_KID, FAR_BODY, FAR_MOVING, FAR_KIN, ROAD_NAME,
     setupPpl, pplOf, crowdOf, notables, stanceOf, blocOf, patronOf, pickKey, pplDay, riot, keyAct, risers, keyCap, PPL_SECRETS, CROWD_WORD, youGovern, officeOf, raceTown,
@@ -10954,6 +11095,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     netWorth, propertyValue, summary, workerHours, canPay,
     faults: () => FAULTS.slice(), setStrict: v => { STRICT = !!v; }, relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
+  { const a0 = api.applyStart; api.applyStart = (s, m) => { REPX.quiet = true; try { return a0(s, m); } finally { REPX.quiet = false; } }; }   // how you begin is not a change in your name
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -14056,13 +14198,13 @@ function shiftText(e) { return String(e.shift[0]).padStart(2, '0') + ':00–' + 
 const GOOD_NAME = { grain: 'grain', wood: 'timber', ore: 'iron ore' };
 function marketActs(s, t) {
   const inv = s.player.inv, out = [];
-  Sim.GOODS.forEach(g => { const c1 = Sim.buyPrice(s, t, g, 1), c5 = Sim.buyPrice(s, t, g, 5); out.push(B_(`Buy ${GOOD_NAME[g]} · ${c1}c`, ['buy', g, 1], '', s.coins < c1)); out.push(B_(`Buy 5 · ${c5}c`, ['buy', g, 5], 'alt', s.coins < c5)); });
-  Sim.GOODS.forEach(g => { if (inv[g]) out.push(B_(`Sell ${inv[g]} ${GOOD_NAME[g]} · ${Sim.sellPrice(s, t, g, inv[g])}c`, ['sell', g, inv[g]], 'alt')); });
+  Sim.GOODS.forEach(g => { const c1 = Sim.yourBuyPrice(s, t, g, 1), c5 = Sim.yourBuyPrice(s, t, g, 5); out.push(B_(`Buy ${GOOD_NAME[g]} · ${c1}c`, ['buy', g, 1], '', s.coins < c1)); out.push(B_(`Buy 5 · ${c5}c`, ['buy', g, 5], 'alt', s.coins < c5)); });
+  Sim.GOODS.forEach(g => { if (inv[g]) out.push(B_(`Sell ${inv[g]} ${GOOD_NAME[g]} · ${Sim.yourSellPrice(s, t, g, inv[g])}c`, ['sell', g, inv[g]], 'alt')); });
   return out.join('');
 }
 function marketTable(s) {
   const towns = Object.keys(Sim.TOWN_GOODS);
-  return `<div class="why"><b>What the markets pay for 10</b> (selling)<br>${Sim.GOODS.map(g => GOOD_NAME[g] + ': ' + towns.map(t => TOWN_NAMES[t] + ' ' + Sim.sellPrice(s, t, g, 10)).join(' \u00b7 ')).join('<br>')}</div>`;
+  return `<div class="why"><b>What the markets pay for 10</b> (selling)<br>${Sim.GOODS.map(g => GOOD_NAME[g] + ': ' + towns.map(t => TOWN_NAMES[t] + ' ' + Sim.yourSellPrice(s, t, g, 10)).join(' \u00b7 ')).join('<br>')}</div>`;
 }
 function cardHTML(s) {
   const p = s.player;
@@ -14100,7 +14242,7 @@ function cardHTML(s) {
     let info = `<h2>${esc(e.name)}</h2><div class="sub">${esc(e.boss)}'s ${T.name.toLowerCase()} · open ${shiftText(e)}</div>${walking}`;
     const acts = [workBtn(s, e.id)];
     info += workLine(s, e.id);
-    if (b && b.owner !== 'player' && s.people[b.owner]) { const pr = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + pr + 'c', ['buyBiz', b.id], 'alt', s.coins < pr)); }
+    if (b && b.owner !== 'player' && s.people[b.owner]) { const pr = Sim.yourBizPrice(s, b.id); acts.push(B_('Buy it · ' + pr + 'c', ['buyBiz', b.id], 'alt', s.coins < pr)); }
     return info + `<div class="acts">${acts.join('')}</div>`;
   }
   // a lot: empty or your shop
@@ -14284,9 +14426,21 @@ function enemyActs(s, q, body) {
 function pageRenown(s) {
   const F = Sim.setupFolk(s), title = Sim.moralName(F.moral);
   let h = `<h3>Your Name</h3><p class="lead">What people say about you, who hates you, and what you own.</p>`;
-  h += `<div class="box"><h5>${esc(s.name)}${title ? ' ' + esc(title) : ''}</h5><p>Your name is <b>${esc(Sim.moralWord(F.moral))}</b> (${Math.round(F.moral)}), and you are <b>${esc(Sim.fameName(F.fame).toLowerCase())}</b> (${Math.round(F.fame)} of 100).</p>${moralBar(F.moral)}${fameBar(F.fame)}
-    <p class="why">Kindness, fair pay, cheap prices, alms and mercy make you good. Evictions, firings, rent rises, greed and blood make you cruel. Fame grows with what you own, the offices you hold and what you do. People who think well of you work for you, buy from you and vote for you. With a cruel name, good workers turn you down.</p>
-    <div class="acts">${B_('Give alms · 10c', ['fAlms'], 'alt', s.coins < 10 || F.almsDay === s.day)}${B_('Ask around town · 5c<small>gossip about your enemies</small>', ['fAsk'], 'alt', s.coins < 5 || F.lastAsk === s.day)}</div></div>`;
+  { const V = Sim.repView(s), pct = k => Math.round(Math.abs(k) * 10) + '%', why = L => L ? `<small class="why">Last: ${L.n > 0 ? '+' : ''}${Math.round(L.n * 10) / 10} on day ${L.d}, ${esc(L.why)}</small>` : '';
+    h += `<div class="box"><h5>${esc(s.name)}${title ? ' ' + esc(title) : ''}</h5>
+      <dl class="kv"><dt>Fame</dt><dd><b>${esc(V.fameWord)}</b></dd></dl>${progressBar(V.fame / 100)}${why(V.fameLast)}
+      <dl class="kv"><dt>Character</dt><dd><b>${esc(V.charWord)}</b></dd></dl>${progressBar((V.moral + 100) / 200)}${why(V.charLast)}
+      <p class="why">Fame is how widely you are known: what you own, the offices you hold, and what you do. Character is honest to crooked: fair pay, fair prices, alms and mercy raise it; evictions, firings, greed and blood lower it. The same act in the same place counts half as much each time within two weeks.</p></div>`;
+    h += `<h4>Standing</h4><div class="box">${V.places.map(p => `<dl class="kv"><dt>${esc(p.name)}${p.office ? ' <small>(as ' + esc(p.office) + ')</small>' : ''}</dt><dd><b>${esc(p.word)}</b></dd></dl>${progressBar(p.v / 100)}${why(p.last)}`).join('')}
+      <p class="why">A hero in one town can be a nobody in the next. Where you hold office, how people rate your government is your standing there. Standing slips when you do nothing in a place for a while.</p></div>`;
+    const kk = V.k;
+    h += `<h4>What your name does for you in ${esc(Sim.townName(V.here))}</h4><div class="box"><ul class="plog">
+      <li>${kk >= 0.05 ? 'You buy ' + pct(kk) + ' cheaper and sell ' + pct(kk) + ' dearer at the market, and businesses and houses cost you ' + pct(kk) + ' less.' : kk <= -0.05 ? 'You pay ' + pct(kk) + ' more and are paid ' + pct(kk) + ' less at the market, and businesses and houses cost you ' + pct(kk) + ' more.' : 'You trade at ordinary prices: nobody knows you well enough to favour you, or to hold anything against you.'}</li>
+      <li>The moneylender would charge you ${Math.round(V.rate * 1000) / 10}% a day (2% for a stranger).</li>
+      <li>${kk > 0.3 ? 'People come looking for work with you.' : kk < -0.3 ? 'Few people want to work for you.' : 'The usual few come asking for work.'}</li>
+      ${V.wont ? '<li class="neg">No one here will trade with you at all.</li>' : ''}</ul></div>`;
+    if (V.log.length) h += `<h4>Why it changed</h4><ul class="plog">${V.log.slice(0, 15).map(e => `<li class="${e.n < 0 ? 'neg' : 'pos'}">Day ${e.d}: ${esc(e.what)} ${e.n > 0 ? '+' : ''}${Math.round(e.n * 10) / 10}: ${esc(e.why)}</li>`).join('')}</ul>`;
+    h += `<div class="acts">${B_('Give alms · 10c', ['fAlms'], 'alt', s.coins < 10 || F.almsDay === s.day)}${B_('Ask around town · 5c<small>gossip about your enemies</small>', ['fAsk'], 'alt', s.coins < 5 || F.lastAsk === s.day)}</div>`; }
   // enemies
   const N = Sim.nemeses(s);
   const rivals = Sim.living(s).filter(q => (q.hate || 0) >= 35 && !q.nem).sort((a, b) => b.hate - a.hate).slice(0, 6);
@@ -14924,7 +15078,7 @@ function personCard(s, pr, body) {
   const tile = (k, v, frac, cls) => `<div class="stat ${cls || ''}"><small>${k}</small><b>${v}</b>${frac == null ? '' : `<i><u style="width:${Math.round(clamp(frac, 0, 1) * 100)}%"></u></i>`}</div>`;
   const op = pr.opinion || 0;
   const head = `<div class="pchead"><span class="pface ${f ? 'f' : 'm'}${pr.kid ? ' kid' : ''}" aria-hidden="true">${esc((pr.name || '?').charAt(0))}</span><div class="pcwho"><h2>${esc(pr.name)} ${ageBadge(pr)}</h2><div class="sub">${esc(Sim.occupation(s, pr))} · ${esc(Sim.homeText(s, pr))}</div><div class="badges">${pr.status === 'here' ? wedBadge(s, pr) : ''}${s.gov && s.gov.council.includes(pr.id) ? '<span class="wedbadge court">On the council</span>' : ''}</div></div><button type="button" class="cardx" data-c='["ui","deselect"]' aria-label="Close">&times;</button></div>`;
-  const stats = `<div class="stats num">${tile('Purse', pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c', null, pr.purse < 0 ? 'bad' : '')}${tile('Respect', Math.round(pr.rep || 0) + '<em>/100</em>', (pr.rep || 0) / 100)}${tile('Mood', Math.round(pr.mood) + '<em>/100</em>', pr.mood / 100, pr.mood < 30 ? 'bad' : 'good')}${tile('Toward you', op >= 40 ? 'Admires' : op >= 10 ? 'Likes' : op > -10 ? 'Neutral' : op > -40 ? 'Resents' : 'Hates', (op + 60) / 120, op <= -10 ? 'bad' : op >= 10 ? 'good' : '')}</div>`;
+  const stats = `<div class="stats num">${tile('Purse', pr.purse < 0 ? 'in debt ' + (-pr.purse) + 'c' : pr.purse + 'c', null, pr.purse < 0 ? 'bad' : '')}${tile('Respect', Math.round(pr.rep || 0) + '<em>/100</em>', (pr.rep || 0) / 100)}${tile('Mood', Math.round(pr.mood) + '<em>/100</em>', pr.mood / 100, pr.mood < 30 ? 'bad' : 'good')}${tile('Toward you', (pr.hate || 0) >= 35 ? Sim.hateStep(pr.hate).name : op >= 40 ? 'Admires' : op >= 10 ? 'Likes' : op > -10 ? 'Neutral' : op > -40 ? 'Resents' : 'Hates', (pr.hate || 0) >= 35 ? 0.02 : (op + 60) / 120, op <= -10 || (pr.hate || 0) >= 35 ? 'bad' : op >= 10 ? 'good' : '')}</div>`;
   const now = doing ? `<div class="pcnow"><b>Now</b> ${esc(doing)}</div>` : '';
   // three leaves: what you can do with them, what is known of them, and the rest
   const talk = relationLine(s, pr) + relationActs(s, pr, body);
@@ -15055,7 +15209,7 @@ function hud(s) {
   { const H = Sim.holidayOn(s.day, Sim.kingdomOf(Sim.townAt(s.player.x, s.player.z) || 'hearthmoor')); if (H) chips.push(`<span class="chip num btn hol" data-c='["page","calendar"]' role="button" tabindex="0">\u2726 ${esc(H.name)}</span>`); }
   if (s.work) chips.push(`<span class="chip num on">Working · \u00d7${s.work.chain || 1} · ${s.work.earned}c</span>`);
   { const w = waypointPos(); if (w) chips.push(`<span class="chip num btn" data-c='["ui","clearWaypoint"]' role="button" tabindex="0">Finding ${esc(w.name.split(' ')[0])}${w.near ? ' \u00b7 ' + Math.round(Math.hypot(s.player.x - w.x, s.player.z - w.z)) + ' m' : ' \u00b7 in ' + esc(TOWN_NAMES[w.town])} \u00d7</span>`); }
-  if (s.village.step > 0) chips.push(`Standing <b>${s.village.standing}</b>`);
+  if (s.village.step > 0) { const t = Sim.townAt(s.player.x, s.player.z) || 'hearthmoor', v = Sim.standing(s, t); chips.push(`<b>${esc(Sim.standingWord(v, s.folk ? s.folk.moral : 0))}</b> in ${esc(Sim.townName(t))}`); }
   const mine = myBusinesses(s);
   if (mine.length) chips.push(`<span class="chip num btn" data-c='["ui","bizMenu"]' role="button" tabindex="0" aria-expanded="${!!UI.bizMenu}">${mine.length === 1 ? 'Your business' : 'Businesses <b>' + mine.length + '</b>'} ${UI.bizMenu ? '\u25b4' : '\u25be'}</span>`);
   const bm = UI.bizMenu && mine.length && !UI.overlay ? mine.map(x => `<div class="bizrow"><div class="bi"><span class="nm">${esc(x.name)}</span>${x.line}</div>${x.go && x.go !== UI.loc ? `<button type="button" data-c='${esc(JSON.stringify(['goto', x.go]))}'>Go</button>` : ''}<button type="button" class="go" data-c='${esc(JSON.stringify(['ui', 'manage', x.ref]))}'>Manage</button></div>`).join('') : '';
@@ -15685,7 +15839,7 @@ function pageProperty(s) {
   const [town, pick] = townPick(s);
   const sale = s.houses.filter(h => (h.town || 'hearthmoor') === town && h.owner !== 'player' && !(h.owner && h.owner !== 'office:lord' && h.tenants.includes(h.owner)));
   html += `<h4>Houses you could buy</h4>${pick}<p>Pick a town, then a house. Go and see it first, or buy it from here; once it is yours, move in from Your houses above, and your family comes with you. Your shops keep running while you live elsewhere (a manager keeps them going), and coaches run between the towns from each stage post.</p><div class="grid2">${sale.map(h => {
-    const ts = h.tenants.map(id => s.people[id].name), price = Sim.housePrice(s, h);
+    const ts = h.tenants.map(id => s.people[id].name), price = Sim.yourHousePrice(s, h);
     return `<div class="box"><h5>${esc(h.name)}</h5><dl class="kv"><dt>Owner</dt><dd>${esc(Sim.landlordName(s, h.owner))}</dd><dt>Tenant</dt><dd>${ts.length ? esc(ts.join(', ')) : 'empty'}</dd><dt>Rent</dt><dd>${h.rent}c a day</dd><dt>Price</dt><dd>${price}c</dd></dl><div class="acts">${B_('Go and see it', ['ui', 'goHouse', h.id], 'alt')}${B_('Buy for ' + price + 'c', ['buyHouse', h.id], '', s.coins < price)}</div></div>`;
   }).join('')}</div>`;
   const bizIn = t => Object.values(s.biz).filter(b => (b.town || 'hearthmoor') === t);
@@ -15758,7 +15912,7 @@ function houseSale(s, h) {
   if (h.owner === 'player') return { mine: true };
   if (h.owner && h.owner !== 'office:lord' && !String(h.owner).startsWith('town:') && h.tenants.includes(h.owner)) return { no: (s.people[h.owner] ? s.people[h.owner].name : 'The owner') + ' lives here and will not sell their home.' };
   if (h.owner && s.people[h.owner] && !Sim.sellerWilling(s, h.owner)) return { no: s.people[h.owner].name + ' will not sell to you.' };
-  return { price: Sim.housePrice(s, h) };
+  return { price: Sim.yourHousePrice(s, h) };
 }
 function signPos(h) { const f = Sim.houseShape(h).face, d = Sim.doorOf(h); return { x: d.x + Math.cos(f) * 1.7 + Math.sin(f) * 0.6, z: d.z - Math.sin(f) * 1.7 + Math.cos(f) * 0.6, face: f }; }
 function houseSignCard(s, Lh, walking) {
@@ -15882,7 +16036,7 @@ function oakBizCard(s, Lh, walking) {
   let html = `<h2>${esc(Lh.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h2><div class="sub">${esc(Sim.tradeName(b.trade))} · ${dist}.${blurb} ${own ? 'It is yours.' : 'Run by ' + esc(owner ? owner.name : site.boss) + '.'} ${b.staff.length} ${b.staff.length === 1 ? 'hand' : 'hands'} · last day ${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit.${rivals.length ? ' Competes with ' + esc(rivals.join(' and ')) + '.' : ''}</div>${walking}`;
   const acts = [workBtn(s, b.id)];
   if (Sim.isPrestige(s, b.id)) html += `<div class="why"><b>One of the great properties of ${esc(TOWN_NAMES[Lh.town])}.</b> Owning it brings fame and the chance to host feasts that the court notices, with upkeep to match.</div>`;
-  if (!own && owner) { const price = Sim.bizPrice(s, b.id); acts.push(B_('Buy it · ' + price + 'c', ['buyBiz', b.id], 'alt', s.coins < price)); }
+  if (!own && owner) { const price = Sim.yourBizPrice(s, b.id); acts.push(B_('Buy it · ' + price + 'c', ['buyBiz', b.id], 'alt', s.coins < price)); }
   if (own) acts.push(B_('Manage', ['ui', 'manage', ['biz', b.id]]));
   acts.push(B_(own ? 'All businesses' : 'Businesses', ['ui', 'btown', Lh.town], 'alt'));
   return html + `<div class="acts">${acts.join('')}</div>`;
@@ -16412,7 +16566,7 @@ function bizBox(s, b) {
   const e = Sim.empById(b.id), own = b.owner === 'player', owner = own ? null : s.people[b.owner];
   const staff = b.staff.map(st => ({ st, p: s.people[st.pid] }));
   let html = `<div class="box"><h5>${esc(e.name)}${b.closed ? ' <span class="pill bad">closed</span>' : ''}</h5><dl class="kv"><dt>Owner</dt><dd>${own ? 'You' : esc(owner.name)}</dd><dt>Trade</dt><dd>${esc(Sim.tradeName(b.trade))}</dd>${own && b.lease ? `<dt>Rent to you</dt><dd>${b.lease.rent}c a day` : `<dt>Last day</dt><dd>${b.lastRevenue || 0}c in, ${b.lastProfit || 0}c profit`}</dd><dt>Staff</dt><dd>${staff.length ? esc(staff.map(x => x.p.name).join(', ')) : 'none'}</dd></dl>`;
-  if (!own) { const price = Sim.bizPrice(s, b.id); html += `<div class="acts">${B_('Buy for ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)}</div><p>${esc(owner.name)} stays on as your manager, and the staff work for you.</p>`; }
+  if (!own) { const price = Sim.yourBizPrice(s, b.id); html += `<div class="acts">${B_('Buy for ' + price + 'c', ['buyBiz', b.id], '', s.coins < price)}</div><p>${esc(owner.name)} stays on as your manager, and the staff work for you.</p>`; }
   else {
     const val = Sim.bizPrice(s, b.id);
     if (b.lease) { const q = s.people[b.lease.pid], L0 = b.lease, can = Sim.leaseBreakable(s, b); html += `<p>Leased to <b>${esc(q ? q.name : 'someone')}</b> for ${L0.rent}c a day${L0.until ? `, until day ${L0.until} (${L0.term}-day lease)` : ''}${L0.behind ? `, <b>${L0.behind} days behind</b>` : ''}. They run it, choose its staff, and keep what it earns above the rent.</p><p><label><input type="checkbox" data-c='${JSON.stringify(['leaseRenew', b.id, null, !L0.renew])}' ${L0.renew ? 'checked' : ''}> Renew when the term is up</label></p><div class="acts">${can ? B_('End the lease', ['endLease', b.id], 'alt') : ''}</div>${can ? '' : '<p class="why">Neither of you can break it before then, unless the rent falls 2 days behind.</p>'}`; }
@@ -18239,8 +18393,16 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.12.1502';
+const BUILD = '2026.11.12.1724';
 const NOTES = [
+  { v: '0.89', date: '12 November', title: 'A good name', items: [
+    'Your reputation is now four things you can read. Fame: how widely you are known. Character: honest to crooked. Standing: in each town, at the royal court and in Valdoria. And each person\u2019s own feeling toward you.',
+    'Standing is kept town by town: a hero in Hearthmoor can be a nobody in Oakbridge. Where you hold office, how people rate your government is your standing there.',
+    'Every change has a reason. The You page, Your name, shows each measure as a word with a small bar, the last thing that moved it, and a list of the latest changes and why.',
+    'Your name now pays, or costs. With a good name you buy up to a tenth cheaper and sell up to a tenth dearer, businesses and houses cost less, the moneylender asks as little as 1% a day, and more people come looking for work. A crooked name does the opposite, and at the very worst a town will not trade with you at all. A stranger trades at ordinary prices.',
+    'Repeating the same act in the same place stops working: within two weeks each repeat counts half as much as the last. After two quiet weeks it counts in full again.',
+    'Your old save carries over: your standing in Hearthmoor, your favour at court and in Valdoria, your fame and your character keep their values, and your standing in each other town is worked out from what you own and have done there.'
+  ] },
   { v: '0.88', date: '12 November', title: 'The rival', items: [
     'You are not the only one with plans. Someone climbs down from the carter\u2019s wagon with you, with the same few coins: your rival. With a chosen start they begin where you do: a merchant against a merchant, a lord against a lord.',
     'Your rival lives by the same rules as everyone: a real job, real businesses bought from their owners, real votes. They keep pace with you, and never get more than a step ahead.',
