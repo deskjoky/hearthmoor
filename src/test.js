@@ -1,7 +1,7 @@
 // Headless tests for the Hearthmoor simulation. Run: node test.js
 const Sim = require('./sim.js'); Sim.setStrict(true);   // in tests a fault in a daily step must fail loudly
 // most tests look at one system at a time, so the world does not age in them; the life-cycle tests turn it back on
-const newGameRaw = Sim.newGame, newGameAging = (...a) => { const s = newGameRaw(...a); s.bandits = null; s.ageRate = 4; return s; }; Sim.newGame = (...a) => { const s = newGameAging(...a); s.ageRate = 0; return s; };
+const newGameRaw = Sim.newGame, newGameAging = (...a) => { const s = newGameRaw(...a); s.bandits = null; s.ageRate = 4; s.rivalOff = true; return s; };   // and no rival, but in the rival's own tests Sim.newGame = (...a) => { const s = newGameAging(...a); s.ageRate = 0; return s; };
 let failures = 0;
 function check(cond, msg) { if (!cond) { failures++; console.log('  FAIL: ' + msg); } else console.log('  ok: ' + msg); }
 function runIdle(s, max = 3000) { let m = 0; while ((s.player.dest || s.player.action) && m < max) { Sim.step(s, 1); m++; } return m; }
@@ -1785,6 +1785,103 @@ console.log('51. Stage IV: one living map. Everyone placed from their day, every
   check(ms < 30, 'placing everyone in all eleven towns takes ' + ms.toFixed(1) + ' ms, a few times a second');
   // nothing about the map is kept in the save, so old saves need nothing
   check(!/"FARS"|farFolk/.test(Sim.serialize(s)) && Sim.deserialize(Sim.serialize(s)).v === Sim.VERSION, 'the map keeps nothing in the save: older saves load as they are');
+}
+
+console.log('52. Stage V: the rival. Shops, workers, votes, love and the courts; beaten, bought out, exposed or allied');
+const faults52 = Sim.faults().length;   // earlier sections break things on purpose; count only what is new
+{
+  const on = s => { s.rivalOff = false; return s; };
+  // arrives with you: same coins, same sex, same town, a person who matters
+  const s = on(Sim.newGame(5201)); Sim.advance(s, 2);
+  const R = s.rival, p = s.people[R.pid], Y = Sim.you(s);
+  check(!!p && p.purse === 5 && Sim.sexOf(p) === Y.sex && Sim.townOf(p) === 'hearthmoor' && R.n === 1, 'a rival steps off the wagon with you: ' + p.name + ', with the same 5 coins');
+  check(Sim.rivalRung(s, p) === 0 && Sim.yourRung(s) === 0 && s.ppl.key[p.id] && Sim.stanceOf(s, p).v === -1, 'on your rung, a person of note, and against you');
+  check(/same few coins/.test(s.events.map(e => e.text).join(' ')), 'and you are told about them');
+  // chosen starts: the rival starts on your rung
+  const m = on(Sim.newGame(5202)); Sim.applyStart(m, 'merchant'); Sim.advance(m, 2);
+  check(Sim.rivalRung(m, m.people[m.rival.pid]) === 1, 'a merchant’s rival owns a business too');
+  const l = on(Sim.newGame(5203)); Sim.applyStart(l, 'lord'); Sim.advance(l, 2); const lp = l.people[l.rival.pid];
+  check(Sim.rivalRung(l, lp) >= 4 && !l.rival.created, 'a lord’s rival is another lord: ' + lp.name + ' (' + Sim.occupation(l, lp) + ')');
+  // left to themselves they work, save and buy
+  for (let d = 0; d < 70; d++) Sim.advance(s, 1440);
+  check(Sim.rivalRung(s, p) >= 1 && Sim.rivalView(s).owns.length >= 1, 'in seventy days the rival has bought a business of their own: ' + Sim.rivalView(s).owns.join(', '));
+  check(R.foul.length >= 1 && R.foul.every(f => !f.found), 'and has played foul at least once, unseen (' + R.foul.length + ')');
+  check(Sim.faults().length === faults52, 'no faults');
+}
+{
+  // the contests: a price war, a worker, a vote, a heart and a false charge
+  const s = Sim.newGame(5204); s.rivalOff = false; Sim.applyStart(s, 'merchant'); s.coins = 6000; Sim.advance(s, 2); holdElections(s);
+  const R = s.rival, p = s.people[R.pid];
+  const [mine, theirs] = ['o_corbin', 'o_sheaf'].map(id => s.biz[id]);
+  Sim.cmd(s, 'buyBiz', 'o_corbin'); p.purse += 2000; theirs.owner = p.id; theirs.staff = theirs.staff.filter(x => x.pid !== p.id); if (p.job) p.job = null; p.job = { type: 'biz', biz: 'o_sheaf', role: 'owner' };
+  check(mine.owner === 'player' && theirs.owner === p.id, 'you and your rival each own a bakery in Oakbridge');
+  for (let d = 0; d < 40 && !R.wars.length; d++) { R.acted = -99; Sim.advance(s, 1440); }
+  const W = R.wars[0];
+  check(!!W && mine.undercut && mine.undercut.by === p.id, 'the rival starts a price war at your bakery');
+  mine.prices = 'cheap'; const won0 = R.won; while (R.wars.length) Sim.advance(s, 1440);
+  check(R.won > won0 && R.contests.some(c => c.what === 'war' && c.youWon), 'cutting your own prices to match wins it');
+  // a worker on poor pay is taken; a loyal, well-paid one refuses
+  const st = mine.staff[0], w = s.people[st.pid]; st.wage = 6; w.opinion = 0; R.tried = {}; const others = Object.values(s.biz).filter(b => b.owner === 'player' && b !== mine); others.forEach(b => b.staff.forEach(x => { x.wage = 20; s.people[x.pid].opinion = 80; }));
+  (s.shops || []).forEach(sh => { if (sh.worker && s.people[sh.worker.pid]) s.people[sh.worker.pid].opinion = 80; });
+  let took = false; for (let d = 0; d < 40 && !took; d++) { R.acted = -99; Sim.advance(s, 1440); took = !!(w.job && s.biz[w.job.biz] && s.biz[w.job.biz].owner === p.id); }
+  check(took && R.contests.some(c => c.what === 'poach' && !c.youWon), 'a worker on poor pay is hired away by the rival');
+  // a vote: you stand, they stand
+  const race = Sim.ensureRaces(s).races.council; race.poll = s.day + 3; race.open = false; p.town = undefined; Sim.advance(s, 1440);
+  Sim.cmd(s, 'stand', 'council'); race.you = true; Sim.advance(s, 1440);
+  check(race.cands.includes(p.id) && !!R.camp.council, 'when you stand, your rival stands against you and campaigns');
+  const n0 = R.contests.length; let k = 0; while (race.open && k < 6) { Sim.advance(s, 1440); k++; }
+  const ec = R.contests.slice(0, Math.max(0, R.contests.length - n0)).find(c => c.what === 'election');
+  check(!!ec, 'the count is a contest between you: ' + (ec ? ec.x : 'none'));
+  // love: whoever you court, they call on too
+  const Y = Sim.you(s), q = Sim.living(s).find(x => Sim.canCourt(s, x) && !x.spouse && Sim.townOf(x) === 'oakbridge' && x.age < 40);
+  Y.love = Y.love || {}; Y.love[q.id] = { stage: 'courting', since: s.day, seen: s.day }; Y.court[q.id] = 40;
+  Sim.advance(s, 1440);
+  check(R.court && R.court.pid === q.id, 'when you court ' + q.name + ', your rival starts calling on them too');
+  let wedR = false; for (let d = 0; d < 30 && !wedR; d++) { Sim.advance(s, 1440); wedR = q.spouse === p.id; }
+  check(wedR && !Y.love[q.id] && R.contests.some(c => c.what === 'courtship' && !c.youWon), 'court too slowly and the rival marries them');
+  check(Sim.faults().length === faults52, 'the contests run');
+}
+{
+  // the four endings
+  const fresh = (seed, start) => { const s = Sim.newGame(seed); s.rivalOff = false; if (start) Sim.applyStart(s, start); s.coins = 9000; Sim.advance(s, 2); holdElections(s); return s; };
+  // exposed: dig up proof where they played foul, then take it to the court
+  let s = fresh(5210), R = s.rival, p = s.people[R.pid], pid = p.id;
+  R.foul.push({ id: 90, kind: 'rumour', d: s.day, town: 'hearthmoor', x: p.name + ' started a story.', found: false }, { id: 91, kind: 'bribe', d: s.day, town: 'hearthmoor', x: p.name + ' paid voters.', found: false });
+  check(!Sim.cmd(s, 'pRivalExpose', null, 'court').ok, 'with no proof you cannot expose them');
+  let tries = 0; while (Sim.proofOf(R) < 3 && tries < 40) { R.dug = -99; Sim.cmd(s, 'pRivalDig'); tries++; if (tries % 5 === 0) Sim.advance(s, 1440); }
+  check(Sim.proofOf(R) >= 3, 'asking around in Hearthmoor turns up proof (' + Sim.proofOf(R) + ' things, ' + tries + ' tries)');
+  const ex = Sim.cmd(s, 'pRivalExpose', null, 'court');
+  check(ex.ok && s.people[pid].status === 'left' && !R.pid && R.past[0].how === 'exposed', 'the court convicts them and they leave in disgrace');
+  // and then, after a quiet spell, someone new rises
+  const q0 = R.quiet; check(q0 > s.day + 15, 'a quiet spell follows (until day ' + q0 + ')');
+  while (s.day < q0 + 1) Sim.advance(s, 1440);
+  check(!!R.pid && R.n === 2 && R.pid !== pid, 'then a new rival rises: ' + s.people[R.pid].name);
+  // bought out: their businesses become yours
+  s = fresh(5211, 'merchant'); R = s.rival; p = s.people[R.pid]; pid = p.id; const theirs = Object.values(s.biz).filter(b => b.owner === pid).map(b => b.id);
+  R.nerve = 90; check(!Sim.cmd(s, 'pRivalBuy').ok, 'a rival who thinks they are winning will not sell');
+  R.nerve = 40; const price = Sim.rivalPrice(s, R, p), c0 = s.coins, by = Sim.cmd(s, 'pRivalBuy');
+  check(by.ok && s.coins === c0 - price && theirs.length && theirs.every(id => s.biz[id].owner === 'player') && s.people[pid].status === 'left' && R.past[0].how === 'bought', 'shaken, they sell out for ' + price + 'c: ' + theirs.length + ' business(es) become yours and they leave');
+  // allied: low resolve and a better rung, and they take your hand
+  s = fresh(5212, 'elder'); R = s.rival; p = s.people[R.pid]; pid = p.id; R.nerve = 20;
+  const pa = Sim.cmd(s, 'pRivalPact');
+  check(pa.ok && Sim.isAlly(s, s.people[pid]) && s.people[pid].status === 'here' && Sim.stanceOf(s, s.people[pid]).v === 1 && R.past[0].how === 'allied', 'shaken, they become your ally and stay where they are');
+  check(Sim.pplOf(s, s.people[pid]).want === 'To rise with you, as your ally', 'and their aim is now to rise with you');
+  check(Sim.cmd(s, 'pRivalBreak', pid).ok && !Sim.isAlly(s, s.people[pid]) && (s.people[pid].hate || 0) > 0, 'a pact can be broken, and they will hold it against you');
+  // beaten: win enough contests and they give up
+  s = fresh(5213); R = s.rival; p = s.people[R.pid]; pid = p.id; let k = 0;
+  while (R.pid && k < 10) { Sim.contest(s, true, 'election', 'You beat them.'); Sim.advance(s, 1440); k++; }
+  check(!R.pid && R.past[0].how === 'beaten' && s.people[pid].status === 'left' && k <= 5, 'after ' + k + ' defeats they give up and leave: beaten');
+  check(Sim.faults().length === faults52, 'every ending runs');
+}
+{
+  // a long game: the rival is there for most of it; an old save gets one at your rung
+  const s = Sim.newGame(5220); s.rivalOff = false; Sim.applyStart(s, 'merchant'); Sim.advance(s, 2);
+  let present = 0, t0 = process.cpuUsage(); for (let d = 0; d < 150; d++) { if (d === 60 && s.rival.pid) { s.rival.nerve = 30; Sim.cmd(s, 'pRivalBuy'); } Sim.advance(s, 1440); if (s.rival.pid) present++; }
+  check(present >= 150 * 0.7, 'over 150 days, with one rival bought out, a rival was active on ' + present + ' of them');
+  const old = JSON.parse(Sim.serialize(s)); delete old.rival; delete old.rivalOff; for (const id in old.people) { delete old.people[id].rival; }
+  const g = Sim.deserialize(JSON.stringify(old)); Sim.advance(g, 2);
+  check(g.rival && g.rival.pid && Math.abs(Sim.rivalRung(g, g.people[g.rival.pid]) - Sim.yourRung(g)) <= 1, 'an older save is given a rival at your level on loading');
+  check(Sim.faults().length === faults52, 'the long game runs');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');

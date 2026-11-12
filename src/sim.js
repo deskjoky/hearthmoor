@@ -389,7 +389,7 @@
     if (why) event(s, (n >= 0 ? 'Standing +' : 'Standing ') + n + ': ' + why, n >= 0 ? 'good' : 'bad');
   }
   function shopLabel(shop) { return tierOf(shop).name + ', ' + PLOTS[shop.plot].name; }
-  function wtpMean(shop, traveler) { const T = TRADES[shop.trade]; return T.wtp * (1 + 0.08 * shop.tier + (traveler ? 0.08 : 0)); }
+  function wtpMean(shop, traveler) { const T = TRADES[shop.trade]; return T.wtp * (1 + 0.08 * shop.tier + (traveler ? 0.08 : 0)) * (shop.warMul || 1); }   // a rival's price war makes folk expect less
   function earn(s, n) { s.coins += n; s.rec.coinsEarned += n; }
   function spend(s, n) { s.coins -= n; s.rec.coinsSpent += n; }
   function goodsName(trade, n) { const T = TRADES[trade]; return n + ' ' + (n === 1 ? T.one : T.many); }
@@ -565,6 +565,7 @@
     guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s));
     if (s.realm) guard(s, 'the realm kept its books', () => realmDay(s));
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
+    if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
     entry.ownedBiz = s.people ? Object.values(s.biz).filter(b => b.owner === 'player').map(b => ({ name: empById(b.id).name, revenue: b.lastRevenue, wages: b.lastWages, profit: b.lastProfit })) : [];
     for (const shop of s.shops) {
@@ -1973,7 +1974,7 @@
         continue;
       }
       own.purse += revenue - supplies - premises;
-      if (own.purse > 300) own.purse -= Math.round((own.purse - 300) * 0.12);   // a prosperous household lives well
+      { const keep = own.rival ? 1500 : 300; if (own.purse > keep) own.purse -= Math.round((own.purse - keep) * 0.12); }   // a prosperous household lives well (a rival keeps a war chest for the fight)
       if (lessee) continue;
       // owners hire when doing well and let people go when not
       const recent = avg(b.profits.slice(-3));
@@ -4969,7 +4970,7 @@
     else if (r.office === 'lord') pool = living(s).filter(p => townOf(p) === r.region && ((p.job && p.job.role === 'owner') || (p.job && p.job.type === 'office') || p.noble));
     else if (r.office === 'seat') pool = living(s).filter(p => townOf(p) === 'crownmere' && ((p.job && p.job.role === 'owner') || (p.noble && !Object.keys(s.realm.regions).some(id => regionLord(s, id) === p.id))));
     else pool = Object.keys(COUNCIL).map(k => s.realm.council[k]).filter(c => c && c !== 'player').map(c => s.people[c]);
-    pool = pool.filter(p => ok(p) && !isHousehold(p) && !out.includes(p.id)).sort((a, b) => (b.rep || 0) - (a.rep || 0));
+    pool = pool.filter(p => ok(p) && !isHousehold(p) && !out.includes(p.id) && !isRival(s, p)).sort((a, b) => (b.rep || 0) - (a.rep || 0));   // a rival stands only where they choose to (rivalCampaign)
     const seen = new Set(); pool = pool.filter(p => !seen.has(p.id) && seen.add(p.id));
     pool.slice(0, 3).forEach((p, i) => { if (out.length < 3 && erand(s) < [0.75, 0.45, 0.25][i]) out.push(p.id); });
     if (!out.length && pool[0]) out.push(pool[0].id);
@@ -5079,6 +5080,7 @@
     const nm = c => c === 'player' ? 'you' : s.people[c].name, line = rank.map(([c]) => nm(c) + ' ' + pct(c) + '%').join(', ');
     E.history.unshift({ d: s.day, key: r.key, label, win: win === 'player' ? s.name : s.people[win].name, you: r.you ? pct('player') : null, text: line, cands: rank.map(([c, v]) => ({ name: c === 'player' ? s.name : s.people[c].name, you: c === 'player', votes: Math.round(v), pct: pct(c) })), total: Math.round(res.total), towns: Object.keys(res.byTown).length, yourVote: ballot && s.people[ballot] ? s.people[ballot].name : null }); if (E.history.length > 40) E.history.length = 40;
     const youRan = r.you; r.you = false;
+    if (s.rival) guard(s, 'the rival heard the count', () => rivalRaceDone(s, r, win, youRan, hold));
     if (youRan) { s.rec.racesRun = (s.rec.racesRun || 0) + 1; if (win === 'player') s.rec.racesWon = (s.rec.racesWon || 0) + 1; else { s.rec.racesLost = (s.rec.racesLost || 0) + 1; if (hold === 'player') s.rec.votedOut = (s.rec.votedOut || 0) + 1; } }
     if (win === 'player') gainXP(s, { council: 80, elder: 220, lord: 450, seat: 650, crown: 1000 }[r.office] || 0);
     if (win === 'player') { const rk = { council: 0, elder: 1, lord: 2, seat: 3, crown: 4 }[r.office]; if (rk > (s.rec.highestRank == null ? -1 : s.rec.highestRank)) { s.rec.highestRank = rk; s.rec.highestTitle = raceLabel(r).replace(/^a seat on the /, 'a seat on the ').replace(/^the /, ''); } }
@@ -8309,6 +8311,7 @@
     const before = s.t;
     s.t += dt;
     updateJob(s, before);
+    if (!s.rival && s.people && !s.rivalOff && s.player) guard(s, 'a rival arrived', () => setupRival(s));
     if (crossed(before, s.t, 21 * 60)) guard(s, 'the day ended', () => closeDay(s));
     if (crossed(before, s.t, 6 * 60)) guard(s, 'the day began', () => openDay(s));
     const h = hourOf(s);
@@ -9181,6 +9184,8 @@
     line: () => 'To live well off the office they hold',
     heir: () => 'To see their children set up for life',
     ruin: () => 'To see you brought down',
+    rival: () => 'To outdo you at every turn',
+    ally: () => 'To rise with you, as your ally',
     guild: () => 'To lead their guild'
   };
   const PPL_SECRETS = {
@@ -9204,7 +9209,9 @@
   function keyScore(s, p, own) {
     let sc = 0, why = '';
     const off = officeOf(s, p), n = own.get(p.id) || 0;
-    if (p.figure) { sc += 200; why = 'a power in the realm'; }
+    if (s.rival && s.rival.pid === p.id) { sc += 400; why = 'your rival'; }
+    else if (s.rival && (s.rival.allies || []).includes(p.id)) { sc += 150; why = 'your ally by pact'; }
+    if (p.figure) { sc += 200; why = why || 'a power in the realm'; }
     if (off) { sc += /council/.test(off) ? 70 : 110; why = why || 'holds office: ' + off; }
     if (p.noble) { sc += 60; why = why || 'of a noble house'; }
     if (p.nem) { sc += 90; why = why || 'your sworn enemy'; }
@@ -9263,6 +9270,8 @@
   function blocOf(s, pid) { let n = 0; const t = pid === 'player' ? null : townOf(s.people[pid]); for (const p of living(s)) if (!p.kid && p.id !== pid && (t == null || townOf(p) === t) && patronOf(s, p) === pid) n++; return n; }
   // how a key person stands toward you, and the reason
   function stanceOf(s, p) {
+    if (isRival(s, p)) return { v: -1, why: 'your rival' };
+    if (isAlly(s, p)) return { v: 1, why: 'your ally by pact' };
     const X = s.ppl, K = X && X.key[p.id]; if (!K) return { v: 0, why: '' };
     const op = p.opinion || 0, h = p.hate || 0, t = K.t;
     if (h >= 35 || K.goal === 'ruin') return { v: -1, why: 'holds a grudge against you' };
@@ -9480,11 +9489,12 @@
   }
   // the weight a voter carries from the people above them, and from the mood of the streets
   function blocLean(s, r, p, cand, hold) {
-    const X = s.ppl; if (!X) return 0; let v = 0;
+    const X = s.ppl; if (!X) return rivalPull(s, r, cand); let v = 0;
     const pat = patronOf(s, p);
     if (pat === 'player') v += cand === 'player' ? 0 : 0;
     else if (pat && X.key[pat]) { const b = X.key[pat].backs[r.key]; if (b && b === cand) v += pat === p.id ? 30 : 13; }
     const C = X.crowd[townOf(p)];
+    v += rivalPull(s, r, cand);
     if (C && hold && cand === hold) v += C.mood === 'angry' ? -12 : C.mood === 'hungry' ? -8 : C.mood === 'uneasy' ? -4 : C.mood === 'happy' ? 5 : 0;
     return v;
   }
@@ -9516,11 +9526,12 @@
     for (const id of Object.keys(X.key)) { const p = s.people[id]; if (!p || p.status !== 'here') { if (p) delete p.tier; delete X.key[id]; } }
     crowdDay(s);
     keyBacking(s);
-    for (const id of Object.keys(X.key)) { const K = X.key[id], p = s.people[id]; if (p && (pidNum(p) + s.day) % 7 === 0) keyAct(s, p, K); }
+    for (const id of Object.keys(X.key)) { const K = X.key[id], p = s.people[id]; if (p && !isRival(s, p) && (pidNum(p) + s.day) % 7 === 0) keyAct(s, p, K); }
     if (s.day % 7 === 3) risers(s);
     for (const b of Object.values(s.biz || {})) { if (b.undercut && b.undercut.until < s.day) delete b.undercut; if (b.riot && b.riot < s.day) delete b.riot; }
   }
   function pplCmd(s, name, a, b) {
+    if (/^pRival/.test(name)) return rivalCmd(s, name, a, b);
     const X = setupPpl(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
     switch (name) {
       case 'pAsk': {   // ask around about someone who matters: what they owe, and with luck what they hide
@@ -9649,7 +9660,421 @@
     return out;
   }
 
+  /* ================= THE RIVAL (Stage V) =================
+     Someone who rises beside you and wants what you want. The first steps off the carter's wagon with you, with the same few
+     coins; later ones step up to meet you wherever you stand. A rival lives by the same rules as everyone (a real job, real
+     businesses bought from real owners, real votes) and competes with you in five places: shops (price wars), hiring (taking
+     your workers), elections (standing against you), courtship (calling on whoever you court) and the courts (a false charge
+     against one of your workers). They fight fair, and sometimes foul; every foul move can be dug up. A rival ends in one of
+     four ways: beaten (their resolve runs out as you win the contests), bought out, exposed (proof of foul play before a court
+     or the town), or allied. Then, after a quiet spell, someone new rises. The rival has their own dice. */
+  const RUNG_NAME = ['A hired hand', 'A shopkeeper', 'A merchant', 'In the council chamber', 'A lord', 'A great lord'];
+  const RIVAL_PURSE = [5, 150, 400, 400, 1200, 2000];
+  const CONTEST_HIT = { election: 18, courtship: 16, war: 10, poach: 8, charge: 10 };
+  const FOUL_NAME = { bribe: 'Bought votes', rumour: 'Spread lies about you', charge: 'Laid a false charge', smear: 'Whispered against you to the one you court', plot: 'Bribed lords against you' };
+  function rrand(s) { const D = s.rivalDice = s.rivalDice || { d: -1, x: 0, b: (s.rng ^ Math.imul(s.nextPid || 1, 7919)) | 0 }; if (D.d !== s.day) { D.d = s.day; D.x = (Math.imul(s.day + 11, 2246822519) ^ (D.b || 0) ^ 0x7a11) | 0; } D.x = (D.x + 0x6D2B79F5) | 0; let x = D.x; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
+  const rpick = (s, a) => a[Math.floor(rrand(s) * a.length)];
+  const ownedBy = (s, pid) => Object.values(s.biz || {}).filter(b => b.owner === pid && !b.closed);
+  const yourBizCount = s => (s.shops || []).length + ownedBy(s, 'player').length;
+  function yourRung(s) {
+    const m = yourOffice(s); if (m) return { crown: 5, seat: 5, lord: 4, elder: 3 }[m.office] || 3;
+    if (s.village && s.village.council) return 3;
+    const n = yourBizCount(s); return n >= 2 ? 2 : n >= 1 ? 1 : 0;
+  }
+  function rivalRung(s, p) {
+    const R = s.realm;
+    if (R) { if (Object.keys(COUNCIL).some(k => R.council[k] === p.id)) return 5; if (Object.keys(R.regions).some(id => R.regions[id].lord === p.id)) return 4; }
+    if (s.offices && s.offices.lord === p.id) return 4;
+    if ((s.offices && s.offices.elder === p.id) || (s.gov && s.gov.council.includes(p.id))) return 3;
+    for (const id in (s.towns || {})) { const T = s.towns[id]; if (T.mayor === p.id || T.council.includes(p.id)) return 3; }
+    const n = ownedBy(s, p.id).length; return n >= 2 ? 2 : n >= 1 ? 1 : 0;
+  }
+  const isRival = (s, p) => !!(s.rival && p && s.rival.pid === p.id);
+  const isAlly = (s, p) => !!(s.rival && p && (s.rival.allies || []).includes(p.id) && p.status === 'here');
+  const nerveWord = n => n >= 80 ? 'Sure of winning' : n >= 55 ? 'Determined' : n >= 30 ? 'Shaken' : n > 0 ? 'Close to giving up' : 'Beaten';
+  function rlog(s, text, kind, tell) { const R = s.rival; R.log.unshift({ d: s.day, x: text, k: kind || 'info' }); if (R.log.length > 30) R.log.length = 30; if (tell !== false) event(s, text, kind || 'info'); }
+  // the rival takes over a business: the old owner stays on to work it, as when you buy one
+  function rivalTakeBiz(s, p, bz) {
+    const owner = s.people[bz.owner], price = bizPrice(s, bz.id);
+    p.purse -= price; if (owner) { owner.purse += price; if (!owner.job || owner.job.biz === bz.id) { owner.job = { type: 'biz', biz: bz.id, role: 'hand' }; bz.staff.unshift({ pid: owner.id, wage: 8 }); } if (owner.home === 'biz:' + bz.id) { owner.home = null; const h = vacancy(s, 99, bz.town); if (h) moveIn(s, owner, h); } plog(s, owner, 'Sold ' + empById(bz.id).name + ' to ' + p.name + ' for ' + price + 'c.'); }
+    bz.owner = p.id; if (bz.closed) { bz.closed = false; bz.profits = [0, 0, 0]; }
+    bz.staff = bz.staff.filter(x => x.pid !== p.id);
+    if (!p.job || p.job.type !== 'biz' || p.job.role !== 'owner') { if (p.job) loseJob(s, p, 'Left to run ' + empById(bz.id).name + '.'); p.job = { type: 'biz', biz: bz.id, role: 'owner' }; }
+    plog(s, p, 'Bought ' + empById(bz.id).name + '.');
+    return price;
+  }
+  // which business a rival wants next: one in a trade and town where you already sell, if they can get it, else the cheapest near home
+  function rivalTarget(s, p, budget) {
+    const mine = new Set(ownedBy(s, 'player').map(b => (b.town || 'hearthmoor') + ':' + b.trade).concat((s.shops || []).map(sh => 'hearthmoor:' + sh.trade)));
+    const home = townOf(p), king = kingdomOf(home);
+    const pool = Object.values(s.biz || {}).filter(b => b.owner !== 'player' && b.owner !== p.id && !b.lease && !b.seized && b.trade !== 'estate' && kingdomOf(b.town || 'hearthmoor') === king && !(s.people[b.owner] && (yourFamily(s, s.people[b.owner]) || s.people[b.owner].status !== 'here')) && !isPrestige(s, b.id));
+    const sc = b => (mine.has((b.town || 'hearthmoor') + ':' + b.trade) ? 0 : 1) * 1e5 + ((b.town || 'hearthmoor') === home ? 0 : 1) * 1e4 + bizPrice(s, b.id);
+    return pool.filter(b => bizPrice(s, b.id) <= budget).sort((a, b) => sc(a) - sc(b))[0] || null;
+  }
+  function rivalName(s, sex) {
+    const taken = new Set(Object.values(s.people).map(q => q.name)), F = FIRST.filter(n => (sex === 'f') === FEMALE.has(n));
+    for (let i = 0; i < 60; i++) { const n = rpick(s, F) + ' ' + rpick(s, FAMILY); if (!taken.has(n) && n !== s.name) return n; }
+    return rpick(s, F) + ' ' + rpick(s, FAMILY) + 'e';
+  }
+  // a new rival: at the start, the one who arrives with you; later, someone who steps up to meet you where you stand
+  function setupRival(s, rung) {
+    const R0 = s.rival, Y = you(s), first = !R0;
+    rung = rung == null ? yourRung(s) : rung;
+    const t = yourTown(s) || 'hearthmoor', usable = q => q && q.status === 'here' && !q.kid && q.age >= 18 && q.age < 62 && !yourFamily(s, q) && !isAlly(s, q) && !q.royal && !(s.realm && q.id === s.realm.king) && !(R0 && (R0.past || []).some(x => x.pid === q.id));
+    let p = null, why = '';
+    if (rung >= 4 && s.realm) {   // a lord who wants what you have
+      const ids = Object.keys(s.realm.regions).map(id => regionLord(s, id)).concat(Object.keys(COUNCIL).map(k => s.realm.council[k]));
+      const L = Array.from(new Set(ids)).map(id => s.people[id]).filter(usable).sort((a, b) => (a.opinion || 0) - (b.opinion || 0) || (sexOf(a) === Y.sex ? -1 : 1));
+      p = L[0] || null; if (p) why = (rung >= 5 ? 'one of the great lords of Alderwyn, who means to have the realm’s favour for himself' : 'a lord of Alderwyn who means to rise above you').replace('himself', sexOf(p) === 'f' ? 'herself' : 'himself');
+    } else if (rung === 3) {   // an ambitious owner or councillor where you live
+      const X = s.ppl, L = living(s).filter(q => usable(q) && townOf(q) === t && (ownedBy(s, q.id).length || (s.gov && s.gov.council.includes(q.id))) && (!X || !X.key[q.id] || ['rise', 'office', 'grow', 'rich', 'guild'].includes(X.key[q.id].goal))).sort((a, b) => (b.rep || 0) - (a.rep || 0));
+      p = L.find(q => sexOf(q) === Y.sex) || L[0] || null; if (p) why = 'who has watched you rise and means to have the chair you want';
+    }
+    const created = !p;
+    if (!p) {   // a newcomer
+      const k = s.rng, age = clamp(Math.round((Y.age || 22) + (rrand(s) - 0.5) * 6), 18, 44);
+      p = newPerson(s, { name: rivalName(s, Y.sex), sex: Y.sex, age, purse: RIVAL_PURSE[Math.min(rung, 5)], skill: 1.05, palette: Math.floor(rrand(s) * 10), town: t === 'hearthmoor' ? undefined : t, log: [], thrift: 0.8 });
+      s.rng = k;   // the rest of the world's dice are untouched
+      const h = vacancy(s, 99, t); if (h) moveIn(s, p, h);
+      plog(s, p, first ? 'Arrived in ' + townName(t) + ' on the same wagon as ' + s.name + '.' : 'Came to ' + townName(t) + ' to make a name.');
+      why = first ? 'who climbed down from the carter’s wagon with you' : rung >= 1 ? 'a merchant newly come to ' + townName(t) + ', with coin and ambition' : 'newly come to ' + townName(t) + ' with nothing but ambition';
+      // they start on your rung: a business or two to match yours
+      for (let i = 0; i < Math.min(2, rung); i++) { const b = rivalTarget(s, p, 99999); if (!b) break; p.purse += bizPrice(s, b.id); rivalTakeBiz(s, p, b); }
+      if (townOf(p) === (s.bodiesIn || 'hearthmoor')) addBody(s, p, first ? { x: s.player.x + 1.6, z: s.player.z + 1.2 } : null);
+    } else p.purse = Math.max(p.purse, RIVAL_PURSE[Math.min(rung, 5)]);
+    p.rival = true;
+    const fresh = { pid: p.id, n: R0 ? R0.n + 1 : 1, since: s.day, nerve: 60, won: 0, lost: 0, foul: [], fid: 1, contests: [], log: R0 ? R0.log.slice(0, 8) : [], camp: {}, court: null, wars: [], quiet: null, past: R0 ? R0.past : [], allies: R0 ? R0.allies || [] : [], acted: s.day, startRung: rung, created, offerDay: -99, dug: -99, heard: -99, secret: { k: ['debt', 'past', 'bought', 'smuggle', 'affair'][Math.floor(rrand(s) * 5)], known: false } };
+    s.rival = R0 ? Object.assign(R0, fresh, { tried: {}, bought: null, told: null, dug: -99 }) : fresh;   // one record for the whole game, so the history of past rivals stays with it
+    { setupPpl(s); const K = newKey(s, p, 'your rival', 99999); K.goal = 'rival'; K.secret = s.rival.secret; }
+    rlog(s, (first ? 'You are not the only one with plans. ' + p.name + ', ' + why + ', has the same few coins and the same hunger. ' : (R0 && R0.pid == null ? 'A new rival: ' : 'A rival: ') + p.name + ', ' + why + '. ') + (sexOf(p) === 'f' ? 'She' : 'He') + ' will compete with you for shops, workers, votes, love and the favour of the courts. (People, Rival.)', 'story');
+    return p;
+  }
+  // a contest decided: your win shakes their resolve; theirs feeds it
+  function contest(s, youWon, what, text) {
+    const R = s.rival; if (!R || !R.pid) return;
+    if (youWon) { R.won++; R.nerve = Math.max(0, R.nerve - (CONTEST_HIT[what] || 10)); } else { R.lost++; R.nerve = Math.min(100, R.nerve + 8); }
+    R.contests.unshift({ d: s.day, what, youWon, x: text }); if (R.contests.length > 20) R.contests.length = 20;
+    rlog(s, text + (youWon ? ' (' + nerveWord(R.nerve).toLowerCase() + ')' : ''), youWon ? 'good' : 'bad');
+  }
+  function foulAdd(s, kind, town, text, extra) { const R = s.rival; const f = Object.assign({ id: R.fid++, kind, d: s.day, town: town || 'hearthmoor', x: text, found: false }, extra || {}); R.foul.unshift(f); if (R.foul.length > 16) R.foul.length = 16; return f; }
+  const proofOf = R => R.foul.filter(f => f.found).length + (R.secret && R.secret.known ? 1 : 0);
+  // where it is easiest to hurt you: a town you own businesses in, or where you live or govern
+  function yourTowns(s) { const t = new Set(ownedBy(s, 'player').map(b => b.town || 'hearthmoor')); if ((s.shops || []).length) t.add('hearthmoor'); t.add(yourTown(s) || 'hearthmoor'); return Array.from(t); }
+  // your workers, wherever they work for you
+  function yourWorkers(s) {
+    const out = [];
+    for (const b of ownedBy(s, 'player')) for (const st of b.staff) { const w = s.people[st.pid]; if (w && w.status === 'here' && !w.kid) out.push({ w, wage: st.wage, town: b.town || 'hearthmoor', trade: b.trade, at: empById(b.id).name, biz: b }); }
+    for (const sh of s.shops || []) { if (sh.worker && sh.worker.pid && s.people[sh.worker.pid]) out.push({ w: s.people[sh.worker.pid], wage: sh.worker.wage || 7, town: 'hearthmoor', trade: sh.trade, at: 'your ' + TRADES[sh.trade].name.toLowerCase(), shop: sh }); }
+    return out;
+  }
+  /* ---------- each evening ---------- */
+  function rivalDay(s) {
+    if (s.rivalOff || !s.people) return;
+    let R = s.rival;
+    if (!R) { setupRival(s); return; }
+    for (const sh of s.shops || []) if (sh.war && sh.war.until < s.day) { delete sh.war; delete sh.warMul; }
+    for (const id of R.allies || []) { const q = s.people[id]; if (q && q.status === 'here' && (q.opinion || 0) < -10) { R.allies = R.allies.filter(x => x !== id); q.ally = false; event(s, q.name + ' no longer counts you an ally: you have wronged them once too often. The pact is broken.', 'bad'); } }
+    if (!R.pid) { if (s.day >= R.quiet) setupRival(s); return; }
+    const p = s.people[R.pid];
+    if (!p || p.status === 'dead') return rivalEnd(s, 'died', (p ? p.name : 'Your rival') + ' has died, and the rivalry with them.');
+    if (p.status !== 'here') return rivalEnd(s, 'gone', p.name + ' has left, and the rivalry with them.');
+    { const rg = rivalRung(s, p); if (R.rungSeen != null && rg !== R.rungSeen) rlog(s, p.name + (rg > R.rungSeen ? ' has risen: ' : ' has come down: ') + occupation(s, p).replace(/^./, c => c.toLowerCase()) + '.', rg > R.rungSeen ? 'bad' : 'good'); R.rungSeen = rg; }
+    rivalPurse(s, R, p);
+    rivalWars(s, R, p); rivalCases(s, R, p);
+    if (R.nerve <= 0) return rivalEnd(s, 'beaten', p.name + ' has had enough. After losing to you again and again, ' + (sexOf(p) === 'f' ? 'she sells up and leaves' : 'he sells up and leaves') + ' to try ' + (sexOf(p) === 'f' ? 'her' : 'his') + ' luck far from here. You have beaten your rival.');
+    rivalClimb(s, R, p);
+    rivalCourt(s, R, p);
+    rivalCampaign(s, R, p);
+    const gap = R.nerve >= 75 ? 4 : R.nerve >= 45 ? 5 : 7;
+    if (s.day - R.acted >= gap && s.day - R.since >= 3) rivalMove(s, R, p);
+    // their resolve drifts back toward the middle when nothing happens
+    if (s.day % 5 === 0) R.nerve = Math.round(R.nerve + (55 - R.nerve) * 0.04);
+  }
+  // they keep pace with you: their trade on the side brings in more when they are behind you, less when ahead
+  function rivalPurse(s, R, p) {
+    const g = yourRung(s) - rivalRung(s, p), base = [6, 8, 11, 15, 20, 30][rivalRung(s, p)];
+    p.purse += Math.round(base * (g > 0 ? 1 + 0.8 * g : g < 0 ? 0.5 : 1));
+  }
+  function rivalClimb(s, R, p) {
+    const t = townOf(p), mine = ownedBy(s, p.id);
+    if (mine.length && !(p.job && p.job.type === 'biz' && p.job.role === 'owner' && s.biz[p.job.biz] && s.biz[p.job.biz].owner === p.id && !s.biz[p.job.biz].closed)) { if (p.job) loseJob(s, p, 'Went back to running ' + empById(mine[0].id).name + '.'); p.job = { type: 'biz', biz: mine[0].id, role: 'owner' }; mine[0].staff = mine[0].staff.filter(x => x.pid !== p.id); }   // an owner whose shop shut goes to run another
+    // a hired hand finds work
+    if (!p.job && !mine.length) {
+      const b = Object.values(s.biz || {}).filter(b => (b.town || 'hearthmoor') === t && !b.closed && b.owner !== 'player' && b.trade !== 'estate').sort((a, b) => a.staff.length - b.staff.length)[0];
+      if (b) { b.staff.push({ pid: p.id, wage: 7 }); p.job = { type: 'biz', biz: b.id, role: 'hand' }; plog(s, p, 'Took work at ' + empById(b.id).name + '.'); rlog(s, p.name + ' has found work at ' + empById(b.id).name + ', and is saving every coin.', 'info', R.since === s.day - 1); }
+    }
+    // buy: as many businesses as you, and one more, to a point
+    const cap = Math.min(6, Math.max(1, yourBizCount(s) + 1, rivalRung(s, p) >= 3 ? 2 : 1));
+    if (mine.length < cap && s.day - (R.bought || -99) >= 4) {
+      const reserve = 40 + mine.length * 30, b = rivalTarget(s, p, p.purse - reserve);
+      if (b) {
+        const yours = ownedBy(s, 'player').some(x => (x.town || 'hearthmoor') === (b.town || 'hearthmoor') && x.trade === b.trade) || ((b.town || 'hearthmoor') === 'hearthmoor' && (s.shops || []).some(sh => sh.trade === b.trade));
+        const price = rivalTakeBiz(s, p, b); R.bought = s.day;
+        rlog(s, p.name + ' has bought ' + empById(b.id).name + ' in ' + townName(b.town) + ' for ' + price + 'c' + (yours ? ', right beside your own ' + tradeName(b.trade).toLowerCase() + '. Expect a price war.' : '.') + ' ' + (sexOf(p) === 'f' ? 'She' : 'He') + ' owns ' + (mine.length + 1) + ' now.', yours ? 'bad' : 'info');
+      }
+    }
+  }
+  // the seat they want next: one step above where they stand, and never more than a step above you
+  function rivalWants(s, p, r, youIn) {
+    const rg = rivalRung(s, p), yr = yourRung(s), t = townOf(p);
+    if (isRival(s, p) && s.rival.pact) return false;
+    const can = { council: !p.town && ownedBy(s, p.id).length > 0 && !(s.gov && s.gov.council.includes(p.id)) && s.offices.elder !== p.id,
+      elder: !p.town && s.gov && s.gov.council.includes(p.id),
+      lord: rg >= 3 && (r.region === t || ownedBy(s, p.id).some(b => (b.town || 'hearthmoor') === r.region)),
+      seat: rg >= 4, crown: false }[r.office];
+    if (!can) return false;
+    if (youIn) return true;   // they always stand against you where they can
+    const step = { council: 3, elder: 3, lord: 4, seat: 5 }[r.office];
+    return step <= Math.min(5, yr + 1) && step > rg - (r.office === 'elder' && rg === 3 ? 1 : 0);
+  }
+  // in an open race: they campaign, and sometimes buy votes
+  function rivalCampaign(s, R, p) {
+    if (!s.elect) return; const E = electState(s);
+    for (const k in R.camp) if (!E.races[k] || !E.races[k].open) delete R.camp[k];
+    const m = yourOffice(s);
+    for (const r of Object.values(E.races)) {
+      if (!r.open) continue;
+      const youIn = r.you || !!(m && m.office === r.office && (m.region || null) === (r.region || null));
+      if (!r.cands.includes(p.id) && rivalWants(s, p, r, youIn)) r.cands.push(p.id);
+      if (!r.cands.includes(p.id) || R.camp[r.key]) continue;
+      const spend = Math.max(0, Math.min(80, Math.floor(p.purse * 0.3))); p.purse -= spend;
+      const c = R.camp[r.key] = { boost: Math.min(18, spend / 4) + 4, bribe: false };
+      if (r.you) {
+        rlog(s, p.name + ' is standing against you for ' + raceLabel(r) + ', and spending ' + spend + 'c on the campaign.', 'bad');
+        if (p.purse > 40 && rrand(s) < 0.4 * Math.max(0.4, R.nerve / 60)) { p.purse -= 30; c.boost += 12; c.bribe = true; const tw = raceTown(r) || 'crownmere'; foulAdd(s, 'bribe', tw, p.name + ' paid voters in ' + townName(tw) + ' to vote for ' + (sexOf(p) === 'f' ? 'her' : 'him') + ' for ' + raceLabel(r) + '.', { race: r.key }); }
+      }
+    }
+  }
+  // the weight a rival's campaign carries at the count
+  function rivalPull(s, r, cand) { const R = s.rival; return R && R.pid && cand === R.pid && R.camp && R.camp[r.key] ? R.camp[r.key].boost : 0; }
+  // the count is in: if you both stood, it is a contest
+  function rivalRaceDone(s, r, win, youRan, hold) {
+    const R = s.rival; if (!R || !R.pid) return; const p = s.people[R.pid]; if (!p) return;
+    const stood = r.cands.includes(R.pid) || win === R.pid;
+    if (win === R.pid && !youRan && hold !== R.pid) rlog(s, p.name + ' is elected ' + raceLabel(r) + '. Your rival climbs.', 'info');
+    if (!youRan || !stood) return;
+    if (win === 'player') contest(s, true, 'election', 'You beat ' + p.name + ' for ' + raceLabel(r) + '.');
+    else if (win === R.pid) contest(s, false, 'election', p.name + ' beat you for ' + raceLabel(r) + '.');
+  }
+  // courtship: whoever you court, they call on too, and if they win the heart first, they marry
+  function rivalCourt(s, R, p) {
+    const Y = you(s);
+    if (p.spouse) { R.court = null; return; }
+    const eligible = q => q && q.status === 'here' && !q.kid && q.age >= 18 && !q.spouse && sexOf(q) !== sexOf(p) && q.id !== p.id && !isHousehold(q) && !q.royal;
+    let tgt = null, st = null;
+    if (!Y.spouse && Y.sex === sexOf(p)) for (const id in (Y.love || {})) { const L = Y.love[id], q = s.people[id]; if (eligible(q) && ['friends', 'courting', 'betrothed'].includes(L.stage) && (!tgt || STAGES.indexOf(L.stage) > STAGES.indexOf(st))) { tgt = q; st = L.stage; } }
+    if (R.court && (!tgt || R.court.pid !== tgt.id)) {
+      const q0 = s.people[R.court.pid];
+      if (q0 && Y.spouse === q0.id) contest(s, true, 'courtship', 'You married ' + q0.name + ' before ' + p.name + ' could win them.');
+      else if (q0 && Y.love && Y.love[q0.id] && Y.love[q0.id].stage === 'betrothed') {}   // handled below
+      R.court = null;
+    }
+    if (!tgt) {   // nobody to fight over: in time they marry for themselves
+      if (s.day - R.since > 25 && rrand(s) < 0.04) { const q = living(s).filter(x => eligible(x) && townOf(x) === townOf(p) && !(Y.love && Y.love[x.id]) && Math.abs(x.age - p.age) < 10)[0]; if (q) { marry(s, p, q); rlog(s, p.name + ' has married ' + q.name + '.', 'info', false); } }
+      return;
+    }
+    if (!R.court) { R.court = { pid: tgt.id, f: 10, since: s.day }; rlog(s, p.name + ' has started calling on ' + tgt.name + ' too. Win ' + (sexOf(tgt) === 'f' ? 'her' : 'him') + ' first: be betrothed before ' + p.name + ' is.', 'bad'); }
+    const C = R.court;
+    if (st === 'betrothed') { if (!C.lost) { C.lost = true; contest(s, true, 'courtship', tgt.name + ' is betrothed to you. ' + p.name + ' has lost.'); } return; }
+    C.f = Math.min(100, C.f + 4 + rrand(s) * 4 + (p.rep || 0) / 25);
+    if (rrand(s) < 0.15 * Math.max(0.5, R.nerve / 60) && s.day - (C.smear || -99) >= 6) { C.smear = s.day; Y.court[tgt.id] = Math.max(0, (Y.court[tgt.id] || 0) - 8); foulAdd(s, 'smear', townOf(tgt), p.name + ' told ' + tgt.name + ' lies about you to turn ' + (sexOf(tgt) === 'f' ? 'her' : 'him') + ' against you.'); rlog(s, tgt.name + ' seems cooler toward you. Someone has been talking.', 'bad'); }
+    if (C.f >= 100 && (Y.court[tgt.id] || 0) < 95) {
+      marry(s, p, tgt); if (Y.love) delete Y.love[tgt.id]; Y.court[tgt.id] = 0; R.court = null;
+      contest(s, false, 'courtship', p.name + ' has married ' + tgt.name + '. You were too slow.');
+    }
+  }
+  // one move against you every few days: fair or foul
+  function rivalMove(s, R, p) {
+    R.acted = s.day;
+    const t = townOf(p), mine = ownedBy(s, p.id), towns = yourTowns(s), foulOk = rrand(s) < 0.35 * Math.max(0.5, R.nerve / 60);
+    const opts = [];
+    const shared = [];
+    for (const b of mine) { const bt = b.town || 'hearthmoor'; for (const x of ownedBy(s, 'player')) if ((x.town || 'hearthmoor') === bt && x.trade === b.trade) shared.push({ theirs: b, yours: x }); if (bt === 'hearthmoor') for (const sh of s.shops || []) if (sh.trade === b.trade) shared.push({ theirs: b, shop: sh }); }
+    if (shared.length && !R.wars.length) opts.push(['war', 3]);
+    const ws = yourWorkers(s), fresh = ws.filter(W => !(R.tried && s.day - (R.tried[W.w.id] || -99) < 30)); if (fresh.length && mine.length) opts.push(['poach', 2]);
+    if (foulOk) { opts.push(['rumour', 2]); if (ws.length && mine.length) opts.push(['charge', 1.5]); if (isRuler(s) && rivalRung(s, p) >= 4) opts.push(['plot', 2]); }
+    if (isRuler(s) && rivalRung(s, p) >= 4) opts.push(['court', 2]);
+    if (!opts.length) return;
+    let tot = opts.reduce((a, o) => a + o[1], 0), r = rrand(s) * tot, k = opts[0][0]; for (const o of opts) { r -= o[1]; if (r <= 0) { k = o[0]; break; } }
+    const sub = sexOf(p) === 'f' ? 'she' : 'he', pos = sexOf(p) === 'f' ? 'her' : 'his';
+    if (k === 'war') {
+      const w = rpick(s, shared), until = s.day + 5, bt = w.theirs.town || 'hearthmoor';
+      if (w.yours) w.yours.undercut = { until, by: p.id }; else { w.shop.war = { until, by: p.id }; w.shop.warMul = 0.85; }
+      p.purse -= 15;
+      const fair = w.shop ? Math.max(1, Math.round(wtpMean(w.shop, false) * 0.85)) : null;
+      R.wars.push({ until, theirs: w.theirs.id, yours: w.yours ? w.yours.id : null, shop: w.shop ? w.shop.id : null, fair, start: s.day });
+      rlog(s, 'Price war! ' + p.name + ' has cut the prices at ' + empById(w.theirs.id).name + ' in ' + townName(bt) + ' to steal the custom of your ' + (w.yours ? empById(w.yours.id).name : 'your ' + TRADES[w.shop.trade].name.toLowerCase()) + '. ' + (w.shop ? 'Sell at ' + fair + 'c or less until day ' + until + ' to win it.' : 'Set your prices there to Cheap, or out-earn ' + pos + ' shop, until day ' + until + ' to win it.'), 'bad');
+    } else if (k === 'poach') {
+      R.tried = R.tried || {}; const pool = ws.filter(W => !(s.day - (R.tried[W.w.id] || -99) < 30)); if (!pool.length) return;
+      const W = pool.slice().sort((a, b) => (a.w.opinion || 0) - (b.w.opinion || 0))[0], w = W.w, fair = fairWage(W.town), offer = W.wage + 2; R.tried[w.id] = s.day;
+      if ((w.opinion || 0) >= 45 || W.wage >= fair + 1) return contest(s, true, 'poach', w.name + ' turned down ' + p.name + '’s offer of ' + offer + 'c a day to leave ' + W.at + '. Loyalty and fair pay held.');
+      const tb = mine.find(b => b.trade === W.trade) || mine[0];
+      if (W.shop) W.shop.worker = null; else loseJob(s, w, 'Hired away from ' + W.at + ' by ' + p.name + '.');
+      if (w.job) w.job = null; tb.staff.push({ pid: w.id, wage: offer }); w.job = { type: 'biz', biz: tb.id, role: 'hand' };
+      contest(s, false, 'poach', p.name + ' has hired ' + w.name + ' away from ' + W.at + ' for ' + offer + 'c a day. Pay at least ' + (fair + 1) + 'c, or win your workers’ loyalty, and they cannot be bought.');
+    } else if (k === 'rumour') {
+      const tw = rpick(s, towns), folk = folkIn(s, tw).filter(q => !q.kid && !yourFamily(s, q) && q.id !== p.id);
+      const lie = rpick(s, ['you water your ale and short-weight your bread', 'you cheated a widow out of her rent', 'you mean to raise every rent in town', 'you owe money all over the kingdom', 'you bribed your way to everything you have']);
+      for (let i = 0; i < Math.min(8, folk.length); i++) { const q = rpick(s, folk); q.opinion = clamp((q.opinion || 0) - 5, -100, 100); remember(s, q, 'Heard that ' + lie + '.', -4); }
+      foulAdd(s, 'rumour', tw, p.name + ' started the story in ' + townName(tw) + ' that ' + lie + '.');
+      rlog(s, 'A story is going round ' + townName(tw) + ' that ' + lie + '. It is not true, but some believe it. Who started it?', 'bad');
+    } else if (k === 'charge') {
+      const cand = ws.filter(W => W.town === 'hearthmoor' ? !!s.justice : !!(s.courts && s.courts[W.town])).filter(W => !W.w.held);
+      if (!cand.length) return;
+      const W = rpick(s, cand), C = W.town === 'hearthmoor' ? s.justice : s.courts[W.town], w = W.w, an = w.name.split(' ')[0], value = 8 + Math.floor(rrand(s) * 12);
+      const c = newCase(s, 'theft', { accused: w.id, accuser: p.id, victim: p.id, value, where: empById(mine[0].id).name, truth: 'lie', thief: null, what: value + 'c said to be taken from ' + p.name, claim: p.name + ' says ' + w.name + ' stole ' + value + 'c from ' + (sexOf(p) === 'f' ? 'her' : 'him') + '.' }, C === s.justice ? undefined : C);
+      c.hidden = [{ text: an + ' was at work all that evening; three people say so.', w: -3 }, { text: p.name.split(' ')[0] + ' is your rival, and ' + an + ' works for you.', w: -2 }];
+      foulAdd(s, 'charge', W.town, p.name + ' accused ' + w.name + ' of a theft that never happened, to hurt you.', { caseId: c.id, court: C.id });
+      rlog(s, p.name + ' has accused ' + w.name + ', who works at ' + W.at + ', of stealing ' + value + 'c. If ' + an + ' is convicted, you lose. See the case in Justice.', 'bad');
+    } else if (k === 'plot') {
+      const Rm = s.realm; Rm.support.lords = clamp(Rm.support.lords - 4, 0, 100);
+      foulAdd(s, 'plot', 'crownmere', p.name + ' paid lords in secret to turn against your crown.');
+      rlog(s, 'Some of the lords have grown cold toward your crown. Someone has been at work among them.', 'bad');
+    } else if (k === 'court') {
+      const Rm = s.realm; Rm.support.lords = clamp(Rm.support.lords - 2, 0, 100);
+      rlog(s, p.name + ' spoke against you before the lords at court, and some of them listened.', 'bad');
+    }
+  }
+  // price wars end: did you hold your custom?
+  function rivalWars(s, R, p) {
+    for (const w of R.wars.slice()) {
+      if (s.day < w.until) continue;
+      R.wars = R.wars.filter(x => x !== w);
+      const tb = s.biz[w.theirs]; if (!tb || tb.owner !== p.id) continue;
+      let won;
+      if (w.shop) { const sh = (s.shops || []).find(x => x.id === w.shop); if (!sh) continue; won = sh.price <= w.fair; }
+      else { const yb = s.biz[w.yours]; if (!yb || yb.owner !== 'player') continue; won = yb.prices === 'cheap' || avg(yb.profits || [0]) >= avg(tb.profits || [0]); }
+      contest(s, won, 'war', won ? 'You held your custom in the price war with ' + p.name + ' at ' + empById(tb.id).name + '.' : 'You lost the price war with ' + p.name + ' at ' + empById(tb.id).name + ': your custom went to ' + (sexOf(p) === 'f' ? 'her' : 'him') + '.');
+    }
+  }
+  // a false charge is heard: convicted, they win; dismissed, you do, and people start to ask who brought it
+  function rivalCases(s, R, p) {
+    for (const f of R.foul) {
+      if (f.kind !== 'charge' || f.settled) continue;
+      const C = f.court === 'hearthmoor' || !f.court ? s.justice : s.courts && s.courts[f.court]; if (!C) { f.settled = true; continue; }
+      const c = (C.closed || []).find(x => x.id === f.caseId); if (!c && (C.cases || []).some(x => x.id === f.caseId)) continue;
+      f.settled = true; const A = s.people[c ? c.accused : null], nm = A ? A.name : 'your worker';
+      if (c && c.verdict === 'guilty') contest(s, false, 'charge', nm + ' was convicted on ' + p.name + '’s word. It was a lie, and you know it.');
+      else { if (rrand(s) < 0.5) f.found = true; contest(s, true, 'charge', 'The charge against ' + nm + ' came to nothing.' + (f.found ? ' People are saying ' + p.name + ' made it up.' : '')); }
+    }
+  }
+  // the rival leaves: every seat they held falls vacant, and what they owned passes on
+  function stripOffices(s, p) {
+    if (p.job && p.job.type === 'office') { const off = p.job.office; p.job = null; if (off === 'lord' && s.offices.lord === p.id) replaceLord(s, p.name + ' has gone'); else if (s.offices[off] === p.id) { s.offices[off] = null; if (off === 'elder' && s.gov) govLog(s, 'The Elder’s chair stands empty. The moot will choose.', 'story'); } }
+    if (s.offices.elder === p.id) s.offices.elder = null;
+    if (s.gov) s.gov.council = s.gov.council.filter(x => x !== p.id);
+    for (const id in (s.towns || {})) { const T = s.towns[id]; if (T.mayor === p.id) { T.mayor = null; T.nextVote = s.day + 1; } T.council = T.council.filter(x => x !== p.id); }
+    const Rm = s.realm;
+    if (Rm) {
+      for (const id in Rm.regions) if (Rm.regions[id].lord === p.id) { Rm.regions[id].lord = null; vacantSeat(s, id); }
+      for (const k of Object.keys(COUNCIL)) if (Rm.council[k] === p.id) Rm.council[k] = noble(s, { name: nameForNoble(s), age: 50, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[k] + ' in place of ' + p.name + '.' }).id;
+    }
+  }
+  function rivalLeave(s, p, why) {
+    stripOffices(s, p);
+    if (p.job) loseJob(s, p, why);
+    p.status = 'left'; PVER++; moveOut(s, p, why); settleLeaver(s, p); s.agents = s.agents.filter(a => a.pid !== p.id); plog(s, p, why);
+  }
+  function rivalEnd(s, how, text) {
+    const R = s.rival, p = s.people[R.pid];
+    if (p) { p.rival = false; if (how === 'allied') { R.allies = (R.allies || []).concat(p.id); p.ally = true; if (s.ppl && s.ppl.key[p.id]) s.ppl.key[p.id].goal = 'ally'; } }
+    if (p && ['beaten', 'bought', 'exposed'].includes(how) && p.status === 'here') rivalLeave(s, p, { beaten: 'Gave up the rivalry with ' + s.name + ' and left.', bought: 'Sold out to ' + s.name + ' and left to start again elsewhere.', exposed: 'Left in disgrace after their tricks were exposed.' }[how]);
+    R.past.unshift({ n: R.n, pid: R.pid, name: p ? p.name : 'Your rival', how, d: s.day, since: R.since, won: R.won, lost: R.lost }); if (R.past.length > 12) R.past.length = 12;
+    if (s.ppl && s.ppl.key[R.pid] && how !== 'allied') delete s.ppl.key[R.pid];
+    for (const sh of s.shops || []) { delete sh.war; delete sh.warMul; }
+    for (const b of Object.values(s.biz || {})) if (b.undercut && b.undercut.by === R.pid) delete b.undercut;
+    R.pid = null; R.court = null; R.wars = []; R.camp = {}; R.quiet = s.day + 20 + Math.floor(rrand(s) * 15);
+    if (how === 'beaten' || how === 'bought' || how === 'exposed' || how === 'allied') { s.rec.rivals = s.rec.rivals || {}; s.rec.rivals[how] = (s.rec.rivals[how] || 0) + 1; deed(s, 0, how === 'allied' ? 2 : 4, 'the rivalry with ' + (p ? p.name : 'your rival')); }
+    event(s, text + ' (Another rival will rise in time.)', how === 'died' || how === 'gone' ? 'info' : 'story');
+    R.log.unshift({ d: s.day, x: text, k: 'story' });
+  }
+  // what you can learn, prove and offer
+  function rivalPrice(s, R, p) {
+    const own = ownedBy(s, p.id), worth = own.reduce((a, b) => a + bizPrice(s, b.id), 0) + Math.max(0, p.purse) + rivalRung(s, p) * 120;
+    return Math.round((own.length ? worth : 40 + Math.max(0, p.purse)) * (0.9 + R.nerve / 100));
+  }
+  function pactScore(s, R, p) { return (p.opinion || 0) / 2 + (60 - R.nerve) / 1.5 + (yourRung(s) - rivalRung(s, p)) * 12 + proofOf(R) * 10; }
+  function rivalCmd(s, name, a, b) {
+    const R = s.rival, here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    if (name === 'pRivalBreak') { const q = s.people[a]; if (!q || !isAlly(s, q)) return fail('They are not your ally.'); R.allies = R.allies.filter(x => x !== q.id); q.ally = false; wrong(s, q, 30, 'You broke your pact with them.', { raw: true }); deed(s, -3, 0, 'a broken pact'); return ok('You end the pact with ' + q.name + '. They will not forget it.'); }
+    if (!R || !R.pid) return fail('You have no rival just now.');
+    const p = s.people[R.pid]; if (!p || p.status !== 'here') return fail('Your rival is gone.');
+    const nm = p.name, sub = sexOf(p) === 'f' ? 'she' : 'he', obj = sexOf(p) === 'f' ? 'her' : 'him';
+    switch (name) {
+      case 'pRivalDig': {   // ask around for proof of their foul play
+        if (R.dug === s.day) return fail('You have asked around today. Try again tomorrow.');
+        if (s.coins < 8) return fail('It takes 8c in ale and favours.');
+        const open = R.foul.filter(f => !f.found && f.town === here), secretHere = R.secret && !R.secret.known && townOf(p) === here;
+        spend(s, 8); R.dug = s.day; skillUse(s, 'speech', 2);
+        if (!open.length && !secretHere) return ok('Nobody in ' + townName(here) + ' has anything on ' + nm + '. ' + (R.foul.some(f => !f.found) ? 'Try the towns where ' + sub + ' has been making trouble.' : 'Perhaps there is nothing to find yet.'));
+        const chance = 0.3 + skillLv(s, 'speech') / 300 + (setupFolk(s).fame || 0) / 400;
+        if (rrand(s) > chance) return ok('You buy a few rounds and hear a lot of talk, but nothing you could prove. Try again another day.');
+        if (open.length) { const f = open[0]; f.found = true; return ok('Someone talks: ' + f.x + ' Now you can prove it. (Proof: ' + proofOf(R) + ')'); }
+        R.secret.known = true; return ok('Someone who knew ' + nm + ' before tells you: ' + nm + ' ' + PPL_SECRETS[R.secret.k] + '. (Proof: ' + proofOf(R) + ')');
+      }
+      case 'pRivalExpose': {   // b: court | town
+        const pr = proofOf(R); if (pr < 2) return fail('You need more proof first: at least two things you can show (you have ' + pr + ').');
+        if (b === 'court') {
+          if (s.day - (R.heard || -99) < 10) return fail('The court heard you on day ' + R.heard + '. It will not hear the same complaint again so soon.');
+          R.heard = s.day; const conv = pr >= 3 || rrand(s) < 0.65;
+          if (!conv) { R.nerve = Math.min(100, R.nerve + 10); deed(s, -1, 0, 'a failed case against ' + nm); return fail('The court hears your case against ' + nm + ' and finds it not proved. ' + nm + ' walks out smiling. Find more proof and try again.'); }
+          const fine = Math.min(Math.max(0, p.purse), 60 * pr); p.purse -= fine;
+          rivalEnd(s, 'exposed', 'The court finds ' + nm + ' guilty: ' + R.foul.filter(f => f.found).map(f => FOUL_NAME[f.kind].toLowerCase()).concat(R.secret.known ? [nm + ' ' + PPL_SECRETS[R.secret.k]] : []).join('; ') + '. ' + nm + ' is fined ' + fine + 'c, stripped of every office, and leaves in disgrace. Your rival is exposed.');
+          return ok(nm + ' is convicted and gone.');
+        }
+        if (b === 'town') {
+          if (s.day - (R.told || -99) < 5) return fail('You told the town only lately.');
+          R.told = s.day; const tw = townOf(p);
+          p.rep = Math.max(0, (p.rep || 0) - 30);
+          if (s.ppl) for (const id in s.ppl.key) { const K = s.ppl.key[id]; for (const k in K.backs) if (K.backs[k] === p.id) delete K.backs[k]; }
+          R.nerve = Math.max(0, R.nerve - 35); R.acted = s.day - 99;   // they will strike back at once if they can
+          deed(s, 1, 2, 'exposing ' + nm);
+          if (R.nerve <= 0) { rivalEnd(s, 'exposed', 'You lay out what ' + nm + ' has done before the whole of ' + townName(tw) + '. No one will deal with ' + obj + ' now, and ' + sub + ' leaves. Your rival is exposed.'); return ok(nm + ' is finished.'); }
+          rlog(s, 'You tell ' + townName(tw) + ' what ' + nm + ' has done. People turn their backs, and ' + nm + '’s friends fall away (' + nerveWord(R.nerve).toLowerCase() + ').', 'good');
+          return ok('It is out. ' + nm + ' is badly shaken, but not finished.');
+        }
+        return fail('To the court, or to the town?');
+      }
+      case 'pRivalPact': {
+        if (s.day - R.offerDay < 7) return fail(nm + ' gave you an answer on day ' + R.offerDay + '. Wait a few days.');
+        R.offerDay = s.day; const sc = pactScore(s, R, p);
+        if (sc < 25) { R.nerve = Math.min(100, R.nerve + 4); return fail(nm + ' laughs. Why would ' + sub + ' join you now? (' + (R.nerve >= 55 ? sub.charAt(0).toUpperCase() + sub.slice(1) + ' thinks ' + sub + ' is winning.' : 'Shake ' + obj + ' more, rise above ' + obj + ', or win ' + obj + ' over first.') + ')'); }
+        p.opinion = Math.max(p.opinion || 0, 20);
+        rivalEnd(s, 'allied', nm + ' takes your hand. From today you are allies, not rivals: ' + sub + ' will not stand against you, ' + sub + ' and those who depend on ' + obj + ' will back you, and ' + sub + ' will speak well of you. Wrong ' + obj + ' and the pact ends.');
+        return ok('An alliance.');
+      }
+      case 'pRivalBuy': {
+        const price = rivalPrice(s, R, p);
+        if (R.nerve >= 80) return fail(nm + ' will not sell: ' + sub + ' thinks ' + sub + ' is winning. Shake ' + obj + ' first.');
+        if (s.coins < price) return fail('Buying ' + nm + ' out costs ' + price + 'c.');
+        spend(s, price); s.rec.invested += price; p.purse += price;
+        const own = ownedBy(s, p.id), names = own.map(b => empById(b.id).name);
+        for (const bz of own) { bz.owner = 'player'; bz.staff = bz.staff.filter(x => x.pid !== p.id); if (p.home === 'biz:' + bz.id) p.home = null; delete bz.undercut; s.rec.bizBought++; }
+        rivalEnd(s, 'bought', 'You buy ' + nm + ' out for ' + price + 'c' + (names.length ? ': ' + names.join(', ') + (names.length === 1 ? ' is' : ' are') + ' yours now' : '') + '. ' + nm + ' takes the coin and leaves to start again far from here.');
+        return ok('Bought out.');
+      }
+    }
+    return fail('Unknown.');
+  }
+  // the rival, for the book
+  function rivalView(s) {
+    const R = s.rival; if (!R) return null;
+    const allies = (R.allies || []).map(id => s.people[id]).filter(q => q && q.status === 'here').map(q => ({ pid: q.id, name: q.name, what: occupation(s, q) }));
+    const past = (R.past || []).map(x => Object.assign({}, x));
+    if (!R.pid) return { active: false, quiet: R.quiet, allies, past, log: R.log.slice(0, 10) };
+    const p = s.people[R.pid]; if (!p) return { active: false, quiet: R.quiet, allies, past, log: R.log.slice(0, 10) };
+    const tgt = R.court && s.people[R.court.pid], Y = you(s);
+    return { active: true, pid: p.id, name: p.name, sex: sexOf(p), age: p.age, town: townOf(p), what: occupation(s, p), rung: rivalRung(s, p), yourRung: yourRung(s), purse: p.purse, rep: Math.round(p.rep || 0),
+      owns: ownedBy(s, p.id).map(b => empById(b.id).name + ' (' + townName(b.town) + ')'), office: officeOf(s, p), nerve: Math.round(R.nerve), nerveWord: nerveWord(R.nerve), won: R.won, lost: R.lost, since: R.since,
+      contests: R.contests.slice(0, 8), proof: proofOf(R), found: R.foul.filter(f => f.found).map(f => ({ d: f.d, x: f.x, kind: FOUL_NAME[f.kind] })), unfound: R.foul.filter(f => !f.found).map(f => townName(f.town)),
+      secret: R.secret && R.secret.known ? p.name + ' ' + PPL_SECRETS[R.secret.k] + '.' : null,
+      court: tgt ? { name: tgt.name, theirs: Math.round(R.court.f), yours: Math.round(Y.court[tgt.id] || 0), stage: Y.love && Y.love[tgt.id] ? Y.love[tgt.id].stage : null } : null,
+      wars: R.wars.map(w => ({ until: w.until, at: empById(w.theirs).name, fair: w.fair })), price: rivalPrice(s, R, p), canBuy: R.nerve < 80, pact: Math.round(pactScore(s, R, p)), offerDay: R.offerDay, dug: R.dug === s.day,
+      log: R.log.slice(0, 10), allies, past, RUNG_NAME };
+  }
+
   const api = {
+    setupRival, rivalDay, rivalView, yourRung, rivalRung, RUNG_NAME, FOUL_NAME, isRival, isAlly, proofOf, rivalPrice, pactScore, contest, rivalMove, bizPrice, nerveWord,
     farFolk, farOne, roadFolk, routinePlan, FAR_IN, FAR_KEY, FAR_KID, FAR_BODY, FAR_MOVING, FAR_KIN, ROAD_NAME,
     setupPpl, pplOf, crowdOf, notables, stanceOf, blocOf, patronOf, pickKey, pplDay, riot, keyAct, risers, keyCap, PPL_SECRETS, CROWD_WORD, youGovern, officeOf, raceTown,
     GRANT_PRICE, VILLAGE_MILESTONES, amendsCost, bribeCost, WEALTH, LAND, BIZ_TOWN_PRICE, spotMul, prestigeIds, isPrestige, setupFolk, folkDay, wrong, kindness, deed, hateStep, hateIdx, HATE_STEPS, FAIR_WAGE, fairWage, PRICE_MODES, moralName, moralWord, fameName, fameTarget, yourTitle, regardOf, nemeses, nemWhere, confrontOpts, threatOdds, authOver, yourGuards, fightOf, willWork, AUDIENCE, townOwnership, DENS, isForeign, warGrief, leaveTown, temperOf, townName,

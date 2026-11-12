@@ -4964,7 +4964,7 @@ const SECTIONS = [
   ['today', 'Today', [['tasks', 'Tasks'], ['goals', 'Goals'], ['calendar', 'Calendar']]],
   ['money', 'Money', [['ledger', 'Ledger'], ['jobs', 'Work']]],
   ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
-  ['people', 'People', [['people', 'Townsfolk'], ['notables', 'Of note'], ['family', 'Family']]],
+  ['people', 'People', [['people', 'Townsfolk'], ['notables', 'Of note'], ['rival', 'Rival'], ['family', 'Family']]],
   ['you', 'You', [['skills', 'Skills'], ['gear', 'Gear'], ['renown', 'Your name']]],
   ['power', 'Power', [['office', 'Your office'], ['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
 ];
@@ -5000,7 +5000,7 @@ function renderBook(turn) {
   const c0 = Sim.calendar(G);
   $('bkhead').innerHTML = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}</nav><span class="bkstat num" title="Time stands still while the book is open"><b>${money(G.coins)}</b><small>${c0.dom} ${c0.monthName} \u00b7 paused</small></span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
   const subs = '';
-  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   keepPlace(pg, y); turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -5293,6 +5293,8 @@ function ageBadge(pr) { const f = Sim.sexOf(pr) === 'f'; return `<span class="ag
 function wedBadge(s, pr) {
   if (pr.kid) return '';
   const Y = Sim.you(s), sp = pr.spouse && s.people[pr.spouse], L = Y.love && Y.love[pr.id];
+  if (Sim.isRival(s, pr)) return `<span class="wedbadge" style="background:#8e2b22;color:#f6e8c8">your rival</span>`;
+  if (Sim.isAlly(s, pr)) return `<span class="wedbadge court">your ally</span>`;
   if (pr.spouse === Y.pid) return `<span class="wedbadge you">your ${Sim.sexOf(pr) === 'f' ? 'wife' : 'husband'}</span>`;
   if (sp) return `<span class="wedbadge wed">married${sp.status === 'here' ? ' to ' + esc(sp.name.split(' ')[0]) : ''}</span>`;
   if (L && L.stage === 'betrothed') return `<span class="wedbadge court">betrothed to you</span>`;
@@ -5480,6 +5482,35 @@ function crowdBox(s, town) {
   if (C.riot) h += `<p class="why"><b>Last riot, day ${C.riot.day}:</b> ${esc(C.riot.text)}</p>`;
   if (C.heat >= 30) h += `<div class="acts">${B_('Hand out bread · ' + cost + 'c', ['pCrowd', town, 'bread'], 'alt', s.coins < cost)}${B_('Speak in the square' + (here ? '' : '<small>go there first</small>'), ['pCrowd', town, 'speak'], 'alt', !here)}${Sim.youGovern(s, town) ? B_('Send out the watch<small>quiet now, hated later</small>', ['pCrowd', town, 'watch'], 'warn') : ''}</div>`;
   return h + '</div>';
+}
+/* Stage V: your rival, and how to deal with them */
+function pageRival(s) {
+  const V = Sim.rivalView(s); let h = `<h3>Your Rival</h3>`;
+  const past = V && V.past.length ? `<h4>Rivals before</h4><ul class="plog">${V.past.map(x => `<li>${esc(x.name)}: ${esc({ beaten: 'beaten, and left', bought: 'bought out, and left', exposed: 'exposed, and left in disgrace', allied: 'became your ally', died: 'died', gone: 'left' }[x.how] || x.how)} on day ${x.d} (you won ${x.won} of ${x.won + x.lost} contests)</li>`).join('')}</ul>` : '';
+  const allies = V && V.allies.length ? `<h4>Your allies</h4><div class="box">${V.allies.map(a => `<p><b>${esc(a.name)}</b>, ${esc(a.what.charAt(0).toLowerCase() + a.what.slice(1))}. Will not stand against you, and backs you at the vote.</p><div class="acts">${B_('Their story', ['ui', 'person', a.pid], 'alt')}${UI.confirm === 'break' + a.pid ? B_('Yes, end the pact', ['pRivalBreak', a.pid], 'warn') : B_('End the pact', ['ui', 'confirm', 'break' + a.pid], 'alt')}</div>`).join('')}</div>` : '';
+  if (!V || !V.active) return h + `<p class="lead">No one stands against you just now.${V && V.quiet ? ' It will not stay that way: someone new will rise to meet you before long.' : ''}</p>${allies}${past}`;
+  const he = V.sex === 'f' ? 'She' : 'He', him = V.sex === 'f' ? 'her' : 'him', here = (Sim.townAt(s.player.x, s.player.z) || 'hearthmoor');
+  h += `<p class="lead">${esc(V.name)} wants what you want. ${he} competes with you for shops, workers, votes, love and the favour of the courts, fairly and sometimes not. Win the contests and ${V.sex === 'f' ? 'her' : 'his'} resolve breaks; or buy ${him} out, expose ${him}, or make ${him} an ally.</p>`;
+  h += `<div class="box"><h5>${esc(V.name)}, ${V.age}</h5><p class="why">${esc(V.what)} · ${esc(Sim.townName(V.town))}</p>
+    <dl class="kv"><dt>Where ${he.toLowerCase()} stands</dt><dd>${esc(V.RUNG_NAME[V.rung])}</dd><dt>Where you stand</dt><dd>${esc(V.RUNG_NAME[V.yourRung])}</dd><dt>Contests won</dt><dd>You ${V.won}, ${he.toLowerCase()} ${V.lost}</dd><dt>Resolve</dt><dd class="${V.nerve < 30 ? 'good' : V.nerve >= 75 ? 'bad' : ''}">${esc(V.nerveWord)}</dd></dl>${progressBar(V.nerve / 100)}
+    <p><b>Owns:</b> ${V.owns.length ? esc(V.owns.join(', ')) : 'nothing yet'}.${V.office ? ' <b>Holds:</b> ' + esc(V.office) + '.' : ''} <b>Purse:</b> about ${Math.round(V.purse / 10) * 10}c.</p>
+    <div class="acts">${B_('Their story', ['ui', 'person', V.pid], 'alt')}${B_('Find them', ['ui', 'findPerson', V.pid], 'alt')}</div></div>`;
+  // what is being fought over right now
+  const live = [];
+  for (const w of V.wars) live.push(`<li><b>Price war at ${esc(w.at)}</b> until day ${w.until}. ${w.fair ? 'Sell at ' + w.fair + 'c or less to win it.' : 'Set your prices there to Cheap, or out-earn them, to win it.'}</li>`);
+  if (V.court) live.push(`<li><b>${esc(V.name)} is courting ${esc(V.court.name)}</b> too: ${V.court.theirs} of 100 to your fondness of ${V.court.yours}. Be betrothed first.</li>`);
+  if (live.length) h += `<h4>Contests now</h4><ul class="plog">${live.join('')}</ul>`;
+  // proof
+  h += `<h4>What you can prove</h4><div class="box"><p>${V.proof ? 'You can prove ' + V.proof + ' thing' + (V.proof === 1 ? '' : 's') + '. Two is enough to try; three and no court will doubt you.' : 'Nothing yet.'}</p>${V.found.length ? `<ul class="plog">${V.found.map(f => `<li>Day ${f.d}: ${esc(f.x)}</li>`).join('')}</ul>` : ''}${V.secret ? `<p>And: ${esc(V.secret)}</p>` : ''}
+    <p class="why">${V.unfound.length ? 'People in ' + esc([...new Set(V.unfound)].join(' and ')) + ' know more than they have said.' : 'If ' + he.toLowerCase() + ' has played foul, nobody is talking yet.'} Ask around where it happened.</p>
+    <div class="acts">${B_('Ask around · 8c<small>in ' + esc(Sim.townName(here)) + '</small>', ['pRivalDig'], 'alt', V.dug || s.coins < 8)}${B_('Take it to the court', ['pRivalExpose', null, 'court'], '', V.proof < 2)}${B_('Tell the town', ['pRivalExpose', null, 'town'], 'alt', V.proof < 2)}</div></div>`;
+  // terms
+  h += `<h4>Make terms</h4><div class="box"><p><b>Buy ${him} out</b> for ${V.price}c: ${V.owns.length ? 'everything ' + he.toLowerCase() + ' owns becomes yours, and ' : ''}${he.toLowerCase()} leaves to start again elsewhere. ${V.canBuy ? '' : he + ' thinks ' + he.toLowerCase() + ' is winning and will not sell yet.'}</p>
+    <p><b>Offer a pact</b>: ${he.toLowerCase()} stops competing and backs you instead. ${V.pact >= 25 ? he + ' might well take it.' : he + ' would laugh at it today: shake ' + him + ', rise above ' + him + ', or win ' + him + ' over first.'}</p>
+    <div class="acts">${UI.confirm === 'rbuy' ? B_('Yes, pay ' + V.price + 'c', ['pRivalBuy'], 'warn', s.coins < V.price) : B_('Buy ' + him + ' out · ' + V.price + 'c', ['ui', 'confirm', 'rbuy'], '', !V.canBuy || s.coins < V.price)}${B_('Offer a pact', ['pRivalPact'], 'alt', s.day - V.offerDay < 7)}</div></div>`;
+  if (V.contests.length) h += `<h4>Contests so far</h4><ul class="plog">${V.contests.map(c => `<li class="${c.youWon ? 'pos' : 'neg'}">Day ${c.d}: ${esc(c.x)}</li>`).join('')}</ul>`;
+  if (V.log.length) h += `<h4>What ${he.toLowerCase()} has been doing</h4><ul class="plog">${V.log.map(l => `<li>Day ${l.d}: ${esc(l.x)}</li>`).join('')}</ul>`;
+  return h + allies + past;
 }
 function pageNotables(s) {
   const [town, pick] = townPick(s), TN = TOWN_NAMES[town], L = Sim.notables(s, town), X = Sim.setupPpl(s);
@@ -5782,6 +5813,7 @@ function taskList(s) {
     if (Sim.isRuler(s) && F.aud.length) out.push({ who: 'The throne room', title: F.aud.length === 1 ? 'A petitioner waits to be heard' : F.aud.length + ' petitioners wait to be heard', note: 'Each brings a choice, kind or cold. Left a week, they go away bitter.', act: B_('Hold court', ['ui', 'throne']) });
     if (F.ambush) { const q = s.people[F.ambush.pid]; out.push({ who: 'A warning', title: F.ambush.kind === 'assassin' ? 'Someone has hired a blade against you' : 'Someone has paid thugs to beat you', note: (q ? q.name + ' paid for it. ' : '') + 'Face them first, keep guards close, or stay off the roads and out of the streets at night.', act: B_('Your enemies', ['page', 'renown']) }); }
   }
+  { const V = Sim.rivalView(s); if (V && V.active) { for (const w of V.wars) out.push({ who: 'Your rival, ' + V.name, title: 'Win the price war at ' + w.at, note: (w.fair ? 'Sell at ' + w.fair + 'c or less' : 'Set your prices there to Cheap, or out-earn them') + ' until day ' + w.until + '.', act: B_('Rival', ['page', 'rival']) }); if (V.court && V.court.stage !== 'betrothed') out.push({ who: 'Your rival, ' + V.name, title: 'Win ' + V.court.name + ' first', note: V.name + ' is at ' + V.court.theirs + ' of 100. Be betrothed before that reaches 100.', act: B_('Rival', ['page', 'rival']) }); } }
   if (s.elect) for (const r of Sim.upcomingRaces(s).filter(r => r.open && r.you)) out.push({ who: 'Your campaign', title: (r.poll === s.day ? 'Today at noon: the vote for ' : 'Day ' + r.poll + ', noon: the vote for ') + Sim.raceLabel(r), note: 'Be at ' + Sim.venueName(r) + ' when the votes are counted. Speak in the town once a day until then.', act: go(Sim.raceVenue(r).loc, 'Go to ' + Sim.venueName(r)) });
   if (v.shortage) out.push({ who: 'The village', title: 'Refill the granary: ' + v.granary + ' of ' + v.granaryNeed + ' grain', note: 'Until it is full, villagers buy less at every shop.', act: go('granary', 'Go to the granary') });
   if (v.dispute != null && (v.council || s.offices.elder === 'player')) out.push({ who: 'The council', title: 'Settle the dispute before the council', note: Sim.DISPUTES[v.dispute].text, act: go('hall', 'Go to the Village Hall') });
@@ -8095,6 +8127,15 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.88', date: '12 November', title: 'The rival', items: [
+    'You are not the only one with plans. Someone climbs down from the carter\u2019s wagon with you, with the same few coins: your rival. With a chosen start they begin where you do: a merchant against a merchant, a lord against a lord.',
+    'Your rival lives by the same rules as everyone: a real job, real businesses bought from their owners, real votes. They keep pace with you, and never get more than a step ahead.',
+    'They compete with you in five ways. A price war at a shop beside yours (match their price to win it). An offer to your workers (fair pay and loyalty keep them). Standing against you at every vote they can. Calling on whoever you court (be betrothed first, or they marry them). And in the courts.',
+    'They fight fair, and sometimes foul: bought votes, lies spread in a town, whispers to the one you court, a false charge against one of your workers. Every foul move can be dug up later.',
+    'Four ways to end it. Beat them: every contest you win shakes their resolve, and when it breaks they leave. Buy them out: everything they own becomes yours. Expose them: ask around where they played foul, then take the proof to the court or the town. Or offer a pact, and they become your ally.',
+    'After a quiet spell, someone new rises to meet you where you stand. An ally stays your ally unless you wrong them.',
+    'A new page: People, Rival. Live contests also show on the Tasks page. Your old save gets a rival at your level when you load it.'
+  ] },
   { v: '0.87', date: '12 November', title: 'One living map', items: [
     'There is one map now. Pinch out while you walk and the camera lifts over the street, then the town, then the kingdom, then both kingdoms and the sea between them. Pinch in over yourself and you are walking again. The minimap and the zoom buttons do the same.',
     'The old parchment chart is gone. Far out you see the real land in the painted look: coasts, rivers, roads, woods, and every town as its own roofs and walls, with its name. Tap a name to fly there.',
