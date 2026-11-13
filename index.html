@@ -11289,25 +11289,14 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   const BANK_SITE = {};
   function bankSite(t) {
     if (BANK_SITE[t] !== undefined) return BANK_SITE[t];
-    const L0 = LAYOUT[t], mk = LOCS[MARKET_AT[t]]; if (!L0 || !mk) return (BANK_SITE[t] = null);
-    const taken = [];
-    for (const b of L0.biz || []) taken.push([b.x, b.z, 12.5]); for (const h of L0.houses || []) taken.push([h.x, h.z, h.tall ? 11.5 : 10.5]);
-    for (const k in LOCS) { const q = LOCS[k]; if (q.town === t && !q.bank) taken.push([q.x, q.z, (q.r || 3) + 6]); }
-    for (const k of ['hall', 'keep', 'church', 'guildhall', 'castle', 'cathedral', 'palace', 'customs', 'alcazar', 'estate', 'lighthouse', 'shipyard', 'fountain']) { const q = L0[k]; if (q && q.x != null) taken.push([q.x, q.z, 16]); }
-    for (const m of L0.mansions || []) taken.push([m.x, m.z, 12]);
-    const clear = (x, z) => taken.every(([a, b, r]) => Math.hypot(x - a, z - b) >= r) && (!L0.inside || L0.inside(x, z)) && (!L0.riverDist || L0.riverDist(x, z) > 9) && (!L0.lakeDist || L0.lakeDist(x, z) > 9) && (L0.shoreX == null || x < L0.shoreX - 8) && (L0.quayX == null || Math.abs(x - L0.quayX) > 8);
-    const streetAt = (x, z) => { let best = null; for (const st of L0.streets || []) { const pts = st.pts || st; for (let i = 1; i < pts.length; i++) { const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1], l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1, u = clamp(((x - ax) * (bx - ax) + (z - az) * (bz - az)) / l2, 0, 1), px = ax + (bx - ax) * u, pz = az + (bz - az) * u, d = Math.hypot(x - px, z - pz); if (!best || d < best.d) best = { d, px, pz, w: st.w || 3 }; } } return best; };
-    let site = null;
-    const roomAt = (x, z) => Math.min(...taken.map(([a, b, r]) => Math.hypot(x - a, z - b) - r + 8));
-    for (let r = 14; r <= 120 && !site; r += 4) for (let k = 0; k < 28 && !site; k++) {
-      const a = k / 28 * Math.PI * 2 + r * 0.37, x = mk.x + Math.cos(a) * r, z = mk.z + Math.sin(a) * r; if (!clear(x, z)) continue;
-      const st = streetAt(x, z); if (!st || st.d < st.w / 2 + 5.5 || st.d > st.w / 2 + 10) continue;
-      site = { x, z, face: Math.atan2(st.px - x, st.pz - z) };
-    }
-    if (!site && L0.spare && L0.spare.length) {   // a crowded town: the roomiest spare plot, set a little back from the street
-      const sp = L0.spare.slice().sort((a, b) => roomAt(b.x, b.z) - roomAt(a.x, a.z))[0]; site = { x: sp.x - Math.sin(sp.face) * 1.2, z: sp.z - Math.cos(sp.face) * 1.2, face: sp.face, room: roomAt(sp.x, sp.z) };
-    }
-    if (site) { site.door = { x: site.x + Math.sin(site.face) * 5.2, z: site.z + Math.cos(site.face) * 5.2 }; LOCS['bank:' + t] = { x: site.door.x, z: site.door.z, r: 3.2, name: BANK_NAME[t].replace(/^the /, 'The '), town: t, bank: t }; }
+    // a bank takes a plot in the row: the tall house nearest the market square, on its street, in line with its neighbours.
+    // The family that lives there keeps the rooms above it. Smaller towns have an empty counting house on the same kind of plot.
+    const L0 = LAYOUT[t], mk = LOCS[MARKET_AT[t]]; if (!L0 || !mk || !(L0.houses || []).length) return (BANK_SITE[t] = null);
+    const hs = L0.houses.map((h, i) => ({ h, i, d: Math.hypot(h.x - mk.x, h.z - mk.z) })).sort((a, b) => a.d - b.d);
+    const pick = hs.slice(0, 10).find(q => q.h.tall) || hs[0], h = pick.h;
+    h.bank = true;
+    const site = { x: h.x, z: h.z, face: h.face, hi: pick.i, door: { x: h.x + Math.sin(h.face) * 4.6, z: h.z + Math.cos(h.face) * 4.6 } };
+    LOCS['bank:' + t] = { x: site.door.x, z: site.door.z, r: 2.6, name: BANK_NAME[t].replace(/^the /, 'The '), town: t, bank: t };
     return (BANK_SITE[t] = site);
   }
   for (const t of Object.keys(LAYOUT)) bankSite(t);
@@ -12534,6 +12523,7 @@ function tradeHouse(f, trade, i, o) {
 }
 /* ----- town houses in many shapes: a seeded mix so no street repeats itself ----- */
 function townHouse(f, h, i, o) {
+  if (h.bank) return;   // this plot is the town's bank (or its empty counting house), drawn on its own
   o = o || {};
   const STONE = o.stone || '#9a948a', STONE2 = o.stone2 || '#8b877c', SLATE = o.slate || '#3f4a5a', TILE = o.tile || '#7a3f2b';
   const r = ((i * 2654435761) >>> 0) / 4294967296, r2 = ((i * 40503 + 7919) % 1000) / 1000;
@@ -13100,6 +13090,7 @@ const CROPS = [
   const bd = at(H.board.x, H.board.z, Math.PI); box(bd, BEAMS, -0.8, 1, 0, 0.12, 2, 0.12); box(bd, BEAMS, 0.8, 1, 0, 0.12, 2, 0.12); box(bd, '#7a5634', 0, 1.5, 0, 1.9, 1, 0.08); box(bd, '#e8dcbc', -0.3, 1.5, 0.06, 0.5, 0.5, 0.02);
   // cottages, thatched and limewashed, a few larger farmhouses
   H.houses.forEach((h, i) => {
+    if (h.bank) return;
     const f = at(h.x, h.z, h.face);
     if (h.tall) { cottage(f, { w: 7, d: 5, h: 3, wall: WALLS[(i + 2) % 4], roof: THATCH[i % 4], yard: false, door: '#3b2a1c', rh: 2.6 }); box(f, '#6b4a2e', 4.6, 1.1, -0.5, 2.4, 2.2, 3.6); roofOn(f, [4, 2.8, 1.1], THATCH[(i + 1) % 4], 4.6, 2.2, -0.5, Math.PI / 2); }
     else cottage(f, { w: 5.2, d: 4.2, h: 2.3, wall: WALLS[i % 4], roof: THATCH[(i + 1) % 4], yard: false, door: ['#3b2a1c', '#5a3a28', '#2f4f6a', '#4f6b3a'][i % 4] });
@@ -14431,7 +14422,7 @@ const VAL_SOLIDS = (function () {
 })();
 const ISLE_SOLIDS = (function () { const I = Sim.ISLE, out = []; for (let a = 0; a < Math.PI * 2; a += 0.05) out.push({ c: 1, x: I.x + Math.cos(a) * 50, z: I.z + Math.sin(a) * 50 / 1.3, r: 1.6 }); out.push({ c: 1, x: I.x - 12, z: I.z, r: 5.6 }, { c: 1, x: I.x + 30, z: I.z - 22, r: 3 }); return out; })();
 function solidsNow(s) {
-  const out = staticSolids.slice(); out.push(...STAGE_SOLIDS); out.push(...BankHouses.solids);
+  const out = staticSolids.slice(); out.push(...STAGE_SOLIDS);
   out.push(...tileSolidsNear(s.player.x, s.player.z));
   if (Math.hypot(s.player.x - TOWNS.greenhaven.x, s.player.z - TOWNS.greenhaven.z) < TOWNS.greenhaven.r + 60) out.push(...GH_SOLIDS, ...GH_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.crownmere.x, s.player.z - TOWNS.crownmere.z) < TOWNS.crownmere.r + 40) { const px = s.player.x, pz = s.player.z; out.push(...CM_SOLIDS.filter(o => Math.abs(o.x - px) < 60 && Math.abs(o.z - pz) < 60), ...CM_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
@@ -18704,32 +18695,34 @@ function bankCard(d, people) {
   else if (open) h += B_('Speak with the banker', ['page', 'bank']);
   return h + B_('Step outside', ['ui', 'leave'], 'alt') + '</div>';
 }
-const BankHouses = { key: '', group: null, t: 0, solids: [] };
-function bankMesh(site, mine) {
+const BankHouses = { key: '', group: null, t: 0 };
+function bankMesh(site, mine, open) {
   const parts = [], gy = groundH(site.x, site.z), f = site.face;
   const Mx = (x, y, z, w, h, d, ry) => { const c = Math.cos(f), sn = Math.sin(f); return new THREE.Matrix4().compose(new THREE.Vector3(site.x + x * c + z * sn, gy + y, site.z - x * sn + z * c), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, f + (ry || 0), 0)), new THREE.Vector3(w, h, d)); };
   const Bx = (col, x, y, z, w, h, d, ry) => parts.push({ geo: G_BOX, color: col, m: Mx(x, y, z, w, h, d, ry) });
   const Cy = (col, x, y, z, r, h) => parts.push({ geo: G_CYL, color: col, m: Mx(x, y, z, r, h, r), smooth: true });
-  const STONE = '#b9b2a2', STONE2 = '#9a948a', SLATE = '#3f4a5a', GOLD = '#c9a24a';
-  Bx(STONE2, 0, 0.25, 0, 9.6, 0.5, 8.4); Bx(STONE, 0, 2.9, -0.4, 8.4, 4.8, 6.4);                     // plinth and hall
-  Bx(STONE2, 0, 0.55, 4.0, 5.2, 0.14, 1.2); Bx(STONE2, 0, 0.42, 4.5, 5.6, 0.14, 1.2);              // steps
-  [-2.7, -0.9, 0.9, 2.7].forEach(x => { Cy(STONE, x, 2.7, 3.4, 0.32, 4.4); Bx(STONE2, x, 0.62, 3.4, 0.9, 0.24, 0.9); Bx(STONE2, x, 4.95, 3.4, 0.9, 0.2, 0.9); });   // columns
-  Bx(STONE2, 0, 5.3, 1.4, 9.0, 0.5, 5.0); Bx(STONE, 0, 5.9, 3.3, 8.6, 0.9, 0.5);                    // entablature
-  Bx(SLATE, 0, 6.5, -0.4, 9.2, 0.5, 7.2); Bx(SLATE, 0, 7.0, -0.4, 6.4, 0.5, 6.0); Bx(SLATE, 0, 7.45, -0.4, 3.4, 0.4, 4.8);   // stepped roof
-  Bx('#3a2a1c', 0, 1.7, 2.82, 1.5, 2.6, 0.12); Bx(GOLD, 0.5, 1.7, 2.9, 0.1, 0.1, 0.06);              // the door
-  Bx(mine ? '#2f6b3a' : '#2b4a7a', 0, 5.9, 3.58, 4.2, 0.6, 0.06); Bx(GOLD, 0, 5.9, 3.62, 0.5, 0.5, 0.04); Bx(GOLD, -1.3, 5.9, 3.62, 0.9, 0.1, 0.04); Bx(GOLD, 1.3, 5.9, 3.62, 0.9, 0.1, 0.04);   // the sign: a coin between two bars
-  [-2.8, 2.8].forEach(x => [-1.6, 0.8].forEach(z => { Bx('#2a2622', x > 0 ? 4.22 : -4.22, 3.0, z, 0.06, 1.6, 0.9); for (let k = -1; k <= 1; k++) Bx('#57534c', x > 0 ? 4.26 : -4.26, 3.0, z + k * 0.28, 0.04, 1.6, 0.05); }));   // barred windows
+  const STONE = '#b9b2a2', STONE2 = '#9a948a', SLATE = '#3f4a5a', GOLD = '#c9a24a', W = 6.2;
+  Bx(STONE2, 0, 0.2, 0.2, W + 0.3, 0.4, 6.4); Bx(STONE, 0, 3.7, -0.5, W, 6.6, 4.8);                    // plinth, and two storeys of stone
+  Bx(STONE2, 0, 0.3, 3.5, 3.4, 0.2, 0.8);                                                            // the step up from the street
+  [-2.4, -0.8, 0.8, 2.4].forEach(x => { Cy(STONE, x, 2.3, 2.6, 0.26, 3.8); Bx(STONE2, x, 0.5, 2.6, 0.7, 0.2, 0.7); Bx(STONE2, x, 4.25, 2.6, 0.7, 0.16, 0.7); });   // four columns
+  Bx(STONE2, 0, 4.55, 1.3, W + 0.2, 0.4, 3.4); Bx(STONE, 0, 5.05, 2.75, W, 0.6, 0.4);                  // the porch roof and its frieze
+  Bx(SLATE, 0, 7.2, -0.5, W + 0.5, 0.4, 5.4); Bx(SLATE, 0, 7.6, -0.5, W - 1.2, 0.4, 4.2);             // the roof
+  Bx('#3a2a1c', 0, 1.5, 1.93, 1.4, 2.4, 0.1); Bx(GOLD, 0.45, 1.5, 2.0, 0.1, 0.1, 0.05);              // the door
+  [-1.9, 0, 1.9].forEach(x => { Bx('#2a2622', x, 5.9, 1.92, 0.9, 1.1, 0.06); Bx(STONE2, x, 5.3, 1.96, 1.1, 0.1, 0.14); });   // the windows of the rooms above
+  [-2.2, 2.2].forEach(x => { Bx('#2a2622', x, 2.0, 1.92, 0.8, 1.3, 0.06); for (let k = -1; k <= 1; k++) Bx('#57534c', x + k * 0.24, 2.0, 1.97, 0.04, 1.3, 0.04); });   // barred windows beside the door
+  if (open) { Bx(mine ? '#2f6b3a' : '#2b4a7a', 0, 5.05, 2.97, 3.6, 0.44, 0.05); Bx(GOLD, 0, 5.05, 3.0, 0.36, 0.36, 0.04); Bx(GOLD, -1.1, 5.05, 3.0, 0.8, 0.08, 0.04); Bx(GOLD, 1.1, 5.05, 3.0, 0.8, 0.08, 0.04); }   // the sign: a coin between two bars
+  else { Bx('#6b4a2e', 0, 1.6, 2.0, 1.7, 0.22, 0.06, 0, 0, 0); Bx('#6b4a2e', 0, 1.1, 2.01, 1.7, 0.22, 0.06); [-2.2, 2.2].forEach(x => Bx('#6b4a2e', x, 2.0, 2.0, 1.0, 0.2, 0.06)); }   // boarded up
   const m = new THREE.Mesh(mergeColored(parts), vc); m.castShadow = true; m.receiveShadow = true; return m;
 }
 function syncBankHouses(s, dt) {
   BankHouses.t -= dt; if (BankHouses.t > 0) return; BankHouses.t = 1.5;
-  const towns = s && s.people ? Object.keys(Sim.BANK_SITE).filter(t => Sim.BANK_SITE[t] && (Sim.BANK_TOWNS.includes(t) ? !(s.bank && !Sim.bankIn(s, t)) : Sim.bankIn(s, t))) : [];
-  const key = towns.map(t => t + (s.bank && s.bank.mine && s.bank.mine.town === t ? '*' : '')).join('|');
+  const towns = Object.keys(Sim.BANK_SITE).filter(t => Sim.BANK_SITE[t]);
+  const st = t => !s || !s.people ? (Sim.BANK_TOWNS.includes(t) ? 'o' : 'x') : s.bank && s.bank.mine && s.bank.mine.town === t ? 'm' : (s.bank ? Sim.bankIn(s, t) : Sim.BANK_TOWNS.includes(t)) ? 'o' : 'x';
+  const key = towns.map(t => t + st(t)).join('|');
   if (key === BankHouses.key) return; BankHouses.key = key;
   if (BankHouses.group) { scene.remove(BankHouses.group); BankHouses.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
-  const g = BankHouses.group = new THREE.Group(); scene.add(g); BankHouses.solids = [];
-  for (const t of towns) { const site = Sim.BANK_SITE[t]; g.add(bankMesh(site, key.includes(t + '*'))); BankHouses.solids.push({ c: 1, x: site.x, z: site.z, r: 4.4 }); }
-  solidKey = '';
+  const g = BankHouses.group = new THREE.Group(); scene.add(g);
+  for (const t of towns) g.add(bankMesh(Sim.BANK_SITE[t], st(t) === 'm', st(t) !== 'x'));
 }
 function frameBody(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -18750,7 +18743,8 @@ function frameBody(now) {
   if (UI.overlay !== 'map' && document.body.classList.contains('mapping')) { document.body.classList.remove('mapping'); $('mapui').hidden = true; UI.mapPid = null; }   // something else took the screen while the map was up
   lmFrame(now, t);
   if (G) Mini.update(dt);
-  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); syncBizSigns(G, dt); syncBankHouses(G, dt); }
+  if (G && UI.mode === 'play') { syncSkylines(focus.x, focus.z); syncWaypoint(); syncBizSigns(G, dt); }
+  syncBankHouses(G && UI.mode === 'play' ? G : null, dt);
   uiTimer -= dt;
   if (uiTimer <= 0 && UI.mode === 'play') { uiTimer = 0.2; hud(G); if (!UI.overlay || UI.overlay === 'map') renderCard(false); }
   if (FIGHT.on && G && G.fight) poseFight(dt, t);
@@ -19044,7 +19038,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.12.2159';
+const BUILD = '2026.11.12.2207';
 const NOTES = [
   { v: '0.91', date: '12 November', title: 'The banks', items: [
     'Banks in Oakbridge, Crownmere, Eastwatch, Dawnport and Valdor, each kept by a named banker who remembers how you paid.',

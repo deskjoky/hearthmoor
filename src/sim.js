@@ -10425,25 +10425,14 @@
   const BANK_SITE = {};
   function bankSite(t) {
     if (BANK_SITE[t] !== undefined) return BANK_SITE[t];
-    const L0 = LAYOUT[t], mk = LOCS[MARKET_AT[t]]; if (!L0 || !mk) return (BANK_SITE[t] = null);
-    const taken = [];
-    for (const b of L0.biz || []) taken.push([b.x, b.z, 12.5]); for (const h of L0.houses || []) taken.push([h.x, h.z, h.tall ? 11.5 : 10.5]);
-    for (const k in LOCS) { const q = LOCS[k]; if (q.town === t && !q.bank) taken.push([q.x, q.z, (q.r || 3) + 6]); }
-    for (const k of ['hall', 'keep', 'church', 'guildhall', 'castle', 'cathedral', 'palace', 'customs', 'alcazar', 'estate', 'lighthouse', 'shipyard', 'fountain']) { const q = L0[k]; if (q && q.x != null) taken.push([q.x, q.z, 16]); }
-    for (const m of L0.mansions || []) taken.push([m.x, m.z, 12]);
-    const clear = (x, z) => taken.every(([a, b, r]) => Math.hypot(x - a, z - b) >= r) && (!L0.inside || L0.inside(x, z)) && (!L0.riverDist || L0.riverDist(x, z) > 9) && (!L0.lakeDist || L0.lakeDist(x, z) > 9) && (L0.shoreX == null || x < L0.shoreX - 8) && (L0.quayX == null || Math.abs(x - L0.quayX) > 8);
-    const streetAt = (x, z) => { let best = null; for (const st of L0.streets || []) { const pts = st.pts || st; for (let i = 1; i < pts.length; i++) { const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1], l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1, u = clamp(((x - ax) * (bx - ax) + (z - az) * (bz - az)) / l2, 0, 1), px = ax + (bx - ax) * u, pz = az + (bz - az) * u, d = Math.hypot(x - px, z - pz); if (!best || d < best.d) best = { d, px, pz, w: st.w || 3 }; } } return best; };
-    let site = null;
-    const roomAt = (x, z) => Math.min(...taken.map(([a, b, r]) => Math.hypot(x - a, z - b) - r + 8));
-    for (let r = 14; r <= 120 && !site; r += 4) for (let k = 0; k < 28 && !site; k++) {
-      const a = k / 28 * Math.PI * 2 + r * 0.37, x = mk.x + Math.cos(a) * r, z = mk.z + Math.sin(a) * r; if (!clear(x, z)) continue;
-      const st = streetAt(x, z); if (!st || st.d < st.w / 2 + 5.5 || st.d > st.w / 2 + 10) continue;
-      site = { x, z, face: Math.atan2(st.px - x, st.pz - z) };
-    }
-    if (!site && L0.spare && L0.spare.length) {   // a crowded town: the roomiest spare plot, set a little back from the street
-      const sp = L0.spare.slice().sort((a, b) => roomAt(b.x, b.z) - roomAt(a.x, a.z))[0]; site = { x: sp.x - Math.sin(sp.face) * 1.2, z: sp.z - Math.cos(sp.face) * 1.2, face: sp.face, room: roomAt(sp.x, sp.z) };
-    }
-    if (site) { site.door = { x: site.x + Math.sin(site.face) * 5.2, z: site.z + Math.cos(site.face) * 5.2 }; LOCS['bank:' + t] = { x: site.door.x, z: site.door.z, r: 3.2, name: BANK_NAME[t].replace(/^the /, 'The '), town: t, bank: t }; }
+    // a bank takes a plot in the row: the tall house nearest the market square, on its street, in line with its neighbours.
+    // The family that lives there keeps the rooms above it. Smaller towns have an empty counting house on the same kind of plot.
+    const L0 = LAYOUT[t], mk = LOCS[MARKET_AT[t]]; if (!L0 || !mk || !(L0.houses || []).length) return (BANK_SITE[t] = null);
+    const hs = L0.houses.map((h, i) => ({ h, i, d: Math.hypot(h.x - mk.x, h.z - mk.z) })).sort((a, b) => a.d - b.d);
+    const pick = hs.slice(0, 10).find(q => q.h.tall) || hs[0], h = pick.h;
+    h.bank = true;
+    const site = { x: h.x, z: h.z, face: h.face, hi: pick.i, door: { x: h.x + Math.sin(h.face) * 4.6, z: h.z + Math.cos(h.face) * 4.6 } };
+    LOCS['bank:' + t] = { x: site.door.x, z: site.door.z, r: 2.6, name: BANK_NAME[t].replace(/^the /, 'The '), town: t, bank: t };
     return (BANK_SITE[t] = site);
   }
   for (const t of Object.keys(LAYOUT)) bankSite(t);
