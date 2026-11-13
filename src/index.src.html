@@ -4984,7 +4984,7 @@ const SECTIONS = [
   ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
   ['people', 'People', [['people', 'Townsfolk'], ['notables', 'Of note'], ['rival', 'Rival'], ['family', 'Family']]],
   ['you', 'You', [['skills', 'Skills'], ['gear', 'Gear'], ['renown', 'Your name']]],
-  ['power', 'Power', [['office', 'Your office'], ['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
+  ['power', 'Power', [['office', 'Your office'], ['court', 'Court'], ['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
 ];
 const TABS = SECTIONS.flatMap(x => x[2]);
 const sectionOf = k => (SECTIONS.find(x => x[2].some(y => y[0] === k)) || (k === 'manage' ? SECTIONS[2] : SECTIONS[0]));
@@ -5018,7 +5018,7 @@ function renderBook(turn) {
   const c0 = Sim.calendar(G);
   $('bkhead').innerHTML = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}</nav><span class="bkstat num" title="Time stands still while the book is open"><b>${money(G.coins)}</b><small>${c0.dom} ${c0.monthName} \u00b7 paused</small></span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
   const subs = '';
-  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, bank: pageBank, purse: pagePurse, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, bank: pageBank, court: pageCourt, purse: pagePurse, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, tasks: pageTasks }[UI.tab])(G);
   keepPlace(pg, y); turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -5569,6 +5569,77 @@ function pagePurse(s) {
     ${live.length ? `<p><b>Under way:</b> ${live.map(d => esc(d.title) + (d.due ? ' (day ' + d.due + ')' : '')).join('; ')}</p>` : ''}${done.length ? `<ul class="plog">${done.map(d => `<li>${esc(d.result)}</li>`).join('')}</ul>` : ''}</div>`;
   h += `<h4>Titles</h4><ul class="plog">${Sim.WEALTH_STEPS.map((x, i) => `<li class="${i <= W.i ? 'pos' : ''}">${esc(x.t[Sim.you(s).sex === 'f' ? 1 : 0])}: ${x.w}c, and ${esc(Sim.standingWord(x.st, 0).toLowerCase())} at home${i <= W.i ? ' ✓' : ''}</li>`).join('')}</ul>`;
   return h;
+}
+/* ----- the court: posts, houses, secrets and claims (Stage IX) ----- */
+function pageCourt(s) {
+  const V = Sim.powView(s); if (!V) return `<h3>Court</h3><p class="lead">There is no court to speak of yet.</p>`;
+  const tab = UI.courtTab || 'posts', open = UI.courtOpen, cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+  const tick = n => `<li class="${n.ok ? 'pos' : 'neg'}">${n.ok ? '✓' : '✗'} ${esc(n.text)}</li>`, all = L => L.every(n => n.ok);
+  let h = `<h3>Court</h3><p class="lead">Who holds what, what the great houses think of you, what you know, and what you could claim.</p>`;
+  h += `<div class="box"><dl class="kv"><dt>Your power</dt><dd><b>${esc(V.word)}</b></dd></dl>${progressBar(V.score / 100)}<small class="why">${esc(V.armsWord)} · favour at court ${V.favour}${V.convicted ? ' · convicted ' + (V.convicted === 1 ? 'once' : V.convicted + ' times') : ''}</small></div>`;
+  if (V.gaol) h += `<div class="box"><h5>In the cells</h5><p>You are held at ${esc(Sim.townName(V.gaol.town))} until day ${V.gaol.until}: ${esc(V.gaol.why)}.</p></div>`;
+  if (V.demand) { const D = V.demand;
+    h += `<div class="box"><h5>${esc(D.who)} knows something</h5><p>${esc(D.who)} has learned that ${esc(D.text)}, and wants <b>${D.coin}c</b> to keep quiet. You have until day ${D.until}.</p>
+      <div class="acts">${B_('Pay ' + D.coin + 'c', ['powAnswer', 'pay'], '', s.coins < D.coin)}${B_('Refuse, and let it out', ['powAnswer', 'defy'], 'warn')}${D.lev ? B_('Answer with what you know of them', ['powPress', D.pid, 'quiet'], 'alt', !D.levHere) : ''}</div>
+      <p class="why">Paid, they keep the secret and may ask again. Refused, it comes out: an office got or used wrongly is lost, and blackmail goes before the magistrate.${D.lev && !D.levHere ? ' You hold a secret of theirs: say so to their face, where they live.' : ''}</p></div>`; }
+  h += `<div class="seg" role="group" aria-label="Court pages">${[['posts', 'Posts'], ['houses', 'Houses'], ['secrets', 'Secrets'], ['claims', 'Claims']].map(([k, n]) => `<button type="button" aria-pressed="${tab === k}" data-c='${JSON.stringify(['ui', 'courtTab', k])}'>${n}</button>`).join('')}</div>`;
+  if (tab === 'posts') {
+    const row = (P, seat) => { const isOpen = open === P.k;
+      let r = `<div class="box"><div class="acts">${B_(esc(P.name) + '<small>' + (P.mine ? 'yours' : esc(P.holder || 'empty')) + (seat ? '' : ' · ' + esc(Sim.townName(P.town)) + ' · ' + P.pay + 'c a day') + '</small>', ['ui', 'courtOpen', isOpen ? null : P.k], P.mine ? '' : 'alt')}</div>`;
+      if (!isOpen) return r + '</div>';
+      r += `<p>${esc(P.power)}</p>`;
+      if (P.mine) { r += `<div class="acts">${B_(esc(P.abuse) + '<small>+' + P.take + 'c</small>', ['powAbuse', P.k], 'warn', !P.canAbuse)}${seat ? '' : B_('Give up the post', ['powQuit', P.k], 'alt')}</div><p class="why">${P.abuseDay ? 'The books are being looked at until day ' + P.abuseDay + '. ' : ''}Milking the office pays, and leaves a secret someone may find. If it comes out you lose the office.</p>`; return r + '</div>'; }
+      if (seat) return r + `<p class="why">Abused, it could: ${esc(P.abuse.toLowerCase())}. Council seats are won on the Run for office page.</p></div>`;
+      if (V.canName) { r += `<p class="why">You can name someone to this post, or put ${esc(P.holder || 'the holder')} out.</p><div class="acts">${V.nameable.map(q => B_('Name ' + esc(q.name), ['powAppoint', P.k, q.pid], 'alt')).join('') || `<span class="hintline">Nobody of note in ${esc(V.hereName)} is free to take it.</span>`}${B_('Dismiss', ['powDismiss', P.k], 'warn')}</div>`; if (V.ruler) return r + '</div>'; }
+      r += `<p><b>What it takes:</b></p><ul class="plog">${P.common.map(tick).join('')}</ul><p>And one of three ways in:</p>
+        <ul class="plog">${P.favour.map(tick).join('')}</ul><div class="acts">${B_('Ask it as a favour', ['powSeek', P.k, 'favour'], 'alt', !all(P.common.concat(P.favour)))}</div>
+        <ul class="plog">${P.coin.map(tick).join('')}</ul><div class="acts">${B_('Buy the place', ['powSeek', P.k, 'coin'], 'alt', !all(P.common.concat(P.coin)))}</div>
+        <ul class="plog">${P.arms.map(tick).join('')}</ul><div class="acts">${B_('Ask it as a soldier', ['powSeek', P.k, 'arms'], 'alt', !all(P.common.concat(P.arms)))}</div>
+        <p class="why">${P.lev ? 'You hold a secret of ' + esc(P.holder) + ': on the Secrets page you could make them stand aside.' : 'A secret of ' + esc(P.holder || 'the holder') + ' would be a fourth way.'} Abused, it could: ${esc(P.abuse.toLowerCase())}.</p>`;
+      return r + '</div>'; };
+    const mine = V.posts.filter(p => p.mine), rest = V.posts.filter(p => !p.mine);
+    if (mine.length) h += `<h4>Yours</h4>` + mine.map(p => row(p)).join('');
+    if (V.dueTowns.length) h += `<h4>Dues</h4><div class="box">${V.dueTowns.map(t => `<div class="setting"><span>${esc(t.name)}</span><div class="seg" role="group">${Object.keys(Sim.DUES).map(d => `<button type="button" aria-pressed="${t.dues === d}" data-c='${JSON.stringify(['powDues', t.t, d])}'>${Sim.DUES[d]}</button>`).join('')}</div></div>`).join('')}<p class="why">High dues bring in coin and make the traders resent you, and a hungry town angrier. Low dues cost you and warm the town.</p></div>`;
+    if (V.lic && open !== 'lic') h += `<h4>Licences in ${esc(V.hereName)}</h4><div class="box"><div class="acts">${B_('Show the ' + V.lic.length + ' licensed traders', ['ui', 'courtOpen', 'lic'], 'alt')}</div></div>`;
+    else if (V.lic) h += `<h4>Licences in ${esc(V.hereName)}</h4><div class="box">${V.lic.map(b => `<div class="staffrow"><span><b>${esc(b.name)}</b>${b.rival ? ' <span class="pill">your rival’s</span>' : ''}<br><small>${esc(b.owner)}${b.shut ? ' · shut until day ' + b.shut : ''}</small></span><div class="acts">${b.shut ? B_('Give it back', ['powLicence', b.id, 'grant'], 'alt') : B_('Take the licence', ['powLicence', b.id, 'revoke'], 'warn', !!V.licWait)}</div></div>`).join('') || '<p class="why">Nobody else trades here.</p>'}<p class="why">A business without its licence is shut for fourteen days. Done without cause, the town notices${V.licWait ? '. One at a time: the next can be taken on day ' + V.licWait : ''}.</p></div>`;
+    if (V.prisoners) h += `<h4>Pardons</h4><div class="box">${V.prisoners.map(p => `<div class="staffrow"><span><b>${esc(p.name)}</b><br><small>${esc(p.at)}: ${esc(p.why || '')}</small></span><div class="acts">${B_('Pardon', ['powPardon', p.pid], 'alt')}</div></div>`).join('') || '<p class="why">The cells of Alderwyn are empty.</p>'}</div>`;
+    if (V.canBank) h += `<h4>Banks</h4><div class="box"><p>Grant a charter where there is only an empty counting house${V.ruler ? '' : ' (1500c to the crown)'}:</p><div class="acts">${V.charterTowns.map(t => B_(esc(t.name), ['powCharter', t.t], 'alt')).join('') || '<span class="hintline">Every town that could have a bank has one.</span>'}</div><p>Break a bank by the crown’s order:</p><div class="acts">${V.breakTowns.map(t => B_(esc(cap(t.name)), ['powBreak', t.t], 'warn')).join('')}</div><p class="why">Its savers lose what they kept there, the town blames you, and anything you owe it falls due at once.</p></div>`;
+    h += `<h4>Posts of the realm</h4>` + rest.map(p => row(p)).join('');
+    h += `<h4>The council</h4>` + V.seats.map(p => row(p, true)).join('');
+  } else if (tab === 'houses') {
+    h += `<p class="why">One number for each house, and the reason for it. Loyal houses lean every vote your way and stand behind a claim. A ruler’s house that turns cold breaks away, and can be brought back.</p>`;
+    h += V.houses.map(H => `<div class="box"><dl class="kv"><dt>${esc(H.lord)} <small>\u00b7 ${esc(H.region)}</small></dt><dd><b>${esc(H.word)}</b></dd></dl>${progressBar(H.loy / 100)}<small class="why">${esc(H.why)}${H.fear ? ' Held by fear until day ' + H.fear + '.' : ''}</small>
+      <div class="acts">${H.state === 'broken' && V.ruler ? B_('Offer terms<small>' + H.termsCost + 'c from the treasury</small>', ['powTerms', H.id], '') + B_('March on them', ['powMarch', H.id], 'warn') : B_('Bring a gift<small>' + H.giftCost + 'c</small>', ['powGift', H.id], 'alt', !H.canGift || s.coins < H.giftCost)}${H.lev ? B_('You hold their secret', ['ui', 'courtTab', 'secrets'], 'alt') : ''}</div></div>`).join('') || '<div class="box"><p>No lord but you holds land in Alderwyn.</p></div>';
+    h += `<p class="why">A gift is taken in person, once in ten days. A good name in their town, a marriage, a name at arms, or a secret held over them all move a house. So does what their lord thinks of you.</p>`;
+  } else if (tab === 'secrets') {
+    h += `<h4>Your agents</h4><div class="box">${V.agents.map(a => `<div class="staffrow"><span><b>${esc(a.name)}</b><br><small>since day ${a.since}</small></span><div class="acts">${B_('Pay off', ['powAgent', a.t, 'off'], 'alt')}</div></div>`).join('') || '<p>You have nobody listening for you.</p>'}
+      <div class="acts">${B_('Hire an agent in ' + esc(V.hereName) + (V.agentFree ? '' : '<small>40c, then 3c a day</small>'), ['powAgent', V.here], 'alt', V.agentHere || V.agents.length >= V.agentCap)}</div><p class="why">${V.agents.length} of ${V.agentCap}. An agent reports every few days: a secret, or that there is none to find. Now and then one is caught, and names you.</p></div>`;
+    h += `<h4>What you know</h4>` + (V.known.map(K => { let r = `<div class="box"><h5>${esc(K.name)}${K.office ? ' <small>' + esc(K.office) + '</small>' : ''}</h5><p>${esc(cap(K.name.split(' ')[0]))} ${esc(K.what)}.</p>`;
+      if (K.exposed) return r + `<p class="why">It is out in the open: there is no leverage in it now.</p>${V.canLaw && K.crime && !K.done && !K.held ? `<div class="acts">${B_('Fine them', ['powSentence', K.pid, 'fine'], 'alt')}${B_('Send to the cells', ['powSentence', K.pid, 'prison'], 'warn')}</div>` : ''}</div>`;
+      r += `<p class="why">${K.here ? 'About ' + K.odds + ' in 100 would give in' + (K.pressed ? ', less each time you ask (asked ' + K.pressed + ')' : '') + '. The rest go to the magistrate: blackmail is a crime, and you could be fined, shamed, or locked up.' : 'Leverage is used face to face, in ' + esc(Sim.townName(K.town)) + '.'}</p>
+        <div class="acts">${B_('Demand coin', ['powPress', K.pid, 'coin'], 'warn', !K.here || K.wait)}${K.house ? B_('Demand loyalty', ['powPress', K.pid, 'loyal'], 'warn', !K.here || K.wait) : ''}${K.post && !V.ruler ? B_('Make them stand aside', ['powPress', K.pid, 'post'], 'warn', !K.here || K.wait) : ''}${K.canBack ? B_('Demand their backing', ['powPress', K.pid, 'back'], 'warn', !K.here || K.wait) : ''}${B_('Say it openly', ['powExpose', K.pid], 'alt')}</div>
+        <p class="why">Said openly it hurts them and cannot hurt you, but then you hold nothing.</p></div>`; return r; }).join('') || '<div class="box"><p>You know nothing that would hurt anyone. Ask about people of note in their own town, or set an agent to listen.</p></div>');
+    h += `<h4>Start a rumour</h4><div class="box"><div class="acts">${V.keysHere.map(q => B_(esc(q.name) + (q.office ? '<small>' + esc(q.office) + '</small>' : ''), ['powRumour', q.pid], 'alt', V.rumourWait || s.coins < 30)).join('') || `<span class="hintline">Nobody of note lives in ${esc(V.hereName)}.</span>`}</div><p class="why">30c to loose tongues. It needs no truth and always costs them standing. About one in four is traced back to you.</p></div>`;
+    h += `<h4>Your own secrets</h4><div class="box">${V.mine.map(m => `<p>${esc(cap(m.text))}. <small class="why">${m.held ? 'Known to ' + esc(m.held) + '.' : 'Nobody has found it. Day ' + m.day + '.'}</small></p>`).join('') || '<p>You have nothing to hide.</p>'}<p class="why">Buying a post, milking an office, blackmail and paid lies each leave one. Enemies look for them. A Spymaster on your side keeps them better hidden.</p></div>`;
+  } else {
+    h += `<p class="why">A claim comes by blood, by marriage, or by recognition. It counts in every vote for the seat, and a strong one can be pressed: the houses, the town and your own strength decide.</p>`;
+    h += V.claims.map(C => { let r = `<div class="box"><h5>${esc(C.name)}</h5><p>Held by ${esc(C.holder)}.</p>`; if (C.mine) return r + '</div>';
+      r += C.claims.length ? `<ul class="plog">${C.claims.map(c => `<li class="pos">By ${c.by} (${c.str}): ${esc(c.why)}</li>`).join('')}</ul>` : `<p class="why">You have no claim to it.</p>`;
+      r += `<dl class="kv"><dt>Strength of your claim</dt><dd><b>${C.str}</b> of ${C.need} needed to press</dd></dl>`;
+      if (!C.recog) r += (UI.courtOpen === 'c:' + C.on ? `<p>Recognised by the houses:</p><ul class="plog">${C.houses.map(tick).join('')}</ul><div class="acts">${B_('Have it recognised', ['powRecognise', C.on, 'houses'], 'alt', !all(C.houses))}</div><p>Or for your name at arms:</p><ul class="plog">${C.arms.map(tick).join('')}</ul><div class="acts">${B_('Be recognised as a soldier', ['powRecognise', C.on, 'arms'], 'alt', !all(C.arms))}</div>` : `<div class="acts">${B_('Seek recognition', ['ui', 'courtOpen', 'c:' + C.on], 'alt')}</div>`);
+      r += `<div class="acts">${B_('Press your claim', ['powClaim', C.on], '', C.str < C.need || !!C.wait)}</div>${C.wait ? `<p class="why">Pressed and answered. Not again before day ${C.wait}.</p>` : ''}`;
+      return r + '</div>'; }).join('');
+    h += `<p class="why">Blood: your house held the seat before you. Marriage: you married into the house that holds it. Lose a pressed claim and the court’s favour falls, and the holder does not forget.</p>`;
+  }
+  if (V.log.length) h += `<h4>Lately</h4><ul class="plog">${V.log.slice(0, 6).map(l => `<li>Day ${l.d}: ${esc(l.x)}</li>`).join('')}</ul>`;
+  return h;
+}
+function serveTime() {   // prison is days lost: they pass at once, and you walk out into the square
+  const g = G && G.pow && G.pow.gaol; UI.serving = false; if (!g) return;
+  let n = 0; while (G.pow.gaol && n++ < 24 * 14) Sim.advance(G, 60);
+  if (UI.inside) Interior.leave();
+  const T = Sim.LOCS[Sim.MARKET_AT[g.town]]; if (T) { const p = G.player; p.x = T.x; p.z = T.z; p.dest = null; p.action = null; p.moving = false; }
+  drainEvents(); renderCard(true); if (UI.overlay === 'book') renderBook(true);
 }
 function pageRival(s) {
   const V = Sim.rivalView(s); let h = `<h3>Your Rival</h3>`;
@@ -7306,6 +7377,8 @@ function uiCmd(k, v) {
   if (k === 'court') { UI.court = v; UI.tab = 'justice'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
   if (k === 'fineTo') { UI.fineTo = v; renderBook(); return; }
   if (k === 'leaseTerm') { UI.leaseTerm = v; renderBook(); return; }
+  if (k === 'courtTab') { UI.courtTab = v; UI.courtOpen = null; renderBook(true); return; }
+  if (k === 'courtOpen') { UI.courtOpen = v; renderBook(); return; }
   if (k === 'btown') { UI.btown = v; UI.focus = null; UI.tab = 'shops'; if (UI.overlay !== 'book') openBook(); else renderBook(true); return; }
   if (k === 'ptown') { UI.ptown = v; renderBook(true); return; }
   if (k === 'tree') { UI.tree = v; UI.treeB = null; UI.tab = 'tree'; if (UI.overlay !== 'book') openBook('tree'); else renderBook(true); return; }
@@ -7426,6 +7499,7 @@ function renderDialog() {
   el.hidden = false;
 }
 function drainEvents() {
+  if (G && G.pow && G.pow.gaol && !UI.serving) { UI.serving = true; setTimeout(serveTime, 1500); }
   if (!G || !G.events.length) return;
   const fresh = G.events.slice(); G.events.length = 0;
   // spoken lines wait in a dialogue box until you tap on, so nothing has to be read in a hurry
@@ -8330,12 +8404,27 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.92', date: '12 November', title: 'Power and intrigue', items: [
+    'A new Court page under Power, with four parts: Posts, Houses, Secrets and Claims. It shows your power as a word and a bar.',
+    'Ten posts to hold: Market Warden of Greenhaven, Harbourmaster, Customs Collector, Mine Warden, Master of the Mint, Chief Magistrate, Ambassador, Royal Banker, Spymaster and Lord Steward (the ruler\u2019s right hand). Each has a named holder, a daily pay, a power, and a way to abuse it for coin.',
+    'Four ways into a post: favour at court, buying the place, your name at arms, or a secret held over whoever has it. All need a good name in the post\u2019s town. You can hold two.',
+    'New powers. Set market dues low, fair or high in the towns you answer for. Take a trader\u2019s licence and shut the business for fourteen days. As ruler or Lord Steward, name and dismiss officials. Pardon prisoners, and fine or lock up people whose crimes are public. As ruler or Royal Banker, grant a bank charter to a town with an empty counting house, or break a bank.',
+    'The houses. Every lord has one loyalty number toward you, shown as Loyal, Wavering or Cold with the reason. A good name in their town, gifts, marriage, a name at arms and what their lord thinks of you all move it. Loyal houses lean votes your way and stand behind a claim. If you rule, a cold house breaks away and stops paying tax until you offer terms or march.',
+    'Spies. Hire an agent in a town and reports come every few days: a secret, or word that there is none. Now and then one is caught and names you.',
+    'Secrets can now be used. Lean on someone for coin, loyalty, their backing in a vote, or to make them stand aside from a post. It is a real gamble: most give in and hate you for it, and the odds fall each time. The rest go to the magistrate, where blackmail is a crime: a fine, a worse name, and for a second offence the cells for some days. Or say the secret openly, which is safe and ends the leverage.',
+    'Start a rumour for 30c. It needs no truth and always hurts. About one in four is traced back to you.',
+    'Your own secrets. Buying a post, milking an office, blackmail and paid lies each leave one. Enemies may find it and name a price: pay, refuse and let it out, or answer with a secret of theirs.',
+    'Claims. A claim to a lordship or the crown comes by blood, by marriage, or by recognition (from the houses, or for your name at arms). It counts in every vote for that seat, and a strong one can be pressed.',
+    'Two roads up, meant to be equal: the schemer\u2019s (coin, agents, secrets) and the commander\u2019s (wars and fights won). Nobody is ever killed by intrigue: the worst is ruin, exile or prison, and you can come back from each.'
+  ] },
   { v: '0.91', date: '12 November', title: 'The banks', items: [
-    'Banks in Oakbridge, Crownmere, Eastwatch, Dawnport and Valdor, each kept by a named banker who remembers how you paid.',
-    'Walk in and borrow against a house, a shop or a business you own, and a little on your name alone. The rate (about half a percent to over one percent a day) depends on your reputation in that town and the banker\u2019s memory of you. You pay back every five days over thirty, out of your purse wherever you are, and can pay off early.',
+    'Banks in Oakbridge, Crownmere, Eastwatch, Dawnport and Valdor: a stone building with columns in the row beside each market, kept by a named banker who remembers how you paid. Walk in: there is a hall, a counter with clerks behind a brass grille, and the banker at a desk. Smaller towns have an empty counting house, boarded up.',
+    'Inside, you can borrow against a house, a shop or a business you own, and a little on your name alone. The rate (about half a percent to over one percent a day) depends on your reputation in that town and the banker\u2019s memory of you. You pay back every five days over thirty, out of your purse wherever you are, and can pay off early.',
     'Miss a payment and you are warned. Miss two and there is a fee and a dearer rate. Miss three and the bank takes what you pledged, sells it, keeps what you owed and gives you back the rest. You can carry on, and borrow again later on worse terms.',
     'The Ashford moneylender is still there for when you spend more than you have, at 1% to 3% a day. The Bank page can pay him off with a cheaper bank loan.',
-    'Become the bank. Found one in a town without a bank, or buy a town\u2019s bank. Set what it charges borrowers and pays savers; the town\u2019s savings come in as people trust it, and it lends to townsfolk, shopkeepers and lords. Some cannot pay. A bank short of coin can suffer a run: put coin in or call in loans, or it fails, and the town\u2019s savings and your coin are lost.',
+    'Becoming the bank is the work of a career. You must be a Merchant Prince, and a banker must trust you: a loan repaid in full, nothing ever seized. Then a 5,000c royal charter and 5,000c in the strongroom found a new bank in a town without one, or about 20,000c buys an existing one.',
+    'Your bank has a strongroom at the back. Go through the door behind the counter and your coin is there to look at, in piles and bars that grow and shrink with what the bank holds. Coin goes in and out in person.',
+    'Set what it charges borrowers and pays savers; the town\u2019s savings come in as people trust it, and it lends to townsfolk, shopkeepers and lords. Some cannot pay. A bank short of coin can suffer a run: put coin in or call in loans, or it fails, and the town\u2019s savings and your coin are lost.',
     'A crown short of coin will borrow from your bank. Once it owes you 1,500c you can forgive the debt for a seat on the royal council, a lordship, a law, or lower taxes, or call it in and empty the treasury. The king will not thank you.',
     'A new Bank page under Money, and your loans on the Purse page.'
   ] },

@@ -570,7 +570,7 @@
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
     if (s.people) guard(s, 'reputation was reckoned', () => repDay(s));
     if (s.people && s.towns) guard(s, 'the banks closed their books', () => bankDay(s));
-    if (s.people && s.towns && s.realm) guard(s, 'the court went about its business', () => powDay(s));
+    if (s.people && s.towns && s.realm && !s.powOff) guard(s, 'the court went about its business', () => powDay(s));
     guard(s, 'the businesses were reckoned', () => { renownDay(s); if (s.people) { dealsDay(s); wealthDay(s); } });
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
     entry.deals = st.deals || 0; entry.investors = st.investors || 0; entry.bank = st.bank || 0;
@@ -10657,6 +10657,7 @@
     return fail('Unknown.');
   }
   function bankDay(s) {
+    if (!s.bank && s.bankLazy) return;   // tests of other things keep the bankers out of the world until asked for
     setupBanks(s);
     loanDay(s); myBankDay(s);
   }
@@ -10749,7 +10750,7 @@
     const W = s.pow, H = W.houses[id], R = s.realm, Y = you(s), sp = Y && Y.spouse && s.people[Y.spouse], T = [];
     const add = (v, why) => { if (v) T.push({ v, why }); };
     add((lord.opinion || 0) * 0.3, (lord.opinion || 0) >= 0 ? 'thinks well of you' : 'thinks ill of you');
-    add((standing(s, id) - 30) * 0.25, standing(s, id) >= 50 ? 'your good name in ' + townName(id) : standing(s, id) >= 25 ? 'your name counts for little in ' + townName(id) : 'you are little known in ' + townName(id) + ', or ill thought of');
+    add((standing(s, id) - 30) * 0.25, standing(s, id) >= 50 ? 'your good name in ' + townName(id) : standing(s, id) >= 25 ? 'your name counts for little in ' + townName(id) : (s.folk && s.folk.moral < -15 ? 'you are ill thought of in ' : 'you are little known in ') + townName(id));
     add(H.gift || 0, 'remembers your gifts');
     if (sp && (sp.noble === id || (sp.parents || []).includes(lord.id) || sp.id === lord.id)) add(14, 'bound to you by marriage');
     add(Math.min(18, armsOf(s) * 0.3), 'respects your name at arms');
@@ -11125,6 +11126,7 @@
     if (isRuler(s)) n += 60; n += Math.min(1, yourSeats(s).length) * 22 + yourLordships(s).length * 16;
     for (const k of yourPosts(s)) n += [0, 4, 9, 18][POSTS[k].lvl];
     n += loyalHouses(s).length * 5 + Math.min(5, Object.keys((s.ppl || { key: {} }).key).filter(id => levOn(s, id)).length) * 4 + W.agents.length;
+    n += Math.min(12, armsOf(s) / 7);
     n += Math.max(0, ...claimSeats(s).map(on => youHoldSeat(s, on) ? 0 : claimStr(s, on))) * 2 + (s.bank && s.bank.mine ? 6 : 0);
     return Math.round(n);
   }
@@ -11152,7 +11154,7 @@
       demand: D && dm ? { who: dp ? dp.name : '?', pid: D.pid, coin: D.coin, until: D.until, text: dm.text, lev: !!(dp && levOn(s, dp.id)), levHere: !!(dp && levOn(s, dp.id) && levOn(s, dp.id).t === here) } : null,
       claims, gaol: W.gaol, convicted: W.convicted, log: W.log.slice(0, 12),
       charterTowns: canBank(s) ? Object.keys(BANK_SITE).filter(t => BANK_SITE[t] && inAlderwyn(t) && t !== 'hearthmoor' && !bankIn(s, t)).map(t => ({ t, name: townName(t) })) : [], breakTowns: canBank(s) && s.bank ? Object.keys(s.bank.banks).filter(t => inAlderwyn(t) && !(s.bank.mine && s.bank.mine.town === t)).map(t => ({ t, name: BANK_NAME[t] })) : [],
-      nameable: canName(s) ? notablesFor(s, here) : [] };
+      nameable: canName(s) ? notablesFor(s, here) : [], keysHere: Object.keys(X.key).map(id => s.people[id]).filter(p => p && p.status === 'here' && X.key[p.id].t === here && !yourFamily(s, p)).slice(0, 10).map(p => ({ pid: p.id, name: p.name, office: officeOf(s, p) })), rumourWait: W.rumoured > s.day - 5 };
   }
   function notablesFor(s, t) { const X = s.ppl; return Object.keys(X.key).map(id => s.people[id]).filter(p => p && p.status === 'here' && X.key[p.id].t === t && !p.post && !p.held && !p.kid && p.age >= 18 && p.id !== s.realm.king && !isRival(s, p)).slice(0, 8).map(p => ({ pid: p.id, name: p.name, feel: p.opinion || 0 })); }
 
@@ -11179,6 +11181,8 @@
     faults: () => FAULTS.slice(), setStrict: v => { STRICT = !!v; }, relation, bloodRelation, you, yourKids, yourHeirs, inheritPreview, canCourt, familyName, AGE_RATES, heirsOf, childrenOf, dies, born, marry, LAND_USES, NEW_COTTAGES, officerCandidates, managerCandidates, managerOf, STAGE, fare, roadDist, HORSE_PRICE, HORSE_SELL, STABLING, COACH_MPM, WALK_MPM, RIDE_MPM, sexOf, ECON, TOWN_GOODS, GOODS_BASE, goodsPrice, buyPrice, sellPrice, marketHere, MARKET_AT, townDemand, sellersOf, shopShare, alliesOf, deedsIn, totalDeeds, exileReady, setupFigures, REGIONS, COUNCIL, LAWS, regionLord, lordName, isRuler, yourLordships, yourSeats, computeSupport, supportOf, setupRealm, setupNewTown, IC, EW, COMFORT, marketOf, houseValue, leaseCandidates, STARTS, applyStart, seatName, yourSeat, yourHouse, yourTown, homeOfYou, houseShape, doorOf, CM, LAKE, CM_JOBS, setupCrownmere, GH, GREEN, GH_JOBS, LAYOUT, townFolk, setupGreenhaven, OAK, OAK_JOBS, FEES, tradeName, townOf, villagers, townAt, oakFolk, HOUSES, MILL, BIZ_SITES, TOWNS, ROADS, RIVER, WAYSTATION, RUIN, OAKGATE, relocate, cityLoad, _moveTo: moveTo, _separate: separate, initGov, holdMoot, electElder, replaceLord, seize, repTarget, thriftOf, councilNames, isHousehold, govLog, INTEREST, SEIZE_AT, CHEST_FLOOR
   };
   { const a0 = api.applyStart; api.applyStart = (s, m) => { REPX.quiet = true; try { return a0(s, m); } finally { REPX.quiet = false; } }; }   // how you begin is not a change in your name
+  // the tests of older systems were written for a world without bankers and courtiers in it: for them, new games start with both asleep
+  { let QUIET = false; const n0 = api.newGame; api.newGame = (...a) => { const s = n0(...a); if (QUIET) { s.powOff = true; s.bankLazy = true; } return s; }; api.setQuietWorld = v => { QUIET = !!v; }; }
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,5 +1,6 @@
 // Headless tests for the Hearthmoor simulation. Run: node test.js
 const Sim = require('./sim.js'); Sim.setStrict(true);   // in tests a fault in a daily step must fail loudly
+Sim.setQuietWorld(true);   // the bankers and the court (Stages VIII and IX) add people, which would move every older test's luck: they wake only in their own tests
 // most tests look at one system at a time, so the world does not age in them; the life-cycle tests turn it back on
 const newGameRaw = Sim.newGame, newGameAging = (...a) => { const s = newGameRaw(...a); s.bandits = null; s.ageRate = 4; s.rivalOff = true; return s; };   // and no rival, but in the rival's own tests Sim.newGame = (...a) => { const s = newGameAging(...a); s.ageRate = 0; return s; };
 let failures = 0;
@@ -2088,7 +2089,7 @@ console.log('55. Stage VIII: banking. Loans against what you own, the missed-pay
 
 console.log('56. Stage IX: power and intrigue. Posts, powers and their abuse, the houses, spies and secrets, blackmail as a gamble, claims, and two roads up');
 {
-  const mk = (seed, days) => { const s = Sim.newGame(seed); s.coins = 20000; Sim.advance(s, 60 * 24 * (days || 2)); holdElections(s); Sim.setupRep(s); Sim.setupPow(s); return s; };
+  const mk = (seed, days) => { const s = Sim.newGame(seed); s.powOff = false; s.bankLazy = false; s.coins = 20000; Sim.advance(s, 60 * 24 * (days || 2)); holdElections(s); Sim.setupRep(s); Sim.setupPow(s); return s; };
   const at = (s, t) => { const L = Sim.LOCS[Sim.MARKET_AT[t]]; s.player.x = L.x; s.player.z = L.z; };
   const name = (s, t, n) => { Sim.setupRep(s).st[t] = n; };
   const know = (s, pid, k) => { const K = s.ppl.key[pid]; K.secret = { k: k || 'skim', known: true }; return K; };
@@ -2215,6 +2216,9 @@ console.log('56. Stage IX: power and intrigue. Posts, powers and their abuse, th
       return { sc: Sim.powerScore(b), loyal: Sim.loyalHouses(b).length, posts: Sim.yourPosts(b).length }; };
     const A = road(5720, true), B = road(5720, false);
     check(A.posts === 2 && B.posts === 2 && A.sc >= 30 && B.sc >= 30 && Math.abs(A.sc - B.sc) <= Math.max(A.sc, B.sc) * 0.3, 'after sixty days the schemer (' + A.sc + ', ' + A.loyal + ' loyal houses) and the commander (' + B.sc + ', ' + B.loyal + ' loyal houses) stand about level'); }
+  // everything on at once, as in a real game: a rival, the court, the banks, ageing
+  { const b = newGameRaw(5730); b.powOff = false; b.bankLazy = false; b.bandits = null; Sim.applyStart(b, 'merchant'); const f1 = Sim.faults().length; for (let i = 0; i < 90; i++) Sim.advance(b, 1440);
+    check(Sim.faults().length === f1 && Object.keys(b.pow.posts).length === 10 && Object.values(b.pow.posts).every(q => q.pid === 'player' || (b.people[q.pid] && b.people[q.pid].status === 'here')) && b.ledger.every(e => Math.abs(e.unexplained || 0) < 0.01), 'ninety days of a full game with the court running: no faults, every post filled, the ledger adds up'); }
   check(Sim.faults().length === f0, 'no faults');
 }
 
