@@ -1428,7 +1428,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     if (s.people) guard(s, 'property was reckoned', () => propertyDay(s));
     if (s.people) guard(s, 'the folk talked it over', () => folkDay(s));
     if (s.people) guard(s, 'the towns took their mood', () => pplDay(s));
-    guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s));
+    guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s)); guard(s, 'the elder’s house changed hands', () => elderHouseDay(s));
     if (s.realm) guard(s, 'the realm kept its books', () => realmDay(s));
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
@@ -2318,6 +2318,25 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
       event(s, 'A rider brings a letter sealed in blue wax: "Steward ' + holderName(s, 'steward') + ' would speak with the new councillor of Hearthmoor. Present yourself at the manor gate." — ' + REALM.lord, 'story');
     }
   }
+  // the Elder's house goes with the chair: whoever is Elder lives there, rent free, and cannot sell it
+  function elderHouseDay(s) {
+    if (s.houses && !s.houses.some(x => x.official === 'elder') && s.houses[6] && s.houses[6].id === 'h6') s.houses[6].official = 'elder';   // saves from before the chair had a house
+    const h = s.houses && s.houses.find(x => x.official === 'elder'); if (!h) return;
+    const e = s.offices.elder, mine = e === 'player';
+    if (mine && h.owner === 'player') return;
+    if (mine) {
+      // the old household (the one who held the chair) finds another roof
+      const old = h.tenants.slice(), spare = s.houses.filter(x => x !== h && (x.town || 'hearthmoor') === 'hearthmoor' && x.owner !== 'player' && x.cap - x.tenants.length >= old.length && !x.official);
+      const to = spare.find(x => x.rent <= 3) || spare[0];
+      for (const id of old) { const q = s.people[id]; if (!q) continue; h.tenants = h.tenants.filter(t => t !== id); if (to) { to.tenants.push(id); q.home = to.id; } else { q.home = null; } plog(s, q, 'Left the Elder’s house, which goes to ' + s.name + ' with the chair.'); }
+      h.owner = 'player'; h.rent = 0; h.forSale = null; s.player.house = h.id; bringFamily(s, 'Moved into the Elder’s house with ' + s.name + '.');
+      event(s, 'The Elder’s house goes with the chair. You move in, rent free' + (old.length ? '; the old household finds a roof elsewhere in the village' : '') + '. You cannot sell it, and it passes to the next Elder.', 'story');
+    } else if (h.owner === 'player') {
+      h.owner = e && s.people[e] ? e : 'office:lord'; h.rent = 0; if (s.player.house === h.id) { s.player.house = null; bringFamily(s, 'Moved back to the hut with ' + s.name + '.'); }
+      const q = e && s.people[e]; if (q) { h.tenants.push(q.id); q.home = h.id; plog(s, q, 'Moved into the Elder’s house.'); }
+      event(s, 'You are no longer Elder, so the Elder’s house is not yours. You move back to your hut.', 'info');
+    }
+  }
   function elderSuccession(s) {
     const v = s.village;
     if (v.step === 8 && v.standing >= 60 && s.offices.elder !== 'player') {
@@ -2656,7 +2675,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
     const corin = P0({ name: 'Corin', age: 35, purse: 12, job: C('forest'), palette: 6 }, H(5)); wed(wynn, corin);
     // the elder owns his house and lives there with his wife, Old Sela
     const elder = P0({ name: 'Brannoch', age: 71, purse: 60, job: { type: 'office', office: 'elder' }, palette: 4 }, H(6));
-    H(6).owner = elder.id; H(6).rent = 0; s.offices.elder = elder.id;
+    H(6).owner = elder.id; H(6).rent = 0; H(6).official = 'elder'; s.offices.elder = elder.id;
     const sela = P0({ name: 'Old Sela', age: 68, purse: 26, job: C('well'), palette: 5 }, H(6)); wed(elder, sela);
     // the shops and their owners, who live above them
     const owners = [['gerd', 'Gerd', 52], ['forge', 'Hollin', 44], ['tankard', 'Mother Ysolde', 58], ['ash', 'Ash', 47], ['mill', 'Tamsin', 45]];
@@ -8492,6 +8511,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
         const o = a === 'house' ? houseById(s, b) : s.biz[b];
         if (!o || o.owner !== 'player') return fail('That is not yours to sell.');
         if (a !== 'house' && o.investor && c) return fail('Buy back ' + o.investor.name + '’s share first.');
+        if (a === 'house' && o.official) return fail('The Elder’s house goes with the chair; it is not yours to sell.');
         if (a === 'house' && s.player.house === b) return fail('You live there. Move out first.');
         if (a === 'biz' && c > 0 && o.lease && !leaseBreakable(s, o)) return fail('It is let until day ' + o.lease.until + '. Sell it once the lease is up.');
         o.forSale = c > 0 ? Math.round(c) : null; if (!o.forSale) s.offers = (s.offers || []).filter(x => !(x.kind === a && x.id === b));
@@ -14989,6 +15009,23 @@ function weatherFor(s, h) {
   const mist = se !== 'winter' && r2 > 0.82 ? Math.max(0, 1 - Math.max(0, h - 7) / 3) * (h < 11 ? 1 : 0) : 0;
   return { rain, mist };
 }
+// a FOR SALE board by the door of every house you could buy
+const hsigns = new Map(); let hsT = 0, hsLocs = null;
+function makeSaleSign() {
+  const g = new THREE.Group();
+  mesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), '#5b4029', 0, 0.75, 0, g); mesh(new THREE.BoxGeometry(0.95, 0.55, 0.06), '#e4d3a6', 0, 1.2, 0.04, g); mesh(new THREE.BoxGeometry(0.95, 0.14, 0.07), '#b3382c', 0, 1.42, 0.04, g);
+  mesh(new THREE.BoxGeometry(0.5, 0.05, 0.07), '#5b4029', 0, 1.18, 0.05, g); mesh(new THREE.BoxGeometry(0.62, 0.05, 0.07), '#5b4029', 0, 1.06, 0.05, g); return g;
+}
+function syncHouseSigns(dt) {
+  hsT -= dt; if (hsT > 0 || !G || UI.mode === 'title' || !G.houses) return; hsT = 1;
+  if (!hsLocs) { hsLocs = {}; for (const k in L) if (L[k].sign) hsLocs[L[k].sign] = L[k]; }
+  for (const h of G.houses) {
+    const Lk = hsLocs[h.id]; if (!Lk) continue; let m = hsigns.get(h.id);
+    const near = Math.abs(Lk.x - focus.x) < 70 && Math.abs(Lk.z - focus.z) < 70, sale = near ? houseSale(G, h) : null, show = !!sale && !sale.mine && sale.price != null && !sale.no;
+    if (show && !m) { m = makeSaleSign(); m.position.set(Lk.x, groundH(Lk.x, Lk.z), Lk.z); m.rotation.y = Lk.face || 0; scene.add(m); hsigns.set(h.id, m); }
+    if (m) m.visible = show;
+  }
+}
 function stepRain(dt, s) {
   if (!rainFx) {
     const n = 2200, a = new Float32Array(n * 6); for (let i = 0; i < n; i++) { const x = (Math.random() - 0.5) * 70, y = Math.random() * 30, z = (Math.random() - 0.5) * 70; a.set([x, y, z, x - 0.07, y + 0.9, z - 0.03], i * 6); }
@@ -18188,9 +18225,12 @@ function sleepTill() {
 }
 /* ----- the 3D map ----- */
 const MAPNAME = { gerd: 'Bakehouse', forge: 'Forge', tankard: 'Tankard', ash: 'Joinery' };
+// a house you own, or one you could buy, gets a pin on the map; the rest stay quiet
+function housePin(k) { const Lk = L[k]; if (!Lk || !Lk.sign || !G.houses) return null; const h = G.houses.find(x => x.id === Lk.sign); if (!h) return null; const sale = houseSale(G, h); return sale.mine ? { h, mine: true } : (sale.price != null && !sale.no) ? { h, sale: true } : null; }
 function pinLabel(k) {
   const s = G, v = s.village, Lk = L[k];
   if (k === 'you') return s.name;
+  { const hp = housePin(k); if (hp) return hp.mine ? (s.player.house === hp.h.id ? 'Your home' : 'Your house') : 'House for sale'; }
   if (k.startsWith('p:')) return (s.people[k.slice(2)] || {}).name || '';
   if (Lk.plot != null) { const sh = Sim.shopOnPlot(s, Lk.plot); return sh ? 'Your ' + TR[sh.trade].name.toLowerCase() : Sim.PLOTS[Lk.plot].grant && !v.landGranted ? 'Council land' : Lk.name; }
   if (Lk.emp) return MAPNAME[Lk.emp];
@@ -18200,6 +18240,7 @@ function pinKind(k) {
   const Lk = L[k];
   if (k === 'you') return 'you';
   if (k.startsWith('p:')) return 'who';
+  { const hp = housePin(k); if (hp) return hp.mine ? 'mine' : 'lot'; }
   if (Lk.plot != null) return Sim.shopOnPlot(G, Lk.plot) ? 'mine' : 'lot';
   if (Lk.emp) return 'work';
   if (Lk.biz && Lk.town) return G.biz[Lk.biz] && G.biz[Lk.biz].owner === 'player' ? 'mine' : 'work';
@@ -18219,7 +18260,7 @@ function pinPos(k) {
 const pinV = new THREE.Vector3();
 function buildPins() {
   if (LM.townPins) { $('pins').innerHTML = Object.keys(TOWNS).map(id => `<button type="button" class="pin town" data-k="town:${id}" data-c='${esc(JSON.stringify(['ui', 'mapFly', id]))}'><span>${esc(TOWN_NAMES[id])}</span></button>`).join('') + `<button type="button" class="pin you" data-k="you" tabindex="-1"><span>${esc(G.name)}</span></button>` + (UI.mapPid && G.people[UI.mapPid] ? `<button type="button" class="pin who" data-k="p:${UI.mapPid}" tabindex="-1"><span>${esc(G.people[UI.mapPid].name)}</span></button>` : ''); return; }
-  const keys = Object.keys(L).filter(k => !L[k].sign && !(L[k].bank && !Sim.bankIn(G, L[k].bank)) && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']).concat(UI.mapPid && G.people[UI.mapPid] ? ['p:' + UI.mapPid] : []);
+  const keys = Object.keys(L).filter(k => (!L[k].sign || housePin(k)) && !(L[k].bank && !Sim.bankIn(G, L[k].bank)) && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']).concat(UI.mapPid && G.people[UI.mapPid] ? ['p:' + UI.mapPid] : []);
   $('pins').innerHTML = keys.map(k => `<button type="button" class="pin ${pinKind(k)} ${UI.mapSel === k ? 'sel' : ''}" data-k="${esc(k)}" ${k === 'you' ? 'tabindex="-1"' : `data-c='${esc(JSON.stringify(['ui', 'mapSel', k]))}'`}><span>${esc(pinLabel(k))}</span></button>`).join('');
 }
 // labels never sit on top of one another: places and halls are placed first, then shops; a label that would overlap one
@@ -19620,7 +19661,7 @@ function frameBody(now) {
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t); if (!UI.inside) syncWild(G, t, dt); if (!FIGHT.on) stepShots(dt);
   syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); syncHeraldry(G); }
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
-  { const w = weatherFor(G, UI.mode === 'title' ? 18 : Sim.hourOf(G)); WX.rain += (w.rain - WX.rain) * Math.min(1, dt * 0.6); WX.mist += (w.mist - WX.mist) * Math.min(1, dt * 0.6); stepRain(dt, G); }
+  { const w = weatherFor(G, UI.mode === 'title' ? 18 : Sim.hourOf(G)); WX.rain += (w.rain - WX.rain) * Math.min(1, dt * 0.6); WX.mist += (w.mist - WX.mist) * Math.min(1, dt * 0.6); stepRain(dt, G); syncHouseSigns(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   syncCamera(G, dt, t);
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist * 1.6 + 60; scene.fog.far = mapCam.dist * 3.2 + 280; lmChrome(); updatePins(); }
@@ -19922,10 +19963,14 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.13.1324';
+const BUILD = '2026.11.13.1416';
 const NOTES = [
   { v: '0.94', date: '13 November', title: 'The unfinished world', items: [
-    'Valdoria has its own road up: the Consulado, a merchant-guild ladder (Cofrade, Maestre, Cónsul, Prior). Foreigners must make a Valdorian name, and from Cónsul up need a sponsor at the Cathedral of Valdor or a Valdorian spouse. A Cónsul pays a quarter of the duty at Dawnport.'
+    'Valdoria has its own road up: the Consulado, a merchant-guild ladder (Cofrade, Maestre, Cónsul, Prior). Foreigners must make a Valdorian name, and from Cónsul up need a sponsor at the Cathedral of Valdor or a Valdorian spouse. A Cónsul pays a quarter of the duty at Dawnport.',
+    'Conquest: win a war against Valdoria with the “Take the Queen’s crown” goal and Valdoria is yours, paying tribute until it revolts if you let unrest run.',
+    'War: businesses you buy in Valdoria after a war is declared are seized.',
+    'Houses: every house you own or could buy now has a pin on the map, and a FOR SALE board stands at the door of each one on the market.',
+    'The Elder’s house goes with the chair: become Elder and you move in rent free (you cannot sell it); lose the chair and it passes to the next Elder.'
   ] },
   { v: '0.93', date: '13 November', title: 'A fresh look', items: [
     'People: every man, woman, child and elder is redrawn, with clothes that show age, means, trade and season. People near you are richly dressed; far ones stay simple. Ordinary townsfolk now vary in height, build, hair and dress.',

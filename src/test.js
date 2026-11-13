@@ -2261,5 +2261,19 @@ console.log('57. Stage XI: the Consulado, the conquest of Valdoria, and business
   else check(true, 'no spare Valdorian business in this world (skipped)');
 }
 
+// ---- 58: the Elder's official house ----
+console.log('58. The Elder’s official house');
+{
+  const s = newGameAging(11); Sim.applyStart(s, 'merchant'); s.ageRate = 0; holdElections(s);
+  const eh = s.houses.find(x => x.official === 'elder'); check(!!eh, 'the elder’s house is marked');
+  const old = s.offices.elder; check(eh.owner === old, 'the old elder owns it');
+  s.offices.elder = 'player'; Sim.advance(s, 60 * 24 * 2);
+  check(eh.owner === 'player' && s.player.house === eh.id, 'as Elder you live in it');
+  check(eh.rent === 0 && !eh.tenants.includes(old), 'rent free, and the old household has moved out');
+  const r = Sim.cmd(s, 'listForSale', 'house', eh.id, 100); check(r && r.ok === false, 'it cannot be sold');
+  s.offices.elder = null; Sim.advance(s, 60 * 24 * 2);
+  check(eh.owner !== 'player' && s.player.house !== eh.id, 'it leaves with the chair');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

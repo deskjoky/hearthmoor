@@ -564,7 +564,7 @@
     if (s.people) guard(s, 'property was reckoned', () => propertyDay(s));
     if (s.people) guard(s, 'the folk talked it over', () => folkDay(s));
     if (s.people) guard(s, 'the towns took their mood', () => pplDay(s));
-    guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s));
+    guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s)); guard(s, 'the elder’s house changed hands', () => elderHouseDay(s));
     if (s.realm) guard(s, 'the realm kept its books', () => realmDay(s));
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
@@ -1454,6 +1454,25 @@
       event(s, 'A rider brings a letter sealed in blue wax: "Steward ' + holderName(s, 'steward') + ' would speak with the new councillor of Hearthmoor. Present yourself at the manor gate." — ' + REALM.lord, 'story');
     }
   }
+  // the Elder's house goes with the chair: whoever is Elder lives there, rent free, and cannot sell it
+  function elderHouseDay(s) {
+    if (s.houses && !s.houses.some(x => x.official === 'elder') && s.houses[6] && s.houses[6].id === 'h6') s.houses[6].official = 'elder';   // saves from before the chair had a house
+    const h = s.houses && s.houses.find(x => x.official === 'elder'); if (!h) return;
+    const e = s.offices.elder, mine = e === 'player';
+    if (mine && h.owner === 'player') return;
+    if (mine) {
+      // the old household (the one who held the chair) finds another roof
+      const old = h.tenants.slice(), spare = s.houses.filter(x => x !== h && (x.town || 'hearthmoor') === 'hearthmoor' && x.owner !== 'player' && x.cap - x.tenants.length >= old.length && !x.official);
+      const to = spare.find(x => x.rent <= 3) || spare[0];
+      for (const id of old) { const q = s.people[id]; if (!q) continue; h.tenants = h.tenants.filter(t => t !== id); if (to) { to.tenants.push(id); q.home = to.id; } else { q.home = null; } plog(s, q, 'Left the Elder’s house, which goes to ' + s.name + ' with the chair.'); }
+      h.owner = 'player'; h.rent = 0; h.forSale = null; s.player.house = h.id; bringFamily(s, 'Moved into the Elder’s house with ' + s.name + '.');
+      event(s, 'The Elder’s house goes with the chair. You move in, rent free' + (old.length ? '; the old household finds a roof elsewhere in the village' : '') + '. You cannot sell it, and it passes to the next Elder.', 'story');
+    } else if (h.owner === 'player') {
+      h.owner = e && s.people[e] ? e : 'office:lord'; h.rent = 0; if (s.player.house === h.id) { s.player.house = null; bringFamily(s, 'Moved back to the hut with ' + s.name + '.'); }
+      const q = e && s.people[e]; if (q) { h.tenants.push(q.id); q.home = h.id; plog(s, q, 'Moved into the Elder’s house.'); }
+      event(s, 'You are no longer Elder, so the Elder’s house is not yours. You move back to your hut.', 'info');
+    }
+  }
   function elderSuccession(s) {
     const v = s.village;
     if (v.step === 8 && v.standing >= 60 && s.offices.elder !== 'player') {
@@ -1792,7 +1811,7 @@
     const corin = P0({ name: 'Corin', age: 35, purse: 12, job: C('forest'), palette: 6 }, H(5)); wed(wynn, corin);
     // the elder owns his house and lives there with his wife, Old Sela
     const elder = P0({ name: 'Brannoch', age: 71, purse: 60, job: { type: 'office', office: 'elder' }, palette: 4 }, H(6));
-    H(6).owner = elder.id; H(6).rent = 0; s.offices.elder = elder.id;
+    H(6).owner = elder.id; H(6).rent = 0; H(6).official = 'elder'; s.offices.elder = elder.id;
     const sela = P0({ name: 'Old Sela', age: 68, purse: 26, job: C('well'), palette: 5 }, H(6)); wed(elder, sela);
     // the shops and their owners, who live above them
     const owners = [['gerd', 'Gerd', 52], ['forge', 'Hollin', 44], ['tankard', 'Mother Ysolde', 58], ['ash', 'Ash', 47], ['mill', 'Tamsin', 45]];
@@ -7628,6 +7647,7 @@
         const o = a === 'house' ? houseById(s, b) : s.biz[b];
         if (!o || o.owner !== 'player') return fail('That is not yours to sell.');
         if (a !== 'house' && o.investor && c) return fail('Buy back ' + o.investor.name + '’s share first.');
+        if (a === 'house' && o.official) return fail('The Elder’s house goes with the chair; it is not yours to sell.');
         if (a === 'house' && s.player.house === b) return fail('You live there. Move out first.');
         if (a === 'biz' && c > 0 && o.lease && !leaseBreakable(s, o)) return fail('It is let until day ' + o.lease.until + '. Sell it once the lease is up.');
         o.forSale = c > 0 ? Math.round(c) : null; if (!o.forSale) s.offers = (s.offers || []).filter(x => !(x.kind === a && x.id === b));
