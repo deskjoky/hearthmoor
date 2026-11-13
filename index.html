@@ -12657,20 +12657,20 @@ function buildTile(i, j) {
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const group = new THREE.Group(); group.add(new THREE.Mesh(g, groundMat));
   // woods where the land wants them, scattered trees elsewhere
-  const pinesT = [], oaksT = [], bushesT = [], tuftsT = [], rocksT = [], solids = [];
+  const pinesT = [], oaksT = [], bushesT = [], tuftsT = [], rocksT = [], solids = [], birchT = [], snagT = [], poplarT = [];
   for (let k = 0; k < 300; k++) {
     const x = x0 + r() * TILE, z = z0 + r() * TILE;
     const wood = Math.sin(x * 0.013 + 1.3) * Math.cos(z * 0.011 - 0.4) + 0.5 * Math.sin((x + z) * 0.021);
     if (wood < 0.35 && r() > 0.2) continue;
     if (!wildClear(x, z)) continue;
     const sc = 0.9 + r() * 1.0;
-    if (wood > 0.35) (r() < 0.8 ? pinesT : oaksT).push([x, z, sc]); else (r() < 0.45 ? oaksT : r() < 0.5 ? pinesT : bushesT).push([x, z, 0.8 + r() * 0.5]);
+    if (wood > 0.35) { const q = r(); (q < 0.72 ? pinesT : q < 0.86 ? birchT : q < 0.95 ? oaksT : snagT).push([x, z, sc]); } else { const q = r(); (q < 0.3 ? oaksT : q < 0.5 ? birchT : q < 0.58 ? poplarT : q < 0.7 ? pinesT : bushesT).push([x, z, 0.8 + r() * 0.5]); }
   }
   for (let k = 0; k < 160; k++) { const x = x0 + r() * TILE, z = z0 + r() * TILE; if (!inVillage(x, z) && segDist(x, z, ROAD_E) > 3) tuftsT.push([x, z, 0.7 + r() * 0.8]); }
   for (let k = 0; k < 10; k++) { const x = x0 + r() * TILE, z = z0 + r() * TILE; if (wildClear(x, z)) rocksT.push([x, z]); }
   const inst = (geo, list, m0) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, m0 || vc, list.length); list.forEach(([x, z, sc], q) => im.setMatrixAt(q, M(x, groundH(x, z) - 0.05, z, r() * 6, sc || (0.6 + r()), (sc || 0.6) * (0.9 + r() * 0.25), sc || (0.6 + r())))); group.add(im); };
-  inst(pineGeo, pinesT); inst(oakGeo, oaksT); inst(bushGeo, bushesT); inst(tuftGeo, tuftsT); inst(rockGeo, rocksT, mat('#7d7b70'));
-  pinesT.forEach(([x, z, sc]) => solids.push({ c: 1, x, z, r: 0.45 * sc })); oaksT.forEach(([x, z, sc]) => solids.push({ c: 1, x, z, r: 0.35 * sc }));
+  inst(pineGeo, pinesT); inst(oakGeo, oaksT); inst(birchGeo, birchT); inst(snagGeo, snagT); inst(poplarGeo, poplarT); inst(bushGeo, bushesT); inst(tuftGeo, tuftsT); inst(rockGeo, rocksT, mat('#7d7b70'));
+  pinesT.forEach(([x, z, sc]) => solids.push({ c: 1, x, z, r: 0.45 * sc })); oaksT.concat(birchT, poplarT).forEach(([x, z, sc]) => solids.push({ c: 1, x, z, r: 0.3 * sc }));
   scene.add(group);
   return { group, solids };
 }
@@ -12682,7 +12682,7 @@ function updateTiles(px, pz, budget) {
   for (let di = -TILE_RADIUS; di <= TILE_RADIUS; di++) for (let dj = -TILE_RADIUS; dj <= TILE_RADIUS; dj++) want.push([ci + di, cj + dj, di * di + dj * dj]);
   want.sort((a, b) => a[2] - b[2]);
   for (const [i, j] of want) { const k = i + ',' + j; if (!tiles.has(k)) { if (built >= budget) break; tiles.set(k, buildTile(i, j)); built++; tileVersion++; } }
-  for (const [k, t] of tiles) { const [i, j] = k.split(',').map(Number); if (Math.abs(i - ci) > TILE_RADIUS + 1 || Math.abs(j - cj) > TILE_RADIUS + 1) { scene.remove(t.group); t.group.traverse(o => { if (o.geometry && o.geometry !== pineGeo && o.geometry !== oakGeo && o.geometry !== rockGeo && o.geometry !== bushGeo && o.geometry !== tuftGeo) o.geometry.dispose(); }); tiles.delete(k); tileVersion++; } }
+  for (const [k, t] of tiles) { const [i, j] = k.split(',').map(Number); if (Math.abs(i - ci) > TILE_RADIUS + 1 || Math.abs(j - cj) > TILE_RADIUS + 1) { scene.remove(t.group); t.group.traverse(o => { if (o.geometry && !KEEPGEO.has(o.geometry) && o.geometry !== rockGeo && o.geometry !== bushGeo && o.geometry !== tuftGeo) o.geometry.dispose(); }); tiles.delete(k); tileVersion++; } }
 }
 function tileSolidsNear(px, pz) { const out = []; const ci = Math.floor(px / TILE), cj = Math.floor(pz / TILE); for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { const t = tiles.get((ci + di) + ',' + (cj + dj)); if (t) out.push(...t.solids); } return out; }
 
@@ -12805,13 +12805,49 @@ const oakGeo = mergeColored([
   { geo: leafBlob(1.25, 3), color: '#3f5c2b', kind: 6, smooth: true, vary: 0.12, m: M(-1.1, 3.6, -0.5, 1.1) },
   { geo: leafBlob(1.05, 4), color: '#5a7c3e', kind: 6, smooth: true, vary: 0.12, m: M(0.1, 4.5, -0.3, 2.0) }
 ]);
+/* Stage X: more kinds of tree, so a wood or a green is never one tree over and over */
+const MR = (x, y, z, rx, ry, rz, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx || 1, sy == null ? (sx || 1) : sy, sz == null ? (sx || 1) : sz));
+const limb = (len, r0) => new THREE.CylinderGeometry(r0 * 0.55, r0, len, 5);
+const birchGeo = mergeColored([
+  { geo: trunkG(0.13, 0.06, 3.6), color: '#d9d5c6', kind: 3, smooth: true, m: M(0, 0, 0) },
+  ...[0.5, 1.1, 1.8, 2.5].map((y, k) => ({ geo: new THREE.CylinderGeometry(0.135 - k * 0.012, 0.135 - k * 0.012, 0.07, 6), color: '#3a352e', kind: 3, m: M(0.0, y, 0) })),
+  { geo: limb(1.2, 0.05), color: '#cfcabb', kind: 3, smooth: true, m: MR(0.3, 2.6, 0, 0, 0, -0.7) },
+  { geo: leafBlob(0.95, 11, 1.15), color: '#86a548', kind: 6, smooth: true, vary: 0.12, m: M(0, 3.7, 0) },
+  { geo: leafBlob(0.75, 12, 1.1), color: '#9bb84f', kind: 6, smooth: true, vary: 0.12, m: M(0.6, 3.3, 0.2, 0.5) },
+  { geo: leafBlob(0.7, 13, 1.1), color: '#7a9a40', kind: 6, smooth: true, vary: 0.12, m: M(-0.55, 3.0, -0.2, 1.2) },
+  { geo: leafBlob(0.55, 14, 1.2), color: '#a3be58', kind: 6, smooth: true, vary: 0.12, m: M(0.05, 4.4, 0.1, 2) }
+]);
+const poplarGeo = mergeColored([
+  { geo: trunkG(0.2, 0.09, 2.0), color: '#5a4630', kind: 3, smooth: true, m: M(0, 0, 0) },
+  ...[[0, 3.0, 1.0, 1.1], [0.15, 4.2, 0.9, 1.15], [-0.1, 5.4, 0.78, 1.2], [0.05, 6.5, 0.6, 1.2], [0, 7.4, 0.4, 1.3]].map(([x, y, r, s], k) => ({ geo: leafBlob(r, 20 + k, s), color: ['#4a6a2c', '#55763a', '#4a6a2c', '#5d7f3e', '#648644'][k], kind: 6, smooth: true, vary: 0.1, m: M(x, y, 0.05 * k, k) }))
+]);
+const willowGeo = mergeColored([
+  { geo: trunkG(0.3, 0.17, 2.2), color: '#4a3b2a', kind: 3, smooth: true, m: M(0, 0, 0) },
+  { geo: limb(1.4, 0.1), color: '#4a3b2a', kind: 3, smooth: true, m: MR(0.5, 2.5, 0, 0, 0, -0.8) }, { geo: limb(1.3, 0.1), color: '#4a3b2a', kind: 3, smooth: true, m: MR(-0.45, 2.5, 0.1, 0, 0, 0.8) },
+  { geo: leafBlob(1.55, 31, 0.6), color: '#6f8f46', kind: 6, smooth: true, vary: 0.1, m: M(0, 3.6, 0) },
+  ...[0, 1, 2, 3, 4, 5, 6].map(k => { const a = k / 7 * Math.PI * 2; return { geo: new THREE.ConeGeometry(0.42, 2.5, 5, 1, true), color: k % 2 ? '#7a9a50' : '#678640', kind: 6, smooth: true, vary: 0.1, m: MR(Math.cos(a) * 1.25, 2.55, Math.sin(a) * 1.25, Math.PI, a, 0) }; })
+]);
+const blossomGeo = mergeColored([
+  { geo: trunkG(0.2, 0.11, 1.8), color: '#4f3826', kind: 3, smooth: true, m: M(0, 0, 0) },
+  { geo: limb(1.0, 0.07), color: '#4f3826', kind: 3, smooth: true, m: MR(0.4, 2.1, 0, 0, 0, -0.8) }, { geo: limb(1.0, 0.07), color: '#4f3826', kind: 3, smooth: true, m: MR(-0.4, 2.0, 0, 0, 0, 0.8) },
+  { geo: leafBlob(1.25, 41, 0.85), color: '#e8b8c4', kind: 6, smooth: true, vary: 0.1, m: M(0, 2.9, 0) },
+  { geo: leafBlob(0.95, 42, 0.85), color: '#f1cdd2', kind: 6, smooth: true, vary: 0.1, m: M(0.85, 2.7, 0.3, 0.6) },
+  { geo: leafBlob(0.9, 43, 0.85), color: '#dca3b3', kind: 6, smooth: true, vary: 0.1, m: M(-0.85, 2.6, -0.3, 1.1) },
+  { geo: leafBlob(0.7, 44, 0.9), color: '#f4d9d9', kind: 6, smooth: true, vary: 0.1, m: M(0.0, 3.65, -0.1, 2) }
+]);
+const snagGeo = mergeColored([
+  { geo: trunkG(0.24, 0.07, 4.2), color: '#5d5548', kind: 3, smooth: true, m: M(0, 0, 0) },
+  { geo: limb(1.5, 0.07), color: '#5d5548', kind: 3, smooth: true, m: MR(0.55, 3.0, 0, 0, 0, -0.9) }, { geo: limb(1.2, 0.06), color: '#5d5548', kind: 3, smooth: true, m: MR(-0.45, 3.4, 0.1, 0.3, 0, 0.8) },
+  { geo: limb(0.9, 0.05), color: '#665d4f', kind: 3, smooth: true, m: MR(0.1, 3.9, -0.3, -0.7, 0, 0.1) }
+]);
+const KEEPGEO = new Set([pineGeo, oakGeo, birchGeo, poplarGeo, willowGeo, blossomGeo, snagGeo]);
 const tuftGeo = mergeColored([0, 1.1, 2.2].map(a => ({ geo: new THREE.ConeGeometry(0.09, 0.55, 3), color: a ? '#6a7f3e' : '#7d8f48', m: M(Math.cos(a) * 0.12, 0.25, Math.sin(a) * 0.12) })).concat([{ geo: new THREE.SphereGeometry(0.06, 4, 3), color: '#e8d36a', m: M(0.05, 0.5, 0.02) }]));
 const bushGeo = mergeColored([{ geo: leafBlob(0.75, 6, 0.75), color: '#44602c', kind: 6, smooth: true, vary: 0.12, m: M(0, 0.42, 0) }, { geo: leafBlob(0.55, 7, 0.8), color: '#527238', kind: 6, smooth: true, vary: 0.12, m: M(0.55, 0.36, 0.2) }]);
-const pines = [], oaks = [], bushes = [];
+const pines = [], oaks = [], bushes = [], birches = [], poplars = [], willows = [], blossoms = [], snags = [];
 for (let i = 0; i < 900; i++) { const x = -48 - rnd() * 60, z = -70 + rnd() * 150; if (!inVillage(x, z)) continue; if (clear(x, z) && !(Math.abs(x - L.forest.x - 4) < 6 && Math.abs(z - L.forest.z) < 5)) pines.push([x, z, 0.85 + rnd() * 0.7]); }
 for (let i = 0; i < 700; i++) { const a = rnd() * Math.PI * 2, r = 84 + rnd() * 28, x = Math.cos(a) * r, z = 4 + Math.sin(a) * r; if (clear(x, z) && segDist(x, z, ROAD_E) > 6) pines.push([x, z, 1 + rnd() * 1.1]); }
-for (let i = 0; i < 260; i++) { const x = (rnd() - 0.5) * 150, z = (rnd() - 0.5) * 150; if (clear(x, z) && Math.hypot(x, z - 4) > 16 && Math.hypot(x, z - 4) < 86) (rnd() < 0.7 ? oaks : bushes).push([x, z, 0.8 + rnd() * 0.5]); }
-for (let i = 0; i < 160; i++) { const k = Math.floor(rnd() * (STREAM.length - 3)) + 1, [ax, az] = STREAM[k], x = ax + (rnd() - 0.5) * 16, z = az + (rnd() - 0.5) * 20; if (clear(x, z)) (rnd() < 0.5 ? oaks : bushes).push([x, z, 0.9 + rnd() * 0.5]); }
+for (let i = 0; i < 260; i++) { const x = (rnd() - 0.5) * 150, z = (rnd() - 0.5) * 150; if (clear(x, z) && Math.hypot(x, z - 4) > 16 && Math.hypot(x, z - 4) < 86) { const q = rnd(); (q < 0.38 ? oaks : q < 0.52 ? birches : q < 0.58 ? poplars : q < 0.66 ? blossoms : bushes).push([x, z, 0.8 + rnd() * 0.5]); } }
+for (let i = 0; i < 160; i++) { const k = Math.floor(rnd() * (STREAM.length - 3)) + 1, [ax, az] = STREAM[k], x = ax + (rnd() - 0.5) * 16, z = az + (rnd() - 0.5) * 20; if (clear(x, z)) { const q = rnd(); (q < 0.34 ? willows : q < 0.5 ? oaks : q < 0.62 ? birches : bushes).push([x, z, 0.9 + rnd() * 0.5]); } }
 function plant(geo, list, sy) {
   const cells = new Map(); for (const it of list) { const k = Math.floor(it[0] / 64) + ',' + Math.floor(it[1] / 64); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(it); }
   let last = null;
@@ -12822,7 +12858,8 @@ function plant(geo, list, sy) {
   }
   return last;
 }
-plant(pineGeo, pines); plant(oakGeo, oaks); plant(bushGeo, bushes);
+plant(pineGeo, pines); plant(oakGeo, oaks); plant(bushGeo, bushes); plant(birchGeo, birches); plant(poplarGeo, poplars); plant(willowGeo, willows); plant(blossomGeo, blossoms);
+for (let i = 0; i < 40; i++) { const x = -48 - rnd() * 60, z = -70 + rnd() * 150; if (inVillage(x, z) && clear(x, z)) snags.push([x, z, 0.8 + rnd() * 0.5]); } plant(snagGeo, snags);
 const rockGeo = flat(new THREE.IcosahedronGeometry(0.6, 0));
 const rocks = [];
 for (let i = 0; i < 140; i++) { const a = rnd() * Math.PI * 2, r = 20 + rnd() * 90, x = Math.cos(a) * r, z = 4 + Math.sin(a) * r; if (clear(x, z)) rocks.push([x, z]); }
@@ -16122,11 +16159,13 @@ function syncHoliday(s) {
   const ringPts = n => Array.from({ length: n }, (_, i) => { const a = i / n * Math.PI * 2; return { x: C.x + Math.cos(a) * C.r, z: C.z + Math.sin(a) * C.r, a }; });
   // bunting on poles round the square, in the day's colours
   const cols = { firstlight: ['#f2d27a', '#fff1c0'], plough: ['#5f9a3a', '#e8e0b0'], maying: ['#f28cb8', '#ffffff', '#8cc8f2', '#f2e07a'], midsummer: ['#e8742a', '#f2c23a'], queensday: ['#a8231c', '#e0b030'], harvest: ['#d9a033', '#8a5a2a'], applefair: ['#b8302a', '#6aa83a'], soulsnight: ['#5a3a6a', '#2a2a2a'], longnight: ['#2f6a3a', '#b8302a'] }[H.id] || ['#ffffff'];
-  const poles = ringPts(8), poleM = M('#6b4a2e');
+  const poles = ringPts(8), poleM = M('#6b4a2e'), FLAGM = {}, FLAG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.2, 0, 0), new THREE.Vector3(0.2, 0, 0), new THREE.Vector3(0, -0.45, 0.02)]); FLAG.computeVertexNormals();
   for (const p of poles) put(new THREE.CylinderGeometry(0.08, 0.1, 3.4, 6), poleM, p.x, gy(p.x, p.z) + 1.7, p.z);
   for (let i = 0; i < poles.length; i++) {
     const a = poles[i], b = poles[(i + 1) % poles.length], n = 7;
-    for (let j = 1; j < n; j++) { const f = j / n, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f, sag = Math.sin(f * Math.PI) * 0.5; const fl = put(new THREE.ConeGeometry(0.16, 0.38, 3), M(cols[j % cols.length]), x, gy(x, z) + 3.1 - sag, z, Math.atan2(b.x - a.x, b.z - a.z), Math.PI); fl.scale.z = 0.25; }
+    const pts = []; for (let j = 0; j <= n; j++) { const f = j / n, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f; pts.push(new THREE.Vector3(x, gy(x, z) + 3.35 - Math.sin(f * Math.PI) * 0.55, z)); }
+    put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.025, 4), poleM, 0, 0, 0);
+    for (let j = 1; j < n; j++) { const p = pts[j], q = pts[j + 1], fl = put(FLAG, FLAGM[cols[j % cols.length]] || (FLAGM[cols[j % cols.length]] = new THREE.MeshLambertMaterial({ color: cols[j % cols.length], side: THREE.DoubleSide })), p.x, p.y, p.z, Math.atan2(-(q.z - p.z), q.x - p.x)); fl.rotation.z = Math.sin(j * 1.7 + i) * 0.08; }
   }
   // lanterns for the night festivals
   if (['firstlight', 'soulsnight', 'longnight', 'midsummer'].includes(H.id)) for (const p of poles) put(new THREE.BoxGeometry(0.26, 0.32, 0.26), E(H.id === 'soulsnight' ? '#ff8a20' : '#ffd070', 1.1), p.x, gy(p.x, p.z) + 3.55, p.z);
@@ -16143,7 +16182,7 @@ function syncHoliday(s) {
     for (const p of ringPts(6)) { const x = C.x + (p.x - C.x) * 0.6, z = C.z + (p.z - C.z) * 0.6, y0 = gy(x, z); if (H.id === 'applefair') { put(new THREE.CylinderGeometry(0.4, 0.4, 0.8, 8), M('#7a5230'), x, y0 + 0.4, z); put(new THREE.SphereGeometry(0.36, 8, 6), M('#b8302a'), x, y0 + 0.85, z); } else { put(new THREE.CylinderGeometry(0.22, 0.38, 1.3, 7), M('#d9b04a'), x, y0 + 0.65, z); put(new THREE.ConeGeometry(0.3, 0.5, 7), M('#e8c45a'), x, y0 + 1.5, z); } }
   }
   if (H.id === 'soulsnight') for (const p of ringPts(10)) { const x = C.x + (p.x - C.x) * 0.75, z = C.z + (p.z - C.z) * 0.75; put(new THREE.SphereGeometry(0.22, 7, 6), E('#ff7a10', 1.3), x, gy(x, z) + 0.22, z); }
-  if (H.id === 'longnight' || H.id === 'firstlight') for (const p of ringPts(6)) { const x = C.x + (p.x - C.x) * 0.55, z = C.z + (p.z - C.z) * 0.55, y0 = gy(x, z); put(new THREE.ConeGeometry(0.6, 1.8, 7), M('#2f5a34'), x, y0 + 0.9, z); put(new THREE.SphereGeometry(0.12, 6, 5), E('#d83a2a', 0.6), x + 0.3, y0 + 1.1, z); }
+  if (H.id === 'longnight' || H.id === 'firstlight') for (const p of ringPts(6)) { const x = C.x + (p.x - C.x) * 0.55, z = C.z + (p.z - C.z) * 0.55, y0 = gy(x, z); put(trunkG(0.14, 0.09, 0.8), M('#4a3424'), x, y0, z); [[1.0, 1.2, 0.6, '#2a5230'], [1.6, 1.0, 0.5, '#2f5a34'], [2.15, 0.78, 0.45, '#37663c']].forEach(([yy, r, hh, c], k) => put(bough(r, hh * 1.9, k + 1), M(c), x, y0 + yy, z)); for (let k = 0; k < 7; k++) { const a = k * 2.4, yy = 1.0 + (k % 4) * 0.42, rr = 0.95 - (k % 4) * 0.22; put(new THREE.SphereGeometry(0.075, 6, 5), E(['#d83a2a', '#e8c24a', '#4a7ad8', '#f0f0e0'][k % 4], 0.7), x + Math.cos(a) * rr, y0 + yy, z + Math.sin(a) * rr); } put(new THREE.OctahedronGeometry(0.16, 0), E('#ffd860', 1.2), x, y0 + 2.75, z); }
   if (H.id === 'queensday') for (const p of poles) { const b = put(new THREE.PlaneGeometry(0.7, 1.4), new THREE.MeshLambertMaterial({ color: '#a8231c', side: THREE.DoubleSide }), p.x, gy(p.x, p.z) + 2.4, p.z, Math.atan2(C.x - p.x, C.z - p.z)); b.translateZ(0.12); }
   scene.add(g); HOL.group = g;
 }
@@ -19730,7 +19769,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.13.0250';
+const BUILD = '2026.11.13.0315';
 const NOTES = [
   { v: '0.92', date: '12 November', title: 'Power and intrigue', items: [
     'A new Court page under Power, with four parts: Posts, Houses, Secrets and Claims. It shows your power as a word and a bar.',
