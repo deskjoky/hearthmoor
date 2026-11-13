@@ -2222,5 +2222,44 @@ console.log('56. Stage IX: power and intrigue. Posts, powers and their abuse, th
   check(Sim.faults().length === f0, 'no faults');
 }
 
+console.log('57. Stage XI: the Consulado, the conquest of Valdoria, and businesses seized after the declaration');
+{
+  const s = newGameRaw(5800); s.ageRate = 0; Sim.advance(s, 1440); const V = s.valdoria, X = (...a) => Sim.cmd(s, ...a);
+  s.coins = 5000; V.standing = 10; V.favour = 20; const dp = Sim.TOWNS.dawnport; s.player.x = dp.x; s.player.z = dp.z;
+  check(!X('consulado').ok && Sim.consuladoView(s).miss.length > 0, 'a stranger with a name of 10 cannot join the guild');
+  V.standing = 25; check(X('consulado').ok && V.rank === 1, 'with a name of 25 he is made a Cofrade');
+  V.standing = 45; V.charter = true; check(!X('consulado').ok, 'a Maestre needs a business of his own in Valdoria');
+  const site = Sim.VD.biz && Sim.VD.biz[0]; check(!!site, 'Valdor has a business site to buy');
+  s.player.x = Sim.LOCS.vdcathedral.x; s.player.z = Sim.LOCS.vdcathedral.z; V.standing = 20; check(!X('valSponsor').ok, 'no family sponsors a stranger with a name of 20');
+  V.standing = 60; V.favour = 40; check(X('valSponsor').ok && V.sponsor, 'at the Cathedral, a family stands sponsor for a name of 60');
+  V.rank = 2; V.rankSince = s.day; s.player.x = dp.x; s.player.z = dp.z; const tax2 = Sim.landingTax(s, 'dawnport', 'iron'); check(X('consulado').ok && V.rank === 3 && V.consulOf === 'dawnport', 'with a sponsor, a Cónsul of Dawnport');
+  check(tax2 > 0 && Math.abs(Sim.landingTax(s, 'dawnport', 'iron') - tax2 / 2) < 1e-9, 'a Cónsul pays a quarter of the duty, half of what a chartered merchant pays');
+  const c0 = s.coins; Sim.advance(s, 1440); check(s.coins - c0 >= 7, 'a Cónsul draws his daily share of the guild dues');
+  check(!X('consulado').ok, 'a Prior cannot be named in Dawnport, nor before twenty days');
+  V.rankSince = s.day - 25; V.standing = 80; V.favour = 70; s.player.x = Sim.VD.C.x; s.player.z = Sim.VD.C.z; check(X('consulado').ok && V.rank === 4, 'after twenty days, in Valdor, a Prior');
+  V.standing = 20; Sim.advance(s, 1440); check(V.rank === 3, 'a name that sinks too low loses the rank');
+  const s2 = newGameRaw(5801); s2.ageRate = 0; Sim.advance(s2, 1440); s2.valdoria.standing = 90; s2.valdoria.favour = 90; s2.valdoria.rank = 3; s2.valdoria.rankSince = -99; s2.coins = 5000;
+  s2.player.x = Sim.VD.C.x; s2.player.z = Sim.VD.C.z; check(!Sim.cmd(s2, 'consulado').ok, 'without a sponsor or a Valdorian wife, the top rank stays closed');
+}
+{
+  const mk = seed => { const s = newGameRaw(seed); s.ageRate = 0; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440); s.valdoria.relation = 20; s.realm.treasury = 99999; return s; };
+  const s = mk(5810), V = s.valdoria, R = s.realm, X = (...a) => Sim.cmd(s, ...a);
+  check(X('declareWar', 'crown').ok && V.war.goal === 'crown', 'the crown may go to war for the Queen’s crown itself');
+  V.war.score = 60; check(!X('warCampaign').ok, 'storming the Alcázar needs the war to stand at 75, not 50');
+  let won = false; for (let t = 0; t < 40 && V.war; t++) { V.war.score = 90; V.war.lastCampaign = -99; R.treasury = 99999; const r = X('warCampaign'); if (r.ok && r.msg === 'won') won = true; }
+  check(won && V.conquered && V.ruler === 'the crown of Alderwyn' && !V.war, 'a decisive victory deposes the Queen and Valdoria passes under the crown');
+  check(!X('audience', 'talk').ok, 'and the Queen gives no more audiences');
+  const t0 = R.treasury; Sim.advance(s, 1440); check(R.treasury > t0 - 100 && V.tribute && V.tribute.to === 'alderwyn', 'Valdoria pays the crown each day');
+  const u0 = V.conquered.unrest; Sim.advance(s, 1440 * 5); check(V.conquered.unrest > u0 + 3, 'the unrest of the lords grows day by day');
+  s.player.x = Sim.LOCS.vdalcazar.x; s.player.z = Sim.LOCS.vdalcazar.z; const u1 = V.conquered.unrest; check(X('valConciliate').ok && V.conquered.unrest < u1, 'holding court at the Alcázar quiets the lords');
+  V.conquered.unrest = 99.5; Sim.advance(s, 1440); check(!V.conquered && V.ruler !== 'the crown of Alderwyn' && V.relation < 30, 'if the lords are left to boil, they rise and the Queen returns');
+}
+{
+  const s = newGameRaw(5820); s.ageRate = 0; Sim.applyStart(s, 'ruler'); Sim.advance(s, 1440); const V = s.valdoria; s.valdoria.relation = 20; s.realm.treasury = 99999;
+  const biz = Object.values(s.biz).find(b => b.owner !== 'player' && Sim.kingdomOf(b.town) === 'valdoria'); 
+  if (biz) { Sim.cmd(s, 'declareWar', 'tribute'); biz.owner = 'player'; biz.seized = undefined; Sim.advance(s, 1440); check(biz.seized === 'war', 'a business that falls to you in Valdoria after the declaration is seized too'); }
+  else check(true, 'no spare Valdorian business in this world (skipped)');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

@@ -2352,7 +2352,7 @@
     for (const q of living(s)) { q.opinion = 0; q.hate = 0; q.mem = []; if (q.nem) q.nem = null; }
     s.folk = null; setupFolk(s);
     if (s.realm) { const R = s.realm; R.favour = 0; R.deeds = {}; R.kept = 0; R.broken = 0; R.plot = null; R.exile = null; R.after = null; R.promises = []; R.bought = {}; R.offer = null; R.embezzled = 0; (R.figures || []).forEach(f => { f.ally = false; f.foe = false; f.progress = 0; }); }
-    if (s.valdoria) { const V = s.valdoria; V.standing = 0; V.charter = false; V.favour = 0; }
+    if (s.valdoria) { const V = s.valdoria; V.standing = 0; V.charter = false; V.favour = 0; V.rank = 0; V.sponsor = null; V.consulOf = null; }
     if (s.justice) s.justice.secrets = [];
     s.pendingDeath = null;
     event(s, 'A newcomer arrives in Hearthmoor with 5 coins: ' + s.name + '. The world remembers those who came before.', 'story');
@@ -3948,7 +3948,7 @@
   function landingTax(s, port, g) {
     const fromOther = SEA_GOODS[g] ? SEA_GOODS[g].made !== port : true;
     if (!fromOther) return 0;
-    if (port === 'dawnport') { const V = s.valdoria; return Math.max(0, (V ? V.duty : 1.2) - 1) * (V && V.charter ? 0.5 : 1); }
+    if (port === 'dawnport') { const V = s.valdoria; return Math.max(0, (V ? V.duty : 1.2) - 1) * (V && (V.rank || 0) >= 3 ? 0.25 : V && V.charter ? 0.5 : 1); }
     return Math.max(0, (s.realm ? s.realm.tariff : 1) - 1);
   }
   // Valdoria: its own crown and its own customs. For now it is a place to go and to trade; its queen, its laws and its
@@ -3972,7 +3972,7 @@
   const QUEEN_MOOD = f => f >= 80 ? 'warm' : f >= 60 ? 'gracious' : f >= 40 ? 'courteous' : f >= 20 ? 'cool' : 'cold';
   function favourBy(s, n, why) { const V = s.valdoria; if (!V || V.favour == null) return; const old = V.favour; V.favour = clamp(V.favour + n, 0, 100); if (why && Math.round(old) !== Math.round(V.favour)) valLog(s, why + ' (her regard for you: ' + QUEEN_MOOD(V.favour) + ')', n > 0 ? 'good' : 'bad'); }
   // what the Queen will see you about: anyone with a name in Valdoria, a merchant's charter, or the crown of Alderwyn
-  const canAudience = s => { const V = s.valdoria; return !!(V && (isRuler(s) || V.charter || V.standing >= 25)); };
+  const canAudience = s => { const V = s.valdoria; return !!(V && (isRuler(s) || V.charter || V.standing >= 25 || (V.rank || 0) >= 2)); };
   // the roads of Valdoria and the Holy Brotherhood that rides them
   const VAL_BANDITS = { dawnport: 12, goldmeadow: 18, thornwick: 30, stonewatch: 15, valdor: 10 };
   /* ---------- war between the crowns ----------
@@ -3988,6 +3988,7 @@
     alderwyn: {
       stormrest: { name: 'Take Stormrest Isle', campaign: 'Land on Stormrest Isle', failed: 'The landing on Stormrest Isle is beaten back with heavy losses.', terms: 'Stormrest Isle passes to Alderwyn, with its harbour dues' },
       trade: { name: 'Win free trade at Dawnport', campaign: 'Blockade Dawnport', failed: 'The blockade of Dawnport is broken, and Alderwyn\u2019s ships scatter.', terms: 'Valdoria takes no duty on Alderwyn goods for 60 days' },
+      crown: { name: 'Take the Queen\u2019s crown', campaign: 'Storm the Alc\u00e1zar', failed: 'The assault on the Alc\u00e1zar is thrown back from the walls of Valdor.', terms: 'Queen Ximena is deposed, and Valdoria passes under the crown of Alderwyn', hard: 75 },
       tribute: { name: 'Make Valdoria pay', campaign: 'Blockade Dawnport', failed: 'The blockade of Dawnport is broken, and Alderwyn\u2019s ships scatter.', terms: 'Valdoria pays Alderwyn 30c a day for 30 days' }
     },
     valdoria: {
@@ -4047,8 +4048,9 @@
     if (goal === 'stormrest') setStormHolder(s, winner);
     else if (goal === 'trade') { V.privilege = { until: s.day + 60 }; V.duty = 1.0; }
     else if (goal === 'tribute') V.tribute = { to: winner, perDay: 30, until: s.day + 30 };
+    else if (goal === 'crown') { V.conquered = { day: s.day, unrest: 30, lastSooth: -99 }; V.queenName = V.ruler; V.ruler = 'the crown of Alderwyn'; V.duty = 1.0; V.tribute = { to: 'alderwyn', perDay: 40, until: s.day + 99999 }; V.rank = 0; }
     else if (goal === 'tariff' && R) { R.tariffCap = { max: 1.0, until: s.day + 60 }; R.tariff = Math.min(R.tariff, 1.0); }
-    V.war = null; V.peaceUntil = s.day + 45; V.relation = winner === 'alderwyn' ? 25 : 35; V.embargo = 0;
+    V.war = null; V.peaceUntil = s.day + 45; V.relation = goal === 'crown' && winner === 'alderwyn' ? 80 : winner === 'alderwyn' ? 25 : 35; V.embargo = 0;
     for (const b of Object.values(s.biz || {})) if (b.seized === 'war') delete b.seized;
     if (s.ship && s.ship.impounded) delete s.ship.impounded;
     if (R) { R.favour = clamp(R.favour + (winner === 'alderwyn' ? 10 : -12), 0, 100); for (const id in s.towns) if (kingdomOf(id) === 'alderwyn') s.towns[id].approval = clamp((s.towns[id].approval || 50) + (winner === 'alderwyn' ? 6 : -4), 0, 100); }
@@ -4080,6 +4082,15 @@
   }
   function warDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
+    // a business you buy or inherit in Valdoria once the war has begun is seized all the same
+    if (V.war) { let n = 0; for (const b of Object.values(s.biz || {})) if (b.owner === 'player' && kingdomOf(b.town || (empById(b.id) ? townAt(empById(b.id).x, empById(b.id).z) : null)) === 'valdoria' && !b.closed && !b.seized) { b.seized = 'war'; n++; } if (n) valLog(s, 'The Queen\u2019s officers seize ' + n + (n > 1 ? ' more of your businesses' : ' more of your business') + ' in Valdoria, bought after the war began. They are given back at the peace.', 'bad'); }
+    // a conquered land: the lords of Valdoria have not forgiven it, and unrest builds until you win them or lose the land
+    if (V.conquered) {
+      const C = V.conquered; C.unrest = clamp(C.unrest + 0.8, 0, 100);
+      if (C.unrest >= 100) { V.conquered = null; V.tribute = null; V.ruler = V.queenName || 'Queen Ximena II'; V.relation = 15; V.peaceUntil = s.day + 30; V.war = null; valLog(s, 'The lords of Valdoria rise and throw out Alderwyn\u2019s garrisons. ' + V.ruler + ' returns to the Alc\u00e1zar, and Valdoria is its own again.', 'bad'); if (R) { R.favour = clamp(R.favour - 15, 0, 100); realmLog(s, 'Valdoria is lost. The conquest was held by force and not by good will.', 'bad'); } }
+      else if (Math.floor(C.unrest) % 20 === 0 && C.warnDay !== s.day && C.unrest >= 60) { C.warnDay = s.day; valLog(s, 'Valdoria\u2019s lords mutter against the crown that took their Queen (unrest ' + Math.round(C.unrest) + ' of 100). Win them over at the Alc\u00e1zar before they rise.', 'bad'); }
+      return;
+    }
     if (!V.war) {
       // the drums: when relations sink this low and nothing binds the crowns, the Queen may go to war
       if (V.relation < 20 && !peaceHolds(V) && s.day >= (V.peaceUntil || 0)) {
@@ -4154,8 +4165,46 @@
   // relations sour, and now and then a decree or a bad season changes what Dawnport will pay
   // where the loads in a ship's hold were bought, by port: { iron: { eastwatch: 20, dawnport: 10 } }
   function shipOrigin(ship, good) { ship.origin = ship.origin || {}; const h = ship.hold[good] || 0, o = ship.origin[good] = ship.origin[good] || {}; const known = Object.values(o).reduce((x, y) => x + y, 0); if (known > h) { for (const k in o) o[k] = Math.round(o[k] * h / known); } return o; }
+  /* ---------- the Consulado: Valdoria's own road up ----------
+     Alderwyn's towns are run by councils and votes. Valdoria's are run by its merchant guilds, the consulados: you rise by trade and fair dealing,
+     and a stranger must first be taken in (a sponsor or a Valdorian spouse) before the guild trusts him with a town. */
+  const CONSULADO = [
+    { key: 'stranger', title: 'No standing', pay: 0 },
+    { key: 'cofrade', title: 'Cofrade of the Consulado', fee: 60, standing: 20, pay: 0, text: 'A brother of the guild: a seat at its table and the right to trade under its seal.' },
+    { key: 'maestre', title: 'Maestre of the Consulado', fee: 150, standing: 40, pay: 3, charter: true, biz: true, text: 'A master of the guild, with a shop of your own in Valdoria. The guild shares its dues with you.' },
+    { key: 'consul', title: 'Cónsul of the Consulado', fee: 300, standing: 55, favour: 30, pay: 8, sponsor: true, text: 'The guild’s head in a Valdorian town. You pay a quarter of the duty at Dawnport, and the town listens to you.' },
+    { key: 'prior', title: 'Prior of the Consulado of Valdor', fee: 600, standing: 75, favour: 55, pay: 15, sponsor: true, held: 20, inValdor: true, text: 'The head of every consulado, and a voice in the Queen’s Council of Trade.' }
+  ];
+  const isValdorian = (s, x, z) => { const t = townAt(x, z); return !!(t && TOWNS[t] && TOWNS[t].foreign === 'valdoria'); };
+  function valdorianSpouse(s) { try { const me = s.people && you(s) && you(s).pid && s.people[you(s).pid]; const sp = me && me.spouse && s.people[me.spouse]; return !!(sp && sp.town && TOWNS[sp.town] && TOWNS[sp.town].foreign === 'valdoria'); } catch (e) { return false; } }
+  const isSponsored = s => { const V = s.valdoria; return !!(V && (V.sponsor || valdorianSpouse(s))); };
+  function hasValdorianBiz(s) { return Object.values(s.biz || {}).some(b => { if (b.owner !== 'player' || b.closed) return false; const e = empById(b.id); return !!(e && isValdorian(s, e.x, e.z)); }); }
+  const rankOf2 = s => Math.max(0, Math.min(CONSULADO.length - 1, (s.valdoria && s.valdoria.rank) || 0));
+  // what the next step needs, and what is missing
+  function consuladoView(s) {
+    const V = s.valdoria; if (!V) return null; const r = rankOf2(s), next = CONSULADO[r + 1] || null, here = isValdorian(s, s.player.x, s.player.z), miss = [];
+    if (next) {
+      if ((V.standing || 0) < next.standing) miss.push('your name in Valdoria must reach ' + next.standing + ' (it is ' + Math.round(V.standing || 0) + ')');
+      if (next.charter && !V.charter) miss.push('you need the Consul’s merchant charter');
+      if (next.biz && !hasValdorianBiz(s)) miss.push('you need a business of your own in a Valdorian town');
+      if (next.favour && (V.favour || 0) < next.favour) miss.push('the Queen’s regard must reach ' + next.favour + ' (it is ' + Math.round(V.favour || 0) + ')');
+      if (next.sponsor && !isSponsored(s)) miss.push('a Valdorian family must stand sponsor for you at the Cathedral of Valdor, or you must marry a Valdorian');
+      if (next.held && s.day - (V.rankSince || 0) < next.held) miss.push('serve ' + (next.held - (s.day - (V.rankSince || 0))) + ' more days as Cónsul');
+      if (next.inValdor && !(townAt(s.player.x, s.player.z) === 'valdor')) miss.push('ask at the guildhall in Valdor');
+      else if (!here) miss.push('ask at a Valdorian town');
+      if (s.coins < next.fee) miss.push('the fees are ' + next.fee + 'c');
+    }
+    return { rank: r, cur: CONSULADO[r], next, miss, sponsored: isSponsored(s), consulOf: V.consulOf || null };
+  }
+  function consuladoDay(s) {
+    const V = s.valdoria; if (!V || !V.rank) return; const c = CONSULADO[rankOf2(s)];
+    if (c.pay) { earn(s, c.pay); }
+    // a guildsman who loses his good name loses his rank
+    if ((V.standing || 0) < c.standing - 15) { V.rank = rankOf2(s) - 1; V.rankSince = s.day; if (V.rank < 3) V.consulOf = null; valLog(s, 'The guild strips you of the rank of ' + c.title.split(' of ')[0] + ': your name in Valdoria has sunk too low. You are now ' + CONSULADO[V.rank].title + '.', 'bad'); }
+  }
   function valdoriaDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
+    consuladoDay(s);
     if (V.relation == null) Object.assign(V, { relation: 50, standing: 0, charter: false, embargo: 0 });
     // a royal who married before v0.47 took the spouse's family name in place of their own: give it back
     for (const id of V.royals || []) { const q = s.people[id]; if (q && q.maiden && /^Infant[ae] /.test(q.maiden) && q.name !== q.maiden) q.name = q.maiden; }
@@ -8101,6 +8150,28 @@
         if (rand(s) < 0.15) { const V = s.valdoria; if (port === 'dawnport' && V) V.standing = clamp(V.standing - 15, 0, 100); valLog(s, 'The clerk you paid at ' + PORTS[port].name + ' is caught taking bribes, and names you.', 'bad'); s.customsContact = null; return ok('exposed'); }
         return ok();
       }
+      case 'valConciliate': {
+        // win over the lords of a conquered Valdoria: gifts, offices and a seat at the table
+        const V = s.valdoria, C = V && V.conquered; if (!C) return fail('Valdoria is not yours.'); if (!isRuler(s)) return fail('Only the crown can.');
+        if (Math.hypot(s.player.x - LOCS.vdalcazar.x, s.player.z - LOCS.vdalcazar.z) > 26) return fail('Hold court at the Alc\u00e1zar in Valdor.');
+        if (s.day - (C.lastSooth || -99) < 3) return fail('You held court ' + (s.day - C.lastSooth) + ' days ago.'); const R = s.realm; if (R.treasury < 120) return fail('Gifts and offices for the lords cost 120c from the treasury.');
+        R.treasury -= 120; C.lastSooth = s.day; C.unrest = clamp(C.unrest - 25, 0, 100); valLog(s, 'You hold court at the Alc\u00e1zar. Offices and gifts go to the lords of Valdoria, and the murmuring quiets (unrest ' + Math.round(C.unrest) + ' of 100).', 'good'); return ok();
+      }
+      case 'valSponsor': {
+        // a Valdorian family stands godparent for a foreigner at the Cathedral of Valdor: the guild will trust a man the Church has taken in
+        const V = s.valdoria; if (!V) return fail('Not now.'); if (V.sponsor) return fail('A Valdorian family already stands sponsor for you.');
+        if (Math.hypot(s.player.x - LOCS.vdcathedral.x, s.player.z - LOCS.vdcathedral.z) > 26) return fail('Ask at the Cathedral of Valdor.');
+        if ((V.standing || 0) < 25) return fail('No family will stand sponsor for a stranger. Make a name in Valdoria first (' + Math.round(V.standing || 0) + ' of 25).');
+        if (s.coins < 120) return fail('The sponsorship, the candles and the alms cost 120c.'); spend(s, 120); V.sponsor = { day: s.day }; V.standing = clamp(V.standing + 3, 0, 100);
+        valLog(s, 'You are received at the Cathedral of Valdor, and a Valdorian family stands sponsor for you. The guilds will now hear you.', 'good'); return ok();
+      }
+      case 'consulado': {
+        // step up one rank in the merchant guild, in person, with the fees paid
+        const V = s.valdoria; if (!V) return fail('Not now.'); const v = consuladoView(s); if (!v.next) return fail('There is no higher rank in the Consulado.');
+        if (v.miss.length) return fail('Not yet: ' + v.miss[0] + '.');
+        spend(s, v.next.fee); V.rank = v.rank + 1; V.rankSince = s.day; if (V.rank === 3) V.consulOf = townAt(s.player.x, s.player.z); V.standing = clamp(V.standing + 2, 0, 100); favourBy(s, 2);
+        valLog(s, 'You are named ' + v.next.title + (V.rank === 3 ? ' for ' + TOWNS[V.consulOf].name : '') + '. ' + v.next.text, 'good'); return ok(v.next.title);
+      }
       case 'charter': {
         // the Consul grants a merchant's charter to a foreigner who trades honestly: half duty on everything you land
         const V = s.valdoria; if (!V) return fail('Not now.'); if (townAt(s.player.x, s.player.z) !== 'dawnport') return fail('Ask at the Consul’s palace in Dawnport.');
@@ -8132,6 +8203,7 @@
         return ok();
       }
       case 'audience': {
+        if (s.valdoria && s.valdoria.conquered) return fail('The Queen has been deposed. Valdoria\u2019s lords answer to the crown now.');
         // an audience with Queen Ximena at the Alcázar. a: 'talk' | 'gift' | 'warrant' | 'duty'
         const V = s.valdoria, q = queenOf(s); if (!V || !q || q.status !== 'here') return fail('The Queen is not receiving.');
         if (V.war && !V.warrant) return fail('The crowns are at war. The Queen does not receive subjects of Alderwyn.');
@@ -8187,7 +8259,8 @@
       }
       case 'warCampaign': {
         const V = s.valdoria, w = V && V.war, R = s.realm; if (!w) return fail('There is no war.'); if (!isRuler(s)) return fail('Only the crown orders a campaign.');
-        if (w.score < 50) return fail('The war is not yet yours to finish (it stands at ' + Math.round(w.score) + '; you need 50).');
+        const need = w.side === 'alderwyn' && WAR_GOALS.alderwyn[w.goal] && WAR_GOALS.alderwyn[w.goal].hard || 50;
+        if (w.score < need) return fail('The war is not yet yours to finish (it stands at ' + Math.round(w.score) + '; you need ' + need + (need > 50 ? ', for the Queen\u2019s crown' : '') + ').');
         if (s.day - w.lastCampaign < 3) return fail('The army is still recovering from the last campaign.');
         if (R.treasury < 150) return fail('A campaign costs 150c from the treasury.');
         R.treasury -= 150; return ok(campaign(s, 'alderwyn') ? 'won' : 'failed');
@@ -11168,7 +11241,7 @@
     farFolk, farOne, roadFolk, routinePlan, FAR_IN, FAR_KEY, FAR_KID, FAR_BODY, FAR_MOVING, FAR_KIN, ROAD_NAME,
     setupPpl, pplOf, crowdOf, notables, stanceOf, blocOf, patronOf, pickKey, pplDay, riot, keyAct, risers, keyCap, PPL_SECRETS, CROWD_WORD, youGovern, officeOf, raceTown,
     GRANT_PRICE, VILLAGE_MILESTONES, amendsCost, bribeCost, WEALTH, LAND, BIZ_TOWN_PRICE, spotMul, prestigeIds, isPrestige, setupFolk, folkDay, wrong, kindness, deed, hateStep, hateIdx, HATE_STEPS, FAIR_WAGE, fairWage, PRICE_MODES, moralName, moralWord, fameName, fameTarget, yourTitle, regardOf, nemeses, nemWhere, confrontOpts, threatOdds, authOver, yourGuards, fightOf, willWork, AUDIENCE, townOwnership, DENS, isForeign, warGrief, leaveTown, temperOf, townName,
-    GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
+    CONSULADO, consuladoView, GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
