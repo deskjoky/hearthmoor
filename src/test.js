@@ -1129,9 +1129,9 @@ console.log('36. Across the Sundering Sea: the passage, Stormrest Isle and Dawnp
 console.log('37. Your own ship, sea trade, customs, and the Queen of Valdoria');
 {
   const s = newGameRaw(39); s.ageRate = 0; const P = Sim.PORTS, X = (...a) => Sim.cmd(s, ...a), at = k => { s.player.x = P[k].x; s.player.z = P[k].z; };
-  s.coins = 2000; s.t = 10 * 60; s.day = 3; at('dawnport');
+  s.coins = 2000 + Sim.SHIP_CLASSES.cog.price - Sim.SHIP_PRICE; s.t = 10 * 60; s.day = 3; at('dawnport');
   check(!X('buyShip').ok, 'ships are sold at a shipyard, not on the quay');
-  s.player.x = Sim.LOCS.ewyard.x; s.player.z = Sim.LOCS.ewyard.z; check(X('buyShip').ok && s.ship && s.coins === 2000 - Sim.SHIP_PRICE, 'you buy a merchant cog at Eastwatch for ' + Sim.SHIP_PRICE + 'c'); at('eastwatch');
+  s.player.x = Sim.LOCS.ewyard.x; s.player.z = Sim.LOCS.ewyard.z; check(X('buyShip').ok && s.ship && s.coins === 2000 - Sim.SHIP_PRICE, 'you buy a merchant cog at Eastwatch for ' + Sim.SHIP_CLASSES.cog.price + 'c'); at('eastwatch');
   check(Sim.seaPrice(s, 'eastwatch', 'iron') < Sim.seaPrice(s, 'dawnport', 'iron') && Sim.seaPrice(s, 'dawnport', 'wine') < Sim.seaPrice(s, 'eastwatch', 'wine'), 'iron is cheap at home and dear in Valdoria; wine the other way');
   const p0 = Sim.seaPrice(s, 'eastwatch', 'iron'); X('cargoBuy', 'iron', 40);
   check(s.ship.hold.iron === 40 && Sim.seaPrice(s, 'eastwatch', 'iron') > p0, 'buying 40 iron fills the hold and raises the price');
@@ -1234,7 +1234,7 @@ console.log('40. Justice that does what it says, and a name in Valdoria earned b
 }
 {
   const s = newGameRaw(42); s.ageRate = 0; const P = Sim.PORTS, X = (...a) => Sim.cmd(s, ...a), V = s.valdoria, at = k => { s.player.x = P[k].x; s.player.z = P[k].z; };
-  s.coins = 4000; s.t = 10 * 60 + 1440 * 2; s.day = 3; at('eastwatch'); buyCog(s); voyage(s, 'dawnport');
+  s.coins = 4000 + Sim.SHIP_CLASSES.cog.price; s.t = 10 * 60 + 1440 * 2; s.day = 3; at('eastwatch'); buyCog(s); voyage(s, 'dawnport');
   const st0 = V.standing; for (let i = 0; i < 5; i++) { X('cargoBuy', 'wine', 10); X('cargoSell', 'wine', 10); }
   check(V.standing === st0, 'buying wine on Dawnport’s quay and selling it straight back earns no name in Valdoria (' + st0 + ' → ' + V.standing + ')');
   voyage(s, 'eastwatch'); X('cargoBuy', 'iron', 40); X('cargoBuy', 'wool', 40); voyage(s, 'dawnport');
@@ -1249,7 +1249,7 @@ console.log('40. Justice that does what it says, and a name in Valdoria earned b
 console.log('41. Where cargo was bought, sentences that keep running, and old appeals repaired (v0.48; from a second outside review)');
 {
   const s = newGameRaw(43); s.ageRate = 0; const P = Sim.PORTS, X = (...a) => Sim.cmd(s, ...a), V = s.valdoria, at = k => { s.player.x = P[k].x; s.player.z = P[k].z; };
-  s.coins = 4000; s.t = 10 * 60 + 1440 * 2; s.day = 3; at('eastwatch'); buyCog(s); voyage(s, 'dawnport'); V.duty = 1.0;
+  s.coins = 4000 + Sim.SHIP_CLASSES.cog.price; s.t = 10 * 60 + 1440 * 2; s.day = 3; at('eastwatch'); buyCog(s); voyage(s, 'dawnport'); V.duty = 1.0;
   const st0 = V.standing; for (let i = 0; i < 3; i++) { X('cargoBuy', 'iron', 10); X('cargoSell', 'iron', 10); }
   check(V.standing === st0, 'Alderwyn iron bought on Dawnport’s quay and sold straight back earns no name, even with no duty (' + st0 + ' → ' + V.standing + ')');
   voyage(s, 'eastwatch'); X('cargoBuy', 'iron', 10); voyage(s, 'dawnport'); s.day++; X('cargoBuy', 'iron', 10);
@@ -1338,7 +1338,7 @@ console.log('43. War between the crowns (v0.50)');
   V.relation = 20; V.wed = { royal: V.royals[0], to: 'you', day: 1 }; check(!X('declareWar').ok, 'nor while the royal houses are joined by marriage'); V.wed = null;
   V.treaty = { kind: 'alliance', since: 1 }; check(!X('declareWar').ok, 'nor while the crowns are allied'); V.treaty = null;
   // what you own in Valdoria, and a ship in hand
-  s.biz.d_vine.owner = 'player'; s.coins = 3000; s.player.x = P.eastwatch.x; s.player.z = P.eastwatch.z; s.t = Math.floor(s.t / 1440) * 1440 + 10 * 60; buyCog(s);
+  s.biz.d_vine.owner = 'player'; s.coins = 3000 + Sim.SHIP_CLASSES.cog.price; s.player.x = P.eastwatch.x; s.player.z = P.eastwatch.z; s.t = Math.floor(s.t / 1440) * 1440 + 10 * 60; buyCog(s);
   const t0 = R.treasury; check(X('declareWar').ok && Sim.atWar(s) && s.biz.d_vine.seized, 'the crown declares war; your tavern in Dawnport is seized');
   check(!X('sail', 'dawnport').ok, 'no passage ships sail to Valdoria in war');
   check(!X('treaty', 'trade').ok && !X('royalMatch', 'self').ok, 'and there are no treaties or royal matches until the peace');

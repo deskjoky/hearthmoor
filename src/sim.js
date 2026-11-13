@@ -3690,14 +3690,15 @@
      never stops her. A ship is either moored (ship.port names the port) or at sea (ship.port is null and ship.sea says where).
      Speeds are metres a game minute, so the clock's own speed-up is the ship's speed-up. Plain numbers only, so it tests without a screen. */
   const SHIP_CLASSES = {
-    skiff: { id: 'skiff', name: 'skiff', price: 150, hold: 12, upkeep: 1, crew: 0, mpm: 10, turn: 1.1, accel: 0.5, draft: 0.5, len: 7, beam: 2.3, blurb: 'An open boat with one sail. Slow and small, but she turns on a coin and floats where nothing else will.' },
-    cutter: { id: 'cutter', name: 'cutter', price: 480, hold: 36, upkeep: 2, crew: 3, mpm: 15.5, turn: 0.75, accel: 0.35, draft: 1, len: 12, beam: 3.4, blurb: 'Fast and handy, with a modest hold. The quickest way across.' },
-    cog: { id: 'cog', name: 'merchant cog', price: 800, hold: 80, upkeep: 3, crew: 6, mpm: 12.65, turn: 0.5, accel: 0.22, draft: 1.5, len: 18, beam: 4.6, blurb: 'The merchant’s workhorse: a deep hold and an honest pace.' },
-    galleon: { id: 'galleon', name: 'great galleon', price: 2800, hold: 240, upkeep: 8, crew: 14, mpm: 14, turn: 0.3, accel: 0.13, draft: 2.4, len: 30, beam: 7.6, blurb: 'Three masts and a hold like a warehouse. Quick once she is moving, slow to turn, and she wants deep water.' }
+    skiff: { id: 'skiff', name: 'skiff', price: 1200, hold: 12, upkeep: 3, crew: 0, mpm: 10, turn: 1.1, accel: 0.5, draft: 0.5, len: 7, beam: 2.3, blurb: 'An open boat with one sail. Slow and small, but she turns on a coin and floats where nothing else will.' },
+    cutter: { id: 'cutter', name: 'cutter', price: 4500, hold: 36, upkeep: 6, crew: 10, mpm: 15.5, turn: 0.75, accel: 0.35, draft: 1, len: 12, beam: 3.4, blurb: 'Fast and handy, with a modest hold. The quickest way across.' },
+    cog: { id: 'cog', name: 'merchant cog', price: 9000, hold: 80, upkeep: 9, crew: 18, mpm: 12.65, turn: 0.5, accel: 0.22, draft: 1.5, len: 18, beam: 4.6, blurb: 'The merchant’s workhorse: a deep hold and an honest pace.' },
+    galleon: { id: 'galleon', name: 'great galleon', price: 30000, hold: 240, upkeep: 24, crew: 40, mpm: 14, turn: 0.3, accel: 0.13, draft: 2.4, len: 30, beam: 7.6, blurb: 'Three masts and a hold like a warehouse. Quick once she is moving, slow to turn, and she wants deep water.' }
   };
   const SHIP_ORDER = ['skiff', 'cutter', 'cog', 'galleon'];
   const SAIL_SET = [0, 0.45, 0.75, 1], SAIL_NAME = ['furled', 'reefed', 'half sail', 'full sail'];
   const shipClass = S => SHIP_CLASSES[(S && S.cls) || 'cog'] || SHIP_CLASSES.cog;
+  const shipWorth = S => Math.round((S.cost || (S.cls ? shipClass(S).price : SHIP_PRICE)) * 0.6);   // the shipwrights give 60% of what she cost you
   // where each port keeps your ship: clear of the piers and of the ships already lying there
   const BERTHS = {
     eastwatch: { x: 1190, z: -300, hdg: 0 },
@@ -3796,7 +3797,7 @@
   function shipTick(s) {
     const S = s.ship, p = s.player;
     if (!S) { if (p.aboard) p.aboard = false; return; }
-    if (!S.cls) { S.cls = 'cog'; if (!S.cap) S.cap = SHIP_CLASSES.cog.hold; }
+    if (!S.cls) { S.cls = 'cog'; S.cost = S.cost || SHIP_PRICE; if (!S.cap) S.cap = SHIP_CLASSES.cog.hold; }
     if (S.port === undefined || (!S.port && !S.sea)) { S.port = S.from && BERTHS[S.from] ? S.from : 'eastwatch'; S.sea = null; }
     if (p.aboard) {
       const q = shipPose(S);
@@ -3825,12 +3826,12 @@
           if (S.impounded) return fail(S.name + ' is impounded. She cannot be traded in.');
           if (S.port !== yard) return fail('You already own ' + S.name + '. Bring her to this port and the shipwrights will take her in part exchange.');
           if (Object.values(S.hold).some(n => n > 0)) return fail('Sell the cargo in ' + S.name + '’s hold first.');
-          credit = Math.round(shipClass(S).price * 0.6);
+          credit = shipWorth(S);
         }
         if (s.coins + credit < C.price) return fail('A ' + C.name + ' costs ' + C.price + 'c' + (credit ? ', less ' + credit + 'c for ' + S.name : '') + '.');
         const old = S ? S.name : null;
         if (credit) earn(s, credit); spend(s, C.price);
-        s.ship = { name: (b && String(b).slice(0, 24)) || (S ? S.name : 'the Hearthmoor Rose'), cls: C.id, port: yard, hold: {}, cap: C.hold, since: s.day };
+        s.ship = { name: (b && String(b).slice(0, 24)) || (S ? S.name : 'the Hearthmoor Rose'), cls: C.id, cost: C.price, port: yard, hold: {}, cap: C.hold, since: s.day };
         event(s, 'You buy a ' + C.name + ', ' + s.ship.name + (old ? ', and the shipwrights take ' + (old === s.ship.name ? 'your old ship' : old) + ' for ' + credit + 'c' : '') + '. She holds ' + C.hold + ' loads and lies at ' + PORTS[yard].name + '. Step aboard at the quay to sail her.', 'story');
         return ok();
       }
@@ -3839,7 +3840,7 @@
         if (S.impounded) return fail(S.name + ' is impounded until there is peace.');
         if (!S.port || (portHere(s) !== S.port && yardHere(s) !== S.port)) return fail('Go to where your ship is moored.');
         if (Object.values(S.hold).some(n => n > 0)) return fail('Sell the cargo first.');
-        earn(s, Math.round(shipClass(S).price * 0.6)); s.ship = null; return ok();
+        earn(s, shipWorth(S)); s.ship = null; return ok();
       }
       case 'board': {
         if (!S) return fail('You have no ship.'); if (p.aboard) return ok();
@@ -11704,7 +11705,7 @@
     CONSULADO, consuladoView, GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, ALD_COAST, SEA, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
-    SHIP_CLASSES, SHIP_ORDER, SAIL_SET, SAIL_NAME, shipClass, BERTHS, SHIPYARDS, yardHere, windAt, windFactor, seaDepth, SEA_FLOOR, SEA_HAZARDS, SEA_EDGE, shipPose, canMoor, seaBearings, sailStep, shipTick,
+    SHIP_CLASSES, SHIP_ORDER, SAIL_SET, SAIL_NAME, shipClass, shipWorth, BERTHS, SHIPYARDS, yardHere, windAt, windFactor, seaDepth, SEA_FLOOR, SEA_HAZARDS, SEA_EDGE, shipPose, canMoor, seaBearings, sailStep, shipTick,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, TRAITS, GIFTS, OUTINGS, STAGE_NAME, WEDDINGS, UPBRING, natureOf, loveOf, suits, stageOf, GROW_DAYS, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,

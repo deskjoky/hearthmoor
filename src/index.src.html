@@ -6320,7 +6320,7 @@ function shipPanel(s, id) {
 }
 // a shipyard: the four classes for sale, and what the shipwrights will give for the ship you have
 function shipyardPanel(s, port) {
-  const S = s.ship, here = !!(S && S.port === port && !S.impounded), cargo = !!(S && Object.values(S.hold).some(n => n > 0)), credit = here && !cargo ? Math.round(Sim.shipClass(S).price * 0.6) : 0;
+  const S = s.ship, here = !!(S && S.port === port && !S.impounded), cargo = !!(S && Object.values(S.hold).some(n => n > 0)), credit = here && !cargo ? Sim.shipWorth(S) : 0;
   const pace = C => C.mpm >= 15 ? 'fast' : C.mpm >= 13.5 ? 'quick' : C.mpm >= 12 ? 'steady' : 'slow', turn = C => C.turn >= 1 ? 'turns on the spot' : C.turn >= 0.7 ? 'handy' : C.turn >= 0.45 ? 'steady on the helm' : 'slow to turn';
   let h = `<p><b>Ships for sale</b></p><table class="trades"><thead><tr><th>Ship</th><th>Hold</th><th></th></tr></thead><tbody>${Sim.SHIP_ORDER.map(k => { const C = Sim.SHIP_CLASSES[k], mine = S && S.cls === k, cost = C.price - credit;
     return `<tr><td>${C.name.charAt(0).toUpperCase() + C.name.slice(1)}<br><small>${esc(C.blurb)} ${pace(C).charAt(0).toUpperCase() + pace(C).slice(1)}, ${turn(C)}; ${C.upkeep}c a day${C.crew ? ', ' + C.crew + 'c a voyage' : ''}.</small></td><td class="num">${C.hold}</td><td><div class="acts">${mine ? '<small>yours</small>' : B_((S ? 'Trade up' : 'Buy') + ' · ' + cost + 'c', ['buyShip', k], 'alt', (S && (!here || cargo)) || s.coins + credit < C.price)}</div></td></tr>`; }).join('')}</tbody></table>`;
@@ -9234,7 +9234,7 @@ const BUILD = '/*BUILD*/';
 const NOTES = [
   { v: '0.97', date: '13 November', title: 'The Sea Road, I: your first ship under sail', items: [
     'You can sail your own ship. Step aboard at the quay, cast off, and take her anywhere on the Sundering Sea. The move stick is the helm; a sail slider (furl, reef, half, full) sets her speed. On a keyboard, A and D steer and W and S set the sail.',
-    'Four ships are for sale at the shipyards of Eastwatch and Dawnport: a skiff, a cutter, a merchant cog and a great galleon. Each handles differently in size, speed, turning and hold. You keep one at a time; the shipwrights take the old one in part exchange.',
+    'Four ships are for sale at the shipyards of Eastwatch and Dawnport: a skiff (1,200c), a cutter (4,500c), a merchant cog (9,000c) and a great galleon (30,000c). Each handles differently in size, speed, turning and hold. You keep one at a time; the shipwrights take the old one for 60% of what she cost you.',
     'Wind matters, simply: a fair wind is fast, a foul wind is slow, and she always makes way. A compass shows your heading and the wind, and the small chart marks each port and how far it lies.',
     'Ships float, rock and heel, their sails fill and shake, and they leave a wake and a bow wave. Run into the shallows and she touches bottom and slides off; you cannot get stuck.',
     'A crossing from Eastwatch to Dawnport takes about twelve minutes in the cog with a fair wind. The 2\u00d7, 4\u00d7 and 8\u00d7 buttons shorten it. Bring her close to a berth with little sail on to moor.',
