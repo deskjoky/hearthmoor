@@ -536,7 +536,7 @@
 
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0) + (st.deals || 0) - (st.investors || 0) + (st.bank || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { powPay: 'Pay from the posts you hold', powDues: 'Dues from the towns you set them in', powAgents: 'Your agents', powFine: 'Fined by the magistrate', powBreak: 'A loan called in when you broke the bank', powSeek: 'Bought a post', powAbuse: 'Taken from your office', powGift: 'Gifts to the houses', powPress: 'Paid for silence', powAnswer: 'Paid to keep a secret', powAgent: 'Hired an agent', powRumour: 'Paid for a rumour', powCharter: 'A bank charter', powRecognise: 'Heralds and lawyers for your claim', bankBorrow: 'Borrowed from a bank', bankRepay: 'Paid off a bank loan', bankRefi: 'Paid off the moneylender with a bank loan', bankFound: 'Founded a bank', bankBuy: 'Bought a bank', bankAdd: 'Coin put into your bank', bankTake: 'Coin taken from your bank', dealTake: 'A deal from the board', investIn: 'Sold a share to an investor', investOut: 'Bought back an investor’s share', improveBiz: 'Improved a business', pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  const FLOW_LABEL = { powPay: 'Pay from the posts you hold', powDues: 'Dues from the towns you set them in', powAgents: 'Your agents', powFine: 'Fined by the magistrate', powBreak: 'A loan called in when you broke the bank', powSeek: 'Bought a post', powAbuse: 'Taken from your office', powGift: 'Gifts to the houses', powPress: 'Paid for silence', powAnswer: 'Paid to keep a secret', powAgent: 'Hired an agent', powRumour: 'Paid for a rumour', powCharter: 'A bank charter', powRecognise: 'Heralds and lawyers for your claim', bankBorrow: 'Borrowed from a bank', bankRepay: 'Paid off a bank loan', bankRefi: 'Paid off the moneylender with a bank loan', bankFound: 'Founded a bank', bankBuy: 'Bought a bank', bankAdd: 'Coin put into your bank', bankTake: 'Coin taken from your bank', dealTake: 'A deal from the board', hapAid: 'Help in a crisis or a fair',  investIn: 'Sold a share to an investor', investOut: 'Bought back an investor’s share', improveBiz: 'Improved a business', pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
   // one broken part of a day must not stop the whole game: record it, tell the player once, and carry on
   const FAULTS = [];
   let STRICT = false;
@@ -564,7 +564,7 @@
     if (s.people) guard(s, 'property was reckoned', () => propertyDay(s));
     if (s.people) guard(s, 'the folk talked it over', () => folkDay(s));
     if (s.people) guard(s, 'the towns took their mood', () => pplDay(s));
-    guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s)); guard(s, 'the elder’s house changed hands', () => elderHouseDay(s));
+    guard(s, 'goods were priced', () => { goodsDay(s); logPrices(s); }); guard(s, 'the sea market closed', () => seaMarketDay(s)); guard(s, 'Valdoria closed for the day', () => valdoriaDay(s)); guard(s, 'the elder’s house changed hands', () => elderHouseDay(s)); guard(s, 'something happened in the towns', () => hapDay(s)); guard(s, 'the family looked to its ambitions', () => ambitionDay(s));
     if (s.realm) guard(s, 'the realm kept its books', () => realmDay(s));
     if (s.people) guard(s, 'the elections were counted', () => electionDay(s));
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
@@ -1972,7 +1972,7 @@
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
       const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day || (b.riot && b.riot >= s.day) || (b.nolic && b.nolic >= s.day) || b.feast === s.day, HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
-      const cap = bizCap(s, b) * (mine ? renownUtil(b) : 1), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (mine ? renownMul(b) : 1) * (b.undercut && b.undercut.until >= s.day ? 0.8 : 1) * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
+      const cap = bizCap(s, b) * (mine ? renownUtil(b) : 1), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * hapMul(s, t0) * PM.share * (mine ? renownMul(b) : 1) * (b.undercut && b.undercut.until >= s.day ? 0.8 : 1) * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
       const Wt = WEALTH[t0] || 1, revenue0 = shut ? 0 : E.flat ? E.flat * Wt : Math.round(Wt * sold * PM.price * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
       // (a rival's price war, a spoiled batch, sickness in the house, a fire in the back room) that lasts a few weeks
@@ -2305,6 +2305,7 @@
     return { gets: out, notes };
   }
   function succeed(s, h, why) {
+    lineClose(s, why === 'retire' ? 'retired' : 'died');
     const Y = you(s), old = s.people[Y.pid], v = s.village, wasLord = s.offices.lord === 'player';
     // the one who came before joins the dead (or retires to live with the family)
     old.name = s.name; old.age = Y.age; old.spouse = Y.spouse;
@@ -2350,6 +2351,7 @@
   }
   // with nobody to carry on: the family's property goes back to the lord and the town, and you begin again as a newcomer
   function beginAgain(s, name, sex) {
+    lineClose(s, 'the line ended');
     const Y = you(s), old = s.people[Y.pid];
     old.name = s.name; old.status = 'dead'; PVER++; old.died = s.day; old.log.unshift({ day: s.day, text: 'Died, aged ' + Y.age + ', leaving no heir.' });
     if (s.offices.elder === 'player') s.offices.elder = null;
@@ -4220,6 +4222,220 @@
     if (c.pay) { earn(s, c.pay); }
     // a guildsman who loses his good name loses his rank
     if ((V.standing || 0) < c.standing - 15) { V.rank = rankOf2(s) - 1; V.rankSince = s.day; if (V.rank < 3) V.consulOf = null; valLog(s, 'The guild strips you of the rank of ' + c.title.split(' of ')[0] + ': your name in Valdoria has sunk too low. You are now ' + CONSULADO[V.rank].title + '.', 'bad'); }
+  }
+  /* ---------- Stage XII: happenings. Crises come with a warning and can be met; fairs and players come to town ---------- */
+  const HAPS = {
+    fire: { bad: true, name: 'Fire', season: 'summer', warnDays: 2, len: 1, aid: 60, aidWarn: 'Buy buckets, ladders and a fire-cart for the watch', aidAfter: 'Give to the burned-out families', mood: 8, cause: 'families were burned out of their homes' },
+    fever: { bad: true, name: 'Fever', season: 'winter', warnDays: 2, len: 8, aid: 80, aidWarn: 'Pay for a physician and herbs', aidAfter: 'Pay for a physician and herbs', mood: 12, cause: 'fever is in the town', mul: 0.75 },
+    blight: { bad: true, name: 'Blight', season: 'autumn', warnDays: 2, len: 12, aid: 100, aidWarn: 'Buy grain from afar before it bites', aidAfter: 'Buy grain from afar for the town', mood: 10, cause: 'the harvest failed' },
+    flood: { bad: true, name: 'Flood', season: 'spring', warnDays: 2, len: 3, aid: 70, aidWarn: 'Pay for sandbags and a dyke', aidAfter: 'Pay to dry out the flooded houses', mood: 6, cause: 'the river came into the houses', towns: ['hearthmoor', 'oakbridge', 'eastwatch', 'dawnport', 'greenhaven'], mul: 0.9 },
+    fair: { good: true, name: 'A travelling fair', warnDays: 1, len: 3, aid: 40, aidWarn: 'Sponsor the fair', aidAfter: 'Sponsor the fair', mood: -10, mul: 1.3 },
+    players: { good: true, name: 'Players in town', warnDays: 1, len: 2, aid: 20, aidWarn: 'Pay the players for a free show', aidAfter: 'Pay the players for a free show', mood: -6, mul: 1.1 }
+  };
+  const HAP_WARN = {
+    fire: t => 'A dry spell in ' + t + ': the thatch is like tinder and the watch has no fire-cart. A spark now could take a street.',
+    fever: t => 'A fever has come to ' + t + '. Two households are down with it, and it is spreading.',
+    blight: t => 'Blight in the fields round ' + t + '. The grain is rotting on the stalk; bread will be dear within days.',
+    flood: t => 'The river is rising at ' + t + ' after days of rain. The low houses may go under.',
+    fair: t => 'A travelling fair is on the road to ' + t + ': stalls, jugglers and a dancing bear. It opens tomorrow.',
+    players: t => 'A company of players is coming to ' + t + ' with a new play. They arrive tomorrow.'
+  };
+  function setupHaps(s) { if (!s.haps) s.haps = { list: [], past: [], next: 1, last: {} }; return s.haps; }
+  const hapIn = (s, t) => s.haps ? s.haps.list.find(h => h.town === (t || 'hearthmoor') && h.phase !== 'warn') || null : null;
+  function hapMul(s, t) { const h = hapIn(s, t); if (!h) return 1; const K = HAPS[h.kind]; return K.mul ? (K.bad && h.aided ? 1 - (1 - K.mul) / 2 : K.mul) : 1; }
+  function hapMood(s, t) { const h = s.haps && s.haps.list.find(x => x.town === t); if (!h || h.phase === 'warn') return null; const K = HAPS[h.kind]; if (h.phase === 'over') return null; return { v: K.mood * (h.aided && K.bad ? 0.5 : 1), text: K.cause || null }; }
+  function standUp(s, t, n, why) { if (t === 'hearthmoor') addStanding(s, n, null); else repAdd(s, t, n, why); }
+  function hapTell(s, h, text, kind) { const hs = setupHaps(s); h.log = h.log || []; h.log.push({ d: s.day, x: text }); if (yourStake(s, h.town)) event(s, text, kind); else if (HAPS[h.kind].bad && rand(s) < 0.2) realmLogSafe(s, text); }
+  function realmLogSafe(s, text) { if (s.realm && typeof realmLog === 'function') try { realmLog(s, text); } catch (e) { } }
+  function burnBiz(s, t, out) {
+    const pool = Object.values(s.biz || {}).filter(b => (b.town || 'hearthmoor') === t && !b.closed && !b.seized && b.trade !== 'estate' && !(b.burnt && b.burnt > s.day));
+    if (!pool.length) return; const b = pool[Math.floor(rand(s) * pool.length)];
+    b.burnt = s.day + 6; b.disrepair = true; b.repairCost = Math.max(b.repairCost || 0, 90); out.push(empById(b.id).name + (b.owner === 'player' ? ', which is yours,' : ''));
+  }
+  function burnHouse(s, t, out, why) {
+    const pool = (s.houses || []).filter(h => (h.town || 'hearthmoor') === t && !h.official && h.owner !== 'player-home' && !h.burnt && s.player.house !== h.id);
+    if (!pool.length) return; const h = pool[Math.floor(rand(s) * pool.length)];
+    h.wear = Math.min(100, (h.wear || 0) + (why === 'flood' ? 55 : 100)); if (why !== 'flood') { h.burnt = s.day; h.tenants.slice().forEach(id => { const q = s.people[id]; if (q) moveOut(s, q, 'Burned out of ' + h.name + '.'); }); }
+    out.push(h.name + (h.owner === 'player' ? ', which is yours,' : ''));
+  }
+  function hapVictim(s, t, old) {
+    const me = you(s).pid, pool = folkIn(s, t).filter(p => p.id !== me && p.status !== 'dead' && !p.noble && !p.royal && (old ? p.age >= 55 || p.age <= 4 : true));
+    if (!pool.length) return null; const p = pool[Math.floor(rand(s) * pool.length)]; dies(s, p); return p;
+  }
+  function hapStrike(s, h) {
+    const K = HAPS[h.kind], TN = townName(h.town), out = [];
+    h.phase = 'on'; h.until = s.day + K.len;
+    if (h.kind === 'fire') {
+      if (h.aided) { hapTell(s, h, 'Fire broke out in ' + TN + ' in the night, but the watch had the new fire-cart and buckets. It was out before it spread.', 'good'); standUp(s, h.town, 3, 'the fire-cart you paid for saved ' + TN); h.harm = 0; return; }
+      burnBiz(s, h.town, out); burnHouse(s, h.town, out); if (rand(s) < 0.5) burnHouse(s, h.town, out);
+      const v = rand(s) < 0.2 ? hapVictim(s, h.town, false) : null; h.harm = out.length + (v ? 2 : 0);
+      hapTell(s, h, 'Fire in ' + TN + '! ' + out.join(' and ') + (out.length > 1 ? ' burned' : ' burned') + '.' + (v ? ' ' + v.name + ' died in the smoke.' : ' No one died.') + ' Burned businesses are shut six days and need mending.', 'bad');
+    } else if (h.kind === 'flood') {
+      if (h.aided) { hapTell(s, h, 'The river came up at ' + TN + ', but the sandbags and the new dyke held. The low streets stayed dry.', 'good'); standUp(s, h.town, 3, 'the dyke you paid for kept ' + TN + ' dry'); h.harm = 0; h.until = s.day; return; }
+      burnHouse(s, h.town, out, 'flood'); burnHouse(s, h.town, out, 'flood'); burnHouse(s, h.town, out, 'flood');
+      setupGoods(s); const G0 = s.goods[h.town]; if (G0) G0.grain = Math.floor(G0.grain * 0.7); h.harm = out.length;
+      hapTell(s, h, 'Flood at ' + TN + '. The river is in the low streets: ' + out.join(', ') + ' are badly damaged, and grain in the stores is spoiled. Trade will be slow for a few days.', 'bad');
+    } else if (h.kind === 'blight') {
+      setupGoods(s); const G0 = s.goods[h.town]; if (G0 && !h.aided) G0.grain = Math.floor(G0.grain * 0.4); h.harm = h.aided ? 0 : 1;
+      hapTell(s, h, h.aided ? 'The blight took the fields round ' + TN + ', but the grain you bought from afar is in the stores. Bread stays within reach.' : 'The harvest round ' + TN + ' has failed. Grain is scarce and bread is dear; the poor will go hungry unless someone brings grain from afar.', h.aided ? 'good' : 'bad');
+    } else if (h.kind === 'fever') {
+      hapTell(s, h, 'The fever has taken hold in ' + TN + '. Shops are quiet, and the old and the very young are most at risk.' + (h.aided ? ' The physician you paid for is going house to house.' : ''), h.aided ? 'info' : 'bad');
+    } else if (h.kind === 'fair') hapTell(s, h, 'The fair has opened in ' + TN + '. The square is full, and every shop in town is busy.', 'good');
+    else if (h.kind === 'players') hapTell(s, h, 'The players are in ' + TN + '. Every evening the square fills for the play, and the taverns after.', 'good');
+  }
+  function hapEnd(s, h) {
+    const K = HAPS[h.kind], TN = townName(h.town);
+    h.phase = 'over'; h.ended = s.day;
+    if (h.kind === 'fever') hapTell(s, h, 'The fever in ' + TN + ' has burned itself out' + (h.dead ? ', after taking ' + h.dead + (h.dead === 1 ? ' life' : ' lives') : ' without a death') + '.', h.dead ? 'info' : 'good');
+    else if (h.kind === 'blight') hapTell(s, h, 'New grain is coming in to ' + TN + '. The blight is over.', 'info');
+    else if (h.kind === 'fair' || h.kind === 'players') { hapTell(s, h, (h.kind === 'fair' ? 'The fair packs up and leaves ' : 'The players move on from ') + TN + '.' + (h.aided ? ' Everyone knows who paid for it.' : ''), 'info'); if (h.aided) { standUp(s, h.town, h.kind === 'fair' ? 4 : 2, 'you paid for the ' + (h.kind === 'fair' ? 'fair' : 'players')); deed(s, 0.5, 1, 'paying for the ' + (h.kind === 'fair' ? 'fair' : 'players') + ' in ' + TN); } }
+    const H = setupHaps(s); H.list = H.list.filter(x => x !== h); H.past.unshift({ kind: h.kind, town: h.town, start: h.start, ended: s.day, aided: !!h.aided, dead: h.dead || 0, harm: h.harm || 0 }); if (H.past.length > 30) H.past.length = 30;
+  }
+  function hapDay(s) {
+    if (s.crisisOff || !s.people) return; const H = setupHaps(s);
+    for (const h of H.list.slice()) {
+      const K = HAPS[h.kind];
+      if (h.phase === 'warn' && s.day >= h.strike) hapStrike(s, h);
+      else if (h.phase === 'on') {
+        if (h.kind === 'fever') {
+          const risk = h.aided ? 0.08 : 0.22; if (rand(s) < risk) { const v = hapVictim(s, h.town, true); if (v) { h.dead = (h.dead || 0) + 1; hapTell(s, h, 'The fever in ' + townName(h.town) + ' has taken ' + v.name + ', aged ' + v.age + '.', 'bad'); } }
+          if (h.aided && h.until - s.day > 3) h.until = s.day + 3;
+        }
+        if (h.kind === 'blight' && !h.aided) { const G0 = s.goods && s.goods[h.town]; if (G0) G0.grain = Math.min(G0.grain, Math.floor(goodsTarget(h.town, 'grain') * 0.45)); }
+        if (s.day >= h.until) hapEnd(s, h);
+      }
+    }
+    if (s.day < 12) return;
+    const se = seasonOf(s);
+    for (const t of pplTowns(s)) {
+      if (H.list.some(h => h.town === t) || s.day - (H.last[t] || 0) < 25) continue;
+      const r = rand(s);
+      if (r < 0.011) {
+        const kinds = Object.keys(HAPS).filter(k => HAPS[k].bad && (!HAPS[k].towns || HAPS[k].towns.includes(t))), w = kinds.map(k => HAPS[k].season === se ? 3 : 1), tot = w.reduce((a, x) => a + x, 0);
+        let q = rand(s) * tot, kind = kinds[0]; for (let i = 0; i < kinds.length; i++) { q -= w[i]; if (q <= 0) { kind = kinds[i]; break; } }
+        hapStart(s, kind, t);
+      } else if (r < 0.026 && !holidayOn(s.day, kingdomOf(t))) hapStart(s, rand(s) < 0.6 ? 'fair' : 'players', t);
+    }
+  }
+  function hapStart(s, kind, t) {
+    const H = setupHaps(s), K = HAPS[kind]; if (!K) return null;
+    const h = { id: H.next++, kind, town: t, phase: 'warn', start: s.day, strike: s.day + K.warnDays, aided: false };
+    H.list.push(h); H.last[t] = s.day; hapTell(s, h, HAP_WARN[kind](townName(t)), K.bad ? 'bad' : 'good'); return h;
+  }
+  function hapView(s) {
+    const H = s.haps; if (!H) return { list: [], past: [] };
+    const here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    return { list: H.list.filter(h => yourStake(s, h.town) || h.town === here).map(h => { const K = HAPS[h.kind]; const canAid = !h.aided && !(h.kind === 'fire' && h.phase !== 'warn' && h.helped) && h.phase !== 'over' && !(h.phase === 'on' && (h.kind === 'flood' && h.harm === 0)) && !(h.phase === 'on' && h.kind === 'fire' && h.harm === 0);
+      return { id: h.id, kind: h.kind, name: K.name, bad: !!K.bad, town: h.town, townName: townName(h.town), phase: h.phase, strike: h.strike, until: h.until, aided: !!h.aided, dead: h.dead || 0, harm: h.harm || 0,
+        aid: canAid ? { label: h.phase === 'warn' ? K.aidWarn : K.aidAfter, cost: K.aid, here: h.town === here || youGovern(s, h.town) } : null, log: (h.log || []).slice(-4) }; }), past: H.past.slice(0, 8).map(p => Object.assign({ name: HAPS[p.kind].name, townName: townName(p.town) }, p)) };
+  }
+
+  /* ---------- Stage XII: ambitions, one at a time, and the family line ---------- */
+  const kidsOfYou = s => { const me = you(s).pid; return living(s).filter(p => (p.parents || []).includes(me)); };
+  const bizMine = s => ownedBy(s, 'player').length + (s.shops || []).length;
+  const AMBITIONS = [
+    { id: 'wealth', name: 'Wealth beyond counting', text: 'Be worth 5,000c in coin and property', goal: 5000, unit: 'c', cur: s => yourWorth(s), fits: s => yourWorth(s) < 5000 },
+    { id: 'fortune', name: 'A great fortune', text: 'Be worth 30,000c in coin and property', goal: 30000, unit: 'c', cur: s => yourWorth(s), fits: s => yourWorth(s) >= 2000 },
+    { id: 'note', name: 'A house of note', text: 'Raise a business to a house of note', goal: 1, cur: s => ownedBy(s, 'player').concat(s.shops || []).some(b => (b.level || 0) >= 2) ? 1 : 0, fits: s => bizMine(s) > 0 },
+    { id: 'many', name: 'Many hands', text: 'Own six businesses at once', goal: 6, cur: s => bizMine(s) },
+    { id: 'elder', name: 'Elder of Hearthmoor', text: 'Hold the Elder’s chair', goal: 1, cur: s => s.offices.elder === 'player' ? 1 : 0 },
+    { id: 'lord', name: 'A lordship', text: 'Hold a lordship', goal: 1, cur: s => (s.offices.lord === 'player' || (s.realm && yourLordships(s).length)) ? 1 : 0, fits: s => !!s.realm },
+    { id: 'council', name: 'The king’s table', text: 'Sit on the royal council, or wear the crown', goal: 1, cur: s => (isRuler(s) || (s.realm && Object.keys(COUNCIL).some(k => s.realm.council[k] === 'player'))) ? 1 : 0, fits: s => !!s.realm },
+    { id: 'crown', name: 'The crown', text: 'Rule Alderwyn', goal: 1, cur: s => isRuler(s) ? 1 : 0, fits: s => !!s.realm && powerOf(s) >= 2 },
+    { id: 'beloved', name: 'Beloved', text: 'Be thought well of (75 or more) in three towns', goal: 3, cur: s => pplTowns(s).filter(t => standing(s, t) >= 75).length },
+    { id: 'family', name: 'A full house', text: 'Have four living children', goal: 4, cur: s => kidsOfYou(s).length },
+    { id: 'honest', name: 'An honest name', text: 'Be widely known (fame 40) as upright (character 50)', goal: 100, cur: s => { const F = setupFolk(s); return Math.round(Math.min(1, Math.max(0, F.fame) / 40, Math.max(0, F.moral) / 50) * 100); } },
+    { id: 'consul', name: 'Cónsul of Valdoria', text: 'Rise to Cónsul in the Consulado', goal: 3, cur: s => (s.valdoria && s.valdoria.rank) || 0, fits: s => !!s.valdoria },
+    { id: 'bank', name: 'The bank', text: 'Own a bank', goal: 1, cur: s => s.bank && s.bank.mine ? 1 : 0, fits: s => !!s.towns }
+  ];
+  const AMB_WAIT = 10;
+  const ambById = id => AMBITIONS.find(a => a.id === id);
+  function ambProg(s, A) { const c = Math.min(A.goal, Math.max(0, Math.round(A.cur(s)))); return { cur: c, goal: A.goal, unit: A.unit || '', done: c >= A.goal }; }
+  function lifeTitle(s) {
+    const f = you(s).sex === 'f';
+    if (isRuler(s)) return [6, 'Ruler of Alderwyn'];
+    if (s.realm && Object.keys(COUNCIL).some(k => s.realm.council[k] === 'player')) return [5, 'Royal councillor'];
+    if (s.offices.lord === 'player' || (s.realm && yourLordships(s).length)) return [4, f ? 'A lady of the realm' : 'A lord of the realm'];
+    if (s.offices.elder === 'player') return [3, 'Elder of Hearthmoor'];
+    if (s.village && s.village.council) return [2, 'Village councillor'];
+    const W = s.people ? wealthTitle(s) : null; if (W && W.i >= 0) return [1, W.title];
+    return [0, 'Common folk'];
+  }
+  function setupLine(s) { if (!s.line) s.line = { heads: [], cur: null }; return s.line; }
+  function lineOpen(s) { const L = setupLine(s); L.cur = { name: s.name, from: s.day, done: [], worth: 0, lvl: -1, title: 'Common folk' }; s.amb = null; return L.cur; }
+  function lineClose(s, why) {
+    const L = setupLine(s), c = L.cur; if (!c) return;
+    L.heads.push(Object.assign({}, c, { to: s.day, why, kids: s.people ? kidsOfYou(s).length : 0, age: you(s).age })); L.cur = null; s.amb = null;
+  }
+  function ambitionDay(s) {
+    if (!s.people) return; const L = setupLine(s);
+    if (!L.cur) lineOpen(s); else if (L.cur.name !== s.name) { lineClose(s, 'gave way'); lineOpen(s); }
+    const c = L.cur, w = yourWorth(s); if (w > c.worth) c.worth = w; const T = lifeTitle(s); if (T[0] > c.lvl) { c.lvl = T[0]; c.title = T[1]; }
+    const a = s.amb && ambById(s.amb.id); if (!a) return;
+    if (ambProg(s, a).done) {
+      c.done.push(a.name); s.amb = null; s.rec.ambitions = (s.rec.ambitions || 0) + 1;
+      withWhy('fulfilling your ambition: ' + a.name, () => deed(s, 0, 4, 'fulfilling an ambition: ' + a.name));
+      standUp(s, yourTown(s) || 'hearthmoor', 5, 'you did what you set out to do');
+      event(s, 'Ambition fulfilled: ' + a.name + '. ' + a.text + ' — done. It will be remembered in the family’s history. Choose another when you are ready.', 'story');
+    }
+  }
+  function ambitionView(s) {
+    const cur = s.amb && ambById(s.amb.id), L = s.line || { heads: [], cur: null };
+    const wait = cur ? Math.max(0, s.amb.since + AMB_WAIT - s.day) : 0;
+    const done = L.cur ? L.cur.done : [];
+    return {
+      cur: cur ? Object.assign({ id: cur.id, name: cur.name, text: cur.text, since: s.amb.since }, ambProg(s, cur)) : null, wait,
+      choices: s.people ? AMBITIONS.filter(a => (!a.fits || a.fits(s)) && !ambProg(s, a).done && !done.includes(a.name) && (!cur || a.id !== cur.id)).map(a => Object.assign({ id: a.id, name: a.name, text: a.text }, ambProg(s, a))) : [],
+      done, line: { heads: L.heads.slice(), cur: L.cur ? Object.assign({}, L.cur, { kids: s.people ? kidsOfYou(s).length : 0 }) : null }
+    };
+  }
+
+
+  /* ---------- Stage XII: why things are as they are, for the tap-to-explain tips ---------- */
+  function whyOf(s, what, a, b) {
+    const out = [];
+    if (what === 'mood') {
+      const C = crowdOf(s, a), TN = townName(a); out.push(TN + ' is ' + C.word.toLowerCase() + ' (anger ' + C.heat + ' of 100).');
+      for (const c of C.causes) out.push('Because ' + c + '.'); if (!C.causes.length) out.push('Nothing much troubles them.');
+      const hp = hapIn(s, a); if (hp && HAPS[hp.kind].good) out.push(HAPS[hp.kind].name + ' is cheering the town.');
+      if (holidayOn(s.day, kingdomOf(a))) out.push('It is a holiday, and that lifts everyone.');
+    } else if (what === 'standing') {
+      const v = Math.round(standing(s, a)); out.push('You are ' + standingWord(v, s.folk ? s.folk.moral : 0).toLowerCase() + ' in ' + townName(a) + ' (' + v + ' of 100).');
+      const R = s.rep, L = R ? R.log.filter(e => e.k === 'st:' + a).slice(0, 4) : []; for (const e of L) out.push((e.n > 0 ? '+' : '') + Math.round(e.n * 10) / 10 + ' on day ' + e.d + ': ' + e.why + '.');
+      if (!L.length) out.push(a === 'hearthmoor' ? 'Work, a shop of your own, help for neighbours and office raise it; debt, cruelty and scandal lower it.' : 'Trade there, own property there and do good there to be known.');
+    } else if (what === 'price') {
+      setupGoods(s); const towns = Object.keys(TOWN_GOODS);
+      for (const t of towns) { const st = Math.round(s.goods[t][a]), tg = goodsTarget(t, a), r = st / tg, hp = hapIn(s, t);
+        out.push(townName(t) + ': ' + (r < 0.6 ? 'dear' : r > 1.4 ? 'cheap' : 'about usual') + ', ' + st + ' in store against a usual ' + tg + (hp && (hp.kind === 'blight' || hp.kind === 'flood') && a === 'grain' ? ' (' + HAPS[hp.kind].name.toLowerCase() + ')' : '') + '.'); }
+      out.push('The less a town has, the more it pays. Each load you sell makes the next one cheaper.');
+    } else if (what === 'coins') {
+      const M = moneyView(s); out.push('You hold ' + s.coins + 'c.');
+      const top = (L, n) => L.filter(x => x[1]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).slice(0, n);
+      if (M && M.ins) { const i = top(M.ins.map(x => [x[0], x[1]]), 3), o = top(M.outs.map(x => [x[0], x[1]]), 3);
+        if (i.length) out.push('Last 7 days in: ' + i.map(x => x[0] + ' ' + Math.round(x[1]) + 'c').join(', ') + '.'); if (o.length) out.push('Last 7 days out: ' + o.map(x => x[0] + ' ' + Math.round(x[1]) + 'c').join(', ') + '.');
+        if (M.due && M.due.length) out.push('Coming: ' + M.due.slice(0, 4).map(d => d.when + ': ' + d.what.charAt(0).toLowerCase() + d.what.slice(1) + (typeof d.n === 'number' ? ' ' + d.n + 'c' : '')).join(', ') + '.'); }
+      if (s.coins < 0) out.push('You are in debt: the moneylender adds 2% a day.');
+    }
+    return out;
+  }
+  /* ---------- Stage XII: what changed while you were away ---------- */
+  function snapshot(s) {
+    const F = s.folk || { fame: 0, moral: 0 }, st = {}, moods = {};
+    if (s.people) for (const t of pplTowns(s)) { st[t] = Math.round(standing(s, t)); if (yourStake(s, t)) moods[t] = crowdOf(s, t).mood; }
+    return { day: s.day, t: s.t, coins: s.coins, fame: Math.round(F.fame || 0), moral: Math.round(F.moral || 0), st, moods, title: s.people ? lifeTitle(s)[1] : '', biz: s.people ? bizMine(s) : 0, houses: (s.houses || []).filter(h => h.owner === 'player').length };
+  }
+  function digest(s, a) {
+    if (!a) return null; const b = snapshot(s), out = [], k = (x, kind) => out.push({ x, k: kind || 'info' });
+    const dc = b.coins - a.coins; if (Math.abs(dc) >= 1) k((dc > 0 ? 'Your purse grew by ' : 'Your purse shrank by ') + Math.abs(dc) + 'c (now ' + b.coins + 'c).', dc > 0 ? 'good' : 'bad');
+    if (b.title !== a.title) k('You are now ' + b.title + ' (was ' + a.title + ').', 'story');
+    if (b.biz !== a.biz) k(b.biz > a.biz ? 'You own ' + (b.biz - a.biz) + ' more ' + (b.biz - a.biz === 1 ? 'business' : 'businesses') + '.' : 'You own ' + (a.biz - b.biz) + ' fewer ' + (a.biz - b.biz === 1 ? 'business' : 'businesses') + '.', b.biz > a.biz ? 'good' : 'bad');
+    if (b.houses !== a.houses) k('You own ' + b.houses + (b.houses === 1 ? ' house' : ' houses') + ' (was ' + a.houses + ').', 'info');
+    for (const t in b.st) { const d = b.st[t] - (a.st[t] || 0); if (Math.abs(d) >= 3) k(townName(t) + (d > 0 ? ' thinks better of you' : ' thinks less of you') + ' (' + (a.st[t] || 0) + ' → ' + b.st[t] + ').', d > 0 ? 'good' : 'bad'); }
+    if (Math.abs(b.fame - a.fame) >= 3) k(b.fame > a.fame ? 'More people know your name.' : 'Fewer people talk about you.', 'info');
+    if (Math.abs(b.moral - a.moral) >= 3) k(b.moral > a.moral ? 'Your name for honesty has grown.' : 'Your name for honesty has slipped.', b.moral > a.moral ? 'good' : 'bad');
+    for (const t in b.moods) if (a.moods[t] && a.moods[t] !== b.moods[t]) k(townName(t) + ' is ' + CROWD_WORD[b.moods[t]].toLowerCase() + ' now (was ' + CROWD_WORD[a.moods[t]].toLowerCase() + ').', ['angry', 'hungry', 'uneasy'].includes(b.moods[t]) ? 'bad' : 'good');
+    const since = (s.chronicle || []).filter(c => c.d > a.day || (c.d === a.day && c.m > Math.round(a.t % 1440))).filter(c => c.k === 'story' || /\byou(r)?\b/i.test(c.x));
+    return { mins: Math.round(s.t - a.t), days: s.day - a.day, lines: out, news: since.slice(-10).reverse() };
   }
   function valdoriaDay(s) {
     const V = s.valdoria, R = s.realm; if (!V) return;
@@ -8177,6 +8393,28 @@
         if (s.day - (C.lastSooth || -99) < 3) return fail('You held court ' + (s.day - C.lastSooth) + ' days ago.'); const R = s.realm; if (R.treasury < 120) return fail('Gifts and offices for the lords cost 120c from the treasury.');
         R.treasury -= 120; C.lastSooth = s.day; C.unrest = clamp(C.unrest - 25, 0, 100); valLog(s, 'You hold court at the Alc\u00e1zar. Offices and gifts go to the lords of Valdoria, and the murmuring quiets (unrest ' + Math.round(C.unrest) + ' of 100).', 'good'); return ok();
       }
+      case 'hapAid': {
+        const H = setupHaps(s), hp = H.list.find(x => x.id === a); if (!hp) return fail('That has passed.');
+        const K = HAPS[hp.kind], v = hapView(s).list.find(x => x.id === a);
+        if (!v || !v.aid) return fail('There is nothing more to pay for there.');
+        if (!v.aid.here) return fail('You need to be in ' + townName(hp.town) + ' to do that.');
+        if (s.coins < K.aid) return fail('That costs ' + K.aid + 'c.');
+        spend(s, K.aid); flow(s, 'hapAid', -K.aid); const TN = townName(hp.town);
+        if (hp.phase === 'on' && (hp.kind === 'fire' || hp.kind === 'flood')) { hp.helped = true; hp.aided = true; standUp(s, hp.town, 4, 'you helped the families who lost their homes'); deed(s, 1.5, 1, 'helping ' + TN + ' after the ' + hp.kind); event(s, 'You pay to help the families of ' + TN + ' who lost their homes. They will not forget it.', 'good'); return ok(); }
+        hp.aided = true;
+        if (hp.kind === 'blight' && hp.phase === 'on') { setupGoods(s); const G0 = s.goods[hp.town]; if (G0) G0.grain = Math.max(G0.grain, Math.floor(goodsTarget(hp.town, 'grain') * 0.9)); }
+        if (K.bad) { standUp(s, hp.town, 4, 'you paid to meet the ' + K.name.toLowerCase() + ' in ' + TN); deed(s, 1.5, 1, 'meeting the ' + K.name.toLowerCase() + ' in ' + TN); }
+        event(s, K.bad ? 'You pay ' + K.aid + 'c: ' + (hp.phase === 'warn' ? K.aidWarn : K.aidAfter).toLowerCase() + '. ' + TN + ' sees who stepped up.' : 'You pay ' + K.aid + 'c towards ' + (hp.kind === 'fair' ? 'the fair' : 'the players') + ' in ' + TN + '. Your name will be on every lip there.', 'good');
+        return ok();
+      }
+      case 'ambition': {
+        const A = ambById(a); if (!A || !s.people) return fail('No such ambition.');
+        if (s.amb && s.amb.id === a) return fail('That is already your ambition.');
+        const V = ambitionView(s); if (!V.choices.some(c => c.id === a)) return fail('That is not open to you now.');
+        if (s.amb && V.wait > 0) return fail('You set your heart on ' + ambById(s.amb.id).name + ' only lately. You can change it in ' + V.wait + (V.wait === 1 ? ' day.' : ' days.'));
+        s.amb = { id: a, since: s.day }; event(s, 'Your ambition: ' + A.name + '. ' + A.text + '.', 'story'); return ok();
+      }
+      case 'ambitionDrop': { if (!s.amb) return fail('You have no ambition set.'); s.amb = null; event(s, 'You set your ambition aside for now.', 'info'); return ok(); }
       case 'valSponsor': {
         // a Valdorian family stands godparent for a foreigner at the Cathedral of Valdor: the guild will trust a man the Church has taken in
         const V = s.valdoria; if (!V) return fail('Not now.'); if (V.sponsor) return fail('A Valdorian family already stands sponsor for you.');
@@ -9472,6 +9710,7 @@
       if (C.calm && C.calm.until >= s.day) target -= C.calm.v; else C.calm = null;
       if (C.grudge && C.grudge.until >= s.day) target += add(C.grudge.v, 'they have not forgotten the watch’s clubs'); else C.grudge = null;
       if (holidayOn(s.day, kingdomOf(t))) target -= 8;
+      { const hm = hapMood(s, t); if (hm) { if (hm.v > 0) target += add(hm.v, hm.text); else target += hm.v; } }
       target = clamp(target, 0, 100);
       C.heat = Math.round((C.heat + (target - C.heat) * (target > C.heat ? 0.22 : 0.3)) * 10) / 10;
       C.causes = causes.sort((x, y) => y.v - x.v).slice(0, 3).map(c => c.text); C.n = a.n; C.hungry = a.hungry;
@@ -11261,6 +11500,7 @@
     farFolk, farOne, roadFolk, routinePlan, FAR_IN, FAR_KEY, FAR_KID, FAR_BODY, FAR_MOVING, FAR_KIN, ROAD_NAME,
     setupPpl, pplOf, crowdOf, notables, stanceOf, blocOf, patronOf, pickKey, pplDay, riot, keyAct, risers, keyCap, PPL_SECRETS, CROWD_WORD, youGovern, officeOf, raceTown,
     GRANT_PRICE, VILLAGE_MILESTONES, amendsCost, bribeCost, WEALTH, LAND, BIZ_TOWN_PRICE, spotMul, prestigeIds, isPrestige, setupFolk, folkDay, wrong, kindness, deed, hateStep, hateIdx, HATE_STEPS, FAIR_WAGE, fairWage, PRICE_MODES, moralName, moralWord, fameName, fameTarget, yourTitle, regardOf, nemeses, nemWhere, confrontOpts, threatOdds, authOver, yourGuards, fightOf, willWork, AUDIENCE, townOwnership, DENS, isForeign, warGrief, leaveTown, temperOf, townName,
+    HAPS, hapView, hapStart, hapDay, hapMul, AMBITIONS, ambitionView, lifeTitle, snapshot, digest, whyOf,
     CONSULADO, consuladoView, GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
@@ -11275,7 +11515,7 @@
   };
   { const a0 = api.applyStart; api.applyStart = (s, m) => { REPX.quiet = true; try { return a0(s, m); } finally { REPX.quiet = false; } }; }   // how you begin is not a change in your name
   // the tests of older systems were written for a world without bankers and courtiers in it: for them, new games start with both asleep
-  { let QUIET = false; const n0 = api.newGame; api.newGame = (...a) => { const s = n0(...a); if (QUIET) { s.powOff = true; s.bankLazy = true; } return s; }; api.setQuietWorld = v => { QUIET = !!v; }; }
+  { let QUIET = false; const n0 = api.newGame; api.newGame = (...a) => { const s = n0(...a); if (QUIET) { s.powOff = true; s.bankLazy = true; s.crisisOff = true; } return s; }; api.setQuietWorld = v => { QUIET = !!v; }; }
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sim = api;
 })(typeof window !== 'undefined' ? window : globalThis);

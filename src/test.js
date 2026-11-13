@@ -2275,5 +2275,30 @@ console.log('58. The Elder’s official house');
   check(eh.owner !== 'player' && s.player.house !== eh.id, 'it leaves with the chair');
 }
 
+// ---- 59: Stage XII ----
+console.log('59. Stage XII: crises and fairs, ambitions and the family history, while you were away, and why');
+{
+  const faults59 = Sim.faults().length;
+  const s = newGameAging(59); Sim.applyStart(s, 'merchant'); s.ageRate = 0; holdElections(s); s.crisisOff = false; s.coins = 2000; Sim.advance(s, 60);
+  const quiet = newGameRaw(58); Sim.advance(quiet, 1440 * 30); check(!quiet.haps || !quiet.haps.list.length, 'the quiet test world has no happenings');
+  const f = Sim.hapStart(s, 'fire', 'hearthmoor'); check(Sim.hapView(s).list.some(x => x.id === f.id && x.aid), 'a fire comes with a warning and something you can do');
+  const r = Sim.cmd(s, 'hapAid', f.id); check(r.ok !== false, 'you pay for the fire-cart');
+  Sim.advance(s, 1440 * 3); check(f.harm === 0 && !Object.values(s.biz).some(b => b.burnt && b.burnt > s.day), 'a fire met in time burns nothing');
+  const f2 = Sim.hapStart(s, 'fire', 'oakbridge'); Sim.advance(s, 1440 * 3); check(f2.harm > 0, 'a fire nobody met burns (' + f2.harm + ')');
+  const fv = Sim.hapStart(s, 'fever', 'hearthmoor'); Sim.advance(s, 1440 * 14); check(s.haps.past.some(p => p.kind === 'fever'), 'a fever runs its course');
+  const g0 = s.goods.hearthmoor.grain; Sim.hapStart(s, 'blight', 'hearthmoor'); Sim.advance(s, 1440 * 3); check(s.goods.hearthmoor.grain < g0, 'blight empties the grain stores');
+  const biz = Object.values(s.biz).find(b => (b.town || 'hearthmoor') === 'greenhaven'); const fair = Sim.hapStart(s, 'fair', 'greenhaven'); Sim.advance(s, 1440 * 2); check(Sim.hapMul(s, 'greenhaven') > 1, 'a fair brings more customers');
+  const A = Sim.ambitionView(s); check(A.choices.length >= 5, 'ambitions are offered (' + A.choices.length + ')');
+  check(Sim.cmd(s, 'ambition', 'wealth').ok !== false && s.amb.id === 'wealth', 'you set an ambition');
+  check(Sim.cmd(s, 'ambition', 'many').ok === false, 'and cannot change it straight away');
+  const sn = Sim.snapshot(s); s.coins = 20000; Sim.advance(s, 1440);
+  check(!s.amb && s.line.cur.done.includes('Wealth beyond counting'), 'a fulfilled ambition goes into the family history');
+  const D = Sim.digest(s, sn); check(D && D.lines.some(l => /purse/.test(l.x)), 'the digest says what changed');
+  check(Sim.whyOf(s, 'coins').length > 0 && Sim.whyOf(s, 'mood', 'hearthmoor').length > 0 && Sim.whyOf(s, 'price', 'grain').length > 0, 'coin, mood and prices can explain themselves');
+  s.pendingDeath = { day: s.day, age: 70 }; const was = s.name; const rb = Sim.cmd(s, 'beginAgain', 'Ada Thorne', 'f'); Sim.advance(s, 1440);
+  check(rb.ok !== false && s.line.heads.length === 1 && s.line.heads[0].name === was && s.line.heads[0].done.length === 1 && s.line.cur && s.line.cur.name === 'Ada Thorne' && !s.amb, 'the family history keeps each head of the family, and the next one starts fresh');
+  check(Sim.faults().length === faults59, 'Stage XII runs without faults');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);
