@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 21;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
+  const VERSION = 22;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -445,7 +445,7 @@
     initGov(s);
     setupOakbridge(s);
     setupGreenhaven(s);
-    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupNewTown(s, 'dawnport'); setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupNewTown(s, 'valdor'); setupNewTown(s, 'saltholm'); setupNewTown(s, 'merrow'); setupNewTown(s, 'gullhaven'); setupRealm(s); setupValdoria(s); setupSeaChart(s);
+    setupCrownmere(s); setupNewTown(s, 'ironcrest'); setupNewTown(s, 'eastwatch'); setupNewTown(s, 'dawnport'); setupNewTown(s, 'goldmeadow'); setupNewTown(s, 'thornwick'); setupNewTown(s, 'stonewatch'); setupNewTown(s, 'valdor'); setupNewTown(s, 'saltholm'); setupNewTown(s, 'merrow'); setupNewTown(s, 'gullhaven'); setupNewTown(s, 'wrenmouth'); setupNewTown(s, 'castamar'); setupRealm(s); setupValdoria(s); setupSeaChart(s);
     generateAncestry(s);
     you(s).age = 20; s.you.bday = 3;
     openDay(s);
@@ -554,6 +554,8 @@
   function closeDay(s) {
     const st = s.stats;
     if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
+    if (s.ship || (s.fleet && s.fleet.length)) guard(s, 'the crews were paid', () => crewNight(s));
+    for (const F of s.fleet || []) { const up = shipClass(F).upkeep; spend(s, up); st.ship = (st.ship || 0) + up; }
     if (s.ship) { const up = shipClass(s.ship).upkeep; spend(s, up); st.ship = (st.ship || 0) + up; if (s.ship.port && s.ship.hurt) { const C = shipClass(s.ship); s.ship.hurt = Math.max(0, s.ship.hurt - Math.max(1, Math.ceil(C.hands * 0.35))); if (!s.ship.hurt) event(s, 'Your crew are all fit again.', 'good'); } }
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
     if (s.people) { guard(s, 'the businesses closed for the day', () => bizDay(s)); guard(s, 'the evening in the village', () => peopleEvening(s)); }
@@ -1660,6 +1662,7 @@
     if (j.type === 'manage') return 'Manages ' + managedName(s, j.kind, j.ref) + ' for you';
     if (j.type === 'watch') return p.held ? 'Village watch (locked up)' : 'Village watch';
     if (j.type === 'office') return OFFICES[j.office].title;
+    if (j.type === 'crew') { const S = shipById(s, j.ship); return (CREW_POSTS[j.post] ? CREW_POSTS[j.post].name : 'Hand') + (S ? ' of your ship ' + S.name : ' at sea'); }
     return 'Working';
   }
   function homeText(s, p) {
@@ -1857,7 +1860,9 @@
     valdor: { make: { grain: 10, wood: 6, ore: 0 }, use: { grain: 90, wood: 55, ore: 22 }, travellers: 90 },
     saltholm: { make: { grain: 2, wood: 2, ore: 0 }, use: { grain: 16, wood: 10, ore: 2 }, travellers: 6 },
     merrow: { make: { grain: 8, wood: 4, ore: 0 }, use: { grain: 14, wood: 9, ore: 2 }, travellers: 6 },
-    gullhaven: { make: { grain: 2, wood: 3, ore: 0 }, use: { grain: 15, wood: 10, ore: 3 }, travellers: 7 }
+    gullhaven: { make: { grain: 2, wood: 3, ore: 0 }, use: { grain: 15, wood: 10, ore: 3 }, travellers: 7 },
+    wrenmouth: { make: { grain: 4, wood: 6, ore: 8 }, use: { grain: 24, wood: 16, ore: 6 }, travellers: 12 },
+    castamar: { make: { grain: 10, wood: 4, ore: 0 }, use: { grain: 22, wood: 14, ore: 4 }, travellers: 12 }
   };
   // per trade: how often a grown person buys (visits a day), how much each time, the usual price,
   // the goods used per unit sold, and how many units one pair of hands can make in a day
@@ -1889,7 +1894,7 @@
   const goodsTarget = (t, g) => Math.max(20, TOWN_GOODS[t].use[g] * 5);
   // every town's market: made on a new game, and for any town a save from before it was built is missing (Valdor, in v0.49)
   function setupGoods(s) {
-    if (s.goods && s.goods.gullhaven) return;
+    if (s.goods && s.goods.castamar) return;
     s.goods = s.goods || {};
     for (const t in TOWN_GOODS) { if (s.goods[t]) continue; s.goods[t] = {}; for (const g of GOODS) { const T = TOWN_GOODS[t]; s.goods[t][g] = Math.max(8, Math.round(goodsTarget(t, g) + 2 * (T.make[g] - T.use[g]))); } }
   }
@@ -1927,7 +1932,7 @@
       }
     }
   }
-  const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour', dawnport: 'dpharbour', goldmeadow: 'gmgreen', thornwick: 'twyard', stonewatch: 'swparade', valdor: 'vdplaza', saltholm: 'shsquare', merrow: 'mrsquare', gullhaven: 'gusquare' };
+  const MARKET_AT = { hearthmoor: 'market', oakbridge: 'oaksq', greenhaven: 'ghgreen', crownmere: 'cmmarket', ironcrest: 'icsquare', eastwatch: 'ewharbour', dawnport: 'dpharbour', goldmeadow: 'gmgreen', thornwick: 'twyard', stonewatch: 'swparade', valdor: 'vdplaza', saltholm: 'shsquare', merrow: 'mrsquare', gullhaven: 'gusquare', wrenmouth: 'wrsquare', castamar: 'casquare' };
   function marketHere(s) { setupGoods(s); for (const t in MARKET_AT) { const L = LOCS[MARKET_AT[t]]; if (L && dist(s.player, L) < L.r + (t === 'hearthmoor' ? 0 : 4)) return t; } return null; }
   // the day's demand for a trade in a town, and how much each seller can make
   function sellersOf(s, t, trade) {
@@ -3523,7 +3528,7 @@
   /* ---------- the Sundering Sea: one wide, open sea between the two kingdoms. Everything about its shape lives here, so that
      anything that crosses it (passage ships today; ships of your own to sail, later) reads the same coasts and isles ---------- */
   // a coast is ragged with bays and headlands, and lies straight only along the quays of the ports
-  const ragged = (z, ph) => { const w = Math.min(1, Math.max(0, (Math.abs(z + 300) - 110) / 130)), k = w * w * (3 - 2 * w); return k * (70 * Math.sin(z / 410 + ph) + 60 * Math.sin(z / 190 + ph * 2.3) + 38 * Math.sin(z / 83 + ph * 0.7) + 16 * Math.sin(z / 31 + ph * 1.9) + 6 * Math.sin(z / 13 + ph * 3.1)); };
+  const ragged = (z, ph) => { const w = Math.min(1, Math.max(0, (Math.abs(z + 300) - 110) / 130), Math.max(0, (Math.abs(z - 620) - 90) / 110), Math.max(0, (Math.abs(z + 1450) - 90) / 110)), k = w * w * (3 - 2 * w); return k * (70 * Math.sin(z / 410 + ph) + 60 * Math.sin(z / 190 + ph * 2.3) + 38 * Math.sin(z / 83 + ph * 0.7) + 16 * Math.sin(z / 31 + ph * 1.9) + 6 * Math.sin(z / 13 + ph * 3.1)); };
   const ALD_COAST = z => 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31) - ragged(z, 0.7);   // Alderwyn's east coast: bays bite west into the land
   const VSHORE = z => 8650 + 10 * Math.sin(z / 70) + 4 * Math.sin(z / 23) + ragged(z, 2.4);          // Valdoria's west coast: bays bite east
   const SEA = { x0: 1140, x1: 8650, band: { x0: -1400, x1: 10500, z0: -2800, z1: 1400 }, level: 'SEA_Y in the drawing' };
@@ -3638,6 +3643,49 @@
     L0.biz.forEach(b0 => { LOCS[pre + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: id }; });
   }
   LOCS.covecamp = { x: 5650, z: 1022, r: 9, name: 'Smugglers’ Cove', port: 'cove' };
+  /* ---------- the Sea Road, Stage III: two more ports on the mainland coasts ----------
+     Wrenmouth, a tin port on Alderwyn's south coast, on the road south from Eastwatch; and Castamar, an olive-oil port on
+     Valdoria's north coast, on a road from Stonewatch. Real towns, built on the same plan as the island ports. */
+  const Q_WREN = ISLE_PORT(1124, 620, Math.PI / 2), Q_CAST = ISLE_PORT(8560, -1450, -Math.PI / 2);
+  // where a coast is a straight quay wall instead of a natural shore: the x of the wall, or null
+  const aldQuay = z => Math.abs(z + 300) < 135 ? 1137 : Math.abs(z - 620) < 80 ? 1124 : null;
+  const valQuay = z => Math.abs(z + 300) < 96 ? 8659 : Math.abs(z + 1450) < 80 ? 8560 : null;
+  function portTown(id, Q, seed, lanes, bizList, pre, more, extra, maxHouses) {
+    const A = (u, v) => Q.at(u, v), C = A(-52, 0);
+    return makeTown({
+      id, lanes, C: { x: C[0], z: C[1] }, seed, R: 62, maxHouses: maxHouses || 26, tall: 0.2,
+      avoid: (x, z, rad) => { const u = (x - Q.x) * Math.sin(Q.qa) + (z - Q.z) * Math.cos(Q.qa); return u > -7 - rad; },
+      streets: [
+        { name: 'the Quay', w: 5.2, pts: [A(-3, -70), A(-3, 0), A(-3, 70)], noHouses: true },
+        { name: 'High Street', w: 4.6, pts: [A(-3, 0), A(-30, 0), A(-60, 2), A(-96, 0)] },
+        { name: 'Church Lane', w: 3.6, pts: [A(-34, -48), A(-32, 0), A(-34, 48)] },
+        { name: 'Back Lane', w: 3.4, pts: [A(-72, -44), A(-70, 0), A(-72, 44)] }
+      ],
+      plazas: [{ id: 'harbour', name: 'the harbour square', x: A(-16, 0)[0], z: A(-16, 0)[1], r0: 3, r1: 10, w: 3 }],
+      marks: [],
+      biz: bizList,
+      spots: Object.assign({ [pre + 'dock']: { x: A(-4, 10)[0], z: A(-4, 10)[1], rx: 2.5, rz: 2.5 }, [pre + 'fish']: { x: A(-4, 40)[0], z: A(-4, 40)[1], rx: 2, rz: 2 }, [pre + 'watch']: { x: A(-94, 2)[0], z: A(-94, 2)[1], rx: 2, rz: 2 } }, more),
+      board: { x: A(-16, 12)[0], z: A(-16, 12)[1] }, entry: { x: A(-96, 0)[0], z: A(-96, 0)[1] }, extra: Object.assign({ quay: Q }, extra || {})
+    });
+  }
+  const WR = portTown('wrenmouth', Q_WREN, 81818, null, [['w_anchor', 'tavern', 'The Anchor', 'Hob Penhale', 1, 0.25, 1, 'harbour'], ['w_smelt', 'smithy', 'Tin Smelters', 'Aldous Wray', 1, 0.62, -1, 'high'], ['w_rope', 'weaver', 'Wrenmouth Ropery', 'Elyn Cord', 2, 0.3, -1, 'church'], ['w_oven', 'bakery', 'Quay Ovens', 'Maud Pellow', 2, 0.72, 1, 'church'], ['w_cooper', 'cooper', 'Saltcask Coopers', 'Ned Hollis', 3, 0.4, 1, 'back']],
+    'wr_', { wr_tin: { x: Q_WREN.at(-90, -40)[0], z: Q_WREN.at(-90, -40)[1], rx: 8, rz: 6 }, wr_yard: { x: Q_WREN.at(-8, -50)[0], z: Q_WREN.at(-8, -50)[1], rx: 6, rz: 4 } }, { tin: Q_WREN.at(-110, -50) });
+  const CK = portTown('castamar', Q_CAST, 82828, VAL_LANES, [['k_olivo', 'tavern', 'El Olivo', 'Jimena Soler', 1, 0.25, -1, 'harbour'], ['k_press', 'cooper', 'The Oil Presses', 'Bernat Olivé', 1, 0.62, 1, 'high'], ['k_horno', 'bakery', 'Horno del Puerto', 'Teresa Vidal', 2, 0.3, 1, 'church'], ['k_fish', 'butcher', 'La Lonja', 'Pere Delmar', 2, 0.72, -1, 'church'], ['k_chand', 'chandler', 'Velas y Brea', 'Lluc Roca', 3, 0.4, -1, 'back']],
+    'ca_', { ca_grove: { x: Q_CAST.at(-100, 40)[0], z: Q_CAST.at(-100, 40)[1], rx: 12, rz: 8 }, ca_press: { x: Q_CAST.at(-60, 30)[0], z: Q_CAST.at(-60, 30)[1], rx: 4, rz: 4 } }, { grove: Q_CAST.at(-130, 50) });
+  const PORT_JOBS = {
+    wr_dock: ['Docker', 'Loading tin at the quay'], wr_fish: ['Fisher', 'Fishing the bay'], wr_watch: ['Watchman', 'Keeping the road gate'], wr_tin: ['Tinner', 'Washing tin in the streams above the town'], wr_yard: ['Boatbuilder', 'Building fishing boats on the strand'],
+    ca_dock: ['Docker', 'Rolling oil casks on the quay'], ca_fish: ['Fisher', 'Fishing from the boats'], ca_watch: ['Guard', 'Keeping the road for the Queen'], ca_grove: ['Olive picker', 'Working the olive groves'], ca_press: ['Presser', 'Working the oil presses']
+  };
+  [WR, CK].forEach(L0 => L0.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); }));
+  TOWNS.wrenmouth = { name: 'Wrenmouth', x: WR.C.x, z: WR.C.z, r: 66, open: true };
+  TOWNS.castamar = { name: 'Castamar', x: CK.C.x, z: CK.C.z, r: 66, open: true, foreign: 'valdoria' };
+  for (const [id, L0, pre, sq, Q] of [['wrenmouth', WR, 'wrb:', 'wrsquare', Q_WREN], ['castamar', CK, 'cab:', 'casquare', Q_CAST]]) {
+    const h = Q.at(-16, 0), qy = Q.at(-4, 0);
+    LOCS[sq] = { x: h[0], z: h[1], r: 11, name: 'the harbour square', town: id };
+    LOCS[id + 'quay'] = { x: qy[0], z: qy[1], r: 7, name: TOWNS[id].name + ' Quay', town: id, port: id };
+    L0.biz.forEach(b0 => { LOCS[pre + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: id }; });
+  }
+  const NEW_PORT_TOWNS = { wrenmouth: WR, castamar: CK };
   const DP = (function () {
     const C = { x: 8740, z: -300 }, R = 104;
     const T = makeTown({
@@ -3824,6 +3872,7 @@
     PORTS[id] = { x: pq[0], z: pq[1], face: Q.qa + Math.PI, name: ISLE_BY[id].name + ' Quay', isle: true };
   }
   BERTHS.cove = { x: 5650, z: 1082, hdg: Math.PI / 2 };
+  for (const [id, Q] of [['wrenmouth', Q_WREN], ['castamar', Q_CAST]]) { const b = Q.at(12, 0), pq = Q.at(-2, 0); BERTHS[id] = { x: b[0], z: b[1], hdg: Math.atan2(Math.cos(Q.qa), -Math.sin(Q.qa)) }; PORTS[id] = { x: pq[0], z: pq[1], face: Q.qa + Math.PI, name: TOWNS[id].name + ' Quay', harbour: true }; }
   PORTS.cove = { x: 5650, z: 1006, face: Math.PI, name: 'Smugglers\u2019 Cove', isle: true };
   // the shipyards: the slip at Eastwatch and the shipwrights of both ports
   const SHIPYARDS = { ewyard: 'eastwatch', 'eb:e_ship1': 'eastwatch', 'eb:e_ship2': 'eastwatch', 'db:d_yard': 'dawnport' };
@@ -3842,7 +3891,7 @@
     const WX = seaWeather(s), rough = WX.storm;
     return { to: a0 + da * f + 0.22 * Math.sin(tt * Math.PI * 6) + (rough ? 0.3 * Math.sin(tt * 90) : 0), str: rough ? 1.25 : WX.calm ? 0.35 : WX.fog ? 0.6 : 0.9 + 0.2 * (wh01(i * 5 + 2) * (1 - f) + wh01(i * 5 + 7) * f), rough, weather: WX.kind };
   }
-  const crewK = S => { const C = shipClass(S); return C.hands ? 1 - 0.5 * Math.min(1, (S.hurt || 0) / C.hands) : 1; };   // hurt and sick hands make her slower to answer
+  const crewK = (S, s0) => { const C = shipClass(S); if (!C.hands) return 1; const fit = s0 && S.crew ? fitCount(s0, S) : C.hands - (S.hurt || 0); return 0.5 + 0.5 * Math.min(1, Math.max(0, fit) / C.hands); };   // short-handed, or with hands hurt and sick, she is slower to answer
   // where you stand aboard, in the world: at the helm, or wherever you have walked to on her decks (d: the ship's own frame, x across and z fore and aft)
   function deckWorld(S, d) { const q = shipPose(S); if (!q) return null; if (!d) return { x: q.x, z: q.z }; const c = Math.cos(q.hdg), sn = Math.sin(q.hdg); return { x: q.x + c * d.x + sn * d.z, z: q.z - sn * d.x + c * d.z }; }
   function aboardPlace(s) { const p = s.player, w = deckWorld(s.ship, p.deck); if (w) { p.x = w.x; p.z = w.z; } }
@@ -3861,8 +3910,8 @@
     return out;
   })();
   function seaDepth(x, z) {
-    const inW = Math.abs(z + 300) < 135, inE = Math.abs(z + 300) < 96;
-    let d = Math.min((x - (inW ? 1138.4 : ALD_COAST(z) - 7)) * (inW ? 1.2 : 0.37), ((inE ? 8656.6 : VSHORE(z) - 8) - x) * (inE ? 1.2 : 0.44), SEA_FLOOR);
+    const qW = aldQuay(z), qE = valQuay(z);
+    let d = Math.min((x - (qW != null ? qW + 1.4 : ALD_COAST(z) - 7)) * (qW != null ? 1.2 : 0.37), ((qE != null ? qE - 2.4 : VSHORE(z) - 8) - x) * (qE != null ? 1.2 : 0.44), SEA_FLOOR);
     if (d <= 0) return 0;
     if (x > ISLE.x - 90 && x < ISLE.x + 90) { const di = Math.hypot(x - ISLE.x, (z - ISLE.z) * 1.3); if (di < 70) d = Math.min(d, (di - 54.5) * 0.3); }
     { const r = isleRel(x, z); if (r != null) d = Math.min(d, -r); }
@@ -3905,7 +3954,7 @@
     const C = shipClass(S), q = S.sea, W = windAt(s); dt = Math.min(dt, 2);
     q.rud = (q.rud || 0) + (clamp(helm || 0, -1, 1) - (q.rud || 0)) * Math.min(1, dt * 4);
     const used = Object.values(S.hold || {}).reduce((a, b) => a + b, 0), laden = 1 - 0.12 * Math.min(1, used / Math.max(1, S.cap || C.hold));
-    const ck = crewK(S), want = C.mpm * SAIL_SET[q.sail | 0] * windFactor(q.hdg, W.to) * W.str * laden;
+    const ck = crewK(S, s), want = C.mpm * (S.refits && S.refits.sheath ? 1.08 : 1) * (S.hull == null ? 1 : 0.75 + 0.25 * S.hull / 100) * SAIL_SET[q.sail | 0] * windFactor(q.hdg, W.to) * W.str * laden;
     q.spd += (want - q.spd) * Math.min(1, dt * C.accel * ck * (want < q.spd ? 1.6 : 1));
     if (q.spd < 0.02 && want === 0) q.spd = 0;
     // she answers the helm best with way on, but a little even stopped, so she can always be worked off
@@ -3935,21 +3984,23 @@
     if (S.port === undefined || (!S.port && !S.sea)) { S.port = S.from && BERTHS[S.from] ? S.from : 'eastwatch'; S.sea = null; }
     if (p.aboard) {
       const q = deckWorld(S, p.deck);
-      if (S.impounded || !q || Math.hypot(p.x - q.x, p.z - q.z) > 6) {   // something took you off her (a summons, the watch, a fight): the crew see to the ship
+      if (!s.fight && (S.impounded || !q || Math.hypot(p.x - q.x, p.z - q.z) > 6)) {   // something took you off her (a summons, the watch, a fight): the crew see to the ship
         p.aboard = false; p.deck = null;
         if (!S.port) { const k = nearestPort(S.sea); S.port = k; S.sea = null; event(s, 'With you gone from the deck, the crew bring ' + S.name + ' into ' + PORTS[k].name + ' and moor her there.', 'info'); }
         else S.sea = null;
       } else { if (S.port && !S.sea) { const B = BERTHS[S.port]; S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 0 }; } aboardPlace(s); }
     } else if (!S.port) { const k = nearestPort(S.sea); S.port = k; S.sea = null; }
     else if (S.sea) S.sea = null;
+    ensureShipId(s, S);
     if (S.port || !p.aboard) return;
     const WX = seaWeather(s), C = shipClass(S), hourK = Math.floor(s.t / 60);
     seaSights(s);
-    if (WX.storm && C.hands && S.hurtHour !== hourK) { S.hurtHour = hourK; if ((S.hurt || 0) < C.hands - 1 && rand(s) < 0.3) { S.hurt = (S.hurt || 0) + 1; event(s, 'A green sea comes over the side and sweeps a hand into the rail. ' + S.hurt + ' of ' + C.hands + ' crew are hurt now, and she answers the helm more slowly. They will mend in port.', 'bad'); } }
-    if (!WX.storm && C.hands && S.leftAt != null && s.t - S.leftAt > 1440 && S.sickAt !== Math.floor(s.t / 360)) { S.sickAt = Math.floor(s.t / 360); if ((S.hurt || 0) < C.hands - 1 && rand(s) < 0.2) { S.hurt = (S.hurt || 0) + 1; event(s, 'A fever goes through the forecastle after so long at sea. ' + S.hurt + ' of ' + C.hands + ' crew are sick or hurt. Rest in port will mend them.', 'bad'); } }
+    { const dayK = Math.floor(s.t / 1440); if (S.provDay !== dayK) { S.provDay = dayK; if (S.voyage && S.crew && S.crew.length) { S.prov = Math.max(0, (S.prov || 0) - 1); if (!S.prov) event(s, 'The last of the stores are eaten aboard ' + S.name + '. The crew go hungry: buy provisions at the next port.', 'bad'); } } }
+    if (WX.storm && C.hands && S.hurtHour !== hourK) { S.hurtHour = hourK; if (rand(s) < 0.3) { const hp = crewHurt(s, S); if (hp) { crewMood(s, S, -3); event(s, 'A green sea comes over the side and sweeps ' + hp.name + ' into the rail. ' + (C.hands - fitCount(s, S)) + ' of ' + C.hands + ' hands are hurt or sick now, and she answers the helm more slowly. They will mend in port.', 'bad'); } } }
+    if (!WX.storm && C.hands && S.leftAt != null && s.t - S.leftAt > 1440 && S.sickAt !== Math.floor(s.t / 360)) { S.sickAt = Math.floor(s.t / 360); if (rand(s) < (crewPost(s, S, 'cook') && S.prov > 0 ? 0.08 : 0.22)) { const hp = crewHurt(s, S, 'fever', true); if (hp) event(s, 'A fever goes through the forecastle after so long at sea: ' + hp.name + ' is down with it. Rest in port will mend them.', 'bad'); } }
     if (WX.storm && S.stormDay !== WX.key) {
       S.stormDay = WX.key;
-      if (rand(s) < 0.35) { let n = 0; for (const g in S.hold) { const l = Math.ceil(S.hold[g] / 3); if (l) { S.hold[g] -= l; n += l; if (S.paid) S.paid[g] = Math.round((S.paid[g] || 0) * 2 / 3); } } if (n) event(s, 'The storm breaks over ' + S.name + ' and washes a third of her cargo overboard.', 'bad'); }
+      if (rand(s) < 0.35) { let n = 0, val = 0; for (const g in S.hold) { const l = Math.ceil(S.hold[g] / 3); if (l) { S.hold[g] -= l; n += l; val += l * SEA_GOODS[g].base * 1.2; if (S.paid) S.paid[g] = Math.round((S.paid[g] || 0) * 2 / 3); } } if (n) { event(s, 'The storm breaks over ' + S.name + ' and washes a third of her cargo overboard.', 'bad'); shipLog(s, S, 'A storm washed ' + n + ' loads overboard.'); voyageNote(S, n + ' loads lost in a storm.'); insureClaim(s, S, Math.round(val), 'the storm'); } }
     }
   }
   /* the chart you fill in: places sighted, wrecks searched, flotsam picked up, and how hard each fishing ground has been worked today */
@@ -3990,36 +4041,488 @@
   const fishingHere = s => { const q = shipPose(s.ship); return q ? FISHING.find(F => Math.hypot(q.x - F.x, q.z - F.z) < F.r) || null : null; };
   const wreckHere = s => { const q = shipPose(s.ship); return q ? WRECKS.find(W => Math.hypot(q.x - W.x, q.z - W.z) < 45 + shipClass(s.ship).len / 2) || null : null; };
   const NET_MINS = 90;
+  /* ================= the Sea Road, Stage III: crew, a fleet, trade, and trouble on the water =================
+     Every sailor is a person from the towns: they sign on at a quay, draw a wage each night, eat your provisions, and have a
+     mood of their own (their morale). You may own several ships; the one you command is s.ship, the rest are s.fleet, each
+     sailed by a captain you appoint, really moving across the sea on its route. Pirates, smugglers, customs patrols and, in war,
+     the Valdorian navy are ships on the water too (s.seaNpc), and when one comes for you, you choose what to do. */
+  const CREW_POSTS = {
+    captain: { name: 'Captain', wage: 16, say: 'sails one of your other ships for you' },
+    mate: { name: 'Mate', wage: 11, say: 'a steadier ship: she handles better' },
+    bosun: { name: 'Bosun', wage: 10, say: 'keeps the hands at it: morale holds up' },
+    cook: { name: 'Cook', wage: 8, say: 'hot food: better morale, less fever' },
+    hand: { name: 'Hand', wage: 6, say: 'works the ship' },
+    guard: { name: 'Guard', wage: 11, say: 'fights beside you if you are boarded' }
+  };
+  const GUARD_ROOM = { skiff: 1, cutter: 2, cog: 4, galleon: 10 };
+  const MAX_SHIPS = 6;
+  const allShips = s => (s.ship ? [s.ship] : []).concat(s.fleet || []);
+  const shipById = (s, id) => allShips(s).find(S => S.id === id) || null;
+  function ensureShipId(s, S) { if (!S.id) { s.nextShip = (s.nextShip || 1); S.id = 'sh' + s.nextShip++; } S.crew = S.crew || []; if (S.prov == null) S.prov = 10; if (S.hull == null) S.hull = 100; S.refits = S.refits || {}; S.log = S.log || []; S.voyages = S.voyages || []; return S; }
+  const crewOf = (s, S) => (S.crew || []).map(c => Object.assign({ p: s.people[c.pid] }, c)).filter(c => c.p);
+  const sailors = (s, S) => crewOf(s, S).filter(c => c.post !== 'guard' && c.post !== 'captain');
+  const fitCount = (s, S) => sailors(s, S).filter(c => !(c.p.hurtUntil > s.day)).length;
+  const crewPost = (s, S, post) => crewOf(s, S).find(c => c.post === post) || null;
+  const minCrew = S => Math.ceil(shipClass(S).hands * 0.4);
+  function shipLog(s, S, text) { S.log = S.log || []; S.log.unshift({ day: s.day, t: Math.round(s.t % 1440), text }); if (S.log.length > 40) S.log.length = 40; }
+  function morale(s, S) { const cs = crewOf(s, S); return cs.length ? Math.round(cs.reduce((a, c) => a + (c.p.mood || 50), 0) / cs.length) : 60; }
+  function crewMood(s, S, d) { for (const c of crewOf(s, S)) c.p.mood = clamp((c.p.mood || 50) + d, 0, 100); }
+  function crewHurt(s, S, why, sick) { const cs = sailors(s, S).filter(c => !(c.p.hurtUntil > s.day)); if (!cs.length) return null; const c = cs[Math.floor(rand(s) * cs.length)]; c.p.hurtUntil = s.day + (sick ? 3 : 2) + Math.floor(rand(s) * 3); plog(s, c.p, (sick ? 'Fell sick aboard ' : 'Hurt aboard ') + S.name + '.'); return c.p; }
+  // who will sign on at a quay: grown people of the town with no work, or common work, who are not your own family or someone of rank
+  function crewCandidates(s, town, post) {
+    if (!town || !s.people) return [];
+    const me = s.you && s.you.pid, fame = fameAt(s, town), out = [];
+    for (const p of Object.values(s.people)) {
+      if (p.status !== 'here' || townOf(p) !== town || p.kid || p.retired || p.noble || p.banker || p.id === me || (p.age || 30) < 16 || (p.age || 30) > 58) continue;
+      if (p.job && p.job.type !== 'commons') continue;
+      if (me && (p.hh === me || (s.people[me] && s.people[me].spouse === p.id))) continue;
+      out.push(p);
+    }
+    out.sort((a, b) => (b.skill || 0) - (a.skill || 0) || (a.id < b.id ? -1 : 1));
+    return out.slice(0, 10).map(p => ({ pid: p.id, name: p.name, skill: Math.round(p.skill || 0), age: p.age, ask: crewAsk(post || 'hand', p, fame) }));
+  }
+  const crewAsk = (post, p, fame) => Math.max(3, Math.round(CREW_POSTS[post].wage * (0.85 + (p.skill || 0) / 140) * (1.08 - (fame || 0) / 500)));
+  function signOn(s, S, p, post, wage) {
+    if (p.job && p.job.type === 'commons') p.job = null;
+    p.job = { type: 'crew', ship: S.id, post }; S.crew = S.crew || []; S.crew = S.crew.filter(c => c.pid !== p.id); S.crew.push({ pid: p.id, post, wage, since: s.day });
+    p.mood = clamp((p.mood || 50) + 5, 0, 100); plog(s, p, 'Signed on as ' + CREW_POSTS[post].name.toLowerCase() + ' of ' + S.name + '.');
+  }
+  function signOff(s, S, pid, why) { const p = s.people[pid]; S.crew = (S.crew || []).filter(c => c.pid !== pid); if (p && p.job && p.job.type === 'crew') { p.job = null; plog(s, p, why || ('Left ' + S.name + '.')); } }
+  // a new ship (or an old save's ship): the shipwrights find her a crew of the right size from the town
+  function fillCrew(s, S, town) {
+    const C = shipClass(S); let need = C.hands - sailors(s, S).length;
+    const towns = [town].concat(Object.keys(MARKET_AT).filter(t => t !== town && kingdomOf(t) === kingdomOf(town)));
+    for (const t of towns) { if (need <= 0) break; for (const c of crewCandidates(s, t, 'hand')) { if (need <= 0) break; const p = s.people[c.pid]; if (!p || p.job) continue; const post = !crewPost(s, S, 'mate') && C.hands >= 4 ? 'mate' : !crewPost(s, S, 'cook') && C.hands >= 6 ? 'cook' : !crewPost(s, S, 'bosun') && C.hands >= 8 ? 'bosun' : 'hand'; signOn(s, S, p, post, crewAsk(post, p, 0)); need--; } }
+  }
+  function townOfPort(k) { return TOWNS[k] ? k : null; }
+  // crew are away when their ship is at sea or lying in another town: they do not walk about their home town meanwhile
+  function crewAway(s, p) { if (!p.job || p.job.type !== 'crew') return false; const S = shipById(s, p.job.ship); if (!S) return false; return !S.port || townOfPort(S.port) !== townOf(p); }
+
+  /* ---------- your merchant name: known port by port, spreading along the trade ---------- */
+  function setupMerchant(s) { const M = s.merchant = s.merchant || {}; M.fame = M.fame || {}; M.flag = M.flag || { field: 'gold', second: 'red', charge: 'anchor' }; return M; }
+  const fameAt = (s, port) => (s.merchant && s.merchant.fame && s.merchant.fame[port]) || 0;
+  function gainFame(s, port, n) { const M = setupMerchant(s); M.fame[port] = clamp((M.fame[port] || 0) + n, 0, 100); }
+  function fameDay(s) {
+    const M = setupMerchant(s), ports = SEA_PORTS;
+    const top = Math.max(0, ...ports.map(p => M.fame[p] || 0));
+    for (const p of ports) { const f = M.fame[p] || 0, others = Math.max(0, ...ports.filter(q => q !== p).map(q => M.fame[q] || 0)); M.fame[p] = clamp(f + Math.max(0, others * 0.6 - f) * 0.06 - 0.15, 0, 100); }
+    return top;
+  }
+  const fameWord = f => f >= 70 ? 'a great house, known in every harbour' : f >= 45 ? 'well known on the quays' : f >= 20 ? 'known to some' : f >= 5 ? 'barely known' : 'unknown';
+
+  /* ---------- prices that move with the weather, war and news from the towns ---------- */
+  const NEWS_TEXT = { glut: ['A glut of {g} at {p}: every warehouse is full.', 'Three ships landed {g} at {p} on the same tide. Prices have fallen.'], short: ['{g} is short at {p} and dear.', 'Fire in a {p} warehouse: {g} is scarce there.', 'The {p} merchants are buying {g} at any price.'] };
+  function seaNewsDay(s) {
+    s.seaNews = (s.seaNews || []).filter(n => n.until > s.day);
+    if (s.seaNews.length < 4 && rand(s) < 0.35) {
+      const port = SEA_PORTS[Math.floor(rand(s) * SEA_PORTS.length)], gs = Object.keys(SEA_GOODS).filter(g => g !== 'fish'), g = gs[Math.floor(rand(s) * gs.length)], glut = SEA_GOODS[g].made === port ? rand(s) < 0.7 : rand(s) < 0.35;
+      if (s.seaNews.some(n => n.port === port && n.good === g)) return;
+      const T = NEWS_TEXT[glut ? 'glut' : 'short'], text = T[Math.floor(rand(s) * T.length)].replace('{g}', SEA_GOODS[g].name).replace('{p}', PORTS[port] ? PORTS[port].name.replace(/ (Quay|Harbour)$/, '') : port);
+      s.seaNews.push({ port, good: g, mult: glut ? 0.6 : 1.7, until: s.day + 4 + Math.floor(rand(s) * 5), day: s.day, text: text.charAt(0).toUpperCase() + text.slice(1) });
+    }
+  }
+  function priceMood(s, port, g) {
+    let m = 1; for (const n of s.seaNews || []) if (n.port === port && n.good === g && n.until > s.day) m *= n.mult;
+    const G = SEA_GOODS[g]; if (!G) return m;
+    if (atWar(s)) { const ald = ['eastwatch', 'wrenmouth'].includes(G.made), val = ['dawnport', 'castamar'].includes(G.made); if ((port === 'dawnport' || port === 'castamar') && ald) m *= 1.5; if ((port === 'eastwatch' || port === 'wrenmouth') && val) m *= 1.4; }
+    if (seaRough(s) && G.made !== port) m *= 1.12;
+    return m;
+  }
+
+  /* ---------- routes across the sea, for captains: a coarse chart of safe water, searched once for each pair of ports ---------- */
+  const RG = { x0: 1060, z0: -2600, step: 40, nx: 0, nz: 0, block: null }, ROUTES = {};
+  function routeGrid() {
+    if (RG.block) return RG;
+    RG.nx = Math.ceil((8720 - RG.x0) / RG.step); RG.nz = Math.ceil((1200 - RG.z0) / RG.step); RG.block = new Uint8Array(RG.nx * RG.nz);
+    for (let i = 0; i < RG.nx; i++) for (let j = 0; j < RG.nz; j++) { const x = RG.x0 + (i + 0.5) * RG.step, z = RG.z0 + (j + 0.5) * RG.step; let b = seaDepth(x, z) < 3; if (!b) for (const [dx, dz] of [[18, 0], [-18, 0], [0, 18], [0, -18]]) if (seaDepth(x + dx, z + dz) < 2.6) { b = true; break; } if (z < SEA_EDGE.z0 || z > SEA_EDGE.z1) b = true; RG.block[i * RG.nz + j] = b ? 1 : 0; }
+    return RG;
+  }
+  const lineClear = (ax, az, bx, bz) => { const L0 = Math.hypot(bx - ax, bz - az), n = Math.ceil(L0 / 10); for (let k = 1; k < n; k++) { const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n; if (seaDepth(x, z) < 2.8) return false; } return true; };
+  function seaRoute(from, to) {
+    const key = from + '>' + to; if (ROUTES[key]) return ROUTES[key];
+    const G0 = routeGrid(), A = BERTHS[from], B = BERTHS[to], cell = (x, z) => [clamp(Math.floor((x - G0.x0) / G0.step), 0, G0.nx - 1), clamp(Math.floor((z - G0.z0) / G0.step), 0, G0.nz - 1)];
+    const free = (x, z) => { const [ci, cj] = cell(x, z); let best = null, bd = 1e9; for (let r = 0; r < 8 && !best; r++) for (let i = ci - r; i <= ci + r; i++) for (let j = cj - r; j <= cj + r; j++) { if (i < 0 || j < 0 || i >= G0.nx || j >= G0.nz || G0.block[i * G0.nz + j]) continue; const d = Math.hypot(i - ci, j - cj); if (d < bd) { bd = d; best = [i, j]; } } return best; };
+    const s0 = free(A.x, A.z), g0 = free(B.x, B.z); if (!s0 || !g0) return (ROUTES[key] = [[B.x, B.z]]);
+    const N = G0.nx * G0.nz, gs = new Float32Array(N).fill(1e9), came = new Int32Array(N).fill(-1), open = [], idx = (i, j) => i * G0.nz + j, h = (i, j) => Math.hypot(i - g0[0], j - g0[1]);
+    gs[idx(s0[0], s0[1])] = 0; open.push([h(s0[0], s0[1]), s0[0], s0[1]]);
+    let found = false, guard = 0;
+    while (open.length && guard++ < 60000) {
+      let bi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k; const [, i, j] = open.splice(bi, 1)[0];
+      if (i === g0[0] && j === g0[1]) { found = true; break; }
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= G0.nx || nj >= G0.nz || G0.block[idx(ni, nj)]) continue; const g = gs[idx(i, j)] + (di && dj ? 1.414 : 1); if (g < gs[idx(ni, nj)]) { gs[idx(ni, nj)] = g; came[idx(ni, nj)] = idx(i, j); open.push([g + h(ni, nj), ni, nj]); } }
+    }
+    let pts = [];
+    if (found) { let k = idx(g0[0], g0[1]); while (k >= 0) { const i = Math.floor(k / G0.nz), j = k % G0.nz; pts.unshift([G0.x0 + (i + 0.5) * G0.step, G0.z0 + (j + 0.5) * G0.step]); k = came[k]; } }
+    pts.unshift([A.x, A.z]); pts.push([B.x, B.z]);
+    const out = [pts[0]]; let i0 = 0; while (i0 < pts.length - 1) { let j = pts.length - 1; while (j > i0 + 1 && !lineClear(pts[i0][0], pts[i0][1], pts[j][0], pts[j][1])) j--; out.push(pts[j]); i0 = j; }   // straighten the path where the water allows
+    return (ROUTES[key] = out.slice(1));
+  }
+
+  /* ---------- your fleet: captains sailing their routes, in real time on the sea ---------- */
+  function cargoValue(s, S, port) { let v = 0; for (const g in S.hold || {}) if (S.hold[g] > 0 && SEA_GOODS[g]) v += S.hold[g] * SEA_GOODS[g].base * 1.2; return Math.round(v); }
+  function shipStrength(s, S, withYou) {
+    const C = shipClass(S), fit = fitCount(s, S), guards = crewOf(s, S).filter(c => c.post === 'guard' && !(c.p.hurtUntil > s.day)).length, mate = crewPost(s, S, 'mate') ? 2 : 0, cap = crewPost(s, S, 'captain');
+    let k = fit + guards * 3 + mate + (S.refits && S.refits.timbers ? 4 : 0) + (cap ? Math.round((cap.p.skill || 0) / 25) : 0) + (withYou ? 4 + Math.round(skillLv(s, 'oneHanded') / 25) : 0);
+    if (withYou && s.escort && s.escort.until > s.day) k += 8;
+    return Math.max(1, Math.round(k * (0.6 + 0.4 * (S.hull == null ? 1 : S.hull / 100)) * (0.7 + 0.6 * morale(s, S) / 100)));
+  }
+  const shipSpeed = (s, S) => shipClass(S).mpm * (S.refits && S.refits.sheath ? 1.08 : 1) * crewK(S, s) * (S.hull == null ? 1 : 0.75 + 0.25 * S.hull / 100);
+  function tradeAt(s, S, port) {
+    // a captain sells what fetches more here than it cost, and loads what sells best at the next port on the route
+    if (!SEA_PORTS.includes(port)) return;
+    const M = setupSeaMarket(s), V = S.voyage || (S.voyage = { from: port, left: s.t, bought: 0, sold: 0, costs: 0, events: [] });
+    for (const g of Object.keys(S.hold)) { const n = S.hold[g] | 0; if (!n || SEA_GOODS[g].made === port) continue; const gross = seaLoad(s, port, g, n, 1), tax = Math.round(gross * landingTax(s, port, g)); earn(s, gross - tax); M[port][g] += n; S.hold[g] = 0; V.sold += gross - tax; gainFame(s, port, Math.min(3, gross / 300)); s.rec.seaTrade = (s.rec.seaTrade || 0) + gross - tax; }
+    const O = S.orders; if (!O || !O.route || O.mode === 'move') return;
+    const next = O.route[(O.i + 1) % O.route.length]; if (!next || !SEA_PORTS.includes(next)) return;
+    let best = null, bm = 1.15;
+    for (const g in SEA_GOODS) { if (g === 'fish') continue; const buy = seaPrice(s, port, g), sell = seaPrice(s, next, g) * (1 - landingTax(s, next, g)); if (sell / buy > bm) { bm = sell / buy; best = g; } }
+    if (!best) return;
+    const used = Object.values(S.hold).reduce((a, b) => a + b, 0), budget = Math.max(0, Math.min(s.coins - 200, S.cap * 20)); let n = Math.min(S.cap - used, 200);
+    while (n > 0 && seaLoad(s, port, best, n, -1) > budget) n = Math.floor(n * 0.7);
+    if (n < 3) return;
+    const cost = seaLoad(s, port, best, n, -1); spend(s, cost); M[port][best] -= n; S.hold[best] = (S.hold[best] || 0) + n; const og = shipOrigin(S, best); og[port] = (og[port] || 0) + n; V.bought += cost;
+    shipLog(s, S, 'Loaded ' + n + ' ' + SEA_GOODS[best].name + ' at ' + PORTS[port].name + ' for ' + cost + 'c, for ' + PORTS[next].name.replace(/ (Quay|Harbour)$/, '') + '.');
+  }
+  function closeVoyage(s, S, to) {
+    const V = S.voyage; if (!V) return; S.voyage = null;
+    if (V.from === to) return;
+    const rec = { from: V.from, to, days: Math.max(0, Math.round((s.t - V.left) / 144) / 10), bought: V.bought, sold: V.sold, costs: V.costs, profit: V.sold - V.bought - V.costs, events: V.events.slice(0, 6), day: s.day };
+    S.voyages = S.voyages || []; S.voyages.unshift(rec); if (S.voyages.length > 12) S.voyages.length = 12;
+    shipLog(s, S, 'Moored at ' + PORTS[to].name + ' from ' + PORTS[V.from].name.replace(/ (Quay|Harbour)$/, '') + ', ' + rec.days + ' days. ' + (rec.profit >= 0 ? 'Profit ' + rec.profit + 'c.' : 'Loss ' + -rec.profit + 'c.'));
+  }
+  const voyageNote = (S, text) => { if (S.voyage) { S.voyage.events.unshift(text); if (S.voyage.events.length > 8) S.voyage.events.length = 8; } };
+  function fleetStep(s, dt) {
+    for (const S of s.fleet || []) {
+      ensureShipId(s, S);
+      const cap = crewPost(s, S, 'captain'), O = S.orders;
+      if (S.port) {
+        if (!O || !cap || S.impounded) continue;
+        if (S.waitUntil == null) { S.waitUntil = s.t + 60; tradeAt(s, S, S.port); if ((S.prov || 0) < 6) { const n = 10 - (S.prov || 0), c = n * Math.max(1, crewOf(s, S).length); if (s.coins >= c) { spend(s, c); S.prov = 10; if (S.voyage) S.voyage.costs += c; } } }
+        if (s.t < S.waitUntil) continue;
+        if (fitCount(s, S) < minCrew(S)) { if (S.shortNote !== s.day) { S.shortNote = s.day; shipLog(s, S, 'Cannot sail: too few fit hands.'); } continue; }
+        const route = O.route || [], to = O.mode === 'move' ? route[0] : route[(O.i + 1) % route.length];
+        if (!to || to === S.port || !BERTHS[to]) { if (O.mode === 'move') S.orders = null; else O.i = (O.i + 1) % Math.max(1, route.length); continue; }
+        if (atWar(s) && to === 'dawnport' && !(s.valdoria && s.valdoria.warrant)) { if (S.warNote !== s.day) { S.warNote = s.day; shipLog(s, S, 'Will not sail for Dawnport while the crowns are at war.'); } continue; }
+        const B = BERTHS[S.port]; S.voyage = S.voyage && S.voyage.from === S.port ? S.voyage : { from: S.port, left: s.t, bought: 0, sold: 0, costs: 0, events: [] }; S.voyage.left = s.t;
+        S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 3, path: seaRoute(S.port, to).map(p => p.slice()), pi: 0, to };
+        shipLog(s, S, (cap.p.name.split(' ')[0]) + ' takes her out of ' + PORTS[S.port].name + ' for ' + PORTS[to].name.replace(/ (Quay|Harbour)$/, '') + '.'); S.port = null; S.waitUntil = null;
+        continue;
+      }
+      const q = S.sea; if (!q) { S.port = 'eastwatch'; continue; }
+      const W = windAt(s), wp = q.path[q.pi] || [BERTHS[q.to].x, BERTHS[q.to].z], want = Math.atan2(wp[0] - q.x, wp[1] - q.z);
+      q.hdg += clamp(Math.atan2(Math.sin(want - q.hdg), Math.cos(want - q.hdg)), -0.6 * dt, 0.6 * dt);
+      const v = shipSpeed(s, S) * windFactor(q.hdg, W.to) * W.str * (cap ? 0.9 + (cap.p.skill || 0) / 500 : 0.85);
+      q.spd += (v - q.spd) * Math.min(1, dt * 0.3);
+      q.x += Math.sin(q.hdg) * q.spd * dt + (W.rough ? Math.sin(W.to) * 0.8 * dt : 0); q.z += Math.cos(q.hdg) * q.spd * dt + (W.rough ? Math.cos(W.to) * 0.8 * dt : 0);
+      if (Math.hypot(wp[0] - q.x, wp[1] - q.z) < 16) q.pi++;
+      if (q.pi >= q.path.length) {
+        const to = q.to; S.port = to; S.sea = null; S.waitUntil = null;
+        if (O && O.mode !== 'move' && O.route) O.i = (O.i + 1) % O.route.length; else if (O && O.mode === 'move') S.orders = null;
+        closeVoyage(s, S, to);
+        if (atWar(s) && to === 'dawnport' && !(s.valdoria && s.valdoria.warrant)) { S.impounded = true; shipLog(s, S, 'Impounded at Dawnport, cargo and all, until the peace.'); event(s, 'Your ship ' + S.name + ' is impounded at Dawnport until the peace.', 'bad'); }
+        continue;
+      }
+      // the day at sea: provisions, storms, sickness, and what a captain does when trouble comes
+      const dayK = Math.floor(s.t / 1440); if (S.provDay !== dayK) { S.provDay = dayK; S.prov = Math.max(0, (S.prov || 0) - 1); if (!S.prov) { crewMood(s, S, -8); voyageNote(S, 'Provisions ran out.'); } }
+      const WX = seaWeather(s), hourK = Math.floor(s.t / 60);
+      if (S.seaHour !== hourK) { S.seaHour = hourK;
+        if (WX.storm) { if (rand(s) < 0.15) { const p0 = crewHurt(s, S, 'storm'); if (p0) voyageNote(S, p0.name + ' hurt in a storm.'); } if (S.stormKey !== WX.key && rand(s) < 0.3) { S.stormKey = WX.key; let n = 0; for (const g in S.hold) { const l = Math.ceil(S.hold[g] / 3); S.hold[g] -= l; n += l; } if (n) { const val = n * 5; insureClaim(s, S, val, 'storm'); voyageNote(S, n + ' loads washed overboard in a storm.'); shipLog(s, S, 'A storm washes ' + n + ' loads overboard.'); } } }
+        const risk = pirateRisk(s, q.x, q.z, S, false);
+        if (rand(s) < risk) fleetPirates(s, S);
+        else if (rand(s) < patrolRisk(s, q.x, q.z)) fleetSearch(s, S, q);
+      }
+    }
+  }
+  function fleetPirates(s, S) {
+    const mine = shipStrength(s, S, false), them = 8 + Math.floor(rand(s) * 14), cap = crewPost(s, S, 'captain'), cv = cargoValue(s, S);
+    let text;
+    if (shipSpeed(s, S) > 13.5 && rand(s) < 0.6) text = 'Pirates gave chase; ' + (cap ? cap.p.name.split(' ')[0] : 'the crew') + ' outran them.';
+    else if (mine * (0.7 + rand(s) * 0.6) > them) { text = 'Pirates came alongside and were beaten off.'; crewMood(s, S, 6); if (rand(s) < 0.4) { const p0 = crewHurt(s, S); if (p0) text += ' ' + p0.name + ' was hurt.'; } gainFame(s, S.voyage ? S.voyage.from : 'eastwatch', 2); }
+    else if (cv > 400 && rand(s) < 0.5) { const n = {}; let val = 0; for (const g in S.hold) { const l = Math.ceil(S.hold[g] * 0.4); S.hold[g] -= l; n[g] = l; val += l * SEA_GOODS[g].base * 1.2; } insureClaim(s, S, Math.round(val), 'pirates'); crewMood(s, S, -10); S.hull = Math.max(30, (S.hull || 100) - 12); text = 'Pirates boarded and took ' + Object.entries(n).filter(e => e[1]).map(e => e[1] + ' ' + SEA_GOODS[e[0]].name).join(', ') + '.'; }
+    else { const pay = Math.min(s.coins, 60 + Math.round(cv * 0.12)); spend(s, Math.max(0, pay)); if (S.voyage) S.voyage.costs += pay; text = 'Pirates demanded tribute: ' + pay + 'c paid to be let go.'; }
+    voyageNote(S, text); shipLog(s, S, text); event(s, S.name + ': ' + text, 'bad');
+  }
+  function contraband(S) { let n = 0; for (const g in S.origin || {}) { if (!S.hold[g]) continue; const o = S.origin[g]; n += Math.min(S.hold[g], (o.cove || 0) + (o.smuggler || 0) + (g !== 'fish' ? (o.sea || 0) : 0)); } return n; }
+  function seizeContraband(s, S) { let n = 0; for (const g in S.origin || {}) { const o = S.origin[g], k = Math.min(S.hold[g] || 0, (o.cove || 0) + (o.smuggler || 0) + (g !== 'fish' ? (o.sea || 0) : 0)); if (k > 0) { S.hold[g] -= k; n += k; o.cove = 0; o.smuggler = 0; if (g !== 'fish') o.sea = 0; } } return n; }
+  function fleetSearch(s, S, q) {
+    const K = watersOf(q.x); if (!K || hasLetter(s, K)) return;
+    const n = contraband(S); if (!n) { voyageNote(S, 'Searched by a ' + (K === 'alderwyn' ? 'royal' : 'Valdorian') + ' patrol: all in order.'); return; }
+    seizeContraband(s, S); const fine = Math.min(Math.max(0, s.coins), 60 + n * 4); spend(s, fine); const text = 'A customs patrol found ' + n + ' loads with no duty paid on them: seized, and ' + fine + 'c fined.'; voyageNote(S, text); shipLog(s, S, text); event(s, S.name + ': ' + text, 'bad');
+  }
+
+  /* ---------- insurance, escorts, letters of safe passage, and the cove's protection ---------- */
+  function insureClaim(s, S, value, why) { const I = S.insured; if (!I || I.until <= s.day || value <= 0) return 0; const pay = Math.round(value * 0.8); earn(s, pay); shipLog(s, S, 'The Merchant Exchange pays ' + pay + 'c on the policy for what was lost to ' + why + '.'); event(s, 'Your insurance pays ' + pay + 'c for ' + S.name + '’s loss to ' + why + '.', 'good'); return pay; }
+  const insurePremium = S => Math.round((S.cost || shipClass(S).price) * 0.03);
+  const watersOf = x => x < 3300 ? 'alderwyn' : x > 6400 ? 'valdoria' : null;
+  const hasLetter = (s, K) => !!(s.letters && s.letters[K] > s.day) || (K === 'valdoria' && s.valdoria && s.valdoria.warrant);
+  const LETTER_PRICE = { alderwyn: 600, valdoria: 700 };
+  const ESCORT_DAY = 45, TOKEN_PRICE = 450;
+  function pirateRisk(s, x, z, S, you) {
+    if (s.pirateToken && s.pirateToken > s.day) return 0;
+    const near = Math.min(...Object.keys(BERTHS).filter(k => !ISLE_BY[k] || k === 'cove').map(k => Math.hypot(BERTHS[k].x - x, BERTHS[k].z - z)));
+    let r = 0.05;
+    if (near < 700) r *= 0.15; else if (near < 1400) r *= 0.6;
+    if (Math.hypot(x - 5650, z - 1000) < 1600) r *= 1.6;   // the cove's own waters
+    if (z < -1600 || z > 700) r *= 1.4;   // far from the passage lane
+    r *= 1 + Math.min(1, cargoValue(s, S) / 3000) * 0.8; r *= 1 + fameAt(s, 'eastwatch') / 300;
+    if (you && s.escort && s.escort.until > s.day) r *= 0.35;
+    if (isNight(s)) r *= 1.3;
+    return r;
+  }
+  const patrolRisk = (s, x, z) => watersOf(x) ? 0.07 : 0;
+
+  /* ---------- ships on the water around you: pirates, smugglers, patrols, the navy in war, and your hired escort ---------- */
+  const NPC_KIND = {
+    pirate: { name: 'a pirate sloop', cls: 'cutter', spd: 15, colors: ['#1a1a1a', '#8e2b22'] },
+    smuggler: { name: 'a smuggler’s lugger', cls: 'cutter', spd: 13, colors: ['#4a3a2a', '#c9a63e'] },
+    patrol: { name: 'a customs patrol', cls: 'cutter', spd: 14.5, colors: null },
+    navy: { name: 'a Valdorian war galley', cls: 'galleon', spd: 14.5, colors: ['#a8322a', '#e2b53e'] },
+    escort: { name: 'your escort', cls: 'cutter', spd: 17, colors: ['#2f6b3a', '#efe9d8'] }
+  };
+  function npcSpawn(s, kind, ang, dist, extra) {
+    const q = shipPose(s.ship); if (!q) return null;
+    s.nextNpc = (s.nextNpc || 1); const a = ang != null ? ang : q.hdg + (rand(s) - 0.5) * 2.4;
+    let x = q.x + Math.sin(a) * dist, z = q.z + Math.cos(a) * dist;
+    for (let k = 0; k < 12 && seaDepth(x, z) < SEA_FLOOR - 0.2; k++) { const b = a + k * 0.5; x = q.x + Math.sin(b) * dist; z = q.z + Math.cos(b) * dist; }
+    if (seaDepth(x, z) < 2.8) return null;
+    const K = NPC_KIND[kind], N = Object.assign({ id: 'n' + s.nextNpc++, kind, cls: K.cls, x, z, hdg: Math.atan2(q.x - x, q.z - z), spd: 6, mode: kind === 'escort' ? 'follow' : 'close', born: s.t, purse: 80 + Math.floor(rand(s) * 320), str: kind === 'pirate' ? 7 + Math.floor(rand(s) * 12) : kind === 'navy' ? 22 + Math.floor(rand(s) * 10) : kind === 'patrol' ? 10 : 4, kingdom: kind === 'patrol' ? watersOf(x) : kind === 'navy' ? 'valdoria' : null }, extra || {});
+    if (kind === 'patrol') N.colors = N.kingdom === 'valdoria' ? ['#a8322a', '#e2b53e'] : ['#2f6b3a', '#efe9d8'];
+    (s.seaNpc = s.seaNpc || []).push(N); return N;
+  }
+  const npcById = (s, id) => (s.seaNpc || []).find(n => n.id === id) || null;
+  function dropNpc(s, N) { s.seaNpc = (s.seaNpc || []).filter(n => n !== N); if (s.encounter && s.encounter.id === N.id) s.encounter = null; }
+  function npcStep(s, dt) {
+    const S = s.ship, p = s.player, q = S && p.aboard && !S.port ? S.sea : null;
+    s.seaNpc = s.seaNpc || [];
+    if (!q) { s.seaNpc = []; s.encounter = null; return; }
+    // who turns up: rolled once an hour at sea, one encounter at a time
+    const hourK = Math.floor(s.t / 60);
+    if (s.npcHour !== hourK) { s.npcHour = hourK;
+      if (s.escort && s.escort.until > s.day && !s.seaNpc.some(n => n.kind === 'escort')) npcSpawn(s, 'escort', q.hdg + Math.PI, 60);
+      if (s.escort && s.escort.until <= s.day) { s.seaNpc = s.seaNpc.filter(n => n.kind !== 'escort'); if (!s.escort.told) { s.escort.told = true; event(s, 'Your escort’s hire is up. She turns for home.', 'info'); } }
+      if (!s.seaNpc.some(n => n.kind !== 'escort')) {
+        const war = atWar(s) && !(s.valdoria && s.valdoria.warrant), dDawn = Math.hypot(q.x - BERTHS.dawnport.x, q.z - BERTHS.dawnport.z);
+        if (war && (dDawn < 1100 || (q.x > 6000 && rand(s) < 0.2))) npcSpawn(s, 'navy', null, 480);   // the blockade of Dawnport, and the galleys that hunt the eastern sea
+        else if (rand(s) < pirateRisk(s, q.x, q.z, S, true)) npcSpawn(s, 'pirate', null, 460);
+        else if (rand(s) < patrolRisk(s, q.x, q.z)) npcSpawn(s, 'patrol', null, 420);
+        else if (rand(s) < 0.035 && !watersOf(q.x)) npcSpawn(s, 'smuggler', null, 380);
+      }
+    }
+    const E = s.encounter;
+    for (const N of s.seaNpc.slice()) {
+      const K = NPC_KIND[N.kind], d = Math.hypot(q.x - N.x, q.z - N.z);
+      let tx = q.x, tz = q.z, v = K.spd, away = false;
+      if (N.mode === 'follow') { const bx = q.x - Math.sin(q.hdg) * 45 + Math.cos(q.hdg) * 30, bz = q.z - Math.cos(q.hdg) * 45 - Math.sin(q.hdg) * 30; tx = bx; tz = bz; v = Math.min(K.spd, Math.max(q.spd, Math.hypot(bx - N.x, bz - N.z) * 0.2)); }
+      else if (N.mode === 'leave' || N.mode === 'flee') { away = true; v = K.spd * (N.mode === 'flee' ? 1.05 : 0.8); }
+      else if (N.mode === 'hold') v = Math.min(3, q.spd + 1);
+      const want = away ? Math.atan2(N.x - q.x, N.z - q.z) : Math.atan2(tx - N.x, tz - N.z);
+      N.hdg += clamp(Math.atan2(Math.sin(want - N.hdg), Math.cos(want - N.hdg)), -0.9 * dt, 0.9 * dt);
+      N.spd += (v - N.spd) * Math.min(1, dt * 0.35);
+      const nx = N.x + Math.sin(N.hdg) * N.spd * dt, nz = N.z + Math.cos(N.hdg) * N.spd * dt;
+      if (seaDepth(nx, nz) >= 2.2) { N.x = nx; N.z = nz; } else { N.hdg += 0.8 * dt; N.spd *= 0.7; }
+      if ((away && d > 900) || d > 1500 || s.t - N.born > 600) { dropNpc(s, N); continue; }
+      if (N.kind === 'escort') continue;
+      // coming up on you: the encounter begins
+      if (!E && N.mode === 'close' && d < (N.kind === 'smuggler' ? 160 : 240)) {
+        s.encounter = { id: N.id, kind: N.kind, stage: 'choice', since: s.t };
+        const say = { pirate: 'A sail closing fast, flying no colours: ' + K.name + '. They mean to board you.', smuggler: 'A low lugger runs up alongside and hails you: smugglers, with goods to sell and no questions.', patrol: 'A ' + (N.kingdom === 'valdoria' ? 'Valdorian' : 'royal') + ' customs patrol hails you: heave to and be searched.', navy: 'Valdorian war galleys bear down on you: ' + (Math.hypot(q.x - BERTHS.dawnport.x, q.z - BERTHS.dawnport.z) < 1400 ? 'the blockade of Dawnport.' : 'they hunt Alderwyn ships.') };
+        event(s, say[N.kind], N.kind === 'smuggler' ? 'story' : 'bad'); shipLog(s, S, say[N.kind]);
+        if (N.kind === 'patrol' && hasLetter(s, N.kingdom)) { s.encounter = null; N.mode = 'leave'; event(s, 'You show your letter of safe passage. The patrol dips its flag and lets you go.', 'good'); }
+      }
+      if (E && E.id === N.id) {
+        if (E.stage === 'fleeing') {
+          N.mode = 'close';
+          const safe = Object.keys(BERTHS).some(k => Math.hypot(BERTHS[k].x - q.x, BERTHS[k].z - q.z) < 320);
+          if (d > 700 || (E.forPort && safe)) { event(s, safe ? 'Under the harbour’s walls ' + K.name.replace(/^a /, 'the ') + ' sheers off.' : 'You show them your stern. ' + K.name.charAt(0).toUpperCase() + K.name.slice(1) + ' falls astern and gives up the chase.', 'good'); shipLog(s, S, 'Escaped ' + K.name + '.'); crewMood(s, S, 4); if (N.kind === 'patrol') valdoriaOrRealmStanding(s, N.kingdom, -3); N.mode = 'leave'; s.encounter = null; }
+          else if (d < 32) { E.stage = 'boarding'; E.forced = true; event(s, K.name.charAt(0).toUpperCase() + K.name.slice(1) + ' runs alongside. Grapnels fly: they are boarding!', 'bad'); }
+        }
+        if (E.stage === 'choice' && s.t - E.since > 30 && N.kind === 'patrol') { event(s, 'The patrol runs alongside and their officers come aboard to search.', 'info'); encounterCmd(s, 'encComply', true); continue; }
+        if (E.stage === 'choice' && s.t - E.since > 30 && N.kind !== 'smuggler') { E.stage = 'boarding'; E.forced = true; event(s, 'You waited too long. They are alongside and boarding!', 'bad'); }
+        if (E.stage === 'choice' && s.t - E.since > 40 && N.kind === 'smuggler') { N.mode = 'leave'; s.encounter = null; }
+      }
+    }
+  }
+  function valdoriaOrRealmStanding(s, K, d) { if (K === 'valdoria' && s.valdoria) s.valdoria.standing = clamp((s.valdoria.standing || 0) + d, 0, 100); if (K === 'alderwyn' && s.realm) s.realm.favour = clamp((s.realm.favour || 0) + d, 0, 100); }
+  const ENC_FOE = { pirate: [['banditChief', 'The pirate captain'], ['bandit', 'A pirate'], ['bandit', 'A pirate'], ['banditArcher', 'A pirate with a bow']], navy: [['knight', 'A Valdorian officer'], ['guard', 'A marine'], ['guard', 'A marine']], patrol: [['guard', 'A customs officer'], ['guard', 'A tide-waiter']] };
+  function boardingSpec(s, N, E) {
+    const S = s.ship, guards = crewOf(s, S).filter(c => c.post === 'guard' && !(c.p.hurtUntil > s.day)), n = clamp(Math.round(N.str / 7), 1, 4);
+    const foes = ENC_FOE[N.kind === 'navy' ? 'navy' : N.kind === 'patrol' ? 'patrol' : 'pirate'].slice(0, n).map(([kit, name]) => ({ kit, name, mul: 0.8 + N.str / 40 }));
+    const allies = guards.slice(0, 3).map((c, i) => ({ name: c.p.name, hp: 100, dmg: 8, i }));
+    const mate = crewPost(s, S, 'mate'); if (mate && allies.length < 3) allies.push({ name: mate.p.name + ', your mate', hp: 80, dmg: 6, i: allies.length });
+    return { kind: 'knockout', foes, allies, title: E.byYou ? 'You board ' + NPC_KIND[N.kind].name.replace(/^a /, 'the ') : NPC_KIND[N.kind].name.charAt(0).toUpperCase() + NPC_KIND[N.kind].name.slice(1) + ' boards you', ctx: { sea: N.id } };
+  }
+  function encounterCmd(s, name, a) {
+    const ok = (m, x) => Object.assign({ ok: true, msg: m }, x || {}), fail = m => ({ ok: false, msg: m }), E = s.encounter, S = s.ship;
+    if (!E || !S) return fail('Nothing is coming for you.');
+    const N = npcById(s, E.id); if (!N) { s.encounter = null; return fail('They are gone.'); }
+    const K = NPC_KIND[N.kind], q = S.sea, cv = cargoValue(s, S), mine = shipStrength(s, S, true);
+    const lose = () => { let val = 0, parts = []; for (const g in S.hold) { const l = Math.ceil((S.hold[g] || 0) * 0.4); if (l) { S.hold[g] -= l; val += l * SEA_GOODS[g].base * 1.2; parts.push(l + ' ' + SEA_GOODS[g].name); } } const c = Math.min(Math.max(0, Math.round(s.coins * 0.2)), 2500); spend(s, c); crewMood(s, S, -12); S.hull = Math.max(25, (S.hull || 100) - 15); for (let k = 0; k < 2; k++) crewHurt(s, S); insureClaim(s, S, Math.round(val), 'pirates'); return 'They take ' + (parts.length ? parts.join(', ') + ' and ' : '') + c + 'c, and leave you battered but afloat.'; };
+    switch (name) {
+      case 'encFlee': E.stage = 'fleeing'; E.forPort = !!a; return ok(null);
+      case 'encPay': {
+        if (N.kind === 'patrol') { const bribe = 60 + Math.round(cv * 0.05); if (s.coins < bribe) return fail('You need ' + bribe + 'c to make it worth their while.'); spend(s, bribe); if (rand(s) < 0.7) { N.mode = 'leave'; s.encounter = null; event(s, 'The officer pockets ' + bribe + 'c and finds nothing to search.', 'info'); return ok(null); } E.stage = 'search'; return encounterCmd(s, 'encComply', true); }
+        const tribute = Math.max(60, Math.round(cv * 0.15 + s.coins * 0.05));
+        if (s.coins >= tribute) { spend(s, tribute); event(s, 'You pay ' + tribute + 'c. ' + K.name.charAt(0).toUpperCase() + K.name.slice(1) + ' lets you go.', 'info'); shipLog(s, S, 'Paid ' + tribute + 'c tribute to pirates.'); }
+        else { for (const g in S.hold) S.hold[g] = Math.floor((S.hold[g] || 0) * 0.75); event(s, 'You have not the coin, so they take a quarter of your cargo instead.', 'bad'); }
+        crewMood(s, S, -3); N.mode = 'leave'; s.encounter = null; return ok(null);
+      }
+      case 'encComply': {   // heave to for the customs search
+        const n = contraband(S);
+        if (!n) { event(s, 'They go through your hold and find everything in order. You are free to sail on.', 'good'); }
+        else { seizeContraband(s, S); const fine = Math.min(Math.max(0, s.coins), (a ? 120 : 60) + n * 4); spend(s, fine); valdoriaOrRealmStanding(s, N.kingdom, -4); event(s, 'They find ' + n + ' loads with no duty paid on them. Seized, and a fine of ' + fine + 'c.', 'bad'); shipLog(s, S, 'Customs seized ' + n + ' loads and fined ' + fine + 'c.'); }
+        N.mode = 'leave'; s.encounter = null; return ok(null);
+      }
+      case 'encLetter': { if (!hasLetter(s, N.kingdom)) return fail('You hold no letter from that crown.'); N.mode = 'leave'; s.encounter = null; event(s, 'Your letter of safe passage is in order. They let you go.', 'good'); return ok(null); }
+      case 'encSurrender': {   // the navy: give up the ship
+        if (N.kind !== 'navy') return fail('No.');
+        const V = s.valdoria, nm = S.name; if (V && V.war) V.war.taken = (V.war.taken || 0) + 1;
+        insureClaim(s, S, Math.round((S.cost || shipClass(S).price) * 0.6 + cargoValue(s, S)), 'the Valdorian navy');
+        for (const c of crewOf(s, S)) signOff(s, S, c.pid, 'Set ashore when ' + nm + ' was taken.');
+        s.ship = null; s.player.aboard = false; s.player.deck = null; const P2 = PORTS.stormrest; s.player.x = P2.x + 3; s.player.z = P2.z; s.encounter = null; dropNpc(s, N);
+        if (s.fleet && s.fleet.length) { const k = s.fleet.findIndex(f => f.port && !f.impounded); if (k >= 0) s.ship = s.fleet.splice(k, 1)[0]; }
+        valLog(s, 'You strike your colours. The Valdorian galleys take ' + nm + ' and her cargo; you and the crew are set ashore on Stormrest Isle.', 'bad');
+        return ok(null, { taken: true });
+      }
+      case 'encFight': case 'encBoard': {
+        if (N.kind === 'smuggler') return fail('They have no quarrel with you.');
+        const them = N.str * (0.8 + rand(s) * 0.4);
+        if (name === 'encFight' && E.stage !== 'boarding' && mine * (0.75 + rand(s) * 0.5) > them * 1.1) { N.mode = 'flee'; s.encounter = null; crewMood(s, S, 8); gainFame(s, nearestPort(q), 3); event(s, 'Your crew line the rail and beat them off. ' + K.name.charAt(0).toUpperCase() + K.name.slice(1) + ' breaks away.', 'good'); shipLog(s, S, 'Beat off ' + K.name + '.'); return ok(null); }
+        E.stage = 'boarding'; E.byYou = name === 'encBoard';
+        return ok(null, { fight: boardingSpec(s, N, E) });
+      }
+      case 'encWon': {
+        const purse = N.purse || 0; earn(s, purse); crewMood(s, S, 10); gainFame(s, nearestPort(q), 4);
+        let text = 'You drive them back over the side' + (E.byYou ? ' and take their ship’s purse' : '') + ': ' + purse + 'c.';
+        if (N.kind === 'pirate') { s.bounty = (s.bounty || 0) + 150; text += ' The crowns pay 150c a pirate ship: claim it at any harbour office.'; }
+        if (N.kind === 'navy') text += ' The galleys fall back; you are through the blockade.';
+        if (N.kind === 'patrol') { valdoriaOrRealmStanding(s, N.kingdom, -10); text += ' Fighting the crown’s officers will not be forgotten.'; }
+        event(s, text, 'good'); shipLog(s, S, text); N.mode = 'flee'; s.encounter = null; return ok(null);
+      }
+      case 'encLost': {
+        let text;
+        if (N.kind === 'navy') { text = 'The marines take the ship.'; s.encounter = null; return encounterCmd(s, 'encSurrender'); }
+        if (N.kind === 'patrol') { const n = seizeContraband(s, S), fine = Math.min(Math.max(0, s.coins), 200 + n * 6); spend(s, fine); valdoriaOrRealmStanding(s, N.kingdom, -8); text = 'The officers overpower you. They seize ' + n + ' loads and fine you ' + fine + 'c.'; }
+        else text = lose();
+        event(s, text, 'bad'); shipLog(s, S, text); N.mode = 'leave'; s.encounter = null; return ok(null);
+      }
+      case 'encTrade': {   // the smugglers: a cheap load, no duty paid on it, and no papers
+        if (N.kind !== 'smuggler') return fail('No.');
+        const goods = ['wine', 'amber', 'dye', 'oil', 'tin'].filter(g => SEA_GOODS[g]), g = a && SEA_GOODS[a] ? a : goods[Math.floor(rand(s) * goods.length)], used = Object.values(S.hold).reduce((x, y) => x + y, 0), n = Math.min(S.cap - used, 20);
+        if (n < 1) return fail('Your hold is full.'); const cost = Math.round(n * SEA_GOODS[g].base * 0.6); if (s.coins < cost) return fail('They want ' + cost + 'c for ' + n + ' ' + SEA_GOODS[g].name + '.');
+        spend(s, cost); S.hold[g] = (S.hold[g] || 0) + n; const og = shipOrigin(S, g); og.smuggler = (og.smuggler || 0) + n; event(s, 'You buy ' + n + ' ' + SEA_GOODS[g].name + ' over the rail for ' + cost + 'c. No papers: a customs search would find it.', 'info'); N.mode = 'leave'; s.encounter = null; return ok(null);
+      }
+      case 'encReport': { if (N.kind !== 'smuggler') return fail('No.'); s.report = (s.report || 0) + 1; event(s, 'You mark their sail and course. Report them at a harbour office for a reward.', 'info'); N.mode = 'leave'; s.encounter = null; return ok(null); }
+      case 'encIgnore': { N.mode = 'leave'; s.encounter = null; return ok(null); }
+    }
+    return null;
+  }
+
+  /* ---------- the fleet's own commands: hire and dismiss, take command, orders, provisions, refits, insurance, escorts and letters ---------- */
+  const REFITS = { sheath: { name: 'Copper sheathing', say: 'a cleaner hull: about 8% faster', k: 0.12 }, hold: { name: 'A deeper hold', say: 'a fifth more cargo', k: 0.1 }, timbers: { name: 'Stout timbers and fighting tops', say: 'harder to board; stronger in a fight', k: 0.15 } };
+  const EXCHANGES = { 'eb:e_exch': 'eastwatch', 'db:d_gold': 'dawnport' };
+  const atLoc2 = (s, k, pad) => { const L = LOCS[k]; return !!(L && Math.hypot(s.player.x - L.x, s.player.z - L.z) < (L.r || 3) + (pad || 2.5)); };
+  function fleetCmd(s, name, a, b, c) {
+    const ok = (m, x) => Object.assign({ ok: true, msg: m }, x || {}), fail = m => ({ ok: false, msg: m }), p = s.player, here = portHere(s), yard = yardHere(s);
+    const S0 = a ? shipById(s, a) : s.ship;
+    switch (name) {
+      case 'hireCrew': {   // a: ship id, b: person id, c: post
+        const S = S0, q = s.people[b], post = CREW_POSTS[c] ? c : 'hand'; if (!S || !q) return fail('No.');
+        if (!S.port || (here !== S.port && yard !== S.port)) return fail('Go to the quay where ' + S.name + ' is moored to sign on crew.');
+        if (townOf(q) !== townOfPort(S.port)) return fail(q.name + ' lives in ' + townName(townOf(q)) + '.');
+        if (q.job && q.job.type !== 'commons') return fail(q.name + ' has other work.');
+        const C = shipClass(S); if (post === 'guard' && crewOf(s, S).filter(x => x.post === 'guard').length >= GUARD_ROOM[S.cls]) return fail('No more room aboard for guards.');
+        if (post !== 'guard' && post !== 'captain' && sailors(s, S).length >= C.hands + 2) return fail(S.name + ' has a full crew.');
+        if (post === 'captain' && crewPost(s, S, 'captain')) return fail(S.name + ' already has a captain.');
+        if (['mate', 'bosun', 'cook'].includes(post) && crewPost(s, S, post)) return fail(S.name + ' already has a ' + post + '.');
+        signOn(s, S, q, post, crewAsk(post, q, fameAt(s, S.port))); shipLog(s, S, q.name + ' signs on as ' + CREW_POSTS[post].name.toLowerCase() + '.'); return ok(q.name + ' signs on as ' + CREW_POSTS[post].name.toLowerCase() + ' of ' + S.name + '.');
+      }
+      case 'dismissCrew': { const S = S0; if (!S || !S.port) return fail('Only in port.'); const cr = (S.crew || []).find(x => x.pid === b); if (!cr) return fail('No.'); const q = s.people[cr.pid]; signOff(s, S, cr.pid, 'Paid off from ' + S.name + '.'); if (q) q.mood = clamp((q.mood || 50) - 5, 0, 100); return ok((q ? q.name : 'They') + ' is paid off and goes ashore.'); }
+      case 'setPost': { const S = S0, cr = S && (S.crew || []).find(x => x.pid === b); if (!cr || !CREW_POSTS[c] || c === 'guard') return fail('No.'); if (c !== 'hand' && crewPost(s, S, c)) { const old = crewPost(s, S, c); const o = S.crew.find(x => x.pid === old.pid); o.post = 'hand'; } cr.post = c; const q = s.people[cr.pid]; if (q && q.job) q.job.post = c; cr.wage = Math.max(cr.wage, crewAsk(c, q, 0)); return ok((q ? q.name : 'They') + ' is now ' + CREW_POSTS[c].name.toLowerCase() + ' of ' + S.name + '.'); }
+      case 'buyProv': { const S = S0; if (!S || !S.port || (here !== S.port && yard !== S.port)) return fail('At the quay where she lies.'); const n = clamp(Math.round(b || 10), 1, 30) - (S.prov || 0); if (n <= 0) return fail('Her stores are full.'); const cost = n * Math.max(1, (S.crew || []).length); if (s.coins < cost) return fail(cost + 'c for ' + n + ' days.'); spend(s, cost); S.prov = (S.prov || 0) + n; if (s.stats) s.stats.prov = (s.stats.prov || 0) + cost; return ok('Stores for ' + S.prov + ' days aboard ' + S.name + '.'); }
+      case 'command': {   // take command of another of your ships, lying in this port
+        const S = shipById(s, a); if (!S || S === s.ship) return fail('No.'); if (p.aboard) return fail('Step ashore first.');
+        if (!S.port || S.port !== here) return fail(S.name + ' is not here.'); if (S.impounded) return fail(S.name + ' is impounded.');
+        s.fleet = s.fleet.filter(x => x !== S); if (s.ship) { s.ship.orders = null; s.fleet.push(s.ship); } s.ship = S; S.orders = null; S.waitUntil = null;
+        const cap = crewPost(s, S, 'captain'); if (cap) { const cr = S.crew.find(x => x.pid === cap.pid); cr.post = 'mate'; if (crewPost(s, S, 'mate') && crewPost(s, S, 'mate').pid !== cap.pid) cr.post = 'hand'; }
+        return ok('You take command of ' + S.name + '.');
+      }
+      case 'orders': {   // a: ship id, b: the route (port ids), c: 'trade' round the route, or 'move' to the first port and wait
+        const S = shipById(s, a); if (!S || S === s.ship) return fail('You sail your own ship.');
+        if (!crewPost(s, S, 'captain')) return fail(S.name + ' needs a captain.');
+        const route = (Array.isArray(b) ? b : []).filter(k => BERTHS[k]).slice(0, 6); if (!route.length) { S.orders = null; return ok('Orders cancelled: she waits where she is.'); }
+        S.orders = { route, i: Math.max(0, route.indexOf(S.port)), mode: c === 'move' ? 'move' : 'trade' }; if (S.orders.mode === 'trade' && route.length < 2) return fail('A trade route needs two ports or more.');
+        if (S.orders.mode === 'trade' && !route.includes(S.port || '')) S.orders.i = route.length - 1;   // first leg: to the route's first port
+        S.waitUntil = S.port ? s.t + 10 : null; shipLog(s, S, c === 'move' ? 'Ordered to ' + PORTS[route[0]].name + '.' : 'Ordered to trade between ' + route.map(k => PORTS[k].name.replace(/ (Quay|Harbour)$/, '')).join(', ') + '.');
+        return ok(S.name + ': orders given.');
+      }
+      case 'rename': { const S = S0, n = String(b || '').trim().slice(0, 24); if (!S || !n) return fail('Give her a name.'); if (!yard || S.port !== yard) return fail('Bring her to a shipyard.'); if (s.coins < 10) return fail('The signwriter wants 10c.'); spend(s, 10); shipLog(s, S, 'Renamed from ' + S.name + '.'); S.name = n; return ok('She is ' + n + ' now.'); }
+      case 'refit': { const S = S0, R0 = REFITS[b]; if (!S || !R0) return fail('No.'); if (!yard || S.port !== yard) return fail('Bring her to a shipyard.'); S.refits = S.refits || {}; if (S.refits[b]) return fail('Already done.'); const cost = Math.round((S.cost || shipClass(S).price) * R0.k); if (s.coins < cost) return fail(R0.name + ' costs ' + cost + 'c.'); spend(s, cost); S.refits[b] = s.day; if (b === 'hold') S.cap = Math.round(shipClass(S).hold * 1.2); shipLog(s, S, R0.name + ' fitted at ' + PORTS[yard].name + '.'); return ok(R0.name + ' fitted.'); }
+      case 'repair': { const S = S0; if (!S) return fail('No.'); if (!yard || S.port !== yard) return fail('Bring her to a shipyard.'); const dmg = 100 - (S.hull == null ? 100 : S.hull); if (dmg <= 0) return fail('She is sound.'); const cost = Math.round(dmg * (S.cost || shipClass(S).price) / 400); if (s.coins < cost) return fail('Repairs cost ' + cost + 'c.'); spend(s, cost); S.hull = 100; shipLog(s, S, 'Repaired at ' + PORTS[yard].name + '.'); return ok('Repaired for ' + cost + 'c.'); }
+      case 'insure': { const S = S0; if (!S) return fail('No.'); if (!Object.keys(EXCHANGES).some(k => atLoc2(s, k))) return fail('Policies are written at the Merchant Exchange in Eastwatch and the Counting House in Dawnport.'); const prem = insurePremium(S); if (s.coins < prem) return fail('The premium is ' + prem + 'c for thirty days.'); spend(s, prem); S.insured = { until: Math.max(s.day, (S.insured && S.insured.until) || 0) + 30 }; if (s.stats) s.stats.insure = (s.stats.insure || 0) + prem; return ok(S.name + ' and her cargo are insured until day ' + S.insured.until + '.'); }
+      case 'hireEscort': { if (!['eastwatch', 'dawnport', 'wrenmouth', 'castamar'].includes(here)) return fail('Escorts are hired at the harbour offices of the mainland ports.'); const d = clamp(Math.round(a || 5), 1, 30), cost = d * ESCORT_DAY; if (s.coins < cost) return fail(cost + 'c for ' + d + ' days.'); spend(s, cost); s.escort = { until: Math.max(s.day, (s.escort && s.escort.until) || 0) + d, told: false }; return ok('An armed cutter will sail with you until day ' + s.escort.until + '.'); }
+      case 'buyLetter': { const K = a === 'valdoria' ? 'valdoria' : 'alderwyn'; const okHere = K === 'alderwyn' ? (atLoc2(s, 'ewkeep', 4) || here === 'wrenmouth' || here === 'eastwatch') : (atLoc2(s, 'dppalace', 4) || here === 'castamar' || here === 'dawnport'); if (!okHere) return fail(K === 'alderwyn' ? 'Letters of safe passage from Alderwyn are sealed at the harbour offices of Eastwatch and Wrenmouth.' : 'Letters of safe passage from Valdoria are sealed at the harbour offices of Dawnport and Castamar.'); if (atWar(s) && K === 'valdoria') return fail('Not while the crowns are at war.'); const st = K === 'valdoria' ? ((s.valdoria && s.valdoria.standing) || 0) : ((s.realm && s.realm.favour) || 0), cost = Math.round(LETTER_PRICE[K] * (1.2 - st / 150)); if (s.coins < cost) return fail('The letter costs ' + cost + 'c.'); spend(s, cost); s.letters = s.letters || {}; s.letters[K] = Math.max(s.day, s.letters[K] || 0) + 60; return ok('A letter of safe passage from the ' + (K === 'alderwyn' ? 'crown of Alderwyn' : 'crown of Valdoria') + ', good until day ' + s.letters[K] + '. Its patrols will not search you.'); }
+      case 'buyToken': { if (here !== 'cove') return fail('Only at the cove.'); if (s.coins < TOKEN_PRICE) return fail('They want ' + TOKEN_PRICE + 'c.'); spend(s, TOKEN_PRICE); s.pirateToken = Math.max(s.day, s.pirateToken || 0) + 30; return ok('A black ribbon for your masthead. The brotherhood of the sea will leave your ships alone until day ' + s.pirateToken + '.'); }
+      case 'claimBounty': { if (!['eastwatch', 'dawnport', 'wrenmouth', 'castamar'].includes(here)) return fail('At a harbour office.'); const n = (s.bounty || 0) + (s.report || 0) * 80; if (!n) return fail('Nothing to claim.'); earn(s, n); s.bounty = 0; s.report = 0; gainFame(s, here, 4); return ok('The harbour office pays you ' + n + 'c.'); }
+      case 'setFlag': { const M = setupMerchant(s), T = HERALDRY.tinctures; if (!T[a] || !T[b] || !HERALDRY.charges[c]) return fail('No.'); M.flag = { field: a, second: b, charge: c }; return ok('Your flag is made: it flies from every ship of yours.'); }
+      case 'nameHouse': { const M = setupMerchant(s), n = String(a || '').trim().slice(0, 30); if (!n) return fail('Name your house.'); M.house = n; return ok('Your merchant house is ' + n + '.'); }
+    }
+    return null;
+  }
+  // each night: wages, morale, provisions, the hurt mending, deserters, and your name spreading
+  function crewNight(s) {
+    const st = s.stats;
+    for (const S of allShips(s)) {
+      ensureShipId(s, S);
+      S.crew = (S.crew || []).filter(c => { const p = s.people[c.pid]; return p && p.status === 'here' && p.job && p.job.type === 'crew' && p.job.ship === S.id; });
+      let wages = 0, unpaid = 0;
+      for (const c of crewOf(s, S)) {
+        if (s.coins >= c.wage) { spend(s, c.wage); c.p.purse = (c.p.purse || 0) + c.wage; wages += c.wage; } else unpaid++;
+        const fair = CREW_POSTS[c.post].wage * (0.85 + (c.p.skill || 0) / 140);
+        let dm = clamp((c.wage - fair) * 1.5, -4, 3) + (S.port ? 1.5 : -0.5);
+        if (!S.port && S.voyage && s.t - S.voyage.left > 1440 * 3) dm -= 2;
+        if (crewPost(s, S, 'bosun')) dm += 1; if (crewPost(s, S, 'cook')) dm += 1;
+        if (!S.port && !(S.prov > 0)) dm -= 8;
+        if (unpaid && s.coins < c.wage) dm -= 12;
+        c.p.mood = clamp((c.p.mood || 50) + dm + (60 - (c.p.mood || 50)) * 0.03, 0, 100);
+        if (S.port && c.p.hurtUntil > s.day) c.p.hurtUntil -= 1;
+        if (c.p.job) c.p.job.since = c.p.job.since || s.day;
+      }
+      if (wages && st) st.crew = (st.crew || 0) + wages;
+      if (S.voyage) S.voyage.costs += wages;
+      if (unpaid) { shipLog(s, S, unpaid + ' of the crew went unpaid tonight.'); event(s, 'You could not pay ' + unpaid + ' of ' + S.name + '’s crew tonight. They will not stand for it long.', 'bad'); }
+      // deserters: in port, the unhappiest walk off
+      if (S.port) for (const c of crewOf(s, S)) if ((c.p.mood || 50) < 18 && rand(s) < 0.5) { signOff(s, S, c.pid, 'Deserted ' + S.name + ' at ' + PORTS[S.port].name + '.'); shipLog(s, S, c.p.name + ' deserted.'); event(s, c.p.name + ' has deserted ' + S.name + '. Morale aboard is low.', 'bad'); }
+      if (S.insured && S.insured.until === s.day) shipLog(s, S, 'Her insurance runs out today.');
+    }
+    fameDay(s); seaNewsDay(s);
+  }
   function shipCmd(s, name, a, b) {
     const ok = (m, x) => Object.assign({ ok: true, msg: m }, x || {}), fail = m => ({ ok: false, msg: m }), p = s.player, S = s.ship;
     const ashoreAt = k => { const P1 = PORTS[k]; p.x = P1.x + Math.sin(P1.face) * 3; p.z = P1.z + Math.cos(P1.face) * 3; p.dest = null; p.action = null; p.riding = false; p.aboard = false; p.deck = null; };
     switch (name) {
-      case 'buyShip': {   // a: the class, b: her name. With a ship already moored in this port, she is taken in part exchange
+      case 'buyShip': {   // a: the class, b: her name. With a ship already, the new one joins your fleet
         const yard = yardHere(s), C = SHIP_CLASSES[a || 'cog']; if (!yard) return fail('Ships are built and sold at the shipyards of Eastwatch and Dawnport.');
         if (!C) return fail('The shipwrights build skiffs, cutters, cogs and galleons.');
-        let credit = 0;
-        if (S) {
-          if (p.aboard) return fail('Step ashore first.');
-          if (S.impounded) return fail(S.name + ' is impounded. She cannot be traded in.');
-          if (S.port !== yard) return fail('You already own ' + S.name + '. Bring her to this port and the shipwrights will take her in part exchange.');
-          if (Object.values(S.hold).some(n => n > 0)) return fail('Sell the cargo in ' + S.name + '’s hold first.');
-          if (S.chest && S.chest.length) return fail('Empty the sea chest in ' + S.name + '’s cabin first.');
-          credit = shipWorth(S);
-        }
-        if (s.coins + credit < C.price) return fail('A ' + C.name + ' costs ' + C.price + 'c' + (credit ? ', less ' + credit + 'c for ' + S.name : '') + '.');
-        const old = S ? S.name : null;
-        if (credit) earn(s, credit); spend(s, C.price);
-        s.ship = { name: (b && String(b).slice(0, 24)) || (S ? S.name : 'the Hearthmoor Rose'), cls: C.id, cost: C.price, port: yard, hold: {}, cap: C.hold, since: s.day };
-        event(s, 'You buy a ' + C.name + ', ' + s.ship.name + (old ? ', and the shipwrights take ' + (old === s.ship.name ? 'your old ship' : old) + ' for ' + credit + 'c' : '') + '. She holds ' + C.hold + ' loads and lies at ' + PORTS[yard].name + '. Step aboard at the quay to sail her.', 'story');
+        if (allShips(s).length >= MAX_SHIPS) return fail('You own ' + MAX_SHIPS + ' ships already. Sell one first.');
+        if (s.coins < C.price) return fail('A ' + C.name + ' costs ' + C.price + 'c.');
+        spend(s, C.price);
+        const nm = (b && String(b).slice(0, 24)) || (S ? ['the Wren', 'the Gull', 'the Kittiwake', 'the Merry Ann', 'the Good Hope', 'the Swift'][allShips(s).length % 6] : 'the Hearthmoor Rose');
+        const N = ensureShipId(s, { name: nm, cls: C.id, cost: C.price, port: yard, hold: {}, cap: C.hold, since: s.day, prov: 10 });
+        fillCrew(s, N, yard);
+        if (!S) s.ship = N; else (s.fleet = s.fleet || []).push(N);
+        shipLog(s, N, 'Launched at ' + PORTS[yard].name + ' and crewed from the town.');
+        event(s, 'You buy a ' + C.name + ', ' + N.name + '. She holds ' + C.hold + ' loads and lies at ' + PORTS[yard].name + (C.hands ? ', with ' + sailors(s, N).length + ' hands signed on from ' + TOWNS[yard].name : '') + '.' + (S ? ' She joins your fleet: appoint a captain to send her trading, or take command of her yourself.' : ' Step aboard at the quay to sail her.'), 'story');
         return ok();
       }
-      case 'sellShip': {
-        if (!S) return fail('You have no ship.'); if (p.aboard) return fail('Step ashore first.');
-        if (S.impounded) return fail(S.name + ' is impounded until there is peace.');
-        if (!S.port || (portHere(s) !== S.port && yardHere(s) !== S.port)) return fail('Go to where your ship is moored.');
-        if (Object.values(S.hold).some(n => n > 0)) return fail('Sell the cargo first.');
-        if (S.chest && S.chest.length) return fail('Empty your sea chest first.');
-        earn(s, shipWorth(S)); s.ship = null; return ok();
+      case 'sellShip': {   // a: which ship (yours by default)
+        const T = a ? shipById(s, a) : S; if (!T) return fail('You have no ship.'); if (T === S && p.aboard) return fail('Step ashore first.');
+        if (T.impounded) return fail(T.name + ' is impounded until there is peace.');
+        if (!T.port || (portHere(s) !== T.port && yardHere(s) !== T.port)) return fail('Go to where she is moored.');
+        if (Object.values(T.hold).some(n => n > 0)) return fail('Sell the cargo first.');
+        if (T.chest && T.chest.length) return fail('Empty the sea chest first.');
+        for (const c of (T.crew || []).slice()) signOff(s, T, c.pid, 'Paid off when ' + T.name + ' was sold.');
+        earn(s, shipWorth(T)); if (T === S) { s.ship = null; const k = (s.fleet || []).findIndex(f => f.port === T.port); if (k >= 0) s.ship = s.fleet.splice(k, 1)[0]; } else s.fleet = s.fleet.filter(f => f !== T);
+        return ok();
       }
       case 'board': {
         if (!S) return fail('You have no ship.'); if (p.aboard) return ok();
@@ -4038,11 +4541,9 @@
         if (!S || !p.aboard) return fail('Step aboard first.'); if (!S.port) return ok();
         if (S.impounded) return fail(S.name + ' is impounded at Dawnport until there is peace.');
         if (seaRough(s) && !a) return fail('A storm is up. Cast off anyway, or wait for calmer water.');
-        const from = S.port;
-        if (atWar(s) && from === 'dawnport') {
-          const V = s.valdoria, SR = setupStormrest(s), cap = WAR.capture + (SR.holder === 'valdoria' ? 0.1 : SR.holder === 'alderwyn' ? -0.1 : 0);
-          if (rand(s) < cap) { const nm = S.name; V.war.taken++; s.ship = null; ashoreAt('stormrest'); valLog(s, 'Valdorian galleys take ' + nm + ' as she clears the harbour, with all her cargo. You and the crew are set ashore on Stormrest Isle.', 'bad'); return ok(null, { taken: true }); }
-        }
+        const from = S.port; ensureShipId(s, S);
+        if (shipClass(S).hands && fitCount(s, S) < minCrew(S)) return fail(S.name + ' needs at least ' + minCrew(S) + ' fit hands to sail; she has ' + fitCount(s, S) + '. Sign on crew at the quay.');
+        S.voyage = { from, left: s.t, bought: 0, sold: 0, costs: 0, events: [] }; shipLog(s, S, 'Cast off from ' + PORTS[from].name + '.');
         const B = BERTHS[from]; S.from = from; S.port = null; S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 0, gx: B.x, gz: B.z }; S.leftAt = s.t;
         return ok();
       }
@@ -4059,7 +4560,7 @@
         if (seaWeather(s).storm) return fail('Not in this sea. The nets would be torn away.');
         const used = Object.values(S.hold).reduce((x, y) => x + y, 0), room = S.cap - used; if (room < 1) return fail('The hold is full.');
         const CH = setupSeaChart(s), fg = CH.fished[F.id] && CH.fished[F.id].day === s.day ? CH.fished[F.id] : (CH.fished[F.id] = { day: s.day, n: 0 }), C = shipClass(S);
-        const k = Math.max(0.25, 1 - fg.n * 0.25) * crewK(S) * (isNight(s) ? 0.6 : 1), n = Math.max(1, Math.min(room, Math.round(C.net * k * (0.7 + rand(s) * 0.6))));
+        const k = Math.max(0.25, 1 - fg.n * 0.25) * crewK(S, s) * (isNight(s) ? 0.6 : 1), n = Math.max(1, Math.min(room, Math.round(C.net * k * (0.7 + rand(s) * 0.6))));
         fg.n++; S.hold.fish = (S.hold.fish || 0) + n; const og = shipOrigin(S, 'fish'); og.sea = (og.sea || 0) + n; s.rec.fished = (s.rec.fished || 0) + n;
         CH.found[F.id] = CH.found[F.id] || s.day;
         event(s, 'You shoot the nets on ' + F.name + ' and haul ' + n + ' loads of fish into the hold.' + (fg.n > 2 ? ' The shoals are thinning here today.' : ''), 'good');
@@ -4090,18 +4591,19 @@
         if (!S || !p.aboard) return fail('You are not aboard.'); if (S.port) return ok();
         const k = canMoor(s); if (!k) return fail('Bring her close to a port and take in sail before you tie up.');
         const from = S.from || k, C = shipClass(S);
+        if (s.encounter) return fail('Not with ' + (NPC_KIND[s.encounter.kind] || { name: 'them' }).name + ' on your quarter.');
         if (atWar(s) && k === 'dawnport') {
-          const V = s.valdoria, SR = setupStormrest(s), cap = WAR.capture + (SR.holder === 'valdoria' ? 0.1 : SR.holder === 'alderwyn' ? -0.1 : 0);
-          if (rand(s) < cap) { const nm = S.name; V.war.taken++; s.ship = null; ashoreAt('stormrest'); valLog(s, 'Valdorian galleys take ' + nm + ' off Dawnport, with all her cargo. You and the crew are set ashore on Stormrest Isle.', 'bad'); return ok(null, { taken: true }); }
+          const V = s.valdoria;
           if (!V.warrant) { S.port = 'dawnport'; S.sea = null; S.impounded = true; ashoreAt('eastwatch'); valLog(s, S.name + ' is impounded the moment she ties up at Dawnport, cargo and all, until there is peace. The harbour guard puts you on a neutral ship back to Eastwatch.', 'bad'); return ok(null, { impounded: true }); }
         }
         const B = BERTHS[k], mins = Math.max(0, Math.round(s.t - (S.leftAt == null ? s.t : S.leftAt)));
         S.port = k; S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 0 }; aboardPlace(s); if (!p.deck) p.face = B.hdg;
         if (k !== from) {
-          s.rec.sailed = (s.rec.sailed || 0) + 1; if (C.crew) { spend(s, C.crew); if (s.stats) s.stats.ship = (s.stats.ship || 0) + C.crew; }
+          s.rec.sailed = (s.rec.sailed || 0) + 1; if (C.crew && !(S.crew && S.crew.length)) { spend(s, C.crew); if (s.stats) s.stats.ship = (s.stats.ship || 0) + C.crew; }
           if (ISLE_BY[k] && ISLE_BY[k].name) setupSeaChart(s).found[k] = setupSeaChart(s).found[k] || s.day;
           if (k === 'dawnport' && !s.rec.landedValdoria) { s.rec.landedValdoria = s.day; event(s, 'You bring her in under the sandstone walls of Dawnport. Red tiles, the smell of salt pans and oranges: Valdoria.', 'story'); }
-          event(s, 'You moor ' + S.name + ' at ' + PORTS[k].name + ', ' + (mins >= 90 ? Math.round(mins / 60) + ' hours' : mins + ' minutes') + ' out of ' + PORTS[from].name.replace(/ (Quay|Harbour)$/, '') + '.' + (C.crew ? ' The crew take ' + C.crew + 'c for the voyage.' : ''), 'info');
+          event(s, 'You moor ' + S.name + ' at ' + PORTS[k].name + ', ' + (mins >= 90 ? Math.round(mins / 60) + ' hours' : mins + ' minutes') + ' out of ' + PORTS[from].name.replace(/ (Quay|Harbour)$/, '') + '.' + (C.crew && !(S.crew && S.crew.length) ? ' The crew take ' + C.crew + 'c for the voyage.' : ''), 'info');
+          closeVoyage(s, S, k);
         }
         S.from = k; return ok(null, { port: k });
       }
@@ -4127,9 +4629,11 @@
   IC.biz.forEach(b0 => { LOCS['ib:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'ironcrest' }; });
   EW.biz.forEach(b0 => { LOCS['eb:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'eastwatch' }; });
   const CM_JOBS = { cm_fish: ['Fisher', 'Fishing from the quay'], cm_watch: ['City watchman', 'Keeping the King\u2019s Gate'], cm_castle: ['Castle servant', 'Serving at the castle'], cm_porter: ['Market porter', 'Carrying in the Great Market'], cm_mason: ['Mason', 'Working on the Great Hall'], cm_carter: ['Carter', 'Loading carts in the South Ward'], cm_wash: ['Washer', 'Washing linen at the lake'], cm_labour: ['Labourer', 'Labouring in the Old Town'] };
-  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW, dawnport: DP, goldmeadow: GM, thornwick: TW, stonewatch: SW, valdor: VD, saltholm: SH, merrow: MR, gullhaven: GU };
-  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS, DP_JOBS, VAL_JOBS, ISLE_JOBS);
+  const LAYOUT = { oakbridge: OAK, greenhaven: GH, crownmere: CM, ironcrest: IC, eastwatch: EW, dawnport: DP, goldmeadow: GM, thornwick: TW, stonewatch: SW, valdor: VD, saltholm: SH, merrow: MR, gullhaven: GU, wrenmouth: WR, castamar: CK };
+  const COMMON_JOBS = Object.assign({}, OAK_JOBS, GH_JOBS, CM_JOBS, IC_JOBS, EW_JOBS, DP_JOBS, VAL_JOBS, ISLE_JOBS, PORT_JOBS);
   /* ---------- getting about: stage posts and coaches, and a horse of your own ---------- */
+  ROADS.wren = [[EW.gate.x - 20, EW.gate.z], [905, -200], [930, 0], [975, 250], [1000, 450], [WR.entry.x - 2, WR.entry.z]];
+  ROADS.vcast = [[CK.entry.x + 2, CK.entry.z], [8720, -1300], [8760, -1100], [8790, -900], [8805, -720], [8840, -560]];
   const STAGE = {
     hearthmoor: { x: 72, z: 11, face: 0, name: 'Hearthmoor Stage Post' },
     oakbridge: { x: OAK.square.x - 10, z: OAK.square.z + 24, face: 0, name: 'Oakbridge Stage Post' },
@@ -4160,14 +4664,16 @@
     goldmeadow: { x: 8930, z: 116, face: Math.PI / 2, name: 'Goldmeadow Coach House' },
     thornwick: { x: 9084, z: -174, face: Math.PI, name: 'Thornwick Coach House' },
     stonewatch: { x: 8956, z: -640, face: Math.PI / 2, name: 'Stonewatch Coach House' },
-    valdor: { x: 9372, z: -318, face: 0, name: 'Valdor Coach House' }
+    valdor: { x: 9372, z: -318, face: 0, name: 'Valdor Coach House' },
+    wrenmouth: { x: WR.entry.x - 10, z: WR.entry.z + 12, face: Math.PI / 2, name: 'Wrenmouth Stage Post' },
+    castamar: { x: CK.entry.x + 10, z: CK.entry.z - 12, face: -Math.PI / 2, name: 'Castamar Coach House' }
   });
   for (const id in STAGE) LOCS['stage:' + id] = { x: STAGE[id].x, z: STAGE[id].z, r: 5, name: STAGE[id].name, town: id === 'hearthmoor' ? undefined : id, stage: id };
   const polyLen = pts => { let L = 0; for (let i = 0; i < pts.length - 1; i++) L += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); return L; };
   // distances by road: the east road to the fork at the waystation, then on east to Oakbridge or north to Greenhaven
   const forkAt = ROADS.east.findIndex(p => p[0] === 240);
   const LEG = { hearthmoor: polyLen(ROADS.east.slice(0, forkAt + 1)) + 75, oakbridge: polyLen(ROADS.east.slice(forkAt)) + 30, greenhaven: polyLen(ROADS.north) + 20 };
-  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40], ['dawnport', 'goldmeadow', polyLen(ROADS.vgold) + 60], ['dawnport', 'thornwick', polyLen(ROADS.vthorn) + 60], ['dawnport', 'stonewatch', polyLen(ROADS.vstone) + 70], ['thornwick', 'valdor', polyLen(ROADS.vqueen) + 70]];
+  const EDGES = [['hearthmoor', 'fork', LEG.hearthmoor], ['fork', 'oakbridge', LEG.oakbridge], ['fork', 'greenhaven', LEG.greenhaven], ['oakbridge', 'crownmere', polyLen(ROADS.crown) + 60], ['greenhaven', 'crownmere', polyLen(ROADS.westcm) + 60], ['crownmere', 'ironcrest', polyLen(ROADS.iron) + 40], ['oakbridge', 'eastwatch', polyLen(ROADS.coast) + 40], ['dawnport', 'goldmeadow', polyLen(ROADS.vgold) + 60], ['dawnport', 'thornwick', polyLen(ROADS.vthorn) + 60], ['dawnport', 'stonewatch', polyLen(ROADS.vstone) + 70], ['thornwick', 'valdor', polyLen(ROADS.vqueen) + 70], ['eastwatch', 'wrenmouth', polyLen(ROADS.wren) + 60], ['castamar', 'stonewatch', polyLen(ROADS.vcast) + 160]];
   const kingdomOf = id => (TOWNS[id] && TOWNS[id].foreign) || 'alderwyn';
   const roadDist = (a, b) => { if (a === b) return 0; const D = { [a]: 0 }, Q = [a]; while (Q.length) { Q.sort((x, y) => D[x] - D[y]); const u = Q.shift(); for (const [x, y, w] of EDGES) { const v = x === u ? y : y === u ? x : null; if (v && (D[v] == null || D[u] + w < D[v])) { D[v] = D[u] + w; Q.push(v); } } } return D[b] || 0; };
   const COACH_MPM = 15, WALK_MPM = 7.8, RIDE_MPM = 18;   // metres per game minute (walking is 6.5 m a second, and a game minute is 1.2 seconds)
@@ -4326,10 +4832,12 @@
   function setupNewTown(s, id) {
     if (!s.towns || s.towns[id]) return;
     const VCFG = { goldmeadow: { seed: 818181, pop: 85, jobs: ['gm_field', 'gm_field', 'gm_field', 'gm_horse', 'gm_harvest', 'gm_watch'], title: 'Reeve', chest: 160, rent: [3, 2], pre: 'gm' }, thornwick: { seed: 828282, pop: 65, jobs: ['tw_fell', 'tw_fell', 'tw_fell', 'tw_saw', 'tw_char', 'tw_watch'], title: 'Warden', chest: 120, rent: [3, 2], pre: 'tw' }, stonewatch: { seed: 838383, pop: 210, jobs: ['sw_garrison', 'sw_garrison', 'sw_garrison', 'sw_quarry', 'sw_quarry', 'sw_wall', 'sw_watch'], title: 'Castellan', chest: 400, rent: [4, 3], pre: 'sw' } };
+    VCFG.castamar = { seed: 898989, pop: 84, jobs: ['ca_dock', 'ca_dock', 'ca_fish', 'ca_grove', 'ca_grove', 'ca_grove', 'ca_press', 'ca_watch'], title: 'Alcalde', chest: 220, rent: [4, 3], pre: 'ca' };
     VCFG.valdor = { seed: 848484, pop: 330, jobs: ['vd_guard', 'vd_guard', 'vd_cath', 'vd_cath', 'vd_porter', 'vd_porter', 'vd_scribe', 'vd_garden', 'vd_watch'], title: 'Corregidor', chest: 900, rent: [6, 4], pre: 'vd' }; VCFG.valdor.pop = 400;
     if (VCFG[id]) Object.assign(VCFG[id], { fam: VAL_FAMILY, first: [VAL_F, VAL_M] });
     const ISLE_CFG = { saltholm: { seed: 858585, pop: 44, jobs: ['sh_dock', 'sh_fish', 'sh_fish', 'sh_pans', 'sh_pans', 'sh_racks', 'sh_watch'], title: 'Harbourmaster', chest: 120, rent: [3, 2], pre: 'sh' }, merrow: { seed: 868686, pop: 38, jobs: ['mr_dock', 'mr_fish', 'mr_dunes', 'mr_dunes', 'mr_beach', 'mr_watch'], title: 'Headman', chest: 140, rent: [3, 2], pre: 'mr' }, gullhaven: { seed: 878787, pop: 56, jobs: ['gu_dock', 'gu_fish', 'gu_fish', 'gu_vats', 'gu_vats', 'gu_cliff', 'gu_watch'], title: 'Portreeve', chest: 160, rent: [3, 2], pre: 'gu' } };
-    for (const k in ISLE_CFG) ISLE_CFG[k].fam = ['Trask', 'Pender', 'Rowse', 'Nance', 'Kitto', 'Tonkin', 'Jago', 'Pascoe', 'Penrose', 'Merrin', 'Hale', 'Tregear', 'Bolitho', 'Carne', 'Hocking', 'Angove', 'Polglase', 'Teague'];
+    ISLE_CFG.wrenmouth = { seed: 888888, pop: 78, jobs: ['wr_dock', 'wr_dock', 'wr_fish', 'wr_fish', 'wr_tin', 'wr_tin', 'wr_yard', 'wr_watch'], title: 'Portreeve', chest: 200, rent: [4, 3], pre: 'wr', fam: ['Penhale', 'Hollis', 'Wray', 'Pellow', 'Cord', 'Tremain', 'Hosken', 'Rodda', 'Vosper', 'Sleeman', 'Chegwin', 'Oates', 'Trewin', 'Couch', 'Ivey', 'Pascoe'] };
+    for (const k of ['saltholm', 'merrow', 'gullhaven']) ISLE_CFG[k].fam = ['Trask', 'Pender', 'Rowse', 'Nance', 'Kitto', 'Tonkin', 'Jago', 'Pascoe', 'Penrose', 'Merrin', 'Hale', 'Tregear', 'Bolitho', 'Carne', 'Hocking', 'Angove', 'Polglase', 'Teague'];
     const L = LAYOUT[id], cfg = VCFG[id] ? VCFG[id] : ISLE_CFG[id] ? ISLE_CFG[id] : id === 'dawnport' ? { seed: 717171, pop: 450, jobs: ['dp_dock', 'dp_dock', 'dp_dock', 'dp_fish', 'dp_fish', 'dp_salt', 'dp_salt', 'dp_sail', 'dp_vine', 'dp_vine', 'dp_watch'], title: 'Consul', chest: 650, rent: [5, 3], pre: 'd', fam: VAL_FAMILY, first: [VAL_F, VAL_M] } : id === 'ironcrest' ? { seed: 515151, pop: 200, jobs: ['ic_mine', 'ic_mine', 'ic_mine', 'ic_mine', 'ic_smelt', 'ic_smelt', 'ic_char', 'ic_haul', 'ic_haul', 'ic_watch'], title: 'Reeve', chest: 300, rent: [4, 3], pre: 'i', fam: ['Stane', 'Coale', 'Cragg', 'Delver', 'Flint', 'Hewer', 'Ironside', 'Pickard', 'Sledge', 'Tor', 'Wray', 'Ashby', 'Quarry'] }
       : { seed: 616161, pop: 480, jobs: ['ew_dock', 'ew_dock', 'ew_dock', 'ew_fish', 'ew_fish', 'ew_net', 'ew_sail', 'ew_sail', 'ew_yard', 'ew_watch'], title: 'Harbourmaster', chest: 700, rent: [5, 3], pre: 'e', fam: ['Penhale', 'Trask', 'Brine', 'Keel', 'Tolley', 'Hook', 'Marchant', 'Rowe', 'Polgrean', 'Nance', 'Tremayne', 'Kitto', 'Jago', 'Pascoe', 'Rescorla'] };
     let sd = cfg.seed; const r = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
@@ -4379,15 +4887,16 @@
     wool: { name: 'wool', base: 3, made: 'eastwatch' }, iron: { name: 'iron', base: 5, made: 'eastwatch' },
     // Stage II: what the islands make, and the catch from the fishing grounds (fish is landed free of duty in every port)
     saltfish: { name: 'salt fish', base: 4, made: 'saltholm' }, amber: { name: 'amber', base: 12, made: 'merrow' }, dye: { name: 'dye', base: 7, made: 'gullhaven' },
-    fish: { name: 'fresh fish', base: 6, made: 'sea' }
+    fish: { name: 'fresh fish', base: 6, made: 'sea' },
+    tin: { name: 'tin', base: 7, made: 'wrenmouth' }, oil: { name: 'olive oil', base: 6, made: 'castamar' }
   };
-  const SEA_PORTS = ['eastwatch', 'dawnport', 'saltholm', 'merrow', 'gullhaven', 'cove'];
+  const SEA_PORTS = ['eastwatch', 'dawnport', 'saltholm', 'merrow', 'gullhaven', 'cove', 'wrenmouth', 'castamar'];
   const ISLE_PORTS = ['saltholm', 'merrow', 'gullhaven', 'cove'];
   const SHIP_PRICE = 800, SHIP_HOLD = 80, SHIP_UPKEEP = 3, SHIP_CREW = 6;
   const seaTarget = (port, g) => SEA_GOODS[g].made === port ? 450 : port === 'cove' ? 260 : 180;
-  function setupSeaMarket(s) { if (s.seaMarket && s.seaMarket.cove && s.seaMarket.eastwatch.fish != null) return s.seaMarket; if (s.seaMarket) { for (const p of SEA_PORTS) { s.seaMarket[p] = s.seaMarket[p] || {}; for (const g in SEA_GOODS) if (s.seaMarket[p][g] == null) s.seaMarket[p][g] = seaTarget(p, g); } return s.seaMarket; } s.seaMarket = {}; for (const p of SEA_PORTS) { s.seaMarket[p] = {}; for (const g in SEA_GOODS) s.seaMarket[p][g] = seaTarget(p, g); } return s.seaMarket; }
-  function seaPrice(s, port, g, shift) { const M = setupSeaMarket(s), G = SEA_GOODS[g], st = Math.max(4, M[port][g] + (shift || 0)), mult = G.made === port ? 0.85 : G.made === 'sea' ? 1 : port === 'cove' ? 1.05 : 1.3; return G.base * mult * clamp(Math.pow(seaTarget(port, g) / st, 0.6), 0.4, 3); }
-  const seaLoad = (s, port, g, n, dir) => { let sum = 0; for (let k = 0; k < n; k++) sum += seaPrice(s, port, g, dir * k); return Math.round(sum); };
+  function setupSeaMarket(s) { if (s.seaMarket && s.seaMarket.castamar && s.seaMarket.eastwatch.oil != null) return s.seaMarket; if (s.seaMarket) { for (const p of SEA_PORTS) { s.seaMarket[p] = s.seaMarket[p] || {}; for (const g in SEA_GOODS) if (s.seaMarket[p][g] == null) s.seaMarket[p][g] = seaTarget(p, g); } return s.seaMarket; } s.seaMarket = {}; for (const p of SEA_PORTS) { s.seaMarket[p] = {}; for (const g in SEA_GOODS) s.seaMarket[p][g] = seaTarget(p, g); } return s.seaMarket; }
+  function seaPrice(s, port, g, shift) { const M = setupSeaMarket(s), G = SEA_GOODS[g], st = Math.max(4, M[port][g] + (shift || 0)), mult = G.made === port ? 0.85 : G.made === 'sea' ? 1 : port === 'cove' ? 1.05 : 1.3; return G.base * mult * clamp(Math.pow(seaTarget(port, g) / st, 0.6), 0.4, 3) * priceMood(s, port, g); }
+  const seaLoad = (s, port, g, n, dir) => { let sum = 0; for (let k = 0; k < n; k++) sum += seaPrice(s, port, g, dir * k); const f = fameAt(s, port); return Math.round(sum * (dir > 0 ? 1 + 0.06 * f / 100 : 1 - 0.04 * f / 100)); };   // a known name buys a little cheaper and sells a little dearer
   function seaMarketDay(s) {
     const M = setupSeaMarket(s);
     for (const p of SEA_PORTS) for (const g in SEA_GOODS) { const T = seaTarget(p, g); M[p][g] = Math.round(M[p][g] + (T - M[p][g]) * 0.3 + (rand(s) - 0.5) * T * 0.04); }
@@ -4396,7 +4905,7 @@
   // higher when the crowns are at odds
   function smuggleRisk(s, port) {
     const V = s.valdoria, h = hourOf(s), night = h >= 21 || h < 5, contact = s.customsContact && s.customsContact.port === port && s.day < s.customsContact.until;
-    let r = port === 'dawnport' ? 0.15 + (V && V.relation < 40 ? 0.1 : 0) : 0.12;
+    let r = port === 'dawnport' || port === 'castamar' ? 0.15 + (V && V.relation < 40 ? 0.1 : 0) : 0.12;
     if (night) r -= 0.05; if (contact) r = Math.min(r, 0.04);
     return Math.max(0.02, Math.round(r * 100) / 100);
   }
@@ -4404,7 +4913,7 @@
   function landingTax(s, port, g) {
     const fromOther = SEA_GOODS[g] ? SEA_GOODS[g].made !== port : true;
     if (!fromOther || ISLE_PORTS.includes(port) || (SEA_GOODS[g] && SEA_GOODS[g].made === 'sea')) return 0;   // the Free Isles keep no customs house, and fish is landed free
-    if (port === 'dawnport') { const V = s.valdoria; return Math.max(0, (V ? V.duty : 1.2) - 1) * (V && (V.rank || 0) >= 3 ? 0.25 : V && V.charter ? 0.5 : 1); }
+    if (port === 'dawnport' || port === 'castamar') { const V = s.valdoria; return Math.max(0, (V ? V.duty : 1.2) - 1) * (V && (V.rank || 0) >= 3 ? 0.25 : V && V.charter ? 0.5 : 1); }
     return Math.max(0, (s.realm ? s.realm.tariff : 1) - 1);
   }
   // Valdoria: its own crown and its own customs. For now it is a place to go and to trade; its queen, its laws and its
@@ -4430,7 +4939,7 @@
   // what the Queen will see you about: anyone with a name in Valdoria, a merchant's charter, or the crown of Alderwyn
   const canAudience = s => { const V = s.valdoria; return !!(V && (isRuler(s) || V.charter || V.standing >= 25 || (V.rank || 0) >= 2)); };
   // the roads of Valdoria and the Holy Brotherhood that rides them
-  const VAL_BANDITS = { dawnport: 12, goldmeadow: 18, thornwick: 30, stonewatch: 15, valdor: 10 };
+  const VAL_BANDITS = { dawnport: 12, goldmeadow: 18, thornwick: 30, stonewatch: 15, valdor: 10, castamar: 14 };
   /* ---------- war between the crowns ----------
      When relations fall through the floor, the Queen may declare war; the ruler of Alderwyn may declare it too. A royal
      marriage, an alliance or a trade pact keeps the peace. In war: no passage ships sail, Dawnport is closed, Alderwyn
@@ -4959,7 +5468,7 @@
     s.towns.crownmere = { title: 'Lord Mayor', chest: 1500, fee: 'normal', approval: 60, council: masters.slice(1, 7).map(p => p.id), mayor: mayor.id, nextVote: s.day + 7, log: [], lastVote: null };
     plog(s, mayor, 'Chosen Lord Mayor of Crownmere by the guilds.');
   }
-  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150, dawnport: 80, goldmeadow: 30, thornwick: 26, stonewatch: 70, valdor: 170, saltholm: 24, merrow: 22, gullhaven: 28 };
+  const UPKEEP = { oakbridge: 135, greenhaven: 34, crownmere: 520, ironcrest: 70, eastwatch: 150, dawnport: 80, goldmeadow: 30, thornwick: 26, stonewatch: 70, valdor: 170, saltholm: 24, merrow: 22, gullhaven: 28, wrenmouth: 40, castamar: 42 };
   const FEES = { low: { name: 'Low market fee (2c)', coin: 2 }, normal: { name: 'Market fee (3c)', coin: 3 }, high: { name: 'High market fee (5c)', coin: 5 } };
   function oakFolk(s) { return living(s).filter(p => p.town === 'oakbridge'); }
   function townFolk(s, id) { return living(s).filter(p => p.town === id); }
@@ -4994,7 +5503,7 @@
   function townLog(s, T, text) { T.log.unshift({ day: s.day, text }); if (T.log.length > 20) T.log.length = 20; event(s, (TOWNS[T.id || 'oakbridge'] || TOWNS.oakbridge).name + ': ' + text, 'info'); }
   /* every town keeps a watch in proportion to its size: about one for every forty people, never fewer than two,
      and the capital a little more. They are townsfolk in a watchman's job, paid from the town chest. */
-  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch', dawnport: 'dp_watch', goldmeadow: 'gm_watch', thornwick: 'tw_watch', stonewatch: 'sw_watch', valdor: 'vd_watch', saltholm: 'sh_watch', merrow: 'mr_watch', gullhaven: 'gu_watch' };
+  const TOWN_WATCH_JOB = { oakbridge: 'watch', greenhaven: 'gh_watch', crownmere: 'cm_watch', ironcrest: 'ic_watch', eastwatch: 'ew_watch', dawnport: 'dp_watch', goldmeadow: 'gm_watch', thornwick: 'tw_watch', stonewatch: 'sw_watch', valdor: 'vd_watch', saltholm: 'sh_watch', merrow: 'mr_watch', gullhaven: 'gu_watch', wrenmouth: 'wr_watch', castamar: 'ca_watch' };
   function watchTarget(s, id) { const pop = id === 'hearthmoor' ? villagers(s).length : townFolk(s, id).length, T = s.towns && s.towns[id]; return Math.max(2, Math.round(pop / (id === 'crownmere' ? 35 : 40) * ((T && T.watchMul) || 1))); }
   function townWatch(s, id, T) {
     const job = TOWN_WATCH_JOB[id]; if (!job) return;
@@ -5023,8 +5532,8 @@
     // a full chest gets spent on walls, wells, the watch and the poor
     if (T.chest > 600 && !(T.mayor === 'player')) T.chest -= Math.round((T.chest - 600) * 0.06);
     // a hungry household sends someone out to find day work: on the quay, in the fields, wherever there is some
-    const VPRE = { goldmeadow: 'gm_', thornwick: 'tw_', stonewatch: 'sw_', valdor: 'vd_', saltholm: 'sh_', merrow: 'mr_', gullhaven: 'gu_' }[id];
-    const jobsHere = VPRE ? Object.keys(Object.assign({}, VAL_JOBS, ISLE_JOBS)).filter(k => k.startsWith(VPRE)) : Object.keys({ greenhaven: GH_JOBS, crownmere: CM_JOBS, ironcrest: IC_JOBS, eastwatch: EW_JOBS, dawnport: DP_JOBS }[id] || OAK_JOBS);
+    const VPRE = { goldmeadow: 'gm_', thornwick: 'tw_', stonewatch: 'sw_', valdor: 'vd_', saltholm: 'sh_', merrow: 'mr_', gullhaven: 'gu_', wrenmouth: 'wr_', castamar: 'ca_' }[id];
+    const jobsHere = VPRE ? Object.keys(Object.assign({}, VAL_JOBS, ISLE_JOBS, PORT_JOBS)).filter(k => k.startsWith(VPRE)) : Object.keys({ greenhaven: GH_JOBS, crownmere: CM_JOBS, ironcrest: IC_JOBS, eastwatch: EW_JOBS, dawnport: DP_JOBS }[id] || OAK_JOBS);
     const famHungry = new Set(townFolk(s, id).filter(p => p.kid && p.hungry).flatMap(p => p.parents || []));
     for (const p of townFolk(s, id)) {
       if (p.kid || p.job || p.retired || p.age < 16 || p.age > 62 || !(p.hungry || famHungry.has(p.id) || p.purse < 4) || rand(s) > 0.35) continue;
@@ -5064,14 +5573,14 @@
     if (!here || here === s.bodiesIn) return;
     s.bodiesIn = here;
     s.agents = s.agents.filter(a => a.kind !== 'person' || townOf(s.people[a.pid]) === here);
-    for (const p of living(s)) if (townOf(p) === here && !(p.job && ['lord', 'steward', 'taxman'].includes(p.job.office))) { if (!bodyOf(s, p)) { addBody(s, p); const a = bodyOf(s, p); if (a && a.job) a.spot = jobSpot(s, a.job); } }
+    for (const p of living(s)) if (townOf(p) === here && !(p.job && ['lord', 'steward', 'taxman'].includes(p.job.office)) && !crewAway(s, p)) { if (!bodyOf(s, p)) { addBody(s, p); const a = bodyOf(s, p); if (a && a.job) a.spot = jobSpot(s, a.job); } }
     s.schedule = s.schedule.filter(e => !e.id || s.agents.some(a => a.id === e.id));
   }
 
   /* ================= the kingdom of Alderwyn: lords, court, council, crown, and the bandits on its roads =================
      Six regions, each held by a lord under the crown. Your standing with the lords, the guilds, the court and the
      towns is your support; with enough of it, and a lordship and a council seat, the crown itself can be yours. */
-  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch', valdor: 'Valdor', saltholm: 'Saltholm', merrow: 'Merrow', gullhaven: 'Gullhaven' };   // Dawnport is Valdoria's, named here only so messages can say where
+  const REGIONS = { hearthmoor: 'Hearthmoor', greenhaven: 'Greenhaven', oakbridge: 'Oakbridge', crownmere: 'the Crown Lands', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch', valdor: 'Valdor', saltholm: 'Saltholm', merrow: 'Merrow', gullhaven: 'Gullhaven', wrenmouth: 'Wrenmouth', castamar: 'Castamar' };   // Dawnport is Valdoria's, named here only so messages can say where
   const COUNCIL = { treasury: 'Lord Treasurer', trade: 'Master of Trade', war: 'Marshal', law: 'Lord Justice' };
   /* the council is three careers, and you follow one. The road of coin runs from Master of Trade up to Lord
      Treasurer; the road of arms leads to Marshal; the road of law to Lord Justice. Once you have taken a seat on
@@ -5114,7 +5623,8 @@
       oakbridge: { lord: lord('Isolde Marlowe', 47, 'oakbridge', 'Lady of Oakbridge, who holds the keep.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 },
       crownmere: { lord: 'crown', tax: 1, patrol: 2, garrison: 2, roads: 2 },
       ironcrest: { lord: lord('Gareth Stane', 58, 'ironcrest', 'Lord of Ironcrest and its mines.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 },
-      eastwatch: { lord: lord('Rowena Tarrant', 44, 'eastwatch', 'Lady of Eastwatch, Warden of the Coast.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 }
+      eastwatch: { lord: lord('Rowena Tarrant', 44, 'eastwatch', 'Lady of Eastwatch, Warden of the Coast.').id, tax: 1, patrol: 1, garrison: 1, roads: 1 },
+      wrenmouth: { lord: 'crown', tax: 1, patrol: 1, garrison: 0, roads: 1 }   // a crown port: the king's own officers keep it
     };
     for (const id in regions) { const r = regions[id]; if (r.lord && r.lord !== 'office' && r.lord !== 'crown' && s.people[r.lord]) { s.people[r.lord].noble = id; s.people[r.lord].opinion = 0; } }
     const courtier = (name, age, why) => noble(s, { name, age, town: 'crownmere', home: 'seat:crownmere', why });
@@ -6442,6 +6952,7 @@
       return { id: i + 1, name: f.name || 'A foe', pid: f.pid || null, kit: f.kit, w: f.w || K.w, a: f.a || K.a, sh: S ? (f.s || K.s) : null, x: px + Math.sin(a) * r, z: pz + Math.cos(a) * r, face: a + Math.PI, hp, hpMax: hp, skill: (f.skill || K.skill) * (f.mul || 1), spd: (f.spd || K.spd), arm: A ? A.arm || 0 : 0, blk: S ? S.blk : 0, ranged: !!(W && W.ranged), reach: (W && W.reach) || 1, state: 'close', t: 0.6 + i * 0.4, down: false, blocking: 0 }; });
     const allies = [], mo = yourOffice(s), ent = spec.kind === 'tourney' ? 0 : isRuler(s) ? 3 : mo && mo.office === 'lord' ? 2 : 0;
     for (let i = 0; i < ent; i++) allies.push({ id: 101 + i, name: isRuler(s) ? 'A royal guard' : 'Your man-at-arms', x: px + (i - 1) * 1.4, z: pz - 1.6, face: 0, hp: 110, hpMax: 110, dmg: 8, spd: 0.95, t: 1 + i * 0.4, down: false });
+    (spec.allies || []).forEach((a0, i) => allies.push({ id: 120 + i, name: a0.name, x: px + (i - 1) * 1.3, z: pz + 1.4, face: 0, hp: a0.hp || 100, hpMax: a0.hp || 100, dmg: a0.dmg || 8, spd: 1, t: 1 + i * 0.3, down: false }));
     if (perk(s, 'bodyguard') && spec.kind !== 'tourney') allies.push({ id: 100, name: 'Your guard', x: px - 1.2, z: pz - 1.2, face: 0, hp: 120, hpMax: 120, dmg: 9, spd: 1, t: 1, down: false });
     const C = s.char; if (C.hp < C.hpMax * 0.4) C.hp = Math.round(C.hpMax * 0.4);   // no one starts a fight already half dead
     s.fight = { kind: spec.kind || 'knockout', ctx: spec.ctx || null, foes, allies, p: { cd: 0, dodge: 0, block: false, riposte: 0, stagger: 0, swing: 0, lastHit: 0 }, log: [], over: null, time: 0, title: spec.title || 'A fight', hits: [] };
@@ -6843,10 +7354,10 @@
   }
   /* where a building stands sets its price: a richer town costs more, and so does the heart of town by the market */
   // what land is worth in each town (houses), and how rich its customers are (businesses take more, and pay more for supplies and premises)
-  const LAND = { hearthmoor: 1, greenhaven: 1.5, goldmeadow: 1.4, thornwick: 1.3, stonewatch: 1.4, ironcrest: 3, dawnport: 3, oakbridge: 3.5, eastwatch: 3.5, crownmere: 6, valdor: 6, saltholm: 1.3, merrow: 1.3, gullhaven: 1.4 };
-  const WEALTH = { hearthmoor: 1.45, greenhaven: 2, goldmeadow: 2.8, thornwick: 2.8, stonewatch: 1.8, ironcrest: 2.5, dawnport: 1.75, oakbridge: 2.1, eastwatch: 2.5, crownmere: 3.7, valdor: 4.2, saltholm: 2.2, merrow: 2.6, gullhaven: 2.4 };
+  const LAND = { hearthmoor: 1, greenhaven: 1.5, goldmeadow: 1.4, thornwick: 1.3, stonewatch: 1.4, ironcrest: 3, dawnport: 3, oakbridge: 3.5, eastwatch: 3.5, crownmere: 6, valdor: 6, saltholm: 1.3, merrow: 1.3, gullhaven: 1.4, wrenmouth: 2, castamar: 2 };
+  const WEALTH = { hearthmoor: 1.45, greenhaven: 2, goldmeadow: 2.8, thornwick: 2.8, stonewatch: 1.8, ironcrest: 2.5, dawnport: 1.75, oakbridge: 2.1, eastwatch: 2.5, crownmere: 3.7, valdor: 4.2, saltholm: 2.2, merrow: 2.6, gullhaven: 2.4, wrenmouth: 2.3, castamar: 2.4 };
   // what an ordinary business costs in each town, before where it stands in town (target ranges, in units of 10c)
-  const BIZ_TOWN_PRICE = { hearthmoor: 320, greenhaven: 650, goldmeadow: 600, thornwick: 550, stonewatch: 600, ironcrest: 1500, dawnport: 1400, oakbridge: 1750, eastwatch: 1750, crownmere: 3400, valdor: 3300, saltholm: 500, merrow: 520, gullhaven: 560 };
+  const BIZ_TOWN_PRICE = { hearthmoor: 320, greenhaven: 650, goldmeadow: 600, thornwick: 550, stonewatch: 600, ironcrest: 1500, dawnport: 1400, oakbridge: 1750, eastwatch: 1750, crownmere: 3400, valdor: 3300, saltholm: 500, merrow: 520, gullhaven: 560, wrenmouth: 800, castamar: 820 };
   // where in town: the edge is cheap, the heart of town dear
   const spotMul = (town, x, z) => { const k = areaOf(town, x, z).k; return Math.round((0.6 + (k - 0.85) / 0.5 * 1.1) * 100) / 100; };
   // the finest properties: the great estates, and the best-placed businesses in the two capitals
@@ -7824,7 +8335,7 @@
     if (d && s.stats) { const f = s.stats.flows = s.stats.flows || {}; f[name] = (f[name] || 0) + d; }
     return r;
   }
-  const SEA_BLOCK = new Set(['walk', 'goto', 'gather', 'journey', 'coach', 'sail', 'ride']), SHIP_CMDS = new Set(['buyShip', 'sellShip', 'board', 'ashore', 'castOff', 'setSail', 'moor', 'deck', 'castNets', 'searchWreck', 'chestPut', 'chestTake']);
+  const SEA_BLOCK = new Set(['walk', 'goto', 'gather', 'journey', 'coach', 'sail', 'ride']), SHIP_CMDS = new Set(['buyShip', 'sellShip', 'board', 'ashore', 'castOff', 'setSail', 'moor', 'deck', 'castNets', 'searchWreck', 'chestPut', 'chestTake']), FLEET_CMDS = new Set(['hireCrew', 'dismissCrew', 'setPost', 'buyProv', 'command', 'orders', 'rename', 'refit', 'repair', 'insure', 'hireEscort', 'buyLetter', 'buyToken', 'claimBounty', 'setFlag', 'nameHouse']);
   function cmd0(s, name, a, b, c) {
     const p = s.player;
     if (s.you && s.you.regent && REGENCY_BLOCK.has(name)) return fail('You are still a child. ' + s.you.regent.name.charAt(0).toUpperCase() + s.you.regent.name.slice(1) + ' acts for you until you are 16.');
@@ -7846,6 +8357,8 @@
     if (name === 'separate') return loveCmd(s, 'lSeparate');
     if (p.aboard && SEA_BLOCK.has(name)) return fail('You are aboard ' + (s.ship ? s.ship.name : 'your ship') + '. ' + (s.ship && s.ship.port ? 'Step ashore first.' : 'Bring her into port and step ashore first.'));
     if (SHIP_CMDS.has(name)) { const r = shipCmd(s, name, a, b); if (r) return r; }
+    if (FLEET_CMDS.has(name)) { const r = fleetCmd(s, name, a, b, c); if (r) return r; }
+    if (/^enc[A-Z]/.test(name)) { const r = encounterCmd(s, name, a); if (r) return r; }
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
       case 'goto': {
@@ -8753,14 +9266,14 @@
         if (!SEA_GOODS[a] || n <= 0) return fail('Nothing to buy.');
         const used = Object.values(s.ship.hold).reduce((x, y) => x + y, 0); if (used + n > s.ship.cap) return fail('The hold has room for ' + (s.ship.cap - used) + ' more.');
         const cost = seaLoad(s, port, a, n, -1); if (s.coins < cost) return fail(n + ' ' + a + ' cost ' + cost + 'c.');
-        spend(s, cost); s.seaMarket[port][a] -= n; s.ship.hold[a] = (s.ship.hold[a] || 0) + n; const og = shipOrigin(s.ship, a); og[port] = (og[port] || 0) + n; s.ship.paid = s.ship.paid || {}; s.ship.paid[a] = (s.ship.paid[a] || 0) + cost; return ok();
+        spend(s, cost); if (s.ship.voyage) s.ship.voyage.bought += cost; s.seaMarket[port][a] -= n; s.ship.hold[a] = (s.ship.hold[a] || 0) + n; const og = shipOrigin(s.ship, a); og[port] = (og[port] || 0) + n; s.ship.paid = s.ship.paid || {}; s.ship.paid[a] = (s.ship.paid[a] || 0) + cost; return ok();
       }
       case 'cargoSell': {
         // c: true to land it quietly, past the customs house
         const port = portHere(s), n = Math.round(b || 0), V = s.valdoria; if (!s.ship || s.ship.port !== port || !SEA_PORTS.includes(port)) return fail('Your ship must be here, in a port with a market.');
         const have = (s.ship.hold[a] || 0); if (!SEA_GOODS[a] || n <= 0 || n > have) return fail('You have ' + have + ' ' + a + ' aboard.');
         const foreign = SEA_GOODS[a].made !== port;
-        const aldGood = SEA_GOODS[a].made === 'eastwatch';
+        const aldGood = SEA_GOODS[a].made === 'eastwatch' || SEA_GOODS[a].made === 'wrenmouth';
         if (port === 'dawnport' && aldGood && V && V.war && !c) return fail('Valdoria is at war with Alderwyn: no Alderwyn goods are landed openly at Dawnport. You could land them quietly.');
         if (port === 'dawnport' && aldGood && V && V.embargo && !c) return fail('Dawnport is closed to Alderwyn’s goods until day ' + V.embargo + '.');
         const gross = seaLoad(s, port, a, n, 1), rate = c ? 0 : landingTax(s, port, a), tax = Math.round(gross * rate);
@@ -8777,7 +9290,7 @@
           const caught = rand(s) < smuggleRisk(s, port);
           if (caught) { const fine = 30; spend(s, Math.min(fine, Math.max(0, s.coins))); if (port === 'dawnport' && V) { V.standing = clamp(V.standing - 12, 0, 100); V.relation = clamp(V.relation - 2, 0, 100); favourBy(s, -5); } valLog(s, 'The customs men seize ' + n + ' ' + a + ' landed without paying the duty, and fine you ' + fine + 'c.', 'bad'); return ok('caught'); }
         }
-        earn(s, gross - tax); s.seaMarket[port][a] += n;
+        earn(s, gross - tax); s.seaMarket[port][a] += n; gainFame(s, port, Math.min(3, gross / 300)); { const V0 = s.ship.voyage; if (V0) V0.sold += gross - tax; else if (s.ship.voyages && s.ship.voyages[0] && s.ship.voyages[0].to === port && s.ship.voyages[0].day === s.day) { s.ship.voyages[0].sold += gross - tax; s.ship.voyages[0].profit += gross - tax; } }
         if (tax) { if (port === 'dawnport') { if (V) V.paid = (V.paid || 0) + tax; } else if (s.realm) s.realm.treasury += tax; }
         // honest trade earns a name in Dawnport: goods brought from Alderwyn and landed with the duty paid, up to 3 a day.
         // Selling back what you bought on the same quay earns nothing.
@@ -9080,6 +9593,8 @@
     if (s.valdoria && s.courts && Math.floor(before / 60) !== Math.floor(s.t / 60) && h >= 8 && h < 19) valCutpurse(s);
     updatePlayer(s, dt);
     if (s.ship || s.player.aboard) shipTick(s);
+    if (s.fleet && s.fleet.length) guard(s, 'the fleet sailed', () => fleetStep(s, dt));
+    if (s.ship && s.player.aboard && !s.fight) guard(s, 'ships came and went', () => npcStep(s, dt)); else if (s.seaNpc && s.seaNpc.length && !s.fight) { s.seaNpc = []; s.encounter = null; }
     for (const shop of s.shops) { fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), hourOf(s), workerHours(shop), dt); updateWorker(s, shop, dt); }   // supplies are fetched whether or not the worker is in
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
@@ -9330,6 +9845,13 @@
     if (s.v === 18) { s.v = 19; if (s.people) { setupPpl(s); pickKey(s, true); crowdDay(s); for (const id in s.ppl.crowd) s.ppl.crowd[id].warn = 0; const n = Object.keys(s.ppl.key).length; event(s, 'The people have changed. ' + n + ' people across the towns now count as people who matter, each with an aim, a loyalty and plans of their own; everyone else keeps a want and a memory of how you treated them; and every town has a mood that can turn. See People of note in the book.', 'story'); } }
     if (s.v === 19) { s.v = 20; widenSea(s); }
     if (s.v === 20) { s.v = 21; if (s.towns) { setupNewTown(s, 'saltholm'); setupNewTown(s, 'merrow'); setupNewTown(s, 'gullhaven'); } setupGoods(s); if (s.seaMarket) setupSeaMarket(s); setupSeaChart(s); event(s, 'The old charts of the Sundering Sea were half empty. Sailors now speak of islands out there: ports with their own people, a cove the customs men never find, reefs, wrecks and fishing grounds. Sail out and put them on your chart.', 'story'); }
+    if (s.v === 21) { s.v = 22;
+      if (s.towns) { setupNewTown(s, 'wrenmouth'); setupNewTown(s, 'castamar'); }
+      if (s.realm && !s.realm.regions.wrenmouth) s.realm.regions.wrenmouth = { lord: 'crown', tax: 1, patrol: 1, garrison: 0, roads: 1 };
+      setupGoods(s); if (s.seaMarket) setupSeaMarket(s); setupMerchant(s); s.fleet = s.fleet || [];
+      for (const S of allShips(s)) { ensureShipId(s, S); if (s.people && !(S.crew && S.crew.length)) fillCrew(s, S, S.port && TOWNS[S.port] ? S.port : 'eastwatch'); }
+      if (s.valdoria) for (const [id, n] of Object.entries(VAL_BANDITS)) if (s.bandits && s.bandits[id] == null) s.bandits[id] = n;
+      event(s, 'Two more ports are open: Wrenmouth, down the coast road south of Eastwatch, and Castamar on Valdoria\u2019s north coast. Every sailor is now someone from the towns, with a wage and a mood of their own, and you may own a fleet and send captains out. Watch for pirates, smugglers and the customs patrols.', 'story'); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
     for (const C of allCourts(s)) if (Array.isArray(C.closed)) {
@@ -9350,7 +9872,7 @@
     { at: 60, key: 'enemy', name: 'Enemy' }, { at: 85, key: 'nemesis', name: 'Nemesis' }, { at: 110, key: 'feud', name: 'Blood feud' }];
   const hateStep = h => { let r = HATE_STEPS[0]; for (const x of HATE_STEPS) if ((h || 0) >= x.at) r = x; return r; };
   const hateIdx = h => HATE_STEPS.indexOf(hateStep(h));
-  const FAIR_WAGE = { hearthmoor: 7, greenhaven: 7, oakbridge: 8, ironcrest: 9, eastwatch: 8, crownmere: 9, dawnport: 8, goldmeadow: 7, thornwick: 7, stonewatch: 8, valdor: 9, saltholm: 7, merrow: 7, gullhaven: 7 };
+  const FAIR_WAGE = { hearthmoor: 7, greenhaven: 7, oakbridge: 8, ironcrest: 9, eastwatch: 8, crownmere: 9, dawnport: 8, goldmeadow: 7, thornwick: 7, stonewatch: 8, valdor: 9, saltholm: 7, merrow: 7, gullhaven: 7, wrenmouth: 8, castamar: 8 };
   const fairWage = t => FAIR_WAGE[t || 'hearthmoor'] || 7;
   const PRICE_MODES = { cheap: { name: 'Cheap', price: 0.9, share: 1.3, says: 'More customers, less on each sale; folk love you for it' }, fair: { name: 'Fair', price: 1, share: 1, says: 'The usual price' }, greedy: { name: 'Dear', price: 1.32, share: 0.78, says: 'Fewer customers, more on each sale; folk resent it' } };
   const MAX_NEM = 6;
@@ -11178,7 +11700,7 @@
      bank: found or buy one, set its rates, take the town's deposits and lend them to townsfolk, shopkeepers, lords and the crown.
      Borrowers default; a bank short of coin can suffer a run and fail. And a crown deep in your debt can be made to pay in favours. */
   const BANK_TOWNS = ['oakbridge', 'crownmere', 'eastwatch', 'dawnport', 'valdor'];
-  const BANK_NAME = { oakbridge: 'the Alder Bank', crownmere: 'the Crown Lake Bank', eastwatch: 'the Harbour Bank', dawnport: 'the Bank of Dawnport', valdor: 'the House of Valdor', hearthmoor: 'the Hearthmoor Bank', greenhaven: 'the Greenhaven Bank', ironcrest: 'the Ironcrest Bank', goldmeadow: 'the Goldmeadow Bank', thornwick: 'the Thornwick Bank', stonewatch: 'the Stonewatch Bank', saltholm: 'the Saltholm Counting House', merrow: 'the Merrow Counting House', gullhaven: 'the Gullhaven Counting House' };
+  const BANK_NAME = { oakbridge: 'the Alder Bank', crownmere: 'the Crown Lake Bank', eastwatch: 'the Harbour Bank', dawnport: 'the Bank of Dawnport', valdor: 'the House of Valdor', hearthmoor: 'the Hearthmoor Bank', greenhaven: 'the Greenhaven Bank', ironcrest: 'the Ironcrest Bank', goldmeadow: 'the Goldmeadow Bank', thornwick: 'the Thornwick Bank', stonewatch: 'the Stonewatch Bank', saltholm: 'the Saltholm Counting House', merrow: 'the Merrow Counting House', gullhaven: 'the Gullhaven Counting House', wrenmouth: 'the Wrenmouth Bank', castamar: 'the Castamar Counting House' };
   const LOAN_DAYS = 30, LOAN_EVERY = 5, LOAN_N = LOAN_DAYS / LOAN_EVERY;
   const LEND_RATE = { low: 0.005, fair: 0.008, high: 0.012 }, SAVE_RATE = { low: 0.001, fair: 0.0025, high: 0.004 };
   function brand(s) { const D = s.bankDice = s.bankDice || { d: -1, x: 0, b: (s.rng ^ 0xba4c) | 0 }; if (D.d !== s.day) { D.d = s.day; D.x = (Math.imul(s.day + 5, 3266489917) ^ D.b) | 0; } D.x = (D.x + 0x6D2B79F5) | 0; let x = D.x; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
@@ -11929,7 +12451,7 @@
     CONSULADO, consuladoView, GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, ALD_COAST, SEA, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
-    SHIP_CLASSES, SHIP_ORDER, SAIL_SET, SAIL_NAME, shipClass, shipWorth, ISLES, ISLE_BY, SEA_PLACES, WRECKS, FISHING, isleRel, ISLE_TOWNS, SH, MR, GU, ISLE_JOBS, ISLE_PORTS, seaWeather, crewK, deckWorld, restAboard, setupSeaChart, flotsamNow, fishingHere, wreckHere, sightRange, NET_MINS, isNight, BERTHS, SHIPYARDS, yardHere, windAt, windFactor, seaDepth, SEA_FLOOR, SEA_HAZARDS, SEA_EDGE, shipPose, canMoor, seaBearings, sailStep, shipTick,
+    SHIP_CLASSES, SHIP_ORDER, SAIL_SET, SAIL_NAME, shipClass, shipWorth, CREW_POSTS, allShips, shipById, crewOf, sailors, fitCount, crewPost, minCrew, morale, crewCandidates, crewAsk, fameAt, fameWord, setupMerchant, priceMood, seaRoute, cargoValue, shipStrength, shipSpeed, NPC_KIND, npcById, contraband, insurePremium, hasLetter, LETTER_PRICE, ESCORT_DAY, TOKEN_PRICE, REFITS, EXCHANGES, GUARD_ROOM, MAX_SHIPS, Q_WREN, Q_CAST, WR, CK, NEW_PORT_TOWNS, aldQuay, valQuay, PORT_JOBS, pirateRisk, watersOf, ensureShipId, ISLES, ISLE_BY, SEA_PLACES, WRECKS, FISHING, isleRel, ISLE_TOWNS, SH, MR, GU, ISLE_JOBS, ISLE_PORTS, seaWeather, crewK, deckWorld, restAboard, setupSeaChart, flotsamNow, fishingHere, wreckHere, sightRange, NET_MINS, isNight, BERTHS, SHIPYARDS, yardHere, windAt, windFactor, seaDepth, SEA_FLOOR, SEA_HAZARDS, SEA_EDGE, shipPose, canMoor, seaBearings, sailStep, shipTick,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, TRAITS, GIFTS, OUTINGS, STAGE_NAME, WEDDINGS, UPBRING, natureOf, loveOf, suits, stageOf, GROW_DAYS, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
