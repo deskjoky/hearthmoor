@@ -2086,5 +2086,137 @@ console.log('55. Stage VIII: banking. Loans against what you own, the missed-pay
   check(s.realm.treasury === t0 - 1700 && s.realm.kingSupport < ks && (king.hate || 0) > 0, 'calling it in empties the treasury and makes the king your enemy');
 }
 
+console.log('56. Stage IX: power and intrigue. Posts, powers and their abuse, the houses, spies and secrets, blackmail as a gamble, claims, and two roads up');
+{
+  const mk = (seed, days) => { const s = Sim.newGame(seed); s.coins = 20000; Sim.advance(s, 60 * 24 * (days || 2)); holdElections(s); Sim.setupRep(s); Sim.setupPow(s); return s; };
+  const at = (s, t) => { const L = Sim.LOCS[Sim.MARKET_AT[t]]; s.player.x = L.x; s.player.z = L.z; };
+  const name = (s, t, n) => { Sim.setupRep(s).st[t] = n; };
+  const know = (s, pid, k) => { const K = s.ppl.key[pid]; K.secret = { k: k || 'skim', known: true }; return K; };
+  const f0 = Sim.faults().length;
+  // posts
+  const s = mk(5601), W = s.pow, X = (...a) => Sim.cmd(s, ...a);
+  const holders = Object.keys(Sim.POSTS).map(k => W.posts[k] && W.posts[k].pid);
+  check(holders.every(Boolean) && new Set(holders).size === 10 && holders.every(id => s.people[id].post), 'ten posts, from Market Warden to Lord Steward, each held by someone');
+  check(Sim.officeOf(s, s.people[W.posts.mint.pid]) === 'Master of the Mint' && !!s.ppl.key[W.posts.mint.pid], 'a post holder is a key person of the town, known by the office');
+  { const o = JSON.parse(Sim.serialize(s)); delete o.pow; const s2 = Sim.deserialize(JSON.stringify(o)); Sim.advance(s2, 60 * 24); check(s2.pow && Object.keys(s2.pow.posts).length === 10 && Sim.powView(s2).houses.length >= 4, 'an old save gains the posts and the houses on its next day'); }
+  let r = X('powSeek', 'harbour', 'coin'); check(!r.ok && /name of 45 in Eastwatch/.test(r.msg), 'a stranger to Eastwatch is not made its Harbourmaster: ' + r.msg.slice(0, 70));
+  name(s, 'eastwatch', 60); const oldH = s.people[W.posts.harbour.pid], c0 = s.coins;
+  r = X('powSeek', 'harbour', 'coin'); check(r.ok && Sim.powHolds(s, 'harbour') && s.coins === c0 - 1500 && !oldH.post && W.mine.some(m => m.k === 'bought'), 'the schemer’s way: with a name in the town, 1,500c buys the post, and leaves a secret behind');
+  check(!X('powSeek', 'harbour', 'coin').ok && (oldH.hate || 0) > 0, 'the one put out resents it');
+  // the commander's way to the same post
+  { const s2 = mk(5602), X2 = (...a) => Sim.cmd(s2, ...a); name(s2, 'eastwatch', 60); s2.coins = 50;
+    check(!X2('powSeek', 'harbour', 'arms').ok && Sim.armsOf(s2) === 0, 'with no name at arms the commander’s way is shut');
+    s2.rec.warsWon = 2; r = X2('powSeek', 'harbour', 'arms'); check(r.ok && Sim.powHolds(s2, 'harbour') && s2.coins === 50 && !s2.pow.mine.length, 'the commander’s way: a war won twice over earns the same post, for nothing, with no secret to keep (arms ' + Sim.armsOf(s2) + ')');
+    name(s2, 'crownmere', 60); s2.realm.favour = 60; r = X2('powSeek', 'mint', 'favour'); check(r.ok && s2.realm.favour === 50, 'and the courtier’s way: favour spent at court');
+    check(!X2('powSeek', 'magistrate', 'favour').ok, 'two posts are as many as one person may hold'); }
+  // pay, dues, abuse, and the ledger
+  r = X('powDues', 'eastwatch', 'high'); check(r.ok && !X('powDues', 'oakbridge', 'high').ok, 'the Harbourmaster sets the dues at Eastwatch, and nowhere else');
+  r = X('powAbuse', 'harbour'); check(r.ok && W.mine.some(m => m.k === 'abuse') && !X('powAbuse', 'harbour').ok, 'the post can be milked, once a week: ' + r.msg.slice(0, 40));
+  { const k0 = s.coins; Sim.advance(s, 60 * 24 * 6); const got = s.coins - k0; check(got >= 6 * 9 && s.ledger.slice(-5).every(e => Math.abs(e.unexplained || 0) < 0.01), 'six days of pay and high dues came to ' + got + 'c, and the ledger adds up'); }
+  // licences
+  at(s, 'eastwatch'); const bz = Object.values(s.biz).find(b => b.town === 'eastwatch' && !b.closed && b.owner !== 'player' && s.people[b.owner]);
+  r = X('powLicence', bz.id, 'revoke'); check(r.ok && bz.nolic > s.day && (s.people[bz.owner].hate || 0) > 0, 'a licence taken shuts a business for fourteen days: ' + r.msg);
+  check(!X('powLicence', Object.values(s.biz).find(b => b.town === 'eastwatch' && b !== bz && b.owner !== 'player' && !b.closed).id, 'revoke').ok, 'but one at a time');
+  check(X('powLicence', bz.id, 'grant').ok && !bz.nolic, 'and it can be given back');
+  // the right hand: naming and dismissing, pardons, bank charters
+  const h = mk(5603), HW = h.pow, XH = (...a) => Sim.cmd(h, ...a);
+  check(!XH('powDismiss', 'mint').ok, 'a private person names nobody');
+  HW.posts.hand = { pid: 'player', since: h.day }; h.realm.favour = 50; at(h, 'crownmere');
+  const oldMint = h.people[HW.posts.mint.pid], pickN = Sim.powView(h).nameable[0];
+  check(!!pickN, 'the Lord Steward sees who in town could be named');
+  r = XH('powAppoint', 'mint', pickN.pid); check(r.ok && HW.posts.mint.pid === pickN.pid && !oldMint.post && h.people[pickN.pid].opinion >= 25 && h.realm.favour === 46, 'the Lord Steward names a new Master of the Mint, who owes it to you; it costs a little favour');
+  check(!XH('powAppoint', 'spy', Sim.powView(h).nameable[0].pid).ok, 'one appointment a day');
+  check(Sim.powView(h).dueTowns.length >= 4 && XH('powDues', 'oakbridge', 'low').ok, 'and sets dues anywhere in Alderwyn');
+  { const p = Sim.living(h).find(q => !q.kid && q.status === 'here' && !q.town && !q.held && q.id !== h.offices.lord); Sim.cmd(h, 'jInvestigate'); h.justice.prisoners.push({ pid: p.id, caseId: null, court: 'hearthmoor', reason: 'test', since: h.day, until: null, sentence: false }); p.held = { since: h.day, why: 'test' };
+    check(Sim.powView(h).prisoners.some(x => x.pid === p.id), 'the prisoners of Alderwyn are listed for whoever can pardon');
+    r = XH('powPardon', p.id); check(r.ok && !p.held && !h.justice.prisoners.some(x => x.pid === p.id) && p.opinion >= 30, 'a pardon frees a prisoner, who remembers it'); }
+  HW.posts.banker = { pid: 'player', since: h.day }; h.realm.council.trade = null;
+  check(!Sim.bankIn(h, 'greenhaven') && Sim.powView(h).charterTowns.some(x => x.t === 'greenhaven'), 'Greenhaven has only an empty counting house');
+  r = XH('powCharter', 'greenhaven'); check(r.ok && Sim.bankIn(h, 'greenhaven') && h.people[h.bank.banks.greenhaven.pid].banker === 'greenhaven', 'the Royal Banker grants a charter, and Greenhaven has a bank');
+  { const L = Sim.LOCS['bank:oakbridge']; h.player.x = L.x; h.player.z = L.z; const sh = h.shops[0]; }
+  r = XH('powBreak', 'oakbridge'); check(r.ok && !Sim.bankIn(h, 'oakbridge') && Sim.standing(h, 'oakbridge') === 0 && !XH('powBreak', 'crownmere').ok, 'and can break a bank, once in thirty days: ' + r.msg);
+  // the houses
+  const g = mk(5604), GW = g.pow, XG = (...a) => Sim.cmd(g, ...a); Sim.advance(g, 60 * 24);
+  const H = GW.houses.oakbridge, lord = g.people[H.pid];
+  check(Object.keys(GW.houses).length >= 4 && typeof H.loy === 'number' && /\.$/.test(H.why), 'each house has one loyalty number and a reason: Oakbridge ' + Math.round(H.loy) + ', "' + H.why + '"');
+  check(!XG('powGift', 'oakbridge').ok, 'a gift is taken in person');
+  at(g, 'oakbridge'); const l0 = H.loy; r = XG('powGift', 'oakbridge'); for (let i = 0; i < 12; i++) Sim.advance(g, 60 * 24);
+  check(r.ok && H.loy > l0 + 3, 'a gift warms a house over the days after (' + Math.round(l0) + ' to ' + Math.round(H.loy) + ')');
+  { const g2 = mk(5604); Sim.advance(g2, 60 * 24); g2.rec.warsWon = 3; const a0 = g2.pow.houses.oakbridge.loy; for (let i = 0; i < 12; i++) Sim.advance(g2, 60 * 24);
+    check(g2.pow.houses.oakbridge.loy > a0 + 3 && /arms/.test(g2.pow.houses.oakbridge.why + Sim.powView(g2).armsWord) , 'so does a name at arms, with no gift at all (' + Math.round(a0) + ' to ' + Math.round(g2.pow.houses.oakbridge.loy) + ')'); }
+  // a ruler's house breaks away, and is brought back
+  g.realm.crown = 'player'; lord.opinion = -100; lord.hate = 120; name(g, 'oakbridge', 0); const sup0 = g.realm.kingSupport; let broke = 0;
+  for (let i = 0; i < 40 && H.state !== 'broken'; i++) { Sim.advance(g, 60 * 24); lord.opinion = -100; lord.hate = 120; broke = i; }
+  check(H.state === 'broken' && g.realm.kingSupport < sup0 + 5, 'a lord who hates the ruler wavers, is warned of, and breaks away (' + broke + ' days)');
+  check(!XG('powGift', 'nowhere').ok && Sim.powView(g).houses.find(x => x.id === 'oakbridge').word === 'Broken away', 'the book says so');
+  g.realm.treasury = 5000; r = XG('powTerms', 'oakbridge'); check(r.ok && H.state === 'ok' && H.loy === 45 && g.realm.treasury < 5000, 'terms bring the house back, for a price');
+  H.state = 'broken'; g.realm.levies = 400; g.rec.warsWon = 2; r = XG('powMarch', 'oakbridge'); check(r.ok && H.state === 'ok' && H.beaten > g.day, 'or the ruler marches, and the house yields: the commander’s answer');
+  // spies and secrets
+  const q = mk(5605), QW = q.pow, XQ = (...a) => Sim.cmd(q, ...a);
+  check(!XQ('powAgent', 'oakbridge').ok, 'an agent is hired in person'); at(q, 'oakbridge'); r = XQ('powAgent', 'oakbridge'); check(r.ok && QW.agents.length === 1 && q.coins === 20000 - 40, 'an agent costs 40c to hire');
+  { const n0 = Object.values(q.ppl.key).filter(K => K.secret && K.secret.known).length; const k0 = q.coins; for (let i = 0; i < 40; i++) Sim.advance(q, 60 * 24);
+    const n1 = Object.values(q.ppl.key).filter(K => K.secret && K.secret.known).length; check(n1 > n0 || QW.log.some(l => /found nothing|caught/.test(l.x)), 'in forty days the agent reports: ' + (QW.log.find(l => /agent/.test(l.x)) || { x: 'nothing' }).x.slice(0, 80)); }
+  // blackmail: a real gamble
+  let gave = 0, court = 0, fined = 0, gaoled = 0, acq = 0;
+  for (let i = 0; i < 40; i++) { const b = mk(5610 + i, 1), XB = (...a) => Sim.cmd(b, ...a); at(b, 'eastwatch'); const pid = b.pow.posts.harbour.pid, p = b.people[pid]; know(b, pid, 'skim'); const c1 = b.coins, st0 = (name(b, 'eastwatch', 50), 50);
+    const r1 = XB('powPress', pid, 'coin'); if (r1.ok) { gave++; if (!(b.coins > c1 && (p.hate || 0) > 0 && b.pow.mine.some(m => m.k === 'blackmail'))) failures++; }
+    else { court++; if (b.pow.convicted) { fined++; if (!(b.coins < c1 && Sim.standing(b, 'eastwatch') < st0)) failures++; if (b.pow.gaol) gaoled++; } else acq++; if (!b.ppl.key[pid].secret.exposed) failures++; } }
+  check(gave >= 20 && court >= 4 && fined >= 2, 'blackmail is a gamble: of 40 tries ' + gave + ' gave in and resented it, ' + court + ' went to the magistrate (' + fined + ' fines, ' + gaoled + ' to the cells, ' + acq + ' let go)');
+  { const b = mk(5650, 1), XB = (...a) => Sim.cmd(b, ...a); at(b, 'eastwatch'); const pid = b.pow.posts.harbour.pid, K = know(b, pid, 'skim'); let n = 0, odds = [];
+    for (let i = 0; i < 6 && !K.secret.exposed; i++) { odds.push(Sim.powView(b).known.find(x => x.pid === pid).odds); K.pressed = -99; XB('powPress', pid, 'coin'); n++; }
+    check(odds.length < 2 || odds[1] < odds[0], 'each time you lean on the same person the odds fall (' + odds.join(', ') + '%)'); }
+  { const b = mk(5651, 1), XB = (...a) => Sim.cmd(b, ...a); name(b, 'eastwatch', 60); at(b, 'eastwatch'); let pid = b.pow.posts.harbour.pid, done = false;
+    for (let i = 0; i < 30 && !done; i++) { const K = know(b, pid, 'debt'); b.people[pid].temper = 0.7; const r1 = XB('powPress', pid, 'post'); if (r1.ok) done = true; else { b.pow.gaol = null; b.pow.convicted = 0; pid = b.pow.posts.harbour.pid; } }
+    check(done && Sim.powHolds(b, 'harbour'), 'leverage can make a holder stand aside: a third way into a post'); }
+  // prison: held, and let out
+  { const b = mk(5652, 1), XB = (...a) => Sim.cmd(b, ...a); b.pow.posts.harbour = { pid: 'player', since: b.day }; b.pow.convicted = 1; let n = 0;
+    for (let i = 0; i < 60 && !b.pow.gaol; i++) { at(b, 'crownmere'); const pid = b.pow.posts.mint.pid; know(b, pid, 'skim'); b.people[pid].temper = 1.5; b.ppl.key[pid].pressed = -99; b.ppl.key[pid].pressN = 5; XB('powPress', pid, 'coin'); n++; }
+    const G0 = b.pow.gaol; check(!!G0 && !Sim.powHolds(b, 'harbour'), 'a second conviction means the cells, and a prisoner holds no post (' + (G0 ? G0.days : 0) + ' days)');
+    r = XB('powGift', 'oakbridge'); check(!r.ok && /in the cells/.test(r.msg), 'in the cells you can do nothing: ' + r.msg);
+    for (let i = 0; i < 8 && b.pow.gaol; i++) Sim.advance(b, 60 * 24); check(!b.pow.gaol && Sim.living(b).length > 50, 'and you are let out when the days are served'); }
+  // exposing: safe, and the end of leverage
+  { const b = mk(5653, 1), XB = (...a) => Sim.cmd(b, ...a); const pid = b.pow.posts.mint.pid, p = b.people[pid]; know(b, pid, 'skim'); const rep0 = p.rep || 50;
+    r = XB('powExpose', pid); check(r.ok && p.rep < rep0 && !p.post && b.pow.posts.mint.pid !== pid && !b.pow.gaol && !b.pow.convicted, 'said openly, a thief loses the post, and nothing happens to you');
+    check(!XB('powPress', pid, 'coin').ok && !XB('powExpose', pid).ok, 'but there is no leverage left in it');
+    b.pow.posts.magistrate = { pid: 'player', since: b.day }; const t0 = b.realm.treasury; r = XB('powSentence', pid, 'fine'); check(r.ok && b.realm.treasury > t0 && !XB('powSentence', pid, 'prison').ok, 'the Chief Magistrate can then fine them, once');
+    const pid2 = b.pow.posts.customs.pid; know(b, pid2, 'bought'); XB('powExpose', pid2); r = XB('powSentence', pid2, 'prison'); check(r.ok && !!b.people[pid2].held, 'or send them to the cells');
+    const pid3 = b.pow.posts.mines.pid; know(b, pid3, 'affair'); XB('powExpose', pid3); check(!XB('powSentence', pid3, 'fine').ok, 'a private shame is not a crime'); }
+  // rumours
+  { let traced = 0, quiet = 0; for (let i = 0; i < 30; i++) { const b = mk(5660 + i, 1); const pid = b.pow.posts.mint.pid, rep0 = b.people[pid].rep || 50; const r1 = Sim.cmd(b, 'powRumour', pid); if (b.people[pid].rep >= rep0) failures++; if (r1.ok) quiet++; else traced++; }
+    check(quiet >= 15 && traced >= 2, 'a rumour needs no secret and always hurts; of 30, ' + traced + ' were traced back'); }
+  // your own secrets can be used against you
+  { const b = mk(5700, 1), XB = (...a) => Sim.cmd(b, ...a), BW = b.pow; name(b, 'eastwatch', 60); XB('powSeek', 'harbour', 'coin'); XB('powAbuse', 'harbour');
+    const foe = b.people[BW.posts.mint.pid]; foe.hate = 80; let d = 0; for (; d < 200 && !BW.demand; d++) { Sim.advance(b, 60 * 24); foe.hate = 80; }
+    check(!!BW.demand, 'in time an enemy learns a secret of yours and names a price (day ' + d + ': ' + (BW.demand ? BW.demand.coin : 0) + 'c)');
+    const c1 = b.coins, coin = BW.demand.coin; r = XB('powAnswer', 'pay'); check(r.ok && b.coins === c1 - coin && !BW.demand && BW.mine.length > 0, 'paying buys silence, and the secret is still held');
+    for (d = 0; d < 300 && !BW.demand; d++) { Sim.advance(b, 60 * 24); foe.hate = 80; } check(!!BW.demand, 'and they, or someone else, come back for more');
+    const hadPost = Sim.powHolds(b, 'harbour'); r = XB('powAnswer', 'defy'); check(r.ok && !BW.demand && (!hadPost || !Sim.powHolds(b, 'harbour')), 'refusing lets it out: the office is lost, and the secret cannot be used again'); }
+  { const b = mk(5701, 1), XB = (...a) => Sim.cmd(b, ...a), BW = b.pow; name(b, 'eastwatch', 60); XB('powSeek', 'harbour', 'coin'); const foe = b.people[BW.posts.mint.pid]; BW.demand = { sid: BW.mine[0].id, pid: foe.id, coin: 100, until: b.day + 4 }; BW.mine[0].held = foe.id;
+    know(b, foe.id, 'debt'); foe.temper = 0.7; at(b, 'crownmere'); let done = false; for (let i = 0; i < 10 && !done && BW.demand; i++) { b.ppl.key[foe.id].pressed = -99; b.ppl.key[foe.id].pressN = 0; done = XB('powPress', foe.id, 'quiet').ok; if (!done) { know(b, foe.id, 'debt'); BW.gaol = null; } }
+    check(done && !BW.demand && Sim.powHolds(b, 'harbour'), 'unless you hold a secret of theirs: then neither speaks'); }
+  // claims
+  { const b = mk(5710, 1), XB = (...a) => Sim.cmd(b, ...a), BW = b.pow, R = b.realm; const lordId = Sim.regionLord(b, 'oakbridge');
+    check(Sim.claimStr(b, 'oakbridge') === 0 && !XB('powClaim', 'oakbridge').ok, 'with no claim there is nothing to press');
+    const Y = Sim.you(b), sp = Sim.living(b).find(p => !p.kid && p.id !== Y.id && !p.spouse && p.status === 'here' && !p.noble); sp.noble = 'oakbridge'; Y.spouse = sp.id; sp.spouse = Y.id;
+    check(Sim.claimsOn(b, 'oakbridge').some(c => c.by === 'marriage') && Sim.claimStr(b, 'oakbridge') === 2, 'marrying into the house gives a claim by marriage');
+    check(!XB('powRecognise', 'oakbridge', 'houses').ok, 'recognition must be earned'); name(b, 'oakbridge', 70); BW.houses.oakbridge.loy = 50;
+    r = XB('powRecognise', 'oakbridge', 'houses'); check(r.ok && Sim.claimStr(b, 'oakbridge') === 4 && b.coins === 20000 - 600, 'a good name there and 600c for the heralds: the claim is recognised (strength 4)');
+    const race = { office: 'lord', region: 'oakbridge', key: 'lord:oakbridge' }; check(Sim.powView(b).claims.find(c => c.on === 'oakbridge').str === 4, 'the book shows it');
+    BW.houses.eastwatch.loy = 80; BW.houses.ironcrest.loy = 80; BW.houses.greenhaven.loy = 80; let won = false; for (let i = 0; i < 6 && !won; i++) { BW.pressed = {}; won = XB('powClaim', 'oakbridge').ok; }
+    check(won && Sim.regionLord(b, 'oakbridge') === 'player' && b.people[lordId].noble == null, 'pressed with the houses behind you, the claim is upheld: you are lord of Oakbridge');
+    check(!XB('powClaim', 'crown').ok, 'the crown needs a stronger claim, and a weak king');
+    // the commander's recognition
+    const b2 = mk(5711, 1); name(b2, 'oakbridge', 45); check(!Sim.cmd(b2, 'powRecognise', 'oakbridge', 'arms').ok, 'recognition by arms needs a name at arms'); b2.rec.warsWon = 2; r = Sim.cmd(b2, 'powRecognise', 'oakbridge', 'arms'); check(r.ok && b2.coins === 20000, 'a soldier is recognised for nothing'); }
+  // the two roads, side by side: sixty days each
+  { const road = (seed, schemer) => { const b = mk(seed, 1), XB = (...a) => Sim.cmd(b, ...a), BW = b.pow; for (const t of ['eastwatch', 'oakbridge', 'crownmere', 'ironcrest', 'greenhaven']) name(b, t, 60);
+      if (schemer) { XB('powSeek', 'harbour', 'coin'); XB('powSeek', 'mint', 'coin'); for (const t of ['oakbridge', 'eastwatch', 'ironcrest']) { at(b, t); XB('powAgent', t); XB('powGift', t); know(b, BW.houses[t].pid, 'debt'); } XB('powRecognise', 'oakbridge', 'houses'); }
+      else { b.rec.warsWon = 3; XB('powSeek', 'harbour', 'arms'); XB('powSeek', 'mint', 'arms'); XB('powRecognise', 'oakbridge', 'arms'); XB('powRecognise', 'eastwatch', 'arms'); }
+      for (let i = 0; i < 60; i++) { Sim.advance(b, 60 * 24); if (BW.demand) XB('powAnswer', 'pay'); if (schemer && i % 10 === 5) for (const t of ['oakbridge', 'eastwatch', 'ironcrest']) { at(b, t); XB('powGift', t); } }
+      return { sc: Sim.powerScore(b), loyal: Sim.loyalHouses(b).length, posts: Sim.yourPosts(b).length }; };
+    const A = road(5720, true), B = road(5720, false);
+    check(A.posts === 2 && B.posts === 2 && A.sc >= 30 && B.sc >= 30 && Math.abs(A.sc - B.sc) <= Math.max(A.sc, B.sc) * 0.3, 'after sixty days the schemer (' + A.sc + ', ' + A.loyal + ' loyal houses) and the commander (' + B.sc + ', ' + B.loyal + ' loyal houses) stand about level'); }
+  check(Sim.faults().length === f0, 'no faults');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll tests passed');
 process.exit(failures ? 1 : 0);

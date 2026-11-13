@@ -536,7 +536,7 @@
 
   // the part of today's coin that already has its own line in the books
   function trackedNet(s) { const st = s.stats, sh = st.shops || {}; let n = (st.jobPay || 0) + (st.rawSales || 0) + (st.rent || 0) + (st.contract || 0) + (st.seized || 0) + (st.owned || 0) - (st.marketBuys || 0) - (st.tax || 0) - (st.given || 0) - (st.salaries || 0) - (st.interest || 0) - (st.family || 0) - (st.stabling || 0) - (st.ship || 0) + (st.fines || 0) + (st.restitution || 0) + (st.bribes || 0) - (st.hush || 0) + (st.lands || 0) + (st.partner || 0) + (st.deals || 0) - (st.investors || 0) + (st.bank || 0); for (const k in sh) { const x = sh[k]; n += (x.revenue || 0) - (x.supplies || 0) - (x.wages || 0) - (x.upkeep || 0); } return n; }
-  const FLOW_LABEL = { bankBorrow: 'Borrowed from a bank', bankRepay: 'Paid off a bank loan', bankRefi: 'Paid off the moneylender with a bank loan', bankFound: 'Founded a bank', bankBuy: 'Bought a bank', bankAdd: 'Coin put into your bank', bankTake: 'Coin taken from your bank', dealTake: 'A deal from the board', investIn: 'Sold a share to an investor', investOut: 'Bought back an investor’s share', improveBiz: 'Improved a business', pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
+  const FLOW_LABEL = { powPay: 'Pay from the posts you hold', powDues: 'Dues from the towns you set them in', powAgents: 'Your agents', powFine: 'Fined by the magistrate', powBreak: 'A loan called in when you broke the bank', powSeek: 'Bought a post', powAbuse: 'Taken from your office', powGift: 'Gifts to the houses', powPress: 'Paid for silence', powAnswer: 'Paid to keep a secret', powAgent: 'Hired an agent', powRumour: 'Paid for a rumour', powCharter: 'A bank charter', powRecognise: 'Heralds and lawyers for your claim', bankBorrow: 'Borrowed from a bank', bankRepay: 'Paid off a bank loan', bankRefi: 'Paid off the moneylender with a bank loan', bankFound: 'Founded a bank', bankBuy: 'Bought a bank', bankAdd: 'Coin put into your bank', bankTake: 'Coin taken from your bank', dealTake: 'A deal from the board', investIn: 'Sold a share to an investor', investOut: 'Bought back an investor’s share', improveBiz: 'Improved a business', pAsk: 'Asking around about people', pCrowd: 'Bread for a hungry town', stand: 'Election campaign', challenge: 'Forcing an early vote', fFestival: 'Paying for a festival',  customsContact: 'Paid a customs clerk', buyShip: 'Bought a ship', sellShip: 'Sold your ship', cargoBuy: 'Cargo bought', cargoSell: 'Cargo sold', sailShip: 'Your ship\u2019s voyage', charter: 'Merchant\u2019s charter', sail: 'Passage by sea', audit: 'Audited a manager\u2019s books', buyHouse: 'Bought a house', buyCottage: 'Bought the cottage', repairCottage: 'Repaired the cottage', improveHome: 'Improved a home', repairHouse: 'Repaired a house', upgrade: 'Shop building work', open: 'Opened a shop', sellShop: 'Sold a shop', buyBiz: 'Bought a business', acceptOffer: 'Sold property', giftCrown: 'Gift to the crown', patronage: 'Patronage', buyHorse: 'Bought a horse', sellHorse: 'Sold a horse', warChest: 'War chest', repairBiz: 'Mended a business', project: 'Village project', seekLordship: 'Lordship fee', acceptLordship: 'Lordship fee', journey: 'Travel', coach: 'Coach fare', skimmed: 'Missing from a manager\u2019s takings', raided: 'Stock taken by bandits', fAlms: 'Alms', fAsk: 'Ale for the gossips', fInformant: 'An informant', fConfront: 'Dealing with an enemy', fAmbush: 'Lost in an ambush', fDuelEnd: 'Lost in a fight', fBlade: 'A hired blade', fFeast: 'A feast', buyLordship: 'A crown grant' };
   // one broken part of a day must not stop the whole game: record it, tell the player once, and carry on
   const FAULTS = [];
   let STRICT = false;
@@ -570,6 +570,7 @@
     if (s.people && !s.rivalOff) guard(s, 'your rival made a move', () => rivalDay(s));
     if (s.people) guard(s, 'reputation was reckoned', () => repDay(s));
     if (s.people && s.towns) guard(s, 'the banks closed their books', () => bankDay(s));
+    if (s.people && s.towns && s.realm) guard(s, 'the court went about its business', () => powDay(s));
     guard(s, 'the businesses were reckoned', () => { renownDay(s); if (s.people) { dealsDay(s); wealthDay(s); } });
     const entry = { day: st.day, shops: [], jobPay: st.jobPay, rawSales: st.rawSales, marketBuys: st.marketBuys, rent: st.rent, tax: st.tax, contract: st.contract, given: st.given, property: st.property, owned: st.owned || 0, salaries: st.salaries || 0, interest: st.interest || 0, seized: st.seized || 0, family: st.family || 0, stabling: st.stabling || 0, ship: st.ship || 0, fines: st.fines || 0, restitution: st.restitution || 0, bribes: st.bribes || 0, hush: st.hush || 0, lands: st.lands || 0, partner: st.partner || 0, notes: st.notes.slice() };
     entry.deals = st.deals || 0; entry.investors = st.investors || 0; entry.bank = st.bank || 0;
@@ -1951,7 +1952,7 @@
       const competition = Math.max(0.35, 1 - 0.28 * ((b.town || 'hearthmoor') === 'hearthmoor' ? s.shops.filter(x => x.trade === b.trade).length : 0)) / (1 + 0.3 * rivals) * (b.town === 'oakbridge' ? 1.35 : 1);
       const t0 = b.town || 'hearthmoor', E = ECON[b.trade] || ECON.carter, key = t0 + ':' + b.trade;
       if (!dem[key]) { const sel = sellersOf(s, t0, b.trade); dem[key] = { units: townDemand(s, t0, b.trade) * (s.village.shortage && t0 === 'hearthmoor' && (b.trade === 'bakery' || b.trade === 'tavern') ? 0.7 : 1), cap: sel.reduce((a, x) => a + x.cap, 0) }; }
-      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day || (b.riot && b.riot >= s.day) || b.feast === s.day, HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
+      const PM = mine ? (PRICE_MODES[b.prices] || PRICE_MODES.fair) : PRICE_MODES.fair, shut = (b.burnt && b.burnt > s.day) || b.strike === s.day || (b.riot && b.riot >= s.day) || (b.nolic && b.nolic >= s.day) || b.feast === s.day, HD = holidayOn(s.day, kingdomOf(t0)), fest = HD ? (b.trade === 'tavern' && HD.tavern ? HD.tavern : ['bakery', 'butcher', 'dairy', 'mill'].includes(b.trade) && HD.food ? HD.food : HD.trade) : 1;
       const cap = bizCap(s, b) * (mine ? renownUtil(b) : 1), D0 = dem[key], sold = E.flat || shut ? 0 : Math.min(cap, D0.cap ? D0.units * cap / D0.cap * fest * PM.share * (mine ? renownMul(b) : 1) * (b.undercut && b.undercut.until >= s.day ? 0.8 : 1) * (mine && s.folk ? 1 + clamp(s.folk.moral, -60, 60) / 240 * Math.min(1, 0.3 + s.folk.fame / 40) : 1) : 0);
       const Wt = WEALTH[t0] || 1, revenue0 = shut ? 0 : E.flat ? E.flat * Wt : Math.round(Wt * sold * PM.price * E.price * (t0 === 'oakbridge' ? 1.1 : 1) * (s.realm && s.realm.monopoly && s.realm.monopoly.trade === b.trade && b.owner === s.realm.monopoly.pid ? 1.3 : 1));
       // not every business does as well: a sharp owner sells more than a dull one, and any place can hit a bad spell
@@ -5828,7 +5829,7 @@
     return Fi;
   }
   // after a fight: what is left of you
-  function endFight(s) { const Fi = s.fight; if (!Fi) return null; const C = s.char; if (Fi.over === 'lost' || Fi.over === 'yielded') C.hp = Math.max(C.hp, Math.round(C.hpMax * 0.25)); C.st = C.stMax; s.fight = null; return Fi.over; }
+  function endFight(s) { const Fi = s.fight; if (!Fi) return null; const C = s.char; if (Fi.over === 'lost' || Fi.over === 'yielded') C.hp = Math.max(C.hp, Math.round(C.hpMax * 0.25)); C.st = C.stMax; if (Fi.over === 'won' && s.pow) s.pow.arms = Math.min(60, (s.pow.arms || 0) + 3); s.fight = null; return Fi.over; }
   /* heraldry: a lord designs the banner of their town, and the crown the royal banner of Alderwyn */
   const HERALDRY = {
     divisions: { plain: 'Plain', pale: 'Halved', fess: 'Halved across', bend: 'Diagonal', saltirePer: 'Quartered across', quarterly: 'Quartered', chief: 'Chief', bordure: 'Border', palePale: 'Centre stripe', fessBand: 'Band', cross: 'Cross', saltire: 'Saltire', chevron: 'Chevron', paly: 'Stripes', barry: 'Bars', chequy: 'Chequered' },
@@ -7107,12 +7108,14 @@
   function cmd0(s, name, a, b, c) {
     const p = s.player;
     if (s.you && s.you.regent && REGENCY_BLOCK.has(name)) return fail('You are still a child. ' + s.you.regent.name.charAt(0).toUpperCase() + s.you.regent.name.slice(1) + ' acts for you until you are 16.');
+    if (s.pow && s.pow.gaol && s.day < s.pow.gaol.until && name !== 'powAnswer') return fail('You are in the cells at ' + townName(s.pow.gaol.town) + ' until day ' + s.pow.gaol.until + '.');
     const shop = typeof a === 'number' ? shopById(s, a) : null;
     if (/^j[A-Z]/.test(name)) return justiceCmd(s, name, a, b, c);
     if (/^x[A-Z]/.test(name)) return xCmd(s, name, a, b, c);
     if (/^f[A-Z]/.test(name)) return folkCmd(s, name, a, b, c);
     if (/^p[A-Z]/.test(name)) return pplCmd(s, name, a, b, c);
     if (name === 'dealTake') return dealCmd(s, name, a);
+    if (/^pow[A-Z]/.test(name)) return powCmd(s, name, a, b, c);
     if (/^bank[A-Z]/.test(name)) return bankCmd(s, name, a, b, c);
     if (name === 'investIn' || name === 'investOut' || name === 'improveBiz') return investCmd(s, name, a, b);
     if (name === 'shopDial') { const sh = shopById(s, a); if (!sh || !DIAL[b]) return fail('No.'); sh.price = clamp(Math.round(shopBase(sh) * DIAL[b]), 1, TRADES[sh.trade].wtp * 3); return ok(TRADES[sh.trade].name + ': prices set to ' + DIAL_NAME[b].toLowerCase() + ', ' + sh.price + 'c.'); }
@@ -9223,6 +9226,7 @@
     const T = s.towns && s.towns[t]; if (T && T.mayor === p.id) return titleOf(T); if (T && T.council.includes(p.id)) return 'the town council';
     if (s.gov && s.gov.council.includes(p.id)) return 'the village council';
     if (p.job && p.job.type === 'office') return p.job.office;
+    if (p.post && POSTS[p.post]) return POSTS[p.post].name;
     return null;
   }
   function keyScore(s, p, own) {
@@ -9513,7 +9517,7 @@
     if (pat === 'player') v += cand === 'player' ? 0 : 0;
     else if (pat && X.key[pat]) { const b = X.key[pat].backs[r.key]; if (b && b === cand) v += pat === p.id ? 30 : 13; }
     const C = X.crowd[townOf(p)];
-    v += rivalPull(s, r, cand);
+    v += rivalPull(s, r, cand) + powLean(s, r, p, cand);
     if (C && hold && cand === hold) v += C.mood === 'angry' ? -12 : C.mood === 'hungry' ? -8 : C.mood === 'uneasy' ? -4 : C.mood === 'happy' ? 5 : 0;
     return v;
   }
@@ -10448,17 +10452,18 @@
     need.push({ ok: t && B.banks[t] ? trusted.includes(t) : trusted.length > 0, text: t && B.banks[t] ? 'Have repaid a loan in full to this bank, and never had a pledge taken by it' : 'Have repaid a loan in full to a bank, and be trusted by its banker' });
     return { ok: need.every(n => n.ok), need };
   }
-  function setupBanks(s) {
-    if (s.bank) return s.bank;
-    const B = s.bank = { banks: {}, loans: [], nextId: 1, mine: null, log: [], past: [] };
-    for (const t of BANK_TOWNS) {
-      if (!TOWNS[t] || !s.towns || !s.towns[t]) continue;
+  function newBanker(s, t) {
+    const B = s.bank;
       const k = s.rng, sex = brand(s) < 0.5 ? 'f' : 'm', F = FIRST.filter(n => (sex === 'f') === FEMALE.has(n)), first = F[Math.floor(brand(s) * F.length)], last = (t === 'dawnport' || t === 'valdor' ? VAL_FAMILY : FAMILY)[Math.floor(brand(s) * (t === 'dawnport' || t === 'valdor' ? VAL_FAMILY.length : FAMILY.length))];
       const p = newPerson(s, { name: (t === 'dawnport' || t === 'valdor' ? (sex === 'f' ? VAL_F : VAL_M)[Math.floor(brand(s) * 20)] : first) + ' ' + last, sex, age: 44 + Math.floor(brand(s) * 18), purse: 900, town: t, retired: true, rep: 70, mood: 65, skill: 1, palette: 6, log: [] });
       s.rng = k; const h = vacancy(s, 999, t); if (h) moveIn(s, p, h);
       p.banker = t; plog(s, p, 'Keeps ' + BANK_NAME[t] + '.');
       B.banks[t] = { pid: p.id, trust: 50, repaid: 0, late: 0, seized: 0 };
-    }
+  }
+  function setupBanks(s) {
+    if (s.bank) return s.bank;
+    const B = s.bank = { banks: {}, loans: [], nextId: 1, mine: null, log: [], past: [] };
+    for (const t of BANK_TOWNS) { if (!TOWNS[t] || !s.towns || !s.towns[t]) continue; newBanker(s, t); }
     return B;
   }
   const bankBlog = (s, text, kind) => { const B = s.bank; B.log.unshift({ d: s.day, x: text }); if (B.log.length > 30) B.log.length = 30; event(s, text, kind || 'info'); };
@@ -10664,7 +10669,495 @@
     return { here, bankHere: K ? { name: BANK_NAME[here], terms: bankTerms(s, here, null), banker: (bankerOf(s, here) || {}).name, pledges: pl.map(p => Object.assign({}, p, { terms: bankTerms(s, here, p) })) } : null, banks, loans, moneylender: s.coins < 0 ? { owed: -s.coins, rate: loanRate(s) } : null, mine: M, past: B.past, log: B.log.slice(0, 10), town, atMine: !!(here && B.mine && B.mine.town === here), canFound: !B.mine && !bankIn(s, town) && !!bankSite(town), canBuy: !B.mine && !!K, buyPrice: K ? bankPrice(s, here) : null, ready: bankReady(s, K ? here : null), charter: BANK_CHARTER, strongroom: BANK_STRONGROOM, LEND_RATE, SAVE_RATE };
   }
 
+
+  /* ══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+     POWER AND INTRIGUE (Stage IX)
+     Posts to hold, powers to use and abuse, the great houses and what they think of you, a spymaster and a right hand,
+     secrets and what you dare do with them, and claims to a seat by blood, marriage or recognition.
+     Two ways up, meant to be as strong as each other: the schemer's (coin, agents, leverage) and the commander's (a name at arms).
+     Nobody is murdered here: the worst that happens to anyone, you included, is ruin, exile or prison, and each can be come back from.
+     It keeps its own dice, so the world's luck is as it was. */
+  function powRand(s) { const D = s.powDice = s.powDice || { d: -1, x: 0, b: (s.rng ^ 0x51ed) | 0 }; if (D.d !== s.day) { D.d = s.day; D.x = (Math.imul(s.day + 11, 2246822519) ^ D.b) | 0; } D.x = (D.x + 0x6D2B79F5) | 0; let x = D.x; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }
+  const POSTS = {
+    warden: { name: 'Market Warden', town: 'greenhaven', lvl: 1, pay: 4, take: 15, rules: 'greenhaven', power: 'Sets the market dues at Greenhaven and licenses its traders.', abuse: 'Keep the stall fees' },
+    harbour: { name: 'Harbourmaster', town: 'eastwatch', lvl: 2, pay: 9, take: 45, rules: 'eastwatch', power: 'Sets the harbour dues at Eastwatch and licenses its traders.', abuse: 'Pocket a share of the dues' },
+    customs: { name: 'Customs Collector', town: 'oakbridge', lvl: 2, pay: 9, take: 45, rules: 'oakbridge', power: 'Sets the bridge and market dues at Oakbridge and licenses its traders.', abuse: 'Wave goods through for a fee' },
+    mines: { name: 'Mine Warden', town: 'ironcrest', lvl: 2, pay: 8, take: 40, rules: 'ironcrest', power: 'Sets the dues at Ironcrest and licenses its pits and forges.', abuse: 'Sell ore off the books' },
+    mint: { name: 'Master of the Mint', town: 'crownmere', lvl: 2, pay: 13, take: 70, power: 'Strikes the realm’s coin, and is paid the best of any post for it.', abuse: 'Clip the coin' },
+    magistrate: { name: 'Chief Magistrate', town: 'crownmere', lvl: 2, pay: 11, take: 50, law: true, power: 'Pardons prisoners and sentences the exposed, in any court of Alderwyn.', abuse: 'Sell a verdict' },
+    ambassador: { name: 'Ambassador to Valdoria', town: 'crownmere', lvl: 2, pay: 10, take: 50, power: 'Speaks for Alderwyn at the Queen’s court. Your name in Valdoria rises while you hold it.', abuse: 'Keep the Queen’s gifts' },
+    banker: { name: 'Royal Banker', town: 'crownmere', lvl: 2, pay: 14, take: 80, needs: 'bank', power: 'Keeps the crown’s accounts. Grants bank charters, and can break a bank.', abuse: 'Lend the crown’s coin as your own' },
+    spy: { name: 'Spymaster', town: 'crownmere', lvl: 3, pay: 15, take: 60, seat: true, power: 'Keeps the crown’s agents. Yours cost nothing, learn more, and guard your own secrets.', abuse: 'Sell what the agents learn' },
+    hand: { name: 'Lord Steward', town: 'crownmere', lvl: 3, pay: 22, take: 100, seat: true, power: 'The ruler’s right hand, who runs things: names and dismisses officials, sets dues and pardons anywhere in Alderwyn.', abuse: 'Sign for the king and keep the difference' }
+  };
+  const SEAT_NOTE = {
+    treasury: { power: 'Holds the realm’s purse and answers for its debts.', abuse: 'Skim the treasury', take: 80 },
+    trade: { power: 'Grants and revokes trade licences anywhere in Alderwyn, and judges trade cases.', abuse: 'Sell licences', take: 60 },
+    war: { power: 'Commands the levies. The houses respect a soldier, and yours march further.', abuse: 'Keep dead men on the pay roll', take: 60 },
+    law: { power: 'Hears appeals, pardons and sentences.', abuse: 'Sell a verdict', take: 60 }
+  };
+  const POST_NEED = { 1: { stand: 35, favour: 12, coin: 300, arms: 14 }, 2: { stand: 45, favour: 30, coin: 1500, arms: 32 }, 3: { stand: 55, favour: 55, coin: 5000, arms: 58 } };
+  const DUES = { low: 'Low', fair: 'Fair', high: 'High' };
+  function setupPow(s) {
+    if (s.pow) return s.pow;
+    const W = s.pow = { posts: {}, dues: {}, houses: {}, agents: [], mine: [], demand: null, recog: {}, held: {}, pressed: {}, lic: {}, licDay: {}, tried: {}, took: {}, log: [], nid: 1, gaol: null, arms: 0, convicted: 0, pardoned: -9, rumoured: -9 };
+    fillPosts(s);
+    return W;
+  }
+  const powLog = (s, text, kind) => { const W = s.pow; W.log.unshift({ d: s.day, x: text }); if (W.log.length > 30) W.log.length = 30; event(s, text, kind || 'info'); };
+  const powFlow = (s, key, n) => { if (!n) return; if (n > 0) earn(s, n); else spend(s, -n); if (s.stats) { const f = s.stats.flows = s.stats.flows || {}; f[key] = (f[key] || 0) + n; } };
+  function postHolder(s, k) { const W = s.pow, q = W && W.posts[k]; return q ? (q.pid === 'player' ? 'player' : s.people[q.pid] || null) : null; }
+  const powHolds = (s, k) => !!(s.pow && s.pow.posts[k] && s.pow.posts[k].pid === 'player');
+  const yourPosts = s => s.pow ? Object.keys(POSTS).filter(k => powHolds(s, k)) : [];
+  function fillPosts(s) {   // every post has someone in it: when a holder dies or leaves, the crown names another
+    const W = s.pow; if (!s.realm || !s.towns) return;
+    for (const k of Object.keys(POSTS)) {
+      const q = W.posts[k], cur = q && q.pid !== 'player' && s.people[q.pid];
+      if (q && (q.pid === 'player' || (cur && cur.status === 'here' && !cur.held))) continue;
+      if (cur) cur.post = null;
+      const Pk = POSTS[k], keep = s.rng;
+      let nm = ''; for (let i = 0; i < 8 && (!nm || Object.values(s.people).some(q => q.name === nm)); i++) nm = FIRST[Math.floor(powRand(s) * FIRST.length)] + ' ' + FAMILY[Math.floor(powRand(s) * FAMILY.length)];
+      const p = noble(s, { name: nm, sex: FEMALE.has(nm.split(' ')[0]) ? 'f' : 'm', age: 38 + Math.floor(powRand(s) * 22), town: Pk.town, purse: 300 + Pk.lvl * 200, why: 'Named ' + Pk.name + '.' });
+      delete p.noble; const h = vacancy(s, 999, Pk.town); if (h) moveIn(s, p, h);
+      s.rng = keep; p.post = k; W.posts[k] = { pid: p.id, since: s.day };
+      if (s.ppl && !s.ppl.key[p.id]) newKey(s, p, 'holds office: ' + Pk.name, 30);
+    }
+  }
+  // a name at arms: what the commander's road is paid in
+  function armsOf(s) {
+    const r = s.rec || {}, W = s.pow; let n = (r.warsWon || 0) * 22 + (r.rebellionsWon || 0) * 25 + (W ? W.arms : 0);
+    if (s.char) n += Math.max(0, (skillLv(s, 'oneHanded') + skillLv(s, 'twoHanded') + skillLv(s, 'archery')) / 3 - SKILL_START) * 0.7;
+    if (s.realm && s.realm.council.war === 'player') n += 15;
+    return Math.round(clamp(n, 0, 100));
+  }
+  const armsWord = n => n >= 70 ? 'A famous captain' : n >= 45 ? 'A proven soldier' : n >= 25 ? 'Known to fight' : n >= 10 ? 'Has seen a fight' : 'No name at arms';
+  const spyHelp = s => powHolds(s, 'spy') || (isRuler(s) && (() => { const p = postHolder(s, 'spy'); return p && p !== 'player' && (p.opinion || 0) >= 0; })());
+  const inAlderwyn = t => kingdomOf(t || 'hearthmoor') === 'alderwyn';
+  const canName = s => isRuler(s) || powHolds(s, 'hand');                                              // names and dismisses officials
+  const canLaw = s => isRuler(s) || powHolds(s, 'hand') || powHolds(s, 'magistrate') || !!(s.realm && s.realm.council.law === 'player');
+  const canBank = s => isRuler(s) || powHolds(s, 'banker');
+  function rulesTown(s, t) {   // may you set the dues here
+    if (!s.realm || !inAlderwyn(t) || t === 'hearthmoor' && !youGovern(s, t)) return false;
+    return canName(s) || youGovern(s, t) || yourLordships(s).includes(t) || yourPosts(s).some(k => POSTS[k].rules === t);
+  }
+  const licTown = (s, t) => rulesTown(s, t) || !!(s.realm && inAlderwyn(t) && s.realm.council.trade === 'player');
+  function levOn(s, pid) { const K = s.ppl && s.ppl.key[pid]; return K && K.secret && K.secret.known && !K.secret.exposed ? K : null; }
+  const himHer = p => sexOf(p) === 'f' ? 'her' : 'him', hisHer = p => sexOf(p) === 'f' ? 'her' : 'his', heShe = p => sexOf(p) === 'f' ? 'she' : 'he';
+
+  // ---- the houses: one number each, and the reason for it
+  function houseTerms(s, id, lord) {
+    const W = s.pow, H = W.houses[id], R = s.realm, Y = you(s), sp = Y && Y.spouse && s.people[Y.spouse], T = [];
+    const add = (v, why) => { if (v) T.push({ v, why }); };
+    add((lord.opinion || 0) * 0.3, (lord.opinion || 0) >= 0 ? 'thinks well of you' : 'thinks ill of you');
+    add((standing(s, id) - 30) * 0.25, standing(s, id) >= 50 ? 'your good name in ' + townName(id) : standing(s, id) >= 25 ? 'your name counts for little in ' + townName(id) : 'you are little known in ' + townName(id) + ', or ill thought of');
+    add(H.gift || 0, 'remembers your gifts');
+    if (sp && (sp.noble === id || (sp.parents || []).includes(lord.id) || sp.id === lord.id)) add(14, 'bound to you by marriage');
+    add(Math.min(18, armsOf(s) * 0.3), 'respects your name at arms');
+    if (H.fear > s.day) add(16, 'afraid of what you know');
+    if (H.beaten > s.day) add(10, 'beaten in the field, and remembers it');
+    add(isRuler(s) ? 10 : yourSeats(s).length || powHolds(s, 'hand') || powHolds(s, 'spy') ? 6 : yourLordships(s).length ? 3 : 0, 'you stand high in the realm');
+    const hand = postHolder(s, 'hand'); if (isRuler(s) && hand && hand !== 'player' && (hand.opinion || 0) >= 0) add(4, 'your Lord Steward keeps them close');
+    if (s.rival && (s.rival.allies || []).includes(lord.id)) add(-12, 'bound to your rival');
+    add(-(lord.hate || 0) * 0.3, 'has a grievance against you');
+    if (isRuler(s) && R.taxRate > 1) add(-(R.taxRate - 1) * 30, 'the taxes you ask');
+    return T;
+  }
+  const houseWord = H => H.state === 'broken' ? 'Broken away' : H.loy >= 60 ? 'Loyal' : H.loy >= 30 ? 'Wavering' : 'Cold';
+  function housesDay(s) {
+    const W = s.pow, R = s.realm; if (!R) return;
+    for (const id of Object.keys(R.regions)) {
+      const l = regionLord(s, id), lord = l && l !== 'player' && s.people[l];
+      if (!lord || lord.status !== 'here' || l === R.king) { delete W.houses[id]; continue; }
+      let H = W.houses[id]; if (!H) H = W.houses[id] = { pid: lord.id, loy: 45, low: 0, state: 'ok', gift: 0, why: 'You have had few dealings.' };
+      if (H.pid !== lord.id) { H.pid = lord.id; H.loy = Math.round(H.loy * 0.5 + 22); H.fear = 0; H.beaten = 0; H.gift = 0; H.low = 0; if (H.state === 'broken') H.state = 'ok'; }
+      H.gift = (H.gift || 0) * 0.985; if (H.gift < 0.5) H.gift = 0;
+      const T = houseTerms(s, id, lord), target = clamp(45 + T.reduce((t, x) => t + x.v, 0), 0, 100);
+      H.loy = Math.round((H.loy + (target - H.loy) * 0.1) * 10) / 10;
+      const top = T.slice().sort((a, b) => Math.abs(b.v) - Math.abs(a.v))[0]; H.why = top ? top.why.charAt(0).toUpperCase() + top.why.slice(1) + '.' : 'You have had few dealings.';
+      if (isRuler(s)) {   // a house that answers to you can break away, and be brought back
+        if (H.state !== 'broken') { H.low = H.loy < 22 ? (H.low || 0) + 1 : 0; if (H.low === 3) powLog(s, lord.name + ', lord of ' + REGIONS[id] + ', is close to breaking with you: ' + H.why.toLowerCase(), 'bad');
+          if (H.low >= 6) { H.state = 'broken'; H.low = 0; R.kingSupport = clamp(R.kingSupport - 6, 0, 100); powLog(s, lord.name + ' breaks away. ' + REGIONS[id] + ' pays the crown nothing until you bring the house back: by terms, or by marching.', 'bad'); } }
+        else { R.treasury -= Math.round(16 * R.taxRate * marketOf(s, id)); if (H.loy >= 45) { H.state = 'ok'; powLog(s, lord.name + ' comes back to you of ' + hisHer(lord) + ' own accord. ' + REGIONS[id] + ' pays its taxes again.', 'good'); } }
+      } else if (H.state === 'broken') H.state = 'ok';
+    }
+  }
+  const loyalHouses = s => s.pow ? Object.keys(s.pow.houses).filter(id => s.pow.houses[id].loy >= 60 && s.pow.houses[id].state !== 'broken') : [];
+  // how the houses and your claims lean a vote
+  function powLean(s, r, p, cand) {
+    const W = s.pow; if (!W || cand !== 'player' || !r || (r.office !== 'lord' && r.office !== 'seat' && r.office !== 'crown')) return 0;
+    let v = 0; const H = W.houses[townOf(p)];
+    if (H) v += H.state === 'broken' ? -8 : H.loy >= 60 ? 7 : H.loy < 30 ? -5 : 0;
+    const on = r.office === 'crown' ? 'crown' : r.office === 'lord' ? r.region : null;
+    if (on) v += claimStr(s, on) * 2.5;
+    return v;
+  }
+
+  // ---- claims: by blood, by marriage, by recognition
+  function claimsOn(s, on) {
+    const W = s.pow, R = s.realm, Y = you(s), out = []; if (!R || !Y) return out;
+    const fits = p => p && (on === 'crown' ? (p.royal || p.id === R.king || p.id === R.prince) : p.noble === on);
+    const gen = (s.rec && s.rec.generations) || 0;
+    if ((Y.parents || []).some(id => fits(s.people[id])) || (W.held[on] != null && W.held[on] < gen)) out.push({ by: 'blood', str: 3, why: 'Your house has held it before you.' });
+    const sp = Y.spouse && s.people[Y.spouse];
+    if (sp && (fits(sp) || (sp.parents || []).some(id => fits(s.people[id])))) out.push({ by: 'marriage', str: 2, why: 'You married into the house that holds it.' });
+    if (W.recog[on] != null) out.push({ by: 'recognition', str: 2, why: W.recog[on].how === 'arms' ? 'Recognised for your name at arms.' : 'Recognised by the houses.' });
+    return out;
+  }
+  const claimStr = (s, on) => claimsOn(s, on).reduce((t, c) => t + c.str, 0);
+  const claimSeats = s => s.realm ? lordRegions(s).filter(id => s.realm.regions[id].lord !== 'office').concat(['crown']) : [];
+  const youHoldSeat = (s, on) => on === 'crown' ? isRuler(s) : regionLord(s, on) === 'player';
+  function recogNeeds(s, on) {
+    const W = s.pow, crown = on === 'crown', n = Object.keys(W.houses).length, loyal = loyalHouses(s).length, H = W.houses[on], lev = !crown && H && levOn(s, H.pid);
+    const cost = crown ? 3000 : 600;
+    return { cost,
+      houses: crown ? [[loyal * 2 >= Math.max(2, n), 'half the houses loyal to you (' + loyal + ' of ' + n + ')'], [s.realm.favour >= 40 || !!s.realm.exile, 'the court’s favour at 40'], [s.coins >= cost, cost + 'c for the heralds and the lawyers']]
+        : [[standing(s, on) >= 60, 'a name of 60 in ' + townName(on)], [!H || H.loy >= 45 || !!lev, 'its lord at least wavering towards you, or in your grip'], [s.coins >= cost, cost + 'c for the heralds and the lawyers']],
+      arms: [[armsOf(s) >= (crown ? 70 : 40), 'a name at arms of ' + (crown ? 70 : 40) + ' (yours: ' + armsOf(s) + ')'], [standing(s, crown ? 'crownmere' : on) >= 40, 'a name of 40 in ' + townName(crown ? 'crownmere' : on)]] };
+  }
+
+  // ---- your own secrets, and the people who find them
+  function mineAdd(s, k, text, w, o) { const W = s.pow; W.mine.unshift(Object.assign({ id: W.nid++, k, text, day: s.day, w, held: null }, o || {})); if (W.mine.length > 12) W.mine.length = 12; }
+  function powLose(s, k, why) {
+    const W = s.pow; if (!powHolds(s, k)) return; delete W.posts[k]; if (W.dues[POSTS[k].rules]) delete W.dues[POSTS[k].rules];
+    fillPosts(s); const p = postHolder(s, k); powLog(s, 'You are no longer ' + POSTS[k].name + ': ' + why + '.' + (p && p !== 'player' ? ' ' + p.name + ' is named in your place.' : ''), 'bad');
+  }
+  function powGaol(s, days, t, why) {
+    const W = s.pow; W.gaol = { until: s.day + days, town: t, why, days };
+    for (const k of yourPosts(s)) powLose(s, k, 'a prisoner holds no office');
+    powLog(s, 'You are taken to the cells at ' + townName(t) + ' for ' + days + ' days: ' + why + '. Your businesses run on without you.', 'bad');
+  }
+  function powTrial(s, p, what) {   // blackmail is a crime. Brought before the magistrate, you may be fined, shamed, even locked up
+    const W = s.pow, R = s.realm, t = inAlderwyn(townOf(p)) ? townOf(p) : 'crownmere', mag = postHolder(s, 'magistrate');
+    let pc = 0.62 + (p.noble ? 0.1 : 0) + Math.min(0.2, W.convicted * 0.1) - (canLaw(s) ? 0.3 : 0) - (mag && mag !== 'player' && levOn(s, mag.id) ? 0.2 : 0);
+    if (powRand(s) > pc) { powLog(s, p.name + ' takes you before the magistrate for ' + what + '. It is ' + hisHer(p) + ' word against yours, and the court lets you go. People talk all the same.', 'warn'); repAdd(s, t, -3, 'accused of ' + what); return { guilty: false }; }
+    const fine = Math.max(60, Math.round(Math.max(0, s.coins) * 0.08)); powFlow(s, 'powFine', -fine);
+    repAdd(s, t, -12, 'convicted of ' + what); if (R) R.favour = clamp(R.favour - 6, 0, 100); deed(s, -6, 2, what);
+    const gaol = W.convicted >= 1 || p.noble || powRand(s) < 0.25, days = 3 + Math.floor(powRand(s) * 4); W.convicted++;
+    powLog(s, p.name + ' takes you before the magistrate for ' + what + ', and you are found guilty. You are fined ' + fine + 'c, and your name suffers for it.', 'bad');
+    if (gaol) powGaol(s, days, t, 'convicted of ' + what);
+    return { guilty: true, fine, gaol: gaol ? days : 0 };
+  }
+  function mineOut(s, m) {   // a secret of yours comes out
+    const W = s.pow, R = s.realm, who = s.people[m.who]; m.out = true; W.mine = W.mine.filter(x => x !== m); W.demand = null;
+    if (m.k === 'abuse' || m.k === 'bought') { const t = POSTS[m.post] ? POSTS[m.post].town : 'crownmere'; repAdd(s, t, m.k === 'abuse' ? -8 : -5, m.k === 'abuse' ? 'abusing your office' : 'buying your office'); if (R) R.favour = clamp(R.favour - (m.k === 'abuse' ? 10 : 6), 0, 100); deed(s, -4, 2, m.text);
+      powLog(s, 'It comes out that ' + m.text + '.', 'bad'); if (POSTS[m.post]) powLose(s, m.post, 'the scandal'); else if (R && SEAT_NOTE[m.post] && R.council[m.post] === 'player') { R.council[m.post] = noble(s, { name: nameForNoble(s), age: 48, town: 'crownmere', home: 'seat:crownmere', why: 'Named ' + COUNCIL[m.post] + ' after the scandal.' }).id; realmLog(s, 'You are put out of the seat of ' + COUNCIL[m.post] + '.', 'bad'); } }
+    else if (m.k === 'blackmail' && who && who.status === 'here') { powLog(s, 'It comes out that ' + m.text + '.', 'bad'); powTrial(s, who, 'blackmail'); }
+    else { repAdd(s, m.town || 'crownmere', -6, 'spreading lies'); deed(s, -2, 1, m.text); powLog(s, 'It comes out that ' + m.text + '.', 'bad'); }
+  }
+  function powSecretsDay(s) {
+    const W = s.pow, X = s.ppl; if (!X) return;
+    if (W.demand && s.day > W.demand.until) { const m = W.mine.find(x => x.id === W.demand.sid); const p = s.people[W.demand.pid]; if (m) { powLog(s, 'You gave ' + (p ? p.name : 'them') + ' no answer.', 'warn'); mineOut(s, m); } else W.demand = null; }
+    W.mine = W.mine.filter(m => s.day - m.day < 150 || m.held);
+    if (W.demand || s.day % 7 !== 5) return;
+    const guard = spyHelp(s) ? 0.5 : W.agents.length ? 0.8 : 1;
+    const foes = Object.keys(X.key).map(id => s.people[id]).filter(p => p && p.status === 'here' && !p.held && ((p.hate || 0) >= 35 || (p.opinion || 0) <= -30 || isRival(s, p)));
+    for (const m of W.mine) {
+      if (m.safe > s.day) continue;
+      let holder = m.held && s.people[m.held]; if (holder && (holder.status !== 'here' || holder.held)) { holder = null; m.held = null; }
+      if (holder) { if (m.quiet > s.day || powRand(s) > 0.35) continue; }
+      else { const knower = (m.knows || []).map(id => s.people[id]).find(p => p && p.status === 'here' && ((p.hate || 0) >= 20 || (p.opinion || 0) < -10));
+        if (powRand(s) > (0.05 * m.w + (knower ? 0.1 : 0)) * guard) continue; holder = knower || (foes.length ? foes[Math.floor(powRand(s) * foes.length)] : null); if (!holder) continue; m.held = holder.id; }
+      const coin = Math.round(clamp(yourWorth(s) * 0.03, 40, 2500) * Math.pow(1.5, m.asked || 0) / 10) * 10;
+      W.demand = { sid: m.id, pid: holder.id, coin, until: s.day + 4 };
+      powLog(s, holder.name + ' has learned that ' + m.text + ', and wants ' + coin + 'c to keep quiet. You have four days to answer.', 'bad');
+      break;
+    }
+  }
+  function agentsDay(s) {
+    const W = s.pow, X = s.ppl; if (!X || !W.agents.length) return;
+    const free = spyHelp(s);
+    if (!free) { const fee = W.agents.length * 3; if (s.coins < fee) { const a = W.agents.pop(); powLog(s, 'You cannot pay your agent in ' + townName(a.t) + ', who stops reporting.', 'warn'); } else powFlow(s, 'powAgents', -fee); }
+    W.agents.forEach((a, i) => {
+      if ((s.day + i * 2 + a.since) % 5 !== 0) return;
+      const L0 = Object.keys(X.key).map(id => s.people[id]).filter(p => p && p.status === 'here' && X.key[p.id].t === a.t && X.key[p.id].secret && !X.key[p.id].secret.known && !yourFamily(s, p));
+      const clean = Object.keys(X.key).map(id => s.people[id]).filter(p => p && X.key[p.id].t === a.t && !X.key[p.id].secret && !X.key[p.id].told);
+      const r = powRand(s);
+      if (L0.length && r < (free ? 0.6 : 0.42)) { const p = L0[Math.floor(powRand(s) * L0.length)], K = X.key[p.id]; K.secret.known = true; K.told = true; powLog(s, 'Your agent in ' + townName(a.t) + ' reports: ' + p.name + ' ' + PPL_SECRETS[K.secret.k] + '.', 'good'); }
+      else if (clean.length && r < 0.7) { const p = clean[Math.floor(powRand(s) * clean.length)]; X.key[p.id].told = true; powLog(s, 'Your agent in ' + townName(a.t) + ' has looked hard at ' + p.name + ' and found nothing to use.', 'info'); }
+      else if (r > (free ? 0.97 : 0.93)) { W.agents = W.agents.filter(x => x !== a); repAdd(s, a.t, -3, 'your spy was caught'); powLog(s, 'Your agent in ' + townName(a.t) + ' is caught asking questions, and names you. The town thinks less of you.', 'bad'); }
+    });
+  }
+  function duesDay(s) {
+    const W = s.pow, R = s.realm, X = s.ppl;
+    for (const t of Object.keys(W.dues)) {
+      if (!rulesTown(s, t)) { delete W.dues[t]; continue; }
+      const d = W.dues[t], crown = canName(s) && !yourPosts(s).some(k => POSTS[k].rules === t) && !yourLordships(s).includes(t), n = Math.round((WEALTH[t] || 1) * 3);
+      const owners = Object.values(s.biz || {}).filter(b => (b.town || 'hearthmoor') === t && !b.closed && b.owner !== 'player' && s.people[b.owner]).map(b => s.people[b.owner]);
+      const nudge = v => { for (let i = 0; i < Math.min(2, owners.length); i++) { const o = owners[Math.floor(powRand(s) * owners.length)]; o.opinion = clamp((o.opinion || 0) + v, -100, 100); } };
+      if (d === 'high') { if (crown) R.treasury += n; else powFlow(s, 'powDues', n); nudge(-2); const C = X && X.crowd[t]; if (C) C.heat = Math.min(100, C.heat + 1.2); if (s.day % 4 === 0) townApprove(s, t, -1); }
+      else if (d === 'low') { if (crown) R.treasury -= Math.round(n / 2); else powFlow(s, 'powDues', -Math.min(Math.round(n / 2), Math.max(0, s.coins))); nudge(1); if (s.day % 3 === 0) townApprove(s, t, 1); }
+    }
+    for (const id of Object.keys(W.lic)) { const b = s.biz && s.biz[id]; if (!b || W.lic[id] < s.day) { if (b) delete b.nolic; delete W.lic[id]; } }
+  }
+  function powDay(s) {
+    if (!s.realm || !s.towns) return;
+    const W = setupPow(s), R = s.realm;
+    fillPosts(s);
+    if (W.gaol && s.day >= W.gaol.until) { powLog(s, 'You are let out of the cells at ' + townName(W.gaol.town) + '. What you lost can be won back.', 'info'); W.gaol = null; }
+    if (R.exile) for (const k of yourPosts(s)) powLose(s, k, 'an exile holds no office');
+    for (const k of yourPosts(s)) { const Pk = POSTS[k]; if (Pk.needs === 'bank' && !(s.bank && s.bank.mine)) { powLose(s, k, 'the Royal Banker must keep a bank'); continue; } powFlow(s, 'powPay', Pk.pay); if (k === 'ambassador' && s.valdoria && s.day % 5 === 0) repAdd(s, 'valdor', 1, 'you speak for Alderwyn at the Queen’s court'); }
+    for (const id of yourLordships(s)) W.held[id] = (s.rec && s.rec.generations) || 0; if (isRuler(s)) W.held.crown = (s.rec && s.rec.generations) || 0;
+    housesDay(s); duesDay(s); agentsDay(s); powSecretsDay(s);
+    if (isRuler(s)) { const hand = postHolder(s, 'hand'); if (hand && hand !== 'player') { if ((hand.opinion || 0) < -20) { R.treasury -= 8; if (s.day % 7 === 2) powLog(s, 'Coin is going missing from the accounts your Lord Steward keeps. ' + hand.name + ' does not love you.', 'warn'); } else R.treasury += 5; } }
+  }
+
+  // ---- what you can do
+  function postNeeds(s, k) {
+    const W = s.pow, Pk = POSTS[k], N = POST_NEED[Pk.lvl], R = s.realm, cur = postHolder(s, k), lev = cur && cur !== 'player' && levOn(s, cur.id);
+    const common = [[standing(s, Pk.town) >= N.stand, 'a name of ' + N.stand + ' in ' + townName(Pk.town)]];
+    if (Pk.needs === 'bank') common.push([!!(s.bank && s.bank.mine), 'a bank of your own']);
+    if (Pk.seat) common.push([yourLordships(s).length > 0 || yourSeats(s).length > 0 || (W.everPost || 0) >= 1, 'a lordship, a council seat, or a post already held']);
+    return { common, lev: !!lev,
+      favour: [[R.favour >= N.favour, 'the court’s favour at ' + N.favour + ' (yours: ' + Math.round(R.favour) + ')']],
+      coin: [[s.coins >= N.coin, N.coin + 'c to buy the place, and a secret to keep']],
+      arms: [[armsOf(s) >= N.arms, 'a name at arms of ' + N.arms + ' (yours: ' + armsOf(s) + ')']] };
+  }
+  function grantPost(s, k, how) {
+    const W = s.pow, Pk = POSTS[k], cur = postHolder(s, k);
+    if (cur && cur !== 'player') { cur.post = null; plog(s, cur, 'Put out as ' + Pk.name + ' in favour of ' + s.name + '.'); if (how !== 'lever') wrong(s, cur, how === 'coin' ? 25 : 15, 'You took ' + hisHer(cur) + ' post as ' + Pk.name + '.'); }
+    W.posts[k] = { pid: 'player', since: s.day, how }; W.everPost = (W.everPost || 0) + 1;
+    powLog(s, 'You are named ' + Pk.name + (how === 'coin' ? ', the place paid for' : how === 'arms' ? ', for your service at arms' : how === 'lever' ? ', its last holder having stood aside' : ', by the court’s favour') + '. It pays ' + Pk.pay + 'c a day. ' + Pk.power, 'good');
+  }
+  function powCmd(s, name, a, b, c) {
+    if (!s.realm || !s.towns) return fail('Not yet.');
+    const W = setupPow(s), R = s.realm, X = setupPpl(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor';
+    switch (name) {
+      case 'powSeek': {   // ask for a post: by favour, by coin, or by your name at arms
+        const Pk = POSTS[a]; if (!Pk) return fail('No such post.'); if (powHolds(s, a)) return fail('You hold it already.');
+        if (isRuler(s)) return fail('You wear the crown. Name someone to the post instead.');
+        if (R.exile) return fail('An exile is given no office.');
+        if (yourPosts(s).length >= 2) return fail('Two posts are as many as one person may hold. Give one up first.');
+        if (W.tried[a] > s.day) return fail('The court has given its answer. Ask again after day ' + W.tried[a] + '.');
+        if (!['favour', 'coin', 'arms'].includes(b)) return fail('By favour, by coin, or by arms.');
+        const N = postNeeds(s, a), miss = N.common.concat(N[b]).filter(x => !x[0]).map(x => x[1]);
+        if (miss.length) return fail('To be ' + Pk.name + ' this way you need ' + miss.join(', and ') + '.');
+        if (b === 'favour') R.favour = clamp(R.favour - Math.round(POST_NEED[Pk.lvl].favour / 3), 0, 100);
+        else if (b === 'coin') { spend(s, POST_NEED[Pk.lvl].coin); mineAdd(s, 'bought', 'you paid for the post of ' + Pk.name, 2, { post: a }); }
+        grantPost(s, a, b); return ok('You are ' + Pk.name + '.');
+      }
+      case 'powQuit': { if (!powHolds(s, a)) return fail('You do not hold it.'); delete W.posts[a]; if (POSTS[a].rules) delete W.dues[POSTS[a].rules]; fillPosts(s); powLog(s, 'You give up the post of ' + POSTS[a].name + '.', 'info'); return ok('Given up.'); }
+      case 'powAbuse': {   // every post and seat can be milked. It pays, and it leaves a secret behind
+        const post = POSTS[a], st = SEAT_NOTE[a]; if (post ? !powHolds(s, a) : !(st && R.council[a] === 'player')) return fail('You do not hold that office.');
+        if (W.took[a] > s.day) return fail('Not again so soon: the books are still being looked at. Wait until day ' + W.took[a] + '.');
+        const take = (post || st).take; W.took[a] = s.day + 7; earn(s, take);
+        const old = W.mine.find(m => m.k === 'abuse' && m.post === a); if (old) { old.w = Math.min(4, old.w + 1); old.day = s.day; } else mineAdd(s, 'abuse', 'you ' + (post || st).abuse.charAt(0).toLowerCase() + (post || st).abuse.slice(1) + ' as ' + (post ? post.name : COUNCIL[a]), 2, { post: a });
+        if (!post || !post.rules) R.treasury -= Math.round(take / 2); deed(s, -2, 0, 'abusing your office');
+        return ok('You take ' + take + 'c that is not yours. Nobody has noticed. If anyone ever does, it will cost you the office and more.');
+      }
+      case 'powDues': {
+        if (!DUES[b]) return fail('Low, fair or high.'); if (!rulesTown(s, a)) return fail('You do not set the dues in ' + townName(a) + '.');
+        if (b === 'fair') delete W.dues[a]; else W.dues[a] = b;
+        return ok(b === 'high' ? 'High dues at ' + townName(a) + ': about ' + Math.round((WEALTH[a] || 1) * 3) + 'c a day more, and traders who resent you for it.' : b === 'low' ? 'Low dues at ' + townName(a) + ': it costs about ' + Math.round((WEALTH[a] || 1) * 1.5) + 'c a day, and the traders and the town warm to you.' : 'The dues at ' + townName(a) + ' go back to what they were.');
+      }
+      case 'powLicence': {   // shut a business by taking its licence, or give one back
+        const bz = s.biz && s.biz[a]; if (!bz || bz.closed) return fail('No such business.'); const t = bz.town || 'hearthmoor';
+        if (!licTown(s, t)) return fail('You do not license traders in ' + townName(t) + '.');
+        if (bz.owner === 'player') return fail('That is your own.');
+        const o = s.people[bz.owner], nm = empById(bz.id).name;
+        if (b === 'grant') { if (!bz.nolic) return fail('It has its licence.'); delete bz.nolic; delete W.lic[a]; if (o) o.opinion = clamp((o.opinion || 0) + 8, -100, 100); return ok(nm + ' may trade again.'); }
+        if (t !== here) return fail('Go to ' + townName(t) + ' to do it: a licence is taken in person.');
+        if (W.licDay[t] > s.day) return fail('One licence at a time. The town would not stand another before day ' + W.licDay[t] + '.');
+        const K = o && X.key[o.id], cause = !!(K && K.secret && K.secret.exposed);
+        bz.nolic = W.lic[a] = s.day + 14; W.licDay[t] = s.day + 10;
+        if (o) wrong(s, o, 25, 'You took the licence from ' + nm + '.');
+        if (!cause) { repAdd(s, t, -3, 'taking a trader’s licence without cause'); deed(s, -2, 1, 'taking a licence without cause'); }
+        if (o && isRival(s, o) && s.rival.nerve != null) s.rival.nerve = clamp(s.rival.nerve - 8, 0, 100);
+        powLog(s, 'You take the licence from ' + nm + ' in ' + townName(t) + '. It is shut for fourteen days' + (cause ? ', and after what came out about its owner nobody argues.' : ', and the town notices that you gave no reason.'), 'info');
+        return ok(nm + ' is shut for fourteen days.');
+      }
+      case 'powAppoint': case 'powDismiss': {   // the ruler, or the ruler's right hand, names who holds what
+        const Pk = POSTS[a]; if (!Pk) return fail('No such post.'); if (!canName(s)) return fail('Only the ruler or the Lord Steward names officials.');
+        if (a === 'hand' && !isRuler(s)) return fail('Only the ruler chooses a right hand.');
+        const cur = postHolder(s, a); if (cur === 'player') return fail('That is your own post.');
+        if (W.named === s.day) return fail('One appointment a day.');
+        let q = name === 'powAppoint' ? s.people[b] : null;
+        if (name === 'powAppoint' && (!q || q.status !== 'here' || q.kid || q.age < 18 || q.held || q.post || q.id === R.king)) return fail('They cannot take it.');
+        W.named = s.day; if (!isRuler(s)) R.favour = clamp(R.favour - 4, 0, 100);
+        if (cur) { cur.post = null; wrong(s, cur, 25, 'You put ' + himHer(cur) + ' out as ' + Pk.name + '.'); plog(s, cur, 'Dismissed as ' + Pk.name + ' by ' + s.name + '.'); const H = W.houses[townOf(cur)]; if (H) H.loy = Math.max(0, H.loy - 3); }
+        if (!q) { delete W.posts[a]; fillPosts(s); q = postHolder(s, a); powLog(s, 'You dismiss ' + (cur ? cur.name : 'the holder') + ' as ' + Pk.name + '. ' + q.name + ' is named instead.', 'info'); return ok('Dismissed.'); }
+        q.post = a; W.posts[a] = { pid: q.id, since: s.day, by: 'player' }; q.opinion = clamp((q.opinion || 0) + 25, -100, 100); remember(s, q, 'You named ' + himHer(q) + ' ' + Pk.name + '.', 12); plog(s, q, 'Named ' + Pk.name + ' by ' + s.name + '.');
+        if (!X.key[q.id]) newKey(s, q, 'holds office: ' + Pk.name, 30);
+        const H = W.houses[townOf(q)]; if (H) { H.gift = Math.min(24, (H.gift || 0) + 6); }
+        if (yourFamily(s, q)) { repAdd(s, Pk.town, -3, 'giving an office to your own family'); }
+        powLog(s, 'You name ' + q.name + ' ' + Pk.name + '. ' + heShe(q).charAt(0).toUpperCase() + heShe(q).slice(1) + ' owes it to you, and knows it.', 'good');
+        return ok(q.name + ' is ' + Pk.name + '.');
+      }
+      case 'powPardon': {
+        if (!canLaw(s)) return fail('You have no power to pardon.'); const p = s.people[a]; if (!p || !p.held) return fail('Nobody of that name is held.');
+        const J = allCourts(s).find(C => C.prisoners.some(x => x.pid === p.id)); if (J && !inAlderwyn(J.id)) return fail('That is the Queen’s prisoner, not Alderwyn’s.');
+        if (W.pardoned > s.day - 3) return fail('One pardon in three days. Mercy given too freely is worth nothing.');
+        W.pardoned = s.day; release(s, p.id, 'Pardoned by ' + s.name + '.'); p.opinion = clamp((p.opinion || 0) + 30, -100, 100); remember(s, p, 'You pardoned ' + himHer(p) + '.', 20);
+        for (const q of living(s)) if (q.spouse === p.id || (q.parents || []).includes(p.id) || (p.parents || []).includes(q.id)) q.opinion = clamp((q.opinion || 0) + 12, -100, 100);
+        if (powHolds(s, 'hand') && !isRuler(s)) R.favour = clamp(R.favour - 2, 0, 100);
+        deed(s, 2, 1, 'pardoning ' + p.name); powLog(s, 'You pardon ' + p.name + ', who walks out of the cells. ' + heShe(p).charAt(0).toUpperCase() + heShe(p).slice(1) + ' and ' + hisHer(p) + ' family will remember it.', 'good');
+        return ok(p.name + ' is free.');
+      }
+      case 'powSentence': {   // someone whose wrongdoing is public can be fined or locked up
+        if (!canLaw(s)) return fail('You have no power to sentence.'); const p = s.people[a], K = p && X.key[a];
+        if (!K || !K.secret || !K.secret.exposed) return fail('Nothing has been proved against them in public.');
+        if (!['skim', 'bought', 'smuggle', 'past', 'oath'].includes(K.secret.k)) return fail('That is a private shame, not a crime.');
+        if (K.secret.done) return fail('They have answered for it already.'); if (p.held) return fail('They are in the cells already.'); if (!inAlderwyn(townOf(p))) return fail('They are the Queen’s subject.');
+        K.secret.done = true;
+        if (b === 'prison') { const J = (s.courts && s.courts[townOf(p)]) || s.justice; if (cellsFree(s, J) <= 0) { K.secret.done = false; return fail('The cells at ' + townName(townOf(p)) + ' are full.'); }
+          hold(s, p.id, null, 'Sentenced by ' + s.name + ': ' + PPL_SECRETS[K.secret.k] + '.', s.day + 20, J); if (p.post) { const k = p.post; p.post = null; delete W.posts[k]; fillPosts(s); }
+          wrong(s, p, 30, 'You sent ' + himHer(p) + ' to the cells.'); powLog(s, 'You send ' + p.name + ' to the cells for twenty days.', 'info'); return ok(p.name + ' is locked up.'); }
+        const fine = Math.round(Math.max(0, p.purse) * 0.4); p.purse -= fine; R.treasury += fine; wrong(s, p, 15, 'You fined ' + himHer(p) + ' ' + fine + 'c.');
+        powLog(s, 'You fine ' + p.name + ' ' + fine + 'c, paid to the treasury.', 'info'); return ok(p.name + ' pays ' + fine + 'c.');
+      }
+      case 'powCharter': {   // open a bank where there is none
+        if (!canBank(s)) return fail('Only the ruler or the Royal Banker grants a charter.'); const B = setupBanks(s);
+        if (!inAlderwyn(a) || a === 'hearthmoor' || !bankSite(a)) return fail('No bank can stand there.'); if (bankIn(s, a)) return fail(townName(a) + ' has a bank.');
+        const fee = 1500; if (s.coins < fee && !isRuler(s)) return fail('The charter costs ' + fee + 'c, paid to the crown.');
+        if (isRuler(s)) R.treasury -= 500; else { spend(s, fee); R.treasury += fee; }
+        newBanker(s, a); repAdd(s, a, 5, 'bringing a bank to the town'); powLog(s, 'By your charter, ' + BANK_NAME[a].replace(/^the /, 'the ') + ' opens its doors in ' + townName(a) + '. The old counting house is a bank at last.', 'good');
+        return ok(townName(a) + ' has a bank.');
+      }
+      case 'powBreak': {   // close a bank by the crown's order. Its savers lose, and what you owe it falls due at once
+        if (!canBank(s)) return fail('Only the ruler or the Royal Banker can break a bank.'); const B = setupBanks(s), k = B.banks[a];
+        if (!k) return fail('There is no bank there to break.'); if (B.mine && B.mine.town === a) return fail('That is your own bank.'); if (!inAlderwyn(a)) return fail('That bank is the Queen’s to break.');
+        if (W.broke > s.day - 30) return fail('One bank in thirty days is all the realm will stand.');
+        let due = 0; for (const L of B.loans) if (L.status === 'open' && L.bank === a) { due += Math.ceil(L.balance + (L.interest || 0) + (L.arrears || 0)); L.status = 'repaid'; L.balance = 0; }
+        if (due) powFlow(s, 'powBreak', -due);
+        const p = s.people[k.pid]; if (p) { p.banker = null; p.purse = Math.round(p.purse * 0.2); wrong(s, p, 40, 'You broke ' + hisHer(p) + ' bank.'); plog(s, p, 'The bank was broken by order of ' + s.name + '.'); }
+        delete B.banks[a]; W.broke = s.day; repAdd(s, a, -8, 'breaking the town’s bank'); if (!isRuler(s)) R.favour = clamp(R.favour - 8, 0, 100);
+        if (B.mine) { const got = Math.round(120 + (WEALTH[a] || 1) * 60); B.mine.deposits += got; B.mine.cash += got; }
+        powLog(s, 'By your order ' + BANK_NAME[a] + ' is broken and its doors are boarded. Its savers lose what they had there' + (due ? ', and the ' + due + 'c you owed it is taken from you at once' : '') + (B.mine ? '. Frightened coin comes to your own bank.' : '.'), 'warn');
+        return ok(BANK_NAME[a].charAt(0).toUpperCase() + BANK_NAME[a].slice(1) + ' is broken.');
+      }
+      case 'powGift': {
+        const H = W.houses[a], lord = H && s.people[H.pid]; if (!lord) return fail('No such house.'); if (here !== a) return fail('Take it to ' + townName(a) + ' yourself.');
+        if (H.gifted > s.day - 10) return fail('You have made your gift. Another so soon would look like a bribe.');
+        const cost = 60 + Math.round((WEALTH[a] || 1) * 20); if (s.coins < cost) return fail('A gift fit for a lord costs ' + cost + 'c.');
+        spend(s, cost); H.gifted = s.day; H.gift = Math.min(24, (H.gift || 0) + 12); lord.opinion = clamp((lord.opinion || 0) + 6, -100, 100); remember(s, lord, 'You brought a handsome gift.', 6);
+        return ok('You bring ' + lord.name + ' a gift worth ' + cost + 'c. It is noticed.');
+      }
+      case 'powTerms': case 'powMarch': {   // bring back a house that has broken away: pay, or march
+        const H = W.houses[a], lord = H && s.people[H.pid]; if (!lord || H.state !== 'broken') return fail('That house has not broken away.'); if (!isRuler(s)) return fail('That is for the ruler.');
+        if (name === 'powTerms') { const cost = 300 + Math.round((WEALTH[a] || 1) * 100); if (R.treasury < cost) return fail('Terms would cost the treasury ' + cost + 'c, and it does not have it.'); R.treasury -= cost; H.state = 'ok'; H.loy = 45; H.low = 0; H.gift = 12; powLog(s, 'You come to terms with ' + lord.name + ': ' + cost + 'c from the treasury, and ' + REGIONS[a] + ' pays its taxes again.', 'good'); return ok('Terms agreed.'); }
+        if (H.marched > s.day - 15) return fail('Your men are not ready to march again.');
+        H.marched = s.day; const yours = R.levies * 0.5 + armsOf(s) * 2 + (R.council.war === 'player' ? 30 : 0), theirs = (60 + (WEALTH[a] || 1) * 25) * (0.8 + powRand(s) * 0.5);
+        if (yours > theirs) { H.state = 'ok'; H.loy = 50; H.low = 0; H.beaten = s.day + 90; W.arms = Math.min(60, W.arms + 6); wrong(s, lord, 15, 'You marched on ' + himHer(lord) + '.'); deed(s, -1, 2, 'marching on ' + REGIONS[a]); powLog(s, 'You march on ' + REGIONS[a] + '. ' + lord.name + ' yields without a siege and swears again. It will hold while the memory does.', 'good'); return ok('The house yields.'); }
+        R.levies = Math.max(0, R.levies - 40); R.kingSupport = clamp(R.kingSupport - 5, 0, 100); powLog(s, 'You march on ' + REGIONS[a] + ' and are turned back at the walls. Forty men are lost, and the realm sees it.', 'bad'); return fail('You are turned back.');
+      }
+      case 'powAgent': {
+        if (b === 'off') { const i = W.agents.findIndex(x => x.t === a); if (i < 0) return fail('You have nobody there.'); W.agents.splice(i, 1); return ok('Your agent in ' + townName(a) + ' is paid off.'); }
+        if (!TOWNS[a] && a !== 'hearthmoor') return fail('No such town.'); if (W.agents.some(x => x.t === a)) return fail('You have someone in ' + townName(a) + ' already.');
+        const cap = spyHelp(s) ? 5 : 3; if (W.agents.length >= cap) return fail('You can run ' + cap + ' agents at once' + (cap < 5 ? '. A Spymaster can run five.' : '.'));
+        if (a !== here) return fail('Go to ' + townName(a) + ' and find someone yourself.');
+        const free = spyHelp(s), cost = free ? 0 : 40; if (s.coins < cost) return fail('A reliable pair of ears costs ' + cost + 'c to hire, and 3c a day after.');
+        spend(s, cost); W.agents.push({ t: a, since: s.day }); return ok('You have an agent in ' + townName(a) + (free ? ', on the crown’s pay.' : ': 3c a day.') + ' Reports come every few days.');
+      }
+      case 'powPress': {   // use a secret. Most give in and hate you for it. Some go to the magistrate, where blackmail is a crime
+        const p = s.people[a], K = p && levOn(s, a); if (!K) return fail('You hold nothing over them.'); if (K.t !== here) return fail('This is said in person, in ' + townName(K.t) + '.');
+        if (K.pressed > s.day - 10) return fail('You have leaned on ' + himHer(p) + ' too lately. Wait.');
+        const H = Object.values(W.houses).find(h => h.pid === p.id), E = electState(s), races = Object.values(E.races || {}).filter(r => r && r.open && r.you && raceTown(r) === K.t && !r.cands.includes(p.id));
+        if (b === 'loyal' && !H) return fail(p.name + ' leads no house.'); if (b === 'post' && !p.post) return fail(p.name + ' holds no post.'); if (b === 'back' && !races.length) return fail('You are standing in no race where ' + hisHer(p) + ' word counts.');
+        if (b === 'quiet' && !(W.demand && W.demand.pid === p.id)) return fail(p.name + ' is asking nothing of you.');
+        if (!['coin', 'loyal', 'post', 'back', 'quiet'].includes(b)) return fail('Ask for coin, loyalty, the post, their backing, or their silence.');
+        if (b === 'post') { if (isRuler(s)) return fail('You can simply dismiss ' + himHer(p) + '.'); if (yourPosts(s).length >= 2) return fail('Two posts are as many as one person may hold.'); const miss = postNeeds(s, p.post).common.filter(x => !x[0]).map(x => x[1]); if (miss.length) return fail('Even if ' + heShe(p) + ' stood aside, you would need ' + miss.join(', and ') + '.'); }
+        const n = K.pressN || 0, odds = clamp(0.84 - n * 0.13 - (temperOf(p) - 1) * 0.3 - (p.noble || p.post ? 0.06 : 0) + (spyHelp(s) ? 0.05 : 0) + (b === 'quiet' ? 0.12 : 0) - (b === 'post' ? 0.1 : 0), 0.2, 0.92);
+        K.pressed = s.day; K.pressN = n + 1; skillUse(s, 'speech', 4);
+        if (powRand(s) >= odds) {   // they would rather be shamed than owned
+          K.secret.exposed = true; p.rep = Math.max(0, (p.rep || 50) - 15); wrong(s, p, 35, 'You tried to blackmail ' + himHer(p) + '.');
+          powLog(s, p.name + ' will not be owned. ' + heShe(p).charAt(0).toUpperCase() + heShe(p).slice(1) + ' tells the town ' + hisHer(p) + ' own secret, and takes yours to the magistrate.', 'bad');
+          const tr = powTrial(s, p, 'blackmail'); return fail(p.name + ' refuses, and goes to the magistrate. ' + (tr.guilty ? 'You are found guilty: ' + tr.fine + 'c' + (tr.gaol ? ' and ' + tr.gaol + ' days in the cells.' : '.') : 'The court lets you go, this time.'));
+        }
+        wrong(s, p, 20, 'You hold ' + hisHer(p) + ' secret over ' + himHer(p) + '.', { noKin: true });
+        const old = W.mine.find(m => m.k === 'blackmail' && m.who === p.id); if (old) { old.w = Math.min(4, old.w + 1); old.day = s.day; } else mineAdd(s, 'blackmail', 'you blackmailed ' + p.name, 2, { who: p.id, knows: [p.id], town: K.t });
+        let msg = '';
+        if (b === 'coin') { const got = Math.round(clamp(p.purse * 0.3, 0, 1500)); p.purse -= got; earn(s, got); msg = heShe(p) + ' pays you ' + got + 'c'; }
+        else if (b === 'loyal') { H.fear = s.day + 60; H.loy = Math.max(H.loy, 55); msg = hisHer(p) + ' house will stand with you for sixty days, out of fear'; }
+        else if (b === 'back') { for (const r of races) K.backs[r.key] = 'player'; msg = heShe(p) + ' backs you in the vote, and ' + hisHer(p) + ' people will follow'; }
+        else if (b === 'quiet') { const m = W.mine.find(x => x.id === W.demand.sid); if (m) { m.held = null; m.safe = s.day + 90; } W.demand = null; msg = 'you each hold the other’s secret, and neither will speak'; }
+        else { const k = p.post; grantPost(s, k, 'lever'); msg = heShe(p) + ' stands aside, and the post is yours'; }
+        return ok(p.name + ' gives in: ' + msg + '. ' + heShe(p).charAt(0).toUpperCase() + heShe(p).slice(1) + ' will not forgive it, and each time you ask again the risk grows.');
+      }
+      case 'powExpose': {   // say it openly. Safe for you, and the end of the leverage
+        const p = s.people[a], K = p && levOn(s, a); if (!K) return fail('You know nothing that would hurt them.');
+        K.secret.exposed = true; const crime = ['skim', 'bought', 'smuggle', 'oath'].includes(K.secret.k);
+        p.rep = Math.max(0, (p.rep || 50) - 25); wrong(s, p, 30, 'You told the town ' + hisHer(p) + ' secret.'); for (const k of Object.keys(K.backs || {})) delete K.backs[k];
+        const H = Object.values(W.houses).find(h => h.pid === p.id); if (H) H.fear = 0;
+        if (crime) { deed(s, 2, 2, 'exposing ' + p.name); repAdd(s, K.t, 2, 'exposing ' + p.name); } else deed(s, -2, 1, 'shaming ' + p.name + ' in public');
+        let lost = ''; if (crime && p.post && (K.secret.k === 'skim' || K.secret.k === 'bought')) { const k = p.post; p.post = null; delete W.posts[k]; fillPosts(s); lost = ' ' + heShe(p).charAt(0).toUpperCase() + heShe(p).slice(1) + ' is put out as ' + POSTS[k].name + '.'; }
+        powLog(s, 'You say openly that ' + p.name + ' ' + PPL_SECRETS[K.secret.k] + '.' + lost + (crime ? ' The town thanks you for it.' : ' The town enjoys it, and thinks a little less of you for telling.'), 'info');
+        return ok('It is out. ' + p.name + ' is hurt by it, and you hold nothing over ' + himHer(p) + ' now.');
+      }
+      case 'powRumour': {   // no secret needed: a lie, paid for. It can be traced
+        const p = s.people[a], K = p && X.key[a]; if (!K) return fail('Nobody would trouble to talk about them.'); if (yourFamily(s, p)) return fail('Not your own family.');
+        if (W.rumoured > s.day - 5) return fail('One story at a time, or nobody believes any of them.'); if (s.coins < 30) return fail('Loose tongues cost 30c.');
+        spend(s, 30); W.rumoured = s.day; const hit = 8 + Math.floor(powRand(s) * 8); p.rep = Math.max(0, (p.rep || 50) - hit); for (const k of Object.keys(K.backs || {})) if (K.backs[k] !== 'player') delete K.backs[k];
+        if (powRand(s) < (spyHelp(s) ? 0.15 : 0.25)) { wrong(s, p, 30, 'You spread lies about ' + himHer(p) + '.'); repAdd(s, K.t, -6, 'spreading lies about ' + p.name); deed(s, -3, 1, 'spreading lies'); powLog(s, 'The story about ' + p.name + ' is traced back to you. ' + townName(K.t) + ' thinks less of you, and ' + heShe(p) + ' will not forget it.', 'bad'); return fail('The story is traced to you.'); }
+        mineAdd(s, 'rumour', 'you paid for lies about ' + p.name, 1, { who: p.id, town: K.t });
+        return ok('By the week’s end ' + townName(K.t) + ' is saying things about ' + p.name + '. ' + heShe(p).charAt(0).toUpperCase() + heShe(p).slice(1) + ' loses standing, and nobody knows where it began.');
+      }
+      case 'powAnswer': {   // someone holds a secret of yours
+        const D = W.demand, m = D && W.mine.find(x => x.id === D.sid), p = D && s.people[D.pid]; if (!D || !m) return fail('Nobody is asking anything of you.');
+        if (a === 'pay') { if (s.coins < D.coin) return fail('You do not have ' + D.coin + 'c.'); spend(s, D.coin); if (p) p.purse += D.coin; m.asked = (m.asked || 0) + 1; m.quiet = s.day + 40; W.demand = null; return ok('You pay ' + D.coin + 'c. ' + (p ? p.name : 'They') + ' says nothing, for now. People who are paid once often come back.'); }
+        if (a === 'defy') { powLog(s, 'You tell ' + (p ? p.name : 'them') + ' to do ' + (p ? hisHer(p) : 'their') + ' worst.', 'info'); mineOut(s, m); return ok('It is out, and it cannot be used against you again.'); }
+        return fail('Pay, or refuse.');
+      }
+      case 'powRecognise': {
+        if (!claimSeats(s).includes(a)) return fail('No such seat.'); if (W.recog[a] != null) return fail('Your claim is recognised already.'); if (youHoldSeat(s, a)) return fail('You hold it.');
+        const N = recogNeeds(s, a), L0 = N[b]; if (!L0) return fail('By the houses, or by arms.'); const miss = L0.filter(x => !x[0]).map(x => x[1]);
+        if (miss.length) return fail('To be recognised this way you need ' + miss.join(', and ') + '.');
+        if (b === 'houses') spend(s, N.cost); W.recog[a] = { day: s.day, how: b };
+        powLog(s, (b === 'arms' ? 'The captains and the heralds' : 'The houses and the heralds') + ' recognise your claim to ' + (a === 'crown' ? 'the crown of Alderwyn' : 'the lordship of ' + REGIONS[a]) + '. It is a claim, not the seat: it counts in every vote for it, and can be pressed.', 'good');
+        return ok('Your claim is recognised.');
+      }
+      case 'powClaim': {   // press a claim: the houses, the town and your own strength decide
+        if (!claimSeats(s).includes(a)) return fail('No such seat.'); if (youHoldSeat(s, a)) return fail('You hold it.'); if (R.exile) return fail('An exile presses a claim with an army, not a herald.');
+        const crown = a === 'crown', str = claimStr(s, a); if (str < (crown ? 4 : 3)) return fail('Your claim is too thin to press. It needs a strength of ' + (crown ? 4 : 3) + ': yours is ' + str + '.');
+        if (W.pressed[a] > s.day - 40) return fail('You pressed it and were answered. Wait until day ' + (W.pressed[a] + 40) + '.');
+        if (crown && R.kingSupport >= 45 && R.crown === 'king') return fail('The king is too well loved for anyone to hear a claim against him. Wait until his support falls below 45.');
+        if (crown && !yourLordships(s).length && !yourSeats(s).length && !yourPosts(s).some(k => POSTS[k].seat)) return fail('Nobody would crown someone who has held nothing. Hold a lordship or a seat first.');
+        const hid = crown ? R.king : regionLord(s, a), holder = hid && s.people[hid], t = crown ? 'crownmere' : a; W.pressed[a] = s.day;
+        const yours = str * 9 + (standing(s, t) - 50) * 0.5 + loyalHouses(s).length * 5 + armsOf(s) * 0.25 + (holder && levOn(s, holder.id) ? 12 : 0) + powRand(s) * 20;
+        const theirs = 50 + (holder ? (holder.rep || 50) * 0.2 : -20) + (crown ? R.kingSupport * 0.4 : 0) + powRand(s) * 20;
+        if (yours > theirs) { if (crown) crownYou(s, 'The houses hear your claim'); else { vacateYours(s, { office: 'lord', region: a }); if (holder) { holder.noble = null; holder.retired = true; } R.regions[a].lord = null; seat(s, 'lord', a, 'player'); } s.rec.claimsWon = (s.rec.claimsWon || 0) + 1; powLog(s, 'Your claim is heard, and upheld. ' + (crown ? 'You are crowned at Crownmere.' : 'You are lord of ' + REGIONS[a] + '.'), 'good'); return ok('Your claim is upheld.'); }
+        R.favour = clamp(R.favour - 15, 0, 100); if (holder) wrong(s, holder, 30, 'You pressed a claim to ' + hisHer(holder) + ' seat.');
+        powLog(s, 'Your claim to ' + (crown ? 'the crown' : REGIONS[a]) + ' is heard, and set aside. ' + (holder ? holder.name + ' will not forget that you tried.' : ''), 'bad'); return fail('Your claim is set aside. More houses behind you, a better name there, or a stronger claim would change it.');
+      }
+    }
+    return fail('Unknown.');
+  }
+  function powerScore(s) {
+    const W = s.pow; let n = 0; if (!W || !s.realm) return 0;
+    if (isRuler(s)) n += 60; n += Math.min(1, yourSeats(s).length) * 22 + yourLordships(s).length * 16;
+    for (const k of yourPosts(s)) n += [0, 4, 9, 18][POSTS[k].lvl];
+    n += loyalHouses(s).length * 5 + Math.min(5, Object.keys((s.ppl || { key: {} }).key).filter(id => levOn(s, id)).length) * 4 + W.agents.length;
+    n += Math.max(0, ...claimSeats(s).map(on => youHoldSeat(s, on) ? 0 : claimStr(s, on))) * 2 + (s.bank && s.bank.mine ? 6 : 0);
+    return Math.round(n);
+  }
+  const powerWord = n => n >= 90 ? 'The power in the realm' : n >= 60 ? 'One of the great' : n >= 35 ? 'A power at court' : n >= 18 ? 'Someone to reckon with' : n >= 6 ? 'A small player' : 'No power to speak of';
+  function powView(s) {
+    if (!s.realm || !s.towns) return null;
+    const W = setupPow(s), R = s.realm, X = setupPpl(s), here = townAt(s.player.x, s.player.z) || 'hearthmoor', sc = powerScore(s);
+    const posts = Object.keys(POSTS).map(k => { const Pk = POSTS[k], h = postHolder(s, k), N = postNeeds(s, k), tick = L => L.map(x => ({ ok: x[0], text: x[1] }));
+      return { k, name: Pk.name, town: Pk.town, lvl: Pk.lvl, seat: !!Pk.seat, pay: Pk.pay, power: Pk.power, abuse: Pk.abuse, take: Pk.take, mine: h === 'player', holder: h && h !== 'player' ? h.name : null, pid: h && h !== 'player' ? h.id : null, holderFeel: h && h !== 'player' ? (h.opinion || 0) : 0, since: W.posts[k] ? W.posts[k].since : null, canAbuse: h === 'player' && !(W.took[k] > s.day), abuseDay: W.took[k] > s.day ? W.took[k] : null,
+        tried: W.tried[k] > s.day ? W.tried[k] : null, common: tick(N.common), favour: tick(N.favour), coin: tick(N.coin), arms: tick(N.arms), lev: N.lev }; });
+    const seats = Object.keys(COUNCIL).map(k => { const c = R.council[k], p = c && c !== 'player' && s.people[c]; return { k, name: COUNCIL[k], mine: c === 'player', holder: p ? p.name : null, pid: p ? p.id : null, power: SEAT_NOTE[k].power, abuse: SEAT_NOTE[k].abuse, take: SEAT_NOTE[k].take, canAbuse: c === 'player' && !(W.took[k] > s.day), abuseDay: W.took[k] > s.day ? W.took[k] : null }; });
+    const houses = Object.keys(W.houses).map(id => { const H = W.houses[id], p = s.people[H.pid]; return { id, region: REGIONS[id], lord: p ? p.name : '?', pid: H.pid, loy: Math.round(H.loy), word: houseWord(H), why: H.why, state: H.state, fear: H.fear > s.day ? H.fear : null, giftCost: 60 + Math.round((WEALTH[id] || 1) * 20), canGift: here === id && !(H.gifted > s.day - 10), termsCost: 300 + Math.round((WEALTH[id] || 1) * 100), lev: !!levOn(s, H.pid) }; });
+    const dueTowns = Object.keys(R.regions).concat(['greenhaven']).filter((t, i, A) => A.indexOf(t) === i && rulesTown(s, t)).map(t => ({ t, name: townName(t), dues: W.dues[t] || 'fair', gain: Math.round((WEALTH[t] || 1) * 3) }));
+    const lic = licTown(s, here) ? Object.values(s.biz || {}).filter(b => (b.town || 'hearthmoor') === here && !b.closed && b.owner !== 'player' && s.people[b.owner]).map(b => ({ id: b.id, name: empById(b.id).name, owner: s.people[b.owner].name, shut: b.nolic >= s.day ? b.nolic : null, rival: isRival(s, s.people[b.owner]) })).slice(0, 14) : null;
+    const prisoners = canLaw(s) ? allCourts(s).filter(J => inAlderwyn(J.id)).reduce((L, J) => L.concat(J.prisoners.map(x => ({ pid: x.pid, name: (s.people[x.pid] || {}).name, why: x.reason, at: townName(J.id) }))), []).filter(x => x.name).slice(0, 8) : null;
+    const known = Object.keys(X.key).map(id => ({ p: s.people[id], K: X.key[id] })).filter(o => o.p && o.p.status === 'here' && o.K.secret && o.K.secret.known).map(({ p, K }) => ({ pid: p.id, name: p.name, town: K.t, here: K.t === here, what: PPL_SECRETS[K.secret.k], exposed: !!K.secret.exposed, done: !!K.secret.done, crime: ['skim', 'bought', 'smuggle', 'past', 'oath'].includes(K.secret.k), held: !!p.held, post: p.post ? POSTS[p.post].name : null, house: Object.keys(W.houses).some(h => W.houses[h].pid === p.id), office: officeOf(s, p), pressed: K.pressN || 0, wait: K.pressed > s.day - 10,
+      odds: Math.round(clamp(0.84 - (K.pressN || 0) * 0.13 - (temperOf(p) - 1) * 0.3 - (p.noble || p.post ? 0.06 : 0) + (spyHelp(s) ? 0.05 : 0), 0.2, 0.92) * 100), asks: !!(W.demand && W.demand.pid === p.id), canBack: Object.values(electState(s).races || {}).some(r => r && r.open && r.you && raceTown(r) === K.t && !r.cands.includes(p.id)) }));
+    const D = W.demand, dm = D && W.mine.find(x => x.id === D.sid), dp = D && s.people[D.pid];
+    const claims = claimSeats(s).map(on => { const C = claimsOn(s, on), crown = on === 'crown', hid = crown ? (R.crown === 'player' ? 'player' : R.king) : regionLord(s, on), N = recogNeeds(s, on), tick = L => L.map(x => ({ ok: x[0], text: x[1] }));
+      return { on, name: crown ? 'The crown of Alderwyn' : 'Lordship of ' + REGIONS[on], holder: hid === 'player' ? 'You' : hid && s.people[hid] ? s.people[hid].name : 'Nobody', mine: hid === 'player', claims: C, str: C.reduce((t, c) => t + c.str, 0), need: crown ? 4 : 3, recog: W.recog[on] != null, houses: tick(N.houses), arms: tick(N.arms), wait: W.pressed[on] > s.day - 40 ? W.pressed[on] + 40 : null }; });
+    return { score: sc, word: powerWord(sc), arms: armsOf(s), armsWord: armsWord(armsOf(s)), ruler: isRuler(s), canName: canName(s), canLaw: canLaw(s), canBank: canBank(s), here, hereName: townName(here), favour: Math.round(R.favour),
+      posts, seats, houses, dueTowns, lic, licWait: W.licDay[here] > s.day ? W.licDay[here] : null, prisoners,
+      agents: W.agents.map(a => ({ t: a.t, name: townName(a.t), since: a.since })), agentCap: spyHelp(s) ? 5 : 3, agentFree: spyHelp(s), agentHere: W.agents.some(a => a.t === here), known,
+      mine: W.mine.map(m => ({ id: m.id, text: m.text, day: m.day, held: m.held && s.people[m.held] ? s.people[m.held].name : null })),
+      demand: D && dm ? { who: dp ? dp.name : '?', pid: D.pid, coin: D.coin, until: D.until, text: dm.text, lev: !!(dp && levOn(s, dp.id)), levHere: !!(dp && levOn(s, dp.id) && levOn(s, dp.id).t === here) } : null,
+      claims, gaol: W.gaol, convicted: W.convicted, log: W.log.slice(0, 12),
+      charterTowns: canBank(s) ? Object.keys(BANK_SITE).filter(t => BANK_SITE[t] && inAlderwyn(t) && t !== 'hearthmoor' && !bankIn(s, t)).map(t => ({ t, name: townName(t) })) : [], breakTowns: canBank(s) && s.bank ? Object.keys(s.bank.banks).filter(t => inAlderwyn(t) && !(s.bank.mine && s.bank.mine.town === t)).map(t => ({ t, name: BANK_NAME[t] })) : [],
+      nameable: canName(s) ? notablesFor(s, here) : [] };
+  }
+  function notablesFor(s, t) { const X = s.ppl; return Object.keys(X.key).map(id => s.people[id]).filter(p => p && p.status === 'here' && X.key[p.id].t === t && !p.post && !p.held && !p.kid && p.age >= 18 && p.id !== s.realm.king && !isRival(s, p)).slice(0, 8).map(p => ({ pid: p.id, name: p.name, feel: p.opinion || 0 })); }
+
   const api = {
+    setupPow, powDay, powView, powCmd, POSTS, SEAT_NOTE, POST_NEED, DUES, armsOf, armsWord, powerScore, powerWord, claimsOn, claimStr, loyalHouses, powHolds, yourPosts, rulesTown, levOn, postHolder,
     bankSite, BANK_SITE, atBank, bankIn, bankReady, BANK_CHARTER, BANK_STRONGROOM,
     setupBanks, bankDay, bankView, bankTerms, pledges, yourLoans, BANK_TOWNS, BANK_NAME, LEND_RATE, SAVE_RATE, LOAN_DAYS, LOAN_EVERY, crownOwes, bankPrice,
     shopDial, shopBase, DIAL, DIAL_NAME, renownOf, renownWord, LADDER, LADDER_GAIN, bizLevel, levelCost, renownTarget, renownDay, dealsDay, dealOffers, yourWorth, investPrice, buyBackPrice, WEALTH_STEPS, wealthTitle, moneyView, INVEST_SHARES,
