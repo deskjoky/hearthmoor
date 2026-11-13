@@ -3174,11 +3174,11 @@ function makeChar(opt) {
   const g = new THREE.Group(), m = new THREE.Group(); m.scale.setScalar(0.93); g.add(m);
   const G0 = opt.gear || {}, fem = !!opt.fem, skin = opt.skin || SKIN[0], robeRank = ['elder', 'c_law'].includes(opt.rank);
   const armor = G0.armor, plate = armor === 'halfplate' || armor === 'fullplate', col = armor ? ARMOR_COL[armor] || '#8a8f96' : robeRank ? (opt.rank === 'elder' ? '#3f5a3a' : '#1c1a1e') : opt.tunic || TUNIC[0];
-  const sleeve = armor === 'chain' || plate ? col : shade(col, 0.86), legCol = armor === 'fullplate' ? '#cfd3d8' : armor === 'chain' ? '#7d828a' : fem ? shade(col, 0.7) : '#4a3f33', boot = plate ? '#8a8f96' : '#2a1f16';
+  const sleeve = armor === 'chain' || plate ? col : shade(col, 0.86), legCol = armor === 'fullplate' ? '#cfd3d8' : armor === 'chain' ? '#7d828a' : fem ? shade(col, 0.7) : opt.legCol || '#4a3f33', boot = plate ? '#8a8f96' : opt.barefoot ? skin : '#2a1f16';
   const add = (geo, parent, x, y, z) => { const o = new THREE.Mesh(geo, vc); o.position.set(x || 0, y || 0, z || 0); parent.add(o); return o; }, grp = (parent, x, y, z) => { const o = new THREE.Group(); o.position.set(x || 0, y || 0, z || 0); parent.add(o); return o; };
   const hips = grp(m, 0, 0.7, 0), torso = grp(hips, 0, 0, 0), body = add(trunkGeo(fem, col, robeRank && !fem), torso);
   const headG = grp(torso, 0, 0.5, 0.004), head = add(headGeo(skin), headG);
-  const sw = fem ? 0.148 : 0.165, arm = side => { const sh = grp(torso, sw * side, 0.285, 0); add(limbGeo('upper', sleeve, ''), sh); const el = grp(sh, 0, -0.25, 0); add(limbGeo('fore', sleeve, skin), el); const hand = grp(el, 0, -0.235, 0); return { sh, el, hand }; };
+  const sw = fem ? 0.148 : 0.165, arm = side => { const sh = grp(torso, sw * side, 0.285, 0); add(limbGeo('upper', sleeve, ''), sh); const el = grp(sh, 0, -0.25, 0); add(limbGeo('fore', opt.rolled ? skin : sleeve, skin), el); const hand = grp(el, 0, -0.235, 0); return { sh, el, hand }; };
   const aL = arm(-1), aR = arm(1);
   const leg = side => { const hp = grp(hips, 0.075 * side, -0.03, 0); if (!fem && !robeRank) add(limbGeo('thigh', legCol, ''), hp); const kn = grp(hp, 0, -0.31, 0); add(limbGeo('shin', fem || robeRank ? boot : legCol, boot), kn); return { hp, kn }; };
   const lL = leg(-1), lR = leg(1);
@@ -3201,7 +3201,8 @@ function makeChar(opt) {
   g.userData = { fig: true, fem, body, head, headG, torso, hips, hl: aL.hand, hr: aR.hand, aL, aR, lL, lR, icon, pack, sel, blob: sh, pick: opt.pick, phase: Math.random() * 6, robe: fem || robeRank };
   if (opt.rank) dressRank(g, opt.rank, opt);
   if (opt.gear) dressGear(g, opt.gear);
-  g.scale.setScalar(opt.fem ? 1.02 : 1.1);
+  if (opt.wardrobe !== false) dressWardrobe(g, opt);
+  g.scale.setScalar((opt.fem ? 1.02 : 1.1) * (opt.height || 1)); if (opt.girth) m.scale.x *= opt.girth;
   hit.userData.owner = g; pickables.push(hit);
   scene.add(g); return g;
 }
@@ -3248,6 +3249,59 @@ function dressRank(g, rank, opt) {
     mesh(RG.jewel, '#b0203a', 0, 0.09, 0.104, H).scale.setScalar(0.6);
   }
 }
+/* ================= Stage X: the wardrobe =================
+   What a person wears says who they are: their age (children with big heads, the old stooped on a stick), their means
+   (patches and bare feet, plain cloth, trimmed hems and gilt), their trade (the tools at the belt), the season (a scarf and
+   cloak in winter, rolled sleeves in summer). The rich detail is merged into a mesh or two and only drawn near the camera,
+   so a crowd stays cheap. */
+const NEAR_D2 = 30 * 30;
+function dressWardrobe(g, opt) {
+  const u = g.userData, T = u.torso, P = u.hips, H = u.headG, fem = !!opt.fem, col = opt.tunic || TUNIC[0];
+  const wealth = opt.wealth || 'mid', trade = opt.trade || '', season = opt.season || 'spring', age = opt.age;
+  const GOLD = '#d9aa3a', WOOD = '#6b4a2a', IRON = '#8a8f96';
+  const trim = wealth === 'rich' ? GOLD : wealth === 'poor' ? shade(col, 0.72) : shade(col, 1.35);
+  if (age === 'child') { H.scale.setScalar(1.3); u.kid = true; }
+  if (age === 'old') { u.stoop = 0.17; const st = mesh(FIG.bit, WOOD, 0.02, 0.33, 0.03, u.hr); st.scale.set(0.024, 0.8, 0.024); u.staff = true; }
+  const tp = [], hp = [], B = (arr, c, x, y, z, sx, sy, sz, rx, rz) => arr.push({ geo: FIG.bit, color: c, m: MX(x, y, z, rx || 0, 0, rz || 0, sx, sy, sz) });
+  const stud = (arr, c, x, y, z) => arr.push({ geo: FIG.eye, color: c, m: MX(x, y, z, 0, 0, 0, 1.15) });
+  if (age !== 'child') for (let i = 0; i < 3; i++) stud(tp, shade(col, 0.5), 0, 0.07 + i * 0.075, 0.1);
+  B(tp, trim, 0, 0.342, 0.0, 0.125, 0.02, 0.1);                                           // a collar band
+  B(tp, wealth === 'rich' ? GOLD : '#c9a24a', 0, 0.0, 0.0905, 0.04, 0.032, 0.012);          // a buckle
+  if (wealth === 'poor') { B(tp, shade(col, 1.45), -0.07, 0.13, 0.099, 0.05, 0.05, 0.008); B(hp, shade(col, 0.6), 0.1, -0.12, 0.082, 0.05, 0.06, 0.008); B(tp, shade(col, 0.6), 0.09, 0.22, 0.097, 0.04, 0.04, 0.008); }
+  if (wealth === 'rich') { B(tp, GOLD, 0, 0.21, 0.101, 0.2, 0.02, 0.01); B(tp, GOLD, 0, 0.145, 0.1, 0.17, 0.012, 0.01); }
+  const hemY = fem || u.robe ? -0.6 : -0.205, hemR = fem || u.robe ? 0.27 : 0.17, hemZ = fem || u.robe ? 0.84 : 0.72;   // a trim round the hem
+  if (wealth !== 'poor') hp.push({ geo: lathe([[hemR, hemY], [hemR + 0.004, hemY], [hemR + 0.004, hemY + 0.03], [hemR, hemY + 0.03]], 14, 1, hemZ), color: wealth === 'rich' ? GOLD : trim });
+  const tool = (h, hd, hc) => { B(hp, WOOD, -0.13, -0.15, 0.02, 0.022, h, 0.022, 0.3, 0.1); B(hp, hc || IRON, -0.15, -0.15 - h / 2, -0.01, hd[0], hd[1], hd[2], 0.3, 0.1); };
+  if (trade === 'smithy') tool(0.34, [0.09, 0.05, 0.05]);
+  else if (trade === 'joinery') { B(hp, IRON, -0.13, -0.12, 0.02, 0.012, 0.24, 0.07, 0.25, 0.1); B(hp, WOOD, -0.13, 0.04, 0.04, 0.03, 0.06, 0.04); }
+  else if (trade === 'tavern') B(tp, '#f3efe4', 0.14, 0.27, 0.0, 0.05, 0.22, 0.12, 0, -0.15);
+  else if (trade === 'bakery') B(hp, '#d8c69a', 0.12, -0.04, 0.08, 0.022, 0.24, 0.022, 0, 0.5);
+  else if (trade === 'pit') tool(0.5, [0.2, 0.025, 0.025], '#5a5e66');
+  else if (trade === 'forest') tool(0.42, [0.07, 0.1, 0.02], '#9aa0a6');
+  else if (trade === 'market') { B(hp, WOOD, -0.1, -0.06, 0.1, 0.07, 0.08, 0.05); B(hp, WOOD, 0.1, -0.06, 0.1, 0.07, 0.08, 0.05); B(hp, GOLD, -0.1, -0.02, 0.127, 0.02, 0.02, 0.006); }
+  else if (trade === 'office') B(hp, '#efe6d2', 0.1, -0.05, 0.09, 0.03, 0.14, 0.03, 0.1);
+  if (opt.vest && age !== 'child') { const v = mesh(fem ? FIG.torsoF : FIG.torso, opt.vest, 0, 0.004, 0.004, T); v.scale.set(1.045, 1, 1.07); }
+  if (opt.kerchief) { const k = mesh(FIG.capHat, opt.kerchief, 0, 0.012, -0.004, H); k.scale.setScalar(1.06); mesh(FIG.bit, opt.kerchief, 0, -0.06, -0.09, H).scale.set(0.16, 0.12, 0.03); }
+  if (opt.shawl) { const f = mesh(RG.collar, opt.shawl, 0, 0.325, 0, T); f.rotation.x = Math.PI / 2; f.scale.set(0.56, 0.45, 0.5); f.position.y = 0.31; }
+  if (opt.satchel) { const sb = mesh(FIG.bit, '#7a5a34', 0.14, -0.1, 0.0, P); sb.scale.set(0.06, 0.15, 0.13); const sr = mesh(FIG.bit, '#5a4026', 0.0, 0.2, 0.0, T); sr.scale.set(0.012, 0.52, 0.02); sr.rotation.z = -0.45; sr.position.set(0.02, 0.17, 0.1); }
+  if (opt.basket) { const bk = mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.09, 8), '#a8844a', 0.17, -0.12, 0.05, P); const hd = mesh(new THREE.TorusGeometry(0.06, 0.007, 4, 8, Math.PI), '#8a6a3a', 0.17, -0.08, 0.05, P); }
+  u.near = [];
+  if (tp.length) { const m = new THREE.Mesh(figGeo('wt' + col + trim + wealth + age + trade + fem, () => mergeSm(tp)), vc); T.add(m); u.near.push(m); }
+  if (hp.length) { const m = new THREE.Mesh(figGeo('wh' + col + trim + wealth + trade + (fem || u.robe) + (opt.chef ? 1 : 0), () => mergeSm(hp)), vc); P.add(m); u.near.push(m); }
+  for (const a of [u.aL, u.aR]) { const m = new THREE.Mesh(figGeo('cuff' + trim, () => mergeSm([{ geo: new THREE.CylinderGeometry(0.044, 0.044, 0.026, 8), color: trim, m: MX(0, -0.185, 0) }])), vc); a.el.add(m); u.near.push(m); }
+  // the season: a scarf and a cloak against the cold, a bare forearm in the heat
+  if (season === 'winter' && age !== 'child') {
+    const sc = wealth === 'rich' ? '#7a2230' : wealth === 'poor' ? '#6b6a5a' : ['#a8453a', '#3a5f7a', '#6f8a3e'][(col.length + col.charCodeAt(2)) % 3];
+    const o = mesh(figGeo('scarf', () => new THREE.CylinderGeometry(0.066, 0.075, 0.055, 9)), sc, 0, 0.372, 0, T); o.scale.set(1, 1, 0.9); const tail = mesh(FIG.bit, sc, 0.04, 0.3, 0.1, T); tail.scale.set(0.035, 0.12, 0.012);
+    if (!u.cloak && wealth !== 'poor') { u.cloak = mesh(FIG.cloak, wealth === 'rich' ? '#4a2030' : shade(col, 0.55), 0, 0.3, -0.02, T); if (wealth === 'rich') { const f = mesh(RG.collar, '#e8e2d4', 0, 0.335, 0, T); f.rotation.x = Math.PI / 2; f.scale.set(0.74, 0.6, 0.6); } }
+  }
+  if (season === 'winter' && age === 'child') { const o = mesh(figGeo('scarf', () => new THREE.CylinderGeometry(0.066, 0.075, 0.055, 9)), '#c25a3a', 0, 0.372, 0, T); o.scale.set(1, 1, 0.9); }
+}
+function nearDetail(g) {   // the fine work on a body is only drawn when the camera is close
+  const u = g.userData; if (!u.near) return;
+  const on = GFX.quality > 0 && g.position.distanceToSquared(camera.position) < NEAR_D2;
+  if (u.nearOn !== on) { u.nearOn = on; for (const m of u.near) m.visible = on; }
+}
 /* how a body moves: a walk with swinging arms and bending knees, work at the bench, and the small motions of standing */
 function animChar(g, t, opts) {
   const u = g.userData; if (!u.fig) return;
@@ -3267,6 +3321,7 @@ function animChar(g, t, opts) {
     ash = 0.03 + b * 0.02; bsh = 0.03 - b * 0.02; ael = -0.14; bel = -0.14; tz = Math.sin(t * 0.45 + u.phase) * 0.025; headY = Math.sin(t * 0.37 + u.phase * 2) * 0.32; headX = Math.sin(t * 0.23 + u.phase) * 0.05; u.torso.scale.y = 1 + b * 0.008;
   }
   if (opts.pack && !opts.riding) lean += 0.1;
+  if (u.stoop && !opts.working) lean += u.stoop;
   u.hips.position.y += (hipY - u.hips.position.y) * 0.4; u.hips.rotation.z = tz;
   lerpTo(u.torso.rotation, 'x', lean); u.torso.rotation.y = twist; u.headG.rotation.y += (headY - u.headG.rotation.y) * 0.08; u.headG.rotation.x += (headX - lean * 0.6 - u.headG.rotation.x) * 0.15;
   lerpTo(L.hp.rotation, 'x', lh, 0.5); lerpTo(R.hp.rotation, 'x', rh, 0.5); lerpTo(L.kn.rotation, 'x', lk, 0.5); lerpTo(R.kn.rotation, 'x', rk, 0.5);
@@ -3301,7 +3356,7 @@ function placeChar(g, a, t, opts) {
   if (opts.icon) { u.icon.material = ICON[opts.icon]; u.icon.position.y = 1.6 + (calm() ? 0 : Math.sin(t * 4) * 0.06); u.icon.rotation.y = calm() ? 0 : t * 2; }
   u.pack.visible = !!opts.pack; if (opts.pack) u.pack.scale.setScalar(opts.pack); if (u.blob) u.blob.visible = GFX.quality === 0;
   u.sel.visible = !!opts.selected;
-  g.visible = !opts.hidden;
+  g.visible = !opts.hidden; if (u.near && g.visible) nearDetail(g);
 }
 // your horse: a bay mare, saddled, legs stepping as she goes
 function makeHorse() {
@@ -3418,6 +3473,28 @@ function lookOf(s, a) {
   { const p = a.pid && s.people[a.pid]; if (p && pl.fem && !p.kid && !(L.tunic && L.tunic !== undefined && L.key === 'rags') && L.key !== 'tax') {
     const n = (a.palette || 0) + (parseInt(String(p.id).slice(1), 10) || 0), old = p.age > 44;
     L.tunic = old ? ['#3a2e3e', '#2f3a34', '#4a3328', '#2b3346', '#3d3a30', '#45302f'][n % 6] : ['#c4473a', '#d9a03a', '#3f8fb8', '#8fbf4a', '#c26a9a', '#e07a3a', '#5aa89a', '#b8c24a'][n % 8]; L.key += old ? 'wo' : 'wy'; } }
+  { const p = a.pid && s.people[a.pid], j = p && p.job, se = Sim.seasonOf(s);
+    if (p) { L.age = p.kid ? 'child' : p.age >= 58 ? 'old' : undefined; L.wealth = p.noble || p.royal || p.purse > 400 ? 'rich' : (!p.home || p.purse < 12) ? 'poor' : 'mid';
+      L.trade = j ? (j.type === 'biz' ? (Sim.empById(j.biz) || {}).trade : j.type === 'commons' ? j.what : j.type === 'office' ? 'office' : '') : '';
+      if (L.trade === 'mill') L.trade = 'bakery'; if (L.wealth === 'poor' && !p.kid) L.barefoot = (parseInt(String(p.id).slice(1), 10) || 0) % 3 === 0;
+      L.rolled = se === 'summer' && !!j && (j.type === 'biz' || j.type === 'commons') && L.trade !== 'office'; L.season = se;
+      if (L.wealth === 'poor' && !L.gear) L.tunic = shade(L.tunic || TUNIC[(a.palette || 0) % TUNIC.length], 0.8);
+      L.key += (L.age || '') + L.wealth + (L.trade || '') + (L.barefoot ? 'b' : '') + (L.rolled ? 'r' : '') + se; } }
+  { const p = a.pid && s.people[a.pid], j = p && p.job; const plain = p && !p.kid && !L.gear && !L.chef && L.key !== 'tax' && L.key !== 'guard' && L.key !== 'elder' && !(j && j.type === 'office');
+    if (p) { const n = parseInt(String(p.id).slice(1), 10) || p.name.length, hh = (n * 2246822519) >>> 0, r1 = (hh & 255) / 255, r2 = ((hh >> 8) & 255) / 255, r3 = ((hh >> 16) & 255) / 255, r4 = ((hh >> 24) & 255) / 255;
+      const kid = p.kid, fem = pl.fem;
+      L.height = kid ? undefined : fem ? 0.93 + r1 * 0.14 : 0.92 + r1 * 0.16; L.girth = kid ? undefined : 0.9 + r2 * 0.26;
+      if (plain) {
+        const SHIRT = ['#8a5a3a', '#5f7a3e', '#a0523a', '#4e6a82', '#7b5f8a', '#a89a5a', '#6a4a36', '#8a8a72', '#3f5a52', '#b07a4a', '#76384a', '#5a5a8a', '#9a7a3a', '#4a6a4a', '#8a4a4a'], VEST = ['#3a2e24', '#6b3a22', '#2f4a3a', '#4a3a5a', '#5a4a2a', '#2a3a4a', '#7a5a2a'], LEG = ['#4a3f33', '#3a4a3a', '#5a4a38', '#2f3a4a', '#6a5a46', '#3b3b3b', '#58402a'], KERCH = ['#e8e0c8', '#c9a24a', '#a8453a', '#4a6f9a', '#7a9a5a'];
+        if (!fem && (L.tunic === undefined || L.key.startsWith('b') || L.key.startsWith('c')) && r3 < 0.95) L.tunic = SHIRT[(hh >> 4) % SHIRT.length];
+        if (!fem) { L.legCol = LEG[(hh >> 11) % LEG.length]; if (r2 > 0.4 && r3 < 0.85) L.vest = VEST[(hh >> 6) % VEST.length]; if (r4 > 0.8) L.satchel = true; }
+        else { if (!L.hat) { if (r2 > 0.45) L.kerchief = KERCH[(hh >> 7) % KERCH.length]; } if (r3 > 0.4) L.shawl = KERCH[(hh >> 9) % KERCH.length]; if (r4 > 0.8) L.basket = true; const D = ['#c4473a', '#d9a03a', '#3f8fb8', '#8fbf4a', '#c26a9a', '#e07a3a', '#5aa89a', '#b8c24a', '#8a4a7a', '#6a8aa8', '#a8583a', '#4a7a4a', '#d8b07a', '#7a5a9a', '#c28a8a', '#3a6a5a'], O = ['#3a2e3e', '#2f3a34', '#4a3328', '#2b3346', '#3d3a30', '#45302f', '#5a4a3a', '#3a4a4a']; if (p.age <= 44 && !L.gear) L.tunic = D[(hh >> 12) % D.length]; else if (p.age > 44 && !L.gear) L.tunic = O[(hh >> 12) % O.length]; }
+        if (!L.hat && !fem && !L.kerchief) { const hv = (hh >> 13) % 9; if (hv === 0) { L.hat = 'cap'; L.capColor = ['#5b4936', '#6a3a2a', '#3a4a5a', '#7a6a3a'][(hh >> 3) % 4]; } else if (hv === 1) { L.hat = 'hood'; L.capColor = ['#5b4936', '#4a4a3a', '#6b3a2a'][(hh >> 5) % 3]; } else if (hv === 2) { L.hat = 'straw'; } }
+        if (!fem && !L.hat && !L.hair) {}
+        if (L.hat) L.hair = null;
+        L.key += 'v' + (L.tunic || '') + (L.legCol || '') + (L.vest || '') + (L.kerchief || '') + (L.shawl || '') + (L.hat || '') + (L.capColor || '') + (L.satchel ? 's' : '') + (L.basket ? 'k' : '');
+      }
+      L.key += 'h' + Math.round((L.height || 1) * 100) + 'g' + Math.round((L.girth || 1) * 100); } }
   for (const k in L) if (L[k] === undefined) delete L[k];
   return Object.assign(L, { key: L.key + pl.key, fem: pl.fem, hair: L.hat ? null : pl.hair, hairColor: pl.hairColor });
 }
