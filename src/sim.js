@@ -7320,10 +7320,17 @@
     merchant: { name: 'A merchant', say: 'You know the baker\u2019s trade and own a Bread Stand in Hearthmoor, with 150 coins put by.' },
     elder: { name: 'The Elder', say: 'You are Elder of Hearthmoor, with a bakery, the council behind you and 400 coins.' },
     lord: { name: 'A lord', say: 'You are lord of Greenhaven, living at its hall, with a bakery in Hearthmoor and 1,200 coins.' },
+    dockhand: { name: 'A dock hand at Eastwatch', say: 'Start on the Eastwatch quay with 30 coins and a leaky old skiff. Ships are there to be earned if you want them; nothing here is required.' },
     ruler: { name: 'The ruler', say: 'Old King Aldwin has given you the crown. You rule Alderwyn from Crownmere castle, with 2,000 coins of your own.' }
   };
   function applyStart(s, mode) {
     if (!STARTS[mode] || mode === 'normal') return;
+    if (mode === 'dockhand') {   // optional: begin at a port with a small boat. Buying ships works the same in every start
+      s.start = mode; s.coins = 30; travelTo(s, 'eastwatch', 'walk');
+      const N = ensureShipId(s, { name: 'the Dock Rat', cls: 'skiff', cost: 300, port: 'eastwatch', hold: {}, cap: SHIP_CLASSES.skiff.hold, since: s.day, prov: 10 });
+      s.ship = N; shipLog(s, N, 'Left to you, patched and leaking, at the Eastwatch quay.');
+      event(s, STARTS[mode].say, 'story'); if (s.stats) s.stats.coinsStart = s.coins; return;
+    }
     const v = s.village, Y = you(s), R = s.realm;
     s.tradeXp = s.tradeXp || {}; s.tradeXp.bakery = Math.max(s.tradeXp.bakery || 0, WORK_LEVELS[1]);
     s.coins = 200; cmd(s, 'open', 1, 'bakery');
