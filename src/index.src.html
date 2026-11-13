@@ -3697,6 +3697,29 @@ const MY_SHIP = (function () {
 })();
 const MY_BERTH = { eastwatch: [1190, -300, 0], stormrest: [Sim.ISLE.x - 46, Sim.ISLE.z - 8, 0.3], dawnport: [1880, -308, Math.PI] };
 function syncMyShip(s) { const port = s && s.ship ? s.ship.port : null; if (port === MY_SHIP.at) return; MY_SHIP.at = port; MY_SHIP.me.visible = !!port; if (port) { const b = MY_BERTH[port]; MY_SHIP.me.position.set(b[0], 0, b[1]); MY_SHIP.me.rotation.y = b[2]; } }
+/* Weather you can see: spring and autumn rain, a rare summer storm, a morning mist now and then. It is drawn from the date, so it never touches the sim or a save,
+   and it changes the light, the haze and the sky as well as showing falling rain. */
+const WX = { rain: 0, mist: 0, now: 0 };
+let rainFx = null;
+function weatherFor(s, h) {
+  if (!s || UI.mode === 'title') return { rain: 0, mist: 0 };
+  const se = Sim.seasonOf(s), d = s.day | 0, r = ((d * 2654435761 >>> 0) % 1000) / 1000, r2 = (((d + 91) * 2246822519 >>> 0) % 1000) / 1000;
+  let rain = 0; if ((se === 'spring' || se === 'autumn') && r < 0.26) rain = r < 0.07 ? 1 : 0.6; else if (se === 'summer' && r < 0.07) rain = 1;
+  if (rain) { const from = 6 + r2 * 8, len = 5 + r2 * 9; rain *= Math.max(0, Math.min(1, (h - from + 1) / 1.5, (from + len - h + 1) / 1.5)); }
+  const mist = se !== 'winter' && r2 > 0.82 ? Math.max(0, 1 - Math.max(0, h - 7) / 3) * (h < 11 ? 1 : 0) : 0;
+  return { rain, mist };
+}
+function stepRain(dt, s) {
+  if (!rainFx) {
+    const n = 2200, a = new Float32Array(n * 6); for (let i = 0; i < n; i++) { const x = (Math.random() - 0.5) * 70, y = Math.random() * 30, z = (Math.random() - 0.5) * 70; a.set([x, y, z, x - 0.07, y + 0.9, z - 0.03], i * 6); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3));
+    rainFx = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xb8c8d8, transparent: true, opacity: 0.45, depthWrite: false })); rainFx.frustumCulled = false; scene.add(rainFx);
+  }
+  const on = WX.rain > 0.02 && !(snow && snow.visible); rainFx.visible = on; if (!on) return;
+  rainFx.material.opacity = 0.3 + 0.4 * WX.rain; const arr = rainFx.geometry.attributes.position.array, fall = dt * (18 + 10 * WX.rain);
+  for (let i = 0; i < arr.length; i += 6) { arr[i + 1] -= fall; arr[i + 4] -= fall; if (arr[i + 1] < 0) { arr[i + 1] += 30; arr[i + 4] += 30; } }
+  rainFx.geometry.attributes.position.needsUpdate = true; rainFx.position.set(focus.x, 0, focus.z);
+}
 function stepSnow(dt) {
   if (!snow || !snow.visible) return;
   const a = snow.geometry.attributes.position, arr = a.array;
@@ -3717,11 +3740,13 @@ function syncLight(h) {
   GFX.skyHor.value.copy(tmpC).lerp(holC.set('#cfe0ee'), k * 0.35); GFX.skyTop.value.set('#060a16').lerp(holC.set('#3f78c4'), k).lerp(holC.set('#3a4a80'), Math.min(0.5, dusk * 0.5)); if (HL) GFX.skyTop.value.lerp(holC.set(HL.tint), HL.amt * 0.6);
   GFX.night.value = 1 - k; GFX.sunCol.value.copy(sun.color).multiplyScalar(0.25 + 0.75 * k); skyMat.uniforms.uCloud.value = HOL.season === 'winter' ? 0.72 : 0.46;
   windowMat.emissiveIntensity = Math.max(0, 1 - k * 1.4) * 1.1 * (HL && HL.glow ? HL.glow : 1);
+  hemi.intensity *= 1 - WX.rain * 0.18; sun.intensity *= 1 - WX.rain * 0.55;
   scene.fog.near = 55 - (1 - k) * 22; scene.fog.far = 200 - (1 - k) * 70; if (HL && HL.fog) { scene.fog.near *= HL.fog; scene.fog.far *= HL.fog + 0.2; }
   // the chosen look has the last word on light, haze and sky
   { const LK = ART_LOOKS[GFX.lookId] || ART_LOOKS.classic, dayK = 0.3 + 0.7 * k;
     hemi.intensity *= LK.hemi; sun.intensity *= LK.sun; if (LK.sunTint) sun.color.multiply(holC.set(LK.sunTint));
     scene.fog.near *= LK.fog; scene.fog.far *= LK.fog;
+    { const w = Math.max(WX.rain * 0.45, WX.mist * 0.95); if (w > 0) { scene.fog.near *= 1 - w * 0.8; scene.fog.far *= 1 - w * 0.7; holC.set('#aab4b8'); scene.fog.color.lerp(holC, w * 0.55 * (0.4 + 0.6 * k)); renderer.setClearColor(scene.fog.color); GFX.skyHor.value.lerp(holC, w * 0.6); GFX.skyTop.value.lerp(holC.set('#6c7780'), WX.rain * 0.5 * k); } }
     if (LK.haze) { holC.set(LK.haze); scene.fog.color.lerp(holC, LK.hazeAmt * dayK); renderer.setClearColor(scene.fog.color); GFX.skyHor.value.lerp(holC, LK.hazeAmt * dayK); }
     if (LK.top) GFX.skyTop.value.lerp(holC.set(LK.top), LK.topAmt * k);
     if (LK.cloud != null && HOL.season !== 'winter') skyMat.uniforms.uCloud.value = LK.cloud;
@@ -8301,6 +8326,7 @@ function frameBody(now) {
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t); if (!UI.inside) syncWild(G, t, dt); if (!FIGHT.on) stepShots(dt);
   syncMyShip(G && UI.mode !== 'title' ? G : null); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); syncHeraldry(G); }
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
+  { const w = weatherFor(G, UI.mode === 'title' ? 18 : Sim.hourOf(G)); WX.rain += (w.rain - WX.rain) * Math.min(1, dt * 0.6); WX.mist += (w.mist - WX.mist) * Math.min(1, dt * 0.6); stepRain(dt, G); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   syncCamera(G, dt, t);
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist * 1.6 + 60; scene.fog.far = mapCam.dist * 3.2 + 280; lmChrome(); updatePins(); }
@@ -8611,6 +8637,7 @@ const NOTES = [
     'Towns: houses have flower tubs, benches, barrels, woodpiles and lanterns. Festival bunting hangs on a real rope and the festival trees are decorated.',
     'New game: the creator now shows your real figure, and adds build, height and more skin, hair and clothing colours. Old saves keep working.',
     'People talk in pairs, children skip and the old shuffle.'
+    ,'Weather: rainy days in spring and autumn, rare summer storms and morning mist. The light dims and the haze closes in. Winter keeps its snow.'
   ] },
   { v: '0.92', date: '12 November', title: 'Power and intrigue', items: [
     'A new Court page under Power, with four parts: Posts, Houses, Secrets and Claims. It shows your power as a word and a bar.',
