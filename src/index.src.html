@@ -1277,14 +1277,16 @@ const smooth01 = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 // the open country: long gentle swells, rising into highlands toward the northern mountains
 function worldH(x, z) {
   let h = 3.4 * Math.sin(x * 0.0082 + 0.6) * Math.cos(z * 0.0071) + 2 * Math.sin((x - z) * 0.013) + 0.7 * Math.sin(x * 0.041) * Math.cos(z * 0.037);
-  h += Math.pow(Math.max(0, (-z - 1050) / 40), 1.7);
+  { let m = Math.pow(Math.max(0, (-z - 1050) / 40), 1.7); m = m < 30 ? m : 30 + 50 * Math.tanh((m - 30) / 50);
+    if (m > 20) { const ridge = 0.5 + 0.32 * Math.sin(x * 0.0105 + 0.8) * Math.cos(z * 0.0131) + 0.18 * Math.abs(Math.sin((x + z * 0.6) * 0.021)); m = 20 + (m - 20) * (0.35 + 1.1 * ridge); }   // ridges and valleys, so the snow lies on the peaks
+    h += m; }
   return h;
 }
 // Valdoria's land before towns level it: low by the coast, rising into hills inland
 function valLand(x, z, sy) {
   let land = sy + 2.4 + 0.35 * Math.sin(x * 0.05) * Math.cos(z * 0.04) + 0.3 * Math.sin((x + z) * 0.09);
-  land += smooth01((x - 2120) / 260) * 9 * (0.6 + 0.4 * Math.sin(z / 140));            // the hills of Valdoria rising inland
-  land += 3.2 * Math.exp(-((x - 2084) ** 2 + (z + 300) ** 2) / 700);                  // the rise under the Consul's palace
+  land += smooth01((x - 8870) / 260) * 9 * (0.6 + 0.4 * Math.sin(z / 140));            // the hills of Valdoria rising inland
+  land += 3.2 * Math.exp(-((x - 8834) ** 2 + (z + 300) ** 2) / 700);                  // the rise under the Consul's palace
   return land;
 }
 function groundH(x, z) {
@@ -1307,18 +1309,19 @@ function groundH(x, z) {
     h += 1.6 * Math.exp(-((x + 318) ** 2 + (z + 850) ** 2) / 500);                  // the rise under Ashcombe Hall
     const dg = segDist(x, z, GREEN); if (dg < 8) h -= (1 - dg / 8) * 2.4;            // the river Green
   }
-  if (x > 1060) { const sx = 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31), inTown = Math.abs(z - -300) < 135 && x < 1137, edge = inTown ? 1137 : sx; if (x > edge - 10) { const sy = worldH(1060, -300) - 1.3; h = Math.min(h, h * (1 - smooth01((x - edge + 10) / 14)) + (sy - 3.5) * smooth01((x - edge + 10) / 14)); } }
+  if (x > 860 && x < 1400) { const sy0 = worldH(1060, -300) - 1.3, c0 = Sim.ALD_COAST(z) - 14; if (x < c0 && h < sy0 + 0.45) h = sy0 + 0.45 + (h - sy0 - 0.45) * 0.15 * Math.max(0, (x - 860) / (c0 - 860) - 1); }
+  if (x > 980) { const sx = Sim.ALD_COAST(z), inTown = Math.abs(z - -300) < 135 && x < 1137, edge = inTown ? 1137 : sx; if (x > edge - 10) { const sy = worldH(1060, -300) - 1.3; h = Math.min(h, h * (1 - smooth01((x - edge + 10) / 14)) + (sy - 3.5) * smooth01((x - edge + 10) / 14)); } }
   // across the Sundering Sea: Stormrest Isle halfway, and the low sandstone coast of Valdoria beyond
   if (x > 1300) {
     const sy = worldH(1060, -300) - 1.3, floor = sy - 3.5;
     const di = Math.hypot(x - Sim.ISLE.x, (z - Sim.ISLE.z) * 1.3);
     if (di < 70) { const isle = sy + 1.8 + 3.2 * smooth01((40 - di) / 30) + 0.4 * Math.sin(x * 0.2) * Math.cos(z * 0.17); h = Math.max(h, floor * (1 - smooth01((70 - di) / 26)) + isle * smooth01((70 - di) / 26)); }
     const vs = Sim.VSHORE(z), inPort = Math.abs(z + 300) < 96;
-    const edgeV = inPort ? 1909 : vs;
+    const edgeV = inPort ? 8659 : vs;
     if (x > edgeV - 16) {
       const dD = Math.hypot(x - Sim.DP.C.x, z - Sim.DP.C.z);
       let land = valLand(x, z, sy);
-      if (dD < 150) { const f = smooth01((dD - 100) / 50); land = land * f + (sy + 2.4 + (x > 2070 ? 3.2 * Math.exp(-((x - 2084) ** 2 + (z + 300) ** 2) / 700) : 0)) * (1 - f); }
+      if (dD < 150) { const f = smooth01((dD - 100) / 50); land = land * f + (sy + 2.4 + (x > 8820 ? 3.2 * Math.exp(-((x - 8834) ** 2 + (z + 300) ** 2) / 700) : 0)) * (1 - f); }
       // Valdoria's inland towns sit on level ground, as Alderwyn's do
       for (const id of ['goldmeadow', 'thornwick', 'stonewatch', 'valdor']) { const T = TOWNS[id], d = Math.hypot(x - T.x, z - T.z) / T.r; if (d < 1.9) { const base = valLand(T.x, T.z, sy), f = smooth01((d - 1.1) / 0.8); land = land * f + base * (1 - f); } }
       const k = smooth01((x - edgeV + 16) / 14); h = floor * (1 - k) + land * k;
@@ -1423,7 +1426,7 @@ function wildClear(x, z) {
   if (inVillage(x, z)) return false;
   if (segDist(x, z, ROAD_E) < 7 || segDist(x, z, STREAM) < 4.5 || segDist(x, z, ROAD_N) < 6 || segDist(x, z, Sim.ROADS.crown) < 6 || segDist(x, z, Sim.ROADS.westcm) < 6) return false;
   if (((x - Sim.LAKE.x) / (Sim.LAKE.rx + 12)) ** 2 + ((z - Sim.LAKE.z) / (Sim.LAKE.rz + 12)) ** 2 < 1) return false;
-  if (segDist(x, z, Sim.ROADS.iron) < 6 || segDist(x, z, Sim.ROADS.coast) < 6 || x > 1120 + 16 * Math.sin(z / 95)) return false;
+  if (segDist(x, z, Sim.ROADS.iron) < 6 || segDist(x, z, Sim.ROADS.coast) < 6 || x > Sim.ALD_COAST(z) - 20) return false;
   if (x < -100 && z < -300 && segDist(x, z, GREEN) < 10) return false;
   if (Math.abs(x - 470) < 300 && z > -1600 && z < 400 && segDist(x, z, RIVER) < 14) return false;
   for (const id in TOWNS) { const T = TOWNS[id]; if (Math.hypot(x - T.x, z - T.z) < T.r * 1.9) return false; }
@@ -1450,9 +1453,9 @@ function buildTile(i, j) {
     if (Math.abs(x - 470) < 300) wet = Math.min(wet, segDist(x, z, RIVER) - 6);
     if (x < -100 && z < -300) wet = Math.min(wet, segDist(x, z, GREEN) - 3);
     if (wet < 4.5) C_TMP.lerp(C_BANK, 0.55);
-    if (x > 1880) C_TMP.lerp(C_DRY, 0.45);   // Valdoria's sun-dried grass
+    if (x > 8630) C_TMP.lerp(C_DRY, 0.45);   // Valdoria's sun-dried grass
     if (y > 12) C_TMP.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
-    if (y > 40) C_TMP.lerp(C_SNOW, Math.min(1, (y - 40) / 10));
+    { const sl = 50 + 9 * Math.sin(x * 0.021 + 0.4) * Math.cos(z * 0.017) + 5 * Math.sin((x - z) * 0.05); if (y > sl) C_TMP.lerp(C_SNOW, Math.min(0.92, (y - sl) / 12)); }   // snow on the heights, in drifts, not one white sheet
     for (let q = 0; q < 3; q++) { col[(k + q) * 3] = C_TMP.r; col[(k + q) * 3 + 1] = C_TMP.g; col[(k + q) * 3 + 2] = C_TMP.b; }
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -1675,6 +1678,7 @@ scene.add(rockInst);
     const x = -1900 + i * 58 + (rnd() - 0.5) * 30, z = -2050 - rnd() * 300 - Math.abs(x) * 0.12, h = 160 + rnd() * 220, w = 120 + rnd() * 90;
     parts.push({ geo: new THREE.ConeGeometry(w, h, 5), color: '#5b6066', m: M(x, h / 2 - 8, z, rnd() * 3) });
     parts.push({ geo: new THREE.ConeGeometry(w * 0.32, h * 0.32, 5), color: '#dfe3e2', m: M(x, h - 8 - h * 0.16 + 0.5, z, rnd() * 3) });
+    if (x + w > Sim.ALD_COAST(z) - 120) parts.length -= 2;   // the range ends where Alderwyn meets the sea
   }
   const m = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true, fog: false }));
   m.material.color = new THREE.Color('#c9d2d6'); scene.add(m); window.__mountains = m;
@@ -2681,7 +2685,9 @@ const CM_Y = worldH(TOWNS.crownmere.x, TOWNS.crownmere.z), CM_TREES = [];
 })();
 
 /* ----- Stage IV: the roads up to Ironcrest and east to Eastwatch, their bridges, and the sea ----- */
-const SHORE_X = z => 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31);
+const SHORE_X = z => Sim.ALD_COAST(z);
+// the open sea reaches well past the edges of the map, so the far horizon is always water or haze, never an edge
+const SEA_SPAN = { x0: 900, x1: 8900, z0: Sim.SEA.band.z0 - 2600, z1: Sim.SEA.band.z1 + 2600 };
 const IC_Y = worldH(TOWNS.ironcrest.x, TOWNS.ironcrest.z), EW_Y = worldH(TOWNS.eastwatch.x, TOWNS.eastwatch.z), SEA_Y = EW_Y - 1.3;
 const IC_TREES = [], EW_TREES = [];
 const ALDERWYN = ['#2f6b3a', '#efe9d8'];   // the realm's colours: green and white
@@ -2700,10 +2706,14 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
   }
   scene.add(new THREE.Mesh(mergeColored(parts), vc));
   // the sea, east of Eastwatch, out to the edge of the world
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(900, 2600), waterMat); sea.rotation.x = -Math.PI / 2; sea.position.set(1140 + 450, SEA_Y, -300); scene.add(sea);
+  // the sea runs from coast to coast, following each bay and headland, and on north and south past the edges of the map
+  { const pos = [], idx = [], west = z => (Math.abs(z + 300) < 135 ? 1137 : Sim.ALD_COAST(z)) - 9, east = z => (Math.abs(z + 300) < 96 ? 8659 : Sim.VSHORE(z)) + 14, cols = 24;
+    let r = 0; for (let z = SEA_SPAN.z0; z <= SEA_SPAN.z1; z += z > -700 && z < 100 ? 4 : 12, r++) { const a = west(z), b = east(z); for (let c = 0; c <= cols; c++) pos.push(a + (b - a) * c / cols, SEA_Y, z); }
+    for (let i = 0; i < r - 1; i++) for (let c = 0; c < cols; c++) { const k = i * (cols + 1) + c; idx.push(k, k + cols + 1, k + 1, k + 1, k + cols + 1, k + cols + 2); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    const sea = new THREE.Mesh(g, waterMat); sea.frustumCulled = false; scene.add(sea); }
   // a pebble strand along the shore
-  const strand = []; for (let z = -1400; z < 900; z += 6) strand.push([SHORE_X(z) - 2, z]);
-  scene.add(new THREE.Mesh(ribbon(strand, 7, (x, z) => Math.max(SEA_Y + 0.05, groundH(x, z) + 0.06), 2), mat('#bfb391')));
+  for (const [z0, z1] of [[Sim.SEA.band.z0, -440], [-160, Sim.SEA.band.z1]]) { const strand = []; for (let z = z0; z < z1; z += 6) strand.push([SHORE_X(z) - 2, z]); scene.add(new THREE.Mesh(ribbon(strand, 7, (x, z) => Math.max(SEA_Y + 0.05, groundH(x, z) + 0.06), 2), mat('#bfb391'))); }
   flushBuild();
 })();
 
@@ -2812,13 +2822,13 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
   O.streets.forEach(st => later(st.pts[0][0], st.pts[0][1], () => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: '#a8916c', m: new THREE.Matrix4() })));
   O.plazas.forEach(q => later(q.x, q.z, () => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: '#b39c78', kind: 4, smooth: true })));
   // the fountain in the Plaza Mayor, with orange trees round it
-  later(2010, -300, () => { const c = fr(2010, -300); part(c, new THREE.CylinderGeometry(3.4, 3.6, 0.9, 16), SAND2, 0, 0.45, 0); part(c, new THREE.CylinderGeometry(3.1, 3.1, 0.06, 16), '#4f8c9c', 0, 0.86, 0); part(c, new THREE.CylinderGeometry(0.5, 0.7, 2.6, 8), SAND, 0, 1.8, 0); part(c, new THREE.CylinderGeometry(1.4, 0.9, 0.4, 10), SAND, 0, 3.1, 0); valBanner(c, 0, 3.4, 0, 0, 2.2);
+  later(8760, -300, () => { const c = fr(8760, -300); part(c, new THREE.CylinderGeometry(3.4, 3.6, 0.9, 16), SAND2, 0, 0.45, 0); part(c, new THREE.CylinderGeometry(3.1, 3.1, 0.06, 16), '#4f8c9c', 0, 0.86, 0); part(c, new THREE.CylinderGeometry(0.5, 0.7, 2.6, 8), SAND, 0, 1.8, 0); part(c, new THREE.CylinderGeometry(1.4, 0.9, 0.4, 10), SAND, 0, 3.1, 0); valBanner(c, 0, 3.4, 0, 0, 2.2);
     [[7, 7], [-7, 7], [7, -7], [-7, -7]].forEach(([x, z]) => { box(c, '#6b4a2e', x, 0.9, z, 0.3, 1.8, 0.3); part(c, G_HEMI, '#3f6b34', x, 1.6, z, 0, 0, 0, 1.5, 1.6, 1.5); for (let k = 0; k < 5; k++) part(c, G_HEMI, '#e8862c', x + Math.cos(k * 1.3) * 1.1, 2.1 + (k % 2) * 0.4, z + Math.sin(k * 1.3) * 1.1, 0, 0, 0, 0.16, 0.16, 0.16); }); });
   // the arcades: a colonnade with a tiled roof along two sides of the Plaza Mayor, where the market stalls shelter
-  later(2010, -300, () => { const sides = [[0, -1], [1, 0]]; for (const [ax, az] of sides) { const cx = 2010 + ax * 15.5, cz = -300 + az * 15.5, along = ax ? [0, 1] : [1, 0];
+  later(8760, -300, () => { const sides = [[0, -1], [1, 0]]; for (const [ax, az] of sides) { const cx = 8760 + ax * 15.5, cz = -300 + az * 15.5, along = ax ? [0, 1] : [1, 0];
     for (let k = -12; k <= 12; k += 4) { const x = cx + along[0] * k, z = cz + along[1] * k; if (!ax && Math.abs(k) < 3) continue; box(fr(x, z), SAND, 0, 1.7, 0, 0.6, 3.4, 0.6); }
     const g = fr(cx + ax * 1.2, cz + az * 1.2, ax ? Math.PI / 2 : 0); box(g, SAND2, 0, 3.55, 0, 26, 0.4, 2.8); box(g, RED2, 0, 3.85, 0.2, 26.4, 0.22, 3.2, 0, 0.12); } });
-  later(1934, -300, () => { const c = fr(1934, -300); box(c, SAND2, 0, 2.4, 0, 0.6, 4.8, 0.6); valBanner(c, 0, 4.6, 0, 0, 2.4); });
+  later(8684, -300, () => { const c = fr(8684, -300); box(c, SAND2, 0, 2.4, 0, 0.6, 4.8, 0.6); valBanner(c, 0, 4.6, 0, 0, 2.4); });
   // homes: sandstone and limewash under red tiles
   O.houses.forEach((h, i) => later(h.x, h.z, () => townHouse(at(h.x, h.z, h.face), h, i + 51, { stone: SAND, stone2: SAND2, slate: RED, tile: RED, roofs: [RED, RED2, '#94432a', RED], walls: ['#ecdcbc', '#e2c9a0', '#f2e6cf', '#d8b88c', '#e9cfa8', '#f0dcc0'] })));
   const SIGN = { armourer: '#5a5f66', weaponsmith: '#6b2f2f', bowyer: '#4f6b3a', bakery: '#c48a3f', tavern: '#a8322a', smithy: '#4a4744', butcher: '#8e2b22', chandler: '#e8d36a', tailor: '#6d5a78', cooper: '#6b4a2e', weaver: '#7a2f5a', potter: '#a8714d', carter: '#5b4029', boatwright: '#3f5a5a', goldsmith: '#e2b53e', apothecary: '#4f6b3a', mason: '#8b877c', tanner: '#6b4a2e' };
@@ -2834,13 +2844,13 @@ function seaShip(x, z, ry, big, flag) { const L0 = big ? 18 : 12, B0 = big ? 4.6
   // the customs house on the quay, long and arcaded, where goods from Alderwyn pay the queen's duty
   later(O.customs.x, O.customs.z, () => { const f = at(O.customs.x, O.customs.z, O.customs.face); box(f, SAND, 0, 3, 0, 20, 6, 9); roofOn(f, [9.6, 20.6, 2.6], RED, 0, 6, 0); for (let k = -9; k <= 9; k += 3) box(f, SAND2, k, 1.6, 4.9, 0.7, 3.2, 0.7); box(f, SAND2, 0, 3.4, 4.9, 20, 0.5, 1); box(f, '#2a1f16', 0, 1.6, 4.52, 2.4, 3, 0.08); valBanner(f, 0, 6.4, 4.6, 0, 2.6); for (let k = 0; k < 6; k++) part(f, G_BARREL, '#6b4a2e', -8 + k * 1.1, 0.35, 6.4); });
   // the quay: a stone wall at the water's edge, timber piers, and ships alongside, Valdorian and Alderwyn
-  later(1912, -300, () => {
-    for (let z = -392; z < -208; z += 10) between(1909, z, 1909, z + 10, SEA_Y + 0.6, 3, 3.2, SAND2);
-    for (const pz of [-350, -300, -250]) { between(1907, pz, 1872, pz, SEA_Y + 0.9, 4, 0.4, '#6b4a2e'); for (let x = 1872; x <= 1906; x += 4) [-1.8, 1.8].forEach(dz => box(fr(x, pz + dz, 0, 0), '#4a3424', 0, SEA_Y - groundH(x, pz + dz) + 0.2, 0, 0.3, 2.4, 0.3)); }
-    seaShip(1878, -357, 0, true, VALDORIA); seaShip(1878, -293, Math.PI, true, ALDERWYN); seaShip(1876, -243, 0, false, VALDORIA); seaShip(1850, -320, 0.5, true, VALDORIA); });
+  later(8662, -300, () => {
+    for (let z = -392; z < -208; z += 10) between(8659, z, 8659, z + 10, SEA_Y + 0.6, 3, 3.2, SAND2);
+    for (const pz of [-350, -300, -250]) { between(8657, pz, 8622, pz, SEA_Y + 0.9, 4, 0.4, '#6b4a2e'); for (let x = 8622; x <= 8656; x += 4) [-1.8, 1.8].forEach(dz => box(fr(x, pz + dz, 0, 0), '#4a3424', 0, SEA_Y - groundH(x, pz + dz) + 0.2, 0, 0.3, 2.4, 0.3)); }
+    seaShip(8628, -357, 0, true, VALDORIA); seaShip(8628, -293, Math.PI, true, ALDERWYN); seaShip(8626, -243, 0, false, VALDORIA); seaShip(8600, -320, 0.5, true, VALDORIA); });
   // salt pans along the shore to the north, and vineyards on the slope to the south
-  later(1960, -400, () => { for (let k = 0; k < 6; k++) { const f = at(1938 + k * 9, -404); box(f, '#b9ad94', 0, 0.12, 0, 8.4, 0.24, 7); box(f, '#f2efe6', 0, 0.26, 0, 7.6, 0.04, 6.2); } for (let k = 0; k < 5; k++) part(at(1944 + k * 11, -414), new THREE.ConeGeometry(1.2, 1.4, 8), '#f4f1e8', 0, 0.7, 0); });
-  later(2030, -200, () => { for (let row = 0; row < 7; row++) for (let k = 0; k < 14; k++) { const x = 2004 + k * 3.8, z = -196 + row * 3.2; const f = at(x, z); box(f, '#6b4a2e', 0, 0.6, 0, 0.12, 1.2, 0.12); part(f, G_HEMI, row % 2 ? '#5f7d34' : '#4f6b2c', 0, 1.1, 0, 0, 0, 0, 0.9, 0.6, 0.9); } });
+  later(8710, -400, () => { for (let k = 0; k < 6; k++) { const f = at(8688 + k * 9, -404); box(f, '#b9ad94', 0, 0.12, 0, 8.4, 0.24, 7); box(f, '#f2efe6', 0, 0.26, 0, 7.6, 0.04, 6.2); } for (let k = 0; k < 5; k++) part(at(8694 + k * 11, -414), new THREE.ConeGeometry(1.2, 1.4, 8), '#f4f1e8', 0, 0.7, 0); });
+  later(8780, -200, () => { for (let row = 0; row < 7; row++) for (let k = 0; k < 14; k++) { const x = 8754 + k * 3.8, z = -196 + row * 3.2; const f = at(x, z); box(f, '#6b4a2e', 0, 0.6, 0, 0.12, 1.2, 0.12); part(f, G_HEMI, row % 2 ? '#5f7d34' : '#4f6b2c', 0, 1.1, 0, 0, 0, 0, 0.9, 0.6, 0.9); } });
   for (const [, fns] of jobs) { fns.forEach(fn => fn()); flushBuild(); }
   // olive and orange trees about the town, cypresses on the hills
   for (let k = 0, n = 0; k < 3000 && n < 90; k++) { const a = rr() * Math.PI * 2, d = 112 + rr() * 140, x = T.x + Math.cos(a) * d, z = T.z + Math.sin(a) * d; if (x < Sim.VSHORE(z) + 10 || Math.abs(z + 300) < 8) continue; n++; DP_TREES.push([x, z]); const g = fr(x, z, rr() * 6), sc = 0.8 + rr() * 0.5;
@@ -2892,9 +2902,9 @@ const VAL_TREES = [];
   town(Sim.GM, 71, { street: '#a8916c', plaza: '#b7a27a', sign: SIGN, house: { stone: SAND, stone2: SAND2, slate: RED, tile: RED, roofs: [RED, RED2, '#9a7a3a'], walls: ['#f2ead6', '#ecdcbc', '#f4ecdc', '#e6d4b0'] } });
   { const w = Sim.GM.windmill, f = at(w.x, w.z); part(f, new THREE.CylinderGeometry(2.4, 3.2, 9, 10), '#f0e8d6', 0, 4.5, 0); part(f, new THREE.ConeGeometry(3, 3, 10), RED, 0, 10.5, 0);
     for (let k = 0; k < 4; k++) box(f, '#6b4a2e', 0, 8.5, 3.2, 0.3, 11, 0.12, 0, 0, k * Math.PI / 2 + 0.3); valBanner(f, 0, 11.5, 0, 0, 1.6); }
-  for (let row = 0; row < 3; row++) for (let k = 0; k < 4; k++) { const x = 2120 + k * 26, z = 210 + row * 22, f = at(x, z); box(f, row % 2 ? '#d9b54a' : '#c9a63e', 0, 0.35, 0, 24, 0.7, 20); }
-  { const f = at(2270, 200); for (let k = -10; k <= 10; k += 2.5) { box(f, '#6b4a2e', k, 0.6, -9, 0.15, 1.2, 0.15); box(f, '#6b4a2e', k, 0.6, 9, 0.15, 1.2, 0.15); } box(f, '#6b4a2e', 0, 1, -9, 21, 0.1, 0.1); box(f, '#6b4a2e', 0, 1, 9, 21, 0.1, 0.1);
-    for (let k = 0; k < 5; k++) { const g = at(2262 + k * 4, 196 + (k % 2) * 6, k); box(g, ['#6b4a2e', '#3a2a1c', '#a87a4a'][k % 3], 0, 1.1, 0, 0.6, 0.7, 1.7); box(g, '#3a2a1c', 0, 1.5, 0.9, 0.3, 0.6, 0.4); } }
+  for (let row = 0; row < 3; row++) for (let k = 0; k < 4; k++) { const x = 8870 + k * 26, z = 210 + row * 22, f = at(x, z); box(f, row % 2 ? '#d9b54a' : '#c9a63e', 0, 0.35, 0, 24, 0.7, 20); }
+  { const f = at(9020, 200); for (let k = -10; k <= 10; k += 2.5) { box(f, '#6b4a2e', k, 0.6, -9, 0.15, 1.2, 0.15); box(f, '#6b4a2e', k, 0.6, 9, 0.15, 1.2, 0.15); } box(f, '#6b4a2e', 0, 1, -9, 21, 0.1, 0.1); box(f, '#6b4a2e', 0, 1, 9, 21, 0.1, 0.1);
+    for (let k = 0; k < 5; k++) { const g = at(9012 + k * 4, 196 + (k % 2) * 6, k); box(g, ['#6b4a2e', '#3a2a1c', '#a87a4a'][k % 3], 0, 1.1, 0, 0.6, 0.7, 1.7); box(g, '#3a2a1c', 0, 1.5, 0.9, 0.3, 0.6, 0.4); } }
   flushBuild();
   // Thornwick: timber houses at the forest's edge, the sawmill and the charcoal clamps, and the forest all round
   town(Sim.TW, 83, { street: '#8a7454', plaza: '#9a8462', sign: SIGN, house: { stone: STONE, stone2: STONE2, slate: '#5e4a2c', tile: '#6b4a2e', roofs: ['#5e4a2c', '#6b4a2e', RED2], walls: ['#c9b48a', '#b99f74', '#d1bf96', '#a88e64'] } });
@@ -2910,7 +2920,7 @@ const VAL_TREES = [];
     { const f = at(O.gate.x, O.gate.z); [-5.4, 5.4].forEach(x => { box(f, STONE2, x, 5, 0, 4, 10, 4.4); box(f, STONE, x, 10.4, 0, 4.4, 0.8, 4.8); }); box(f, STONE2, 0, 8.6, 0, 7.2, 2.6, 3.6); valBanner(f, -5.4, 10.8, 2.4, 0, 2.6); valBanner(f, 5.4, 10.8, 2.4, 0, 2.6); }
     { const k = O.keep, f = at(k.x, k.z, k.face); box(f, STONE, 0, 9, 0, 16, 18, 14); box(f, STONE2, 0, 18.4, 0, 17, 0.8, 15); [[-8, -7], [8, -7], [-8, 7], [8, 7]].forEach(([x, z]) => { part(f, new THREE.CylinderGeometry(2.6, 2.8, 22, 10), STONE2, x, 11, z); part(f, new THREE.ConeGeometry(3.2, 4, 10), RED, x, 24, z); }); for (let q = -6; q <= 6; q += 3) win(f, q, 12, 7.04, 0.8, 1.6, 0.06); box(f, '#3b2a1c', 0, 2, 7.1, 3, 4, 0.1); valBanner(f, 0, 19, 7.4, 0, 3.4); }
     town(O, 91, { street: '#8f8676', plaza: '#9e9584', sign: SIGN, house: { stone: STONE, stone2: STONE2, slate: RED, tile: RED, roofs: [RED, '#8a3a24', RED2], walls: ['#c9c0ae', '#b8ae9a', '#d4cab6', '#a8a08e'] } });
-    { const f = at(2180, -836); box(f, '#9a9384', 0, 1.5, 0, 22, 3, 12); for (let k = 0; k < 8; k++) box(at(2170 + k * 3, -826), '#b5ad9c', 0, 0.5, 0, 1.6, 1, 1.2); } flushBuild(); }
+    { const f = at(8930, -836); box(f, '#9a9384', 0, 1.5, 0, 22, 3, 12); for (let k = 0; k < 8; k++) box(at(8920 + k * 3, -826), '#b5ad9c', 0, 0.5, 0, 1.6, 1, 1.2); } flushBuild(); }
   // Valdor: the royal capital. Ochre and white houses with red tile roofs, a paved plaza with a fountain,
   // the cathedral to the north with its bell tower, and the Alcázar on its terrace to the east, banners on every tower
   { const O = Sim.VD, OCH = '#d8b77e', OCH2 = '#c49a5e', WHITE = '#efe6d2', GOLD = '#d9b04a';
@@ -2932,7 +2942,7 @@ const VAL_TREES = [];
       for (let k = -14; k <= 14; k += 4.6) if (Math.abs(k) > 3) { win(f, k, 6, 11.06, 1.2, 2, 0.08); win(f, k, 10.6, 11.06, 1.2, 2, 0.08); }
       [-5, 5].forEach(x => { box(f, '#7a1f1f', x, 1.9, 21, 0.6, 0.12, 4); valBanner(f, x, 1.8, 22, 0, 3); }); }
     // the west gate where the Queen's Road comes in
-    { const f = at(2630, -300, Math.PI / 2); [-5, 5].forEach(x => { box(f, OCH2, x, 4, 0, 3, 8, 3.4); box(f, STONE, x, 8.3, 0, 3.4, 0.6, 3.8); }); box(f, OCH2, 0, 7.2, 0, 7, 1.8, 2.8); valBanner(f, -5, 8.6, 1.8, 0, 2); valBanner(f, 5, 8.6, 1.8, 0, 2); }
+    { const f = at(9380, -300, Math.PI / 2); [-5, 5].forEach(x => { box(f, OCH2, x, 4, 0, 3, 8, 3.4); box(f, STONE, x, 8.3, 0, 3.4, 0.6, 3.8); }); box(f, OCH2, 0, 7.2, 0, 7, 1.8, 2.8); valBanner(f, -5, 8.6, 1.8, 0, 2); valBanner(f, 5, 8.6, 1.8, 0, 2); }
     flushBuild(); }
 })();
 /* ----- skylines: from far off, each town is a shape on the horizon above the haze ----- */
@@ -2946,7 +2956,7 @@ const SKYLINES = (function () {
   const OK = Sim.OAK, oy = worldH(TOWNS.oakbridge.x, TOWNS.oakbridge.z);
   add('oakbridge', [[BX, OK.keep.x, oy + 9, OK.keep.z, 12, 18, 12], [BX, OK.C.x, oy + 4, OK.C.z, 130, 8, 130], [BX, OK.hall.x, oy + 10, OK.hall.z, 4, 20, 4]]);
   add('ironcrest', [[BX, Sim.IC.keep.x, IC_Y + 7, Sim.IC.keep.z, 10, 14, 10], [CY, 784, IC_Y + 5, -1250, 2.6, 10, 2.6], [CY, 796, IC_Y + 5, -1262, 2.6, 10, 2.6], [BX, 700, IC_Y + 3, -1265, 120, 6, 110]]);
-  { const D = Sim.DP, dy = SEA_Y + 2.4; add('dawnport', [[BX, D.palace.x, dy + 9, D.palace.z, 16, 18, 28], [CY, D.palace.x - 7, dy + 10, D.palace.z - 13, 2.5, 20, 2.5], [CY, D.palace.x - 7, dy + 10, D.palace.z + 13, 2.5, 20, 2.5], [BX, D.C.x, dy + 4, D.C.z, 180, 8, 200], [BX, 1878, SEA_Y + 7, -357, 0.4, 14, 0.4]]); }
+  { const D = Sim.DP, dy = SEA_Y + 2.4; add('dawnport', [[BX, D.palace.x, dy + 9, D.palace.z, 16, 18, 28], [CY, D.palace.x - 7, dy + 10, D.palace.z - 13, 2.5, 20, 2.5], [CY, D.palace.x - 7, dy + 10, D.palace.z + 13, 2.5, 20, 2.5], [BX, D.C.x, dy + 4, D.C.z, 180, 8, 200], [BX, 8628, SEA_Y + 7, -357, 0.4, 14, 0.4]]); }
   { const S0 = Sim.SW, y0 = worldH(0, 0) * 0 + groundH(S0.C.x, S0.C.z); add('stonewatch', [[BX, S0.keep.x, y0 + 11, S0.keep.z, 16, 22, 14], [CY, S0.C.x, y0 + 4, S0.C.z, 82, 8, 82], [CY, S0.keep.x - 8, y0 + 13, S0.keep.z - 7, 2.6, 26, 2.6], [CY, S0.keep.x + 8, y0 + 13, S0.keep.z - 7, 2.6, 26, 2.6]]); }
   { const g = Sim.GM, y1 = groundH(g.C.x, g.C.z); add('goldmeadow', [[CY, g.windmill.x, y1 + 6, g.windmill.z, 3, 12, 3], [BX, g.C.x, y1 + 3, g.C.z, 90, 6, 90]]); }
   { const w = Sim.TW, y2 = groundH(w.C.x, w.C.z); add('thornwick', [[BX, w.C.x, y2 + 3, w.C.z, 80, 6, 70]]); }
@@ -2955,6 +2965,8 @@ const SKYLINES = (function () {
   return out;
 })();
 function syncSkylines(px, pz) {
+  if (window.__mountains) window.__mountains.visible = UI.overlay !== 'map';
+  if (UI.overlay === 'map') { for (const k of SKYLINES) k.me.visible = false; return; }
   for (const k of SKYLINES) { const T = TOWNS[k.id === 'cmcastle' ? 'crownmere' : k.id], d = Math.hypot(px - T.x, pz - T.z) - T.r, dc = k.id === 'cmcastle' ? Math.hypot(px - Sim.CM.castle.x, pz - Sim.CM.castle.z) : 0; const vis = k.id === 'cmcastle' ? d <= 120 && dc > 150 : d > 120 && d < 1700; k.me.visible = vis; if (vis) { k.m0.color.copy(scene.fog.color).multiplyScalar(0.72); k.m0.opacity = clamp(0.75 - d / 2600, 0.15, 0.6); } }
 }
 /* ----- the stage posts: an office, a coach waiting, and fresh horses ----- */
@@ -3704,7 +3716,7 @@ const MY_SHIP = (function () {
   const n0 = PARTS.solid.length; seaShip(0, 0, 0, true, ['#c9962b', '#8e2b22']); const parts = PARTS.solid.splice(n0);
   const me = new THREE.Mesh(mergeColored(parts), vc); me.visible = false; scene.add(me); return { me, at: null };
 })();
-const MY_BERTH = { eastwatch: [1190, -300, 0], stormrest: [Sim.ISLE.x - 46, Sim.ISLE.z - 8, 0.3], dawnport: [1880, -308, Math.PI] };
+const MY_BERTH = { eastwatch: [1190, -300, 0], stormrest: [Sim.ISLE.x - 46, Sim.ISLE.z - 8, 0.3], dawnport: [8630, -308, Math.PI] };
 function syncMyShip(s) { const port = s && s.ship ? s.ship.port : null; if (port === MY_SHIP.at) return; MY_SHIP.at = port; MY_SHIP.me.visible = !!port; if (port) { const b = MY_BERTH[port]; MY_SHIP.me.position.set(b[0], 0, b[1]); MY_SHIP.me.rotation.y = b[2]; } }
 /* Weather you can see: spring and autumn rain, a rare summer storm, a morning mist now and then. It is drawn from the date, so it never touches the sim or a save,
    and it changes the light, the haze and the sky as well as showing falling rain. */
@@ -3930,9 +3942,9 @@ const DP_SOLIDS = (function () {
   const O = Sim.DP, out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
   O.houses.forEach(h => C(h.x, h.z, h.tall ? 3.3 : 2.8)); O.biz.forEach(b => C(b.x - Math.sin(b.face) * 0.3, b.z - Math.cos(b.face) * 0.3, 3.5));
   for (let k = -12; k <= 12; k += 4) C(O.palace.x + 2, O.palace.z + k, 5); for (let k = -9; k <= 9; k += 4.5) C(O.customs.x, O.customs.z + k, 4.4);
-  C(2010, -300, 3.8); C(1934, -300, 0.8);
+  C(8760, -300, 3.8); C(8684, -300, 0.8);
   // the water's edge: the quay wall, then the natural shore north and south of the port
-  for (let z = -900; z < 400; z += 2) { const x = Math.abs(z + 300) < 92 ? 1908.5 : Sim.VSHORE(z) - 1; C(x, z, 1.4); }
+  for (let z = -900; z < 400; z += 2) { const x = Math.abs(z + 300) < 92 ? 8658.5 : Sim.VSHORE(z) - 1; C(x, z, 1.4); }
   return out;
 })();
 const VAL_SOLIDS = (function () {
@@ -3941,7 +3953,7 @@ const VAL_SOLIDS = (function () {
   const W = Sim.SW.wall, G0 = Sim.SW.gate; for (let i = 0; i < W.length - 1; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], L0 = Math.hypot(bx - ax, bz - az); for (let d = 0; d <= L0; d += 1.5) { const x = ax + (bx - ax) * d / L0, z = az + (bz - az) * d / L0; if (Math.hypot(x - G0.x, z - G0.z) < 6.5) continue; C(x, z, 1.4); } }
   C(Sim.SW.keep.x, Sim.SW.keep.z, 10); C(Sim.GM.windmill.x, Sim.GM.windmill.z, 3.4); C(Sim.TW.sawmill.x, Sim.TW.sawmill.z, 5);
   { const A = Sim.VD.alcazar; for (let dx = -18; dx <= 18; dx += 6) for (let dz = -16; dz <= 16; dz += 6) C(A.x + dx + 4, A.z + dz, 3.6); C(Sim.VD.fountain.x, Sim.VD.fountain.z, 3.6);
-    const c = Sim.VD.cathedral; for (let dz = -12; dz <= 12; dz += 6) C(c.x + dz * 0, c.z + dz, 7); [-5, 5].forEach(x => C(2630, -300 + x, 2)); }
+    const c = Sim.VD.cathedral; for (let dz = -12; dz <= 12; dz += 6) C(c.x + dz * 0, c.z + dz, 7); [-5, 5].forEach(x => C(9380, -300 + x, 2)); }
   return out;
 })();
 const ISLE_SOLIDS = (function () { const I = Sim.ISLE, out = []; for (let a = 0; a < Math.PI * 2; a += 0.05) out.push({ c: 1, x: I.x + Math.cos(a) * 50, z: I.z + Math.sin(a) * 50 / 1.3, r: 1.6 }); out.push({ c: 1, x: I.x - 12, z: I.z, r: 5.6 }, { c: 1, x: I.x + 30, z: I.z - 22, r: 3 }); return out; })();
@@ -3978,7 +3990,7 @@ function collide(p, solids) {
       }
     }
   }
-  p.x = clamp(p.x, -1400, 1400); p.z = clamp(p.z, -1600, 900);
+  p.x = clamp(p.x, Sim.SEA.band.x0, Sim.SEA.band.x1); p.z = clamp(p.z, Sim.SEA.band.z0, Sim.SEA.band.z1);
 }
 
 // sticks: touch the left part of the screen to walk, the right part to turn and zoom
@@ -7354,29 +7366,48 @@ function setMapMode(m) {
    sea between; pinch in over yourself and you are walking again. The clock runs while you look (at 1x), and everyone is on it:
    full figures up close, small figures over a town, dots over the whole world. Far out, the land is one painted picture of the
    real world (drawn once from the real buildings, roads and rivers), so a phone draws the whole map as cheaply as one picture. */
-const WORLD_B = { x0: -520, x1: 3000, z0: -1800, z1: 420 };
+const WORLD_B = Sim.SEA.band;   // the known world: Alderwyn, the Sundering Sea and Valdoria. The land runs on past it, into haze
+// the far picture is drawn in three parts, so each kingdom keeps its detail across so wide a sea: Alderwyn, the open sea, Valdoria
+const LM_PARTS = [{ x0: WORLD_B.x0, x1: 1800, px: 2048 }, { x0: 1800, x1: 8000, px: 1024 }, { x0: 8000, x1: WORLD_B.x1, px: 1536 }];
+const LM_FADE = 650;   // how far in from the edge of the known world the land and sea fade into haze
 const LM = { far: false, land: null, rt: null, farScene: null, quad: null, pts: null, inst: null, cart: null, near: new Map(), t: 0, n: 0, ids: [], prevIds: [], x: null, z: null, px: null, pz: null, fl: null, pal: null, roads: [], bakeKey: '', savedSpeed: null, blend: null, townPins: false, shown: 0 };
-const LM_FAR_IN = 950, LM_FAR_OUT = 850, LM_MAX = () => Math.max(2700, 2700 * (window.innerHeight / Math.max(1, window.innerWidth)) * 1.9), LM_MIN = 18;
+const LM_FAR_IN = 950, LM_FAR_OUT = 850, LM_MAX = () => clamp((WORLD_B.x1 - WORLD_B.x0) / 2 / (Math.tan(19 * Math.PI / 180) * (window.innerWidth / Math.max(1, window.innerHeight))) * 1.06, 2700, 16000), LM_MIN = 18;
 const LM_COL = TUNIC.map(c => new THREE.Color(c).lerp(new THREE.Color('#f3e6c8'), 0.35)), LM_KEY = new THREE.Color('#f2c14e'), LM_KIN = new THREE.Color('#ffffff'), LM_ROAD = new THREE.Color('#d9c9a0');
 function lmLand() {
   if (LM.land) return LM.land;
-  const W = WORLD_B.x1 - WORLD_B.x0, D = WORLD_B.z1 - WORLD_B.z0, nx = Math.round(W / 22), nz = Math.round(D / 22);
-  const g = new THREE.PlaneGeometry(W, D, nx, nz); g.rotateX(-Math.PI / 2); g.translate(WORLD_B.x0 + W / 2, 0, WORLD_B.z0 + D / 2);
-  const p = g.attributes.position, col = new Float32Array(p.count * 3), C = new THREE.Color(), WOOD = new THREE.Color('#2f4a2c');
-  for (let k = 0; k < p.count; k++) {
-    const x = p.getX(k), z = p.getZ(k), y = groundH(x, z); p.setY(k, y - 1.6);
-    const gv = (0.5 + 0.5 * Math.sin(x * 0.19 + 1.7) * Math.cos(z * 0.23 - 0.6)) * 0.7 + 0.3 * (0.5 + 0.5 * Math.sin((x + z) * 0.071)), gk = gv * (GREENS.length - 1), g0 = Math.floor(gk);
-    C.copy(GREENS[g0]).lerp(GREENS[Math.min(GREENS.length - 1, g0 + 1)], gk - g0);
-    const wood = Math.sin(x * 0.013 + 1.3) * Math.cos(z * 0.011 - 0.4) + 0.5 * Math.sin((x + z) * 0.021);
-    if (wood > 0.35 && y < 14 && wildClear(x, z)) C.lerp(WOOD, Math.min(0.7, (wood - 0.3) * 1.6));
-    if (x > 1880) C.lerp(C_DRY, 0.45);
-    if (y > 12) C.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
-    if (y > 40) C.lerp(C_SNOW, Math.min(1, (y - 40) / 10));
-    col[k * 3] = C.r; col[k * 3 + 1] = C.g; col[k * 3 + 2] = C.b;
+  const grp = new THREE.Group(), WOOD = new THREE.Color('#2f4a2c'), C = new THREE.Color(), M0 = 2600;
+  for (const [x0, x1] of [[WORLD_B.x0 - M0, Sim.SEA.x0 + 380], [Sim.SEA.x1 - 380, WORLD_B.x1 + M0]]) {
+    const z0 = WORLD_B.z0 - M0, z1 = WORLD_B.z1 + M0, W = x1 - x0, D = z1 - z0, nx = Math.round(W / 30), nz = Math.round(D / 30);
+    const g = new THREE.PlaneGeometry(W, D, nx, nz); g.rotateX(-Math.PI / 2); g.translate(x0 + W / 2, 0, z0 + D / 2);
+    const p = g.attributes.position, col = new Float32Array(p.count * 3);
+    for (let k = 0; k < p.count; k++) {
+      const x = p.getX(k), z = p.getZ(k), y = groundH(x, z); p.setY(k, y - 1.6);
+      const gv = (0.5 + 0.5 * Math.sin(x * 0.19 + 1.7) * Math.cos(z * 0.23 - 0.6)) * 0.7 + 0.3 * (0.5 + 0.5 * Math.sin((x + z) * 0.071)), gk = gv * (GREENS.length - 1), g0 = Math.floor(gk);
+      C.copy(GREENS[g0]).lerp(GREENS[Math.min(GREENS.length - 1, g0 + 1)], gk - g0);
+      const wood = Math.sin(x * 0.013 + 1.3) * Math.cos(z * 0.011 - 0.4) + 0.5 * Math.sin((x + z) * 0.021);
+      if (wood > 0.35 && y < 14 && wildClear(x, z)) C.lerp(WOOD, Math.min(0.7, (wood - 0.3) * 1.6));
+      if (x > 8630) C.lerp(C_DRY, 0.45);
+      if (y > 12) C.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
+      { const sl = 50 + 9 * Math.sin(x * 0.021 + 0.4) * Math.cos(z * 0.017) + 5 * Math.sin((x - z) * 0.05); if (y > sl) C.lerp(C_SNOW, Math.min(0.92, (y - sl) / 12)); }   // snow on the heights, in drifts, not one white sheet
+      col[k * 3] = C.r; col[k * 3 + 1] = C.g; col[k * 3 + 2] = C.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, groundMat); m.receiveShadow = false; m.frustumCulled = false; m.renderOrder = -5; grp.add(m);
   }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, groundMat); m.receiveShadow = false; m.visible = false; m.frustumCulled = false; m.renderOrder = -5; scene.add(m);
-  return (LM.land = m);
+  grp.visible = false; scene.add(grp);
+  return (LM.land = grp);
+}
+// how much of a place shows in the far picture: all of it inside the known world, fading to nothing at its edges
+function lmFadeTex(P) {
+  const W = P.x1 - P.x0, D = WORLD_B.z1 - WORLD_B.z0, cw = 256, ch = Math.max(8, Math.round(256 * D / W)), cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const cx = cv.getContext('2d'), im = cx.createImageData(cw, ch);
+  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) {
+    const x = P.x0 + (i + 0.5) / cw * W, z = WORLD_B.z0 + (j + 0.5) / ch * D;
+    const wob = 190 * Math.sin(x / 300 + 1.3) * Math.cos(z / 260) + 80 * Math.sin((x - z) / 140) + 40 * Math.sin(x / 90 + z / 170);   // a ragged edge to the haze, not a straight one
+    const e = Math.min(x - WORLD_B.x0, WORLD_B.x1 - x, z - WORLD_B.z0, WORLD_B.z1 - z) + wob, a = smooth01(e / LM_FADE), o = (j * cw + i) * 4;
+    im.data[o] = im.data[o + 1] = im.data[o + 2] = Math.round(a * 255); im.data[o + 3] = 255;
+  }
+  cx.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(cv); t.flipY = false; return t;
 }
 function lmLayers() {
   if (LM.inst) return;
@@ -7389,11 +7420,13 @@ function lmLayers() {
   LM.cart = new THREE.InstancedMesh(cg, new THREE.MeshLambertMaterial({ color: 0x8a6a44 }), 120); LM.cart.frustumCulled = false; LM.cart.count = 0; LM.cart.visible = false; scene.add(LM.cart);
   // the far view: one picture of the world, and a dot for everyone
   LM.farScene = new THREE.Scene();
-  const W = WORLD_B.x1 - WORLD_B.x0, D = WORLD_B.z1 - WORLD_B.z0;
-  const maxT = renderer.capabilities.maxTextureSize || 2048, tw = Math.min(3072, maxT), th = Math.round(tw * D / W);
-  LM.rt = new THREE.WebGLRenderTarget(tw, th, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true }); LM.rt.texture.encoding = renderer.outputEncoding;
-  const qg = new THREE.PlaneGeometry(W, D); qg.rotateX(-Math.PI / 2); qg.translate(WORLD_B.x0 + W / 2, 0, WORLD_B.z0 + D / 2);
-  LM.quad = new THREE.Mesh(qg, new THREE.MeshBasicMaterial({ map: LM.rt.texture, fog: false })); LM.farScene.add(LM.quad);
+  const D = WORLD_B.z1 - WORLD_B.z0, maxT = renderer.capabilities.maxTextureSize || 2048;
+  for (const P of LM_PARTS) {
+    const W = P.x1 - P.x0, tw = Math.min(P.px, maxT), th = Math.min(maxT, Math.round(tw * D / W));
+    P.rt = new THREE.WebGLRenderTarget(tw, th, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true }); P.rt.texture.encoding = renderer.outputEncoding;
+    const qg = new THREE.PlaneGeometry(W, D); qg.rotateX(-Math.PI / 2); qg.translate(P.x0 + W / 2, 0, WORLD_B.z0 + D / 2);
+    P.quad = new THREE.Mesh(qg, new THREE.MeshBasicMaterial({ map: P.rt.texture, alphaMap: lmFadeTex(P), transparent: true, depthWrite: false, fog: false })); LM.farScene.add(P.quad);
+  }
   const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cap * 3), 3)); pg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cap * 3), 3)); pg.setDrawRange(0, 0);
   LM.pts = new THREE.Points(pg, new THREE.PointsMaterial({ size: 3.2 * Math.min(2.5, window.devicePixelRatio || 1), sizeAttenuation: false, vertexColors: true, fog: false, depthTest: false })); LM.pts.frustumCulled = false; LM.farScene.add(LM.pts);
 }
@@ -7402,13 +7435,17 @@ function lmBake() {
   const key = Sim.seasonOf(G) + ':' + Math.floor(G.day / 4);
   if (LM.bakeKey === key) return;
   LM.bakeKey = key; lmLayers(); const land = lmLand();
-  const W = WORLD_B.x1 - WORLD_B.x0, D = WORLD_B.z1 - WORLD_B.z0, cx = WORLD_B.x0 + W / 2, cz = WORLD_B.z0 + D / 2;
-  const oc = new THREE.OrthographicCamera(-W / 2, W / 2, D / 2, -D / 2, 1, 1400); oc.position.set(cx, 700, cz); oc.up.set(0, 0, -1); oc.lookAt(cx, 0, cz); oc.updateMatrixWorld();
-  const keep = { fn: scene.fog.near, ff: scene.fog.far, sky: skyDome.visible, land: land.visible, inst: LM.inst.visible, cart: LM.cart.visible, sh: renderer.shadowMap.autoUpdate };
+  const keep = { fn: scene.fog.near, ff: scene.fog.far, sky: skyDome.visible, land: land.visible, inst: LM.inst.visible, cart: LM.cart.visible };
   scene.fog.near = 5000; scene.fog.far = 9000; skyDome.visible = false; land.visible = true; LM.inst.visible = false; LM.cart.visible = false;
-  for (const k of SKYLINES) k.me.visible = false;
-  renderer.setRenderTarget(LM.rt); renderer.setClearColor(0x4f7f9a, 1); renderer.clear(); renderer.render(scene, oc); renderer.setRenderTarget(null);
-  scene.fog.near = keep.fn; scene.fog.far = keep.ff; skyDome.visible = keep.sky; land.visible = keep.land; LM.inst.visible = keep.inst; LM.cart.visible = keep.cart;
+  for (const k of SKYLINES) k.me.visible = false; const mtn = window.__mountains, mtnV = mtn && mtn.visible; if (mtn) mtn.visible = false;
+  const D = WORLD_B.z1 - WORLD_B.z0, cz = WORLD_B.z0 + D / 2;
+  for (const P of LM_PARTS) {
+    const W = P.x1 - P.x0, cx = P.x0 + W / 2;
+    const oc = new THREE.OrthographicCamera(-W / 2, W / 2, D / 2, -D / 2, 1, 1400); oc.position.set(cx, 700, cz); oc.up.set(0, 0, -1); oc.lookAt(cx, 0, cz); oc.updateMatrixWorld();
+    renderer.setRenderTarget(P.rt); renderer.setClearColor(0x4f7f9a, 1); renderer.clear(); renderer.render(scene, oc);
+  }
+  renderer.setRenderTarget(null);
+  scene.fog.near = keep.fn; scene.fog.far = keep.ff; skyDome.visible = keep.sky; land.visible = keep.land; LM.inst.visible = keep.inst; LM.cart.visible = keep.cart; if (mtn) mtn.visible = mtnV;
 }
 function lmSample(now) {
   const F = Sim.farFolk(G), n = F.n;
@@ -7521,7 +7558,7 @@ function lmChrome() {
     if (town) { const T = TOWNS[town]; MAP_C.town = town; MAP_C.x = town === 'hearthmoor' ? 0 : T.x; MAP_C.z = town === 'hearthmoor' ? 0 : T.z; MAP_C.name = TOWN_NAMES[town]; MAP_C.r = town === 'crownmere' ? 300 : 150; }
     UI.mapSel = null; renderMapCard();
   }
-  const name = town ? MAP_C.name + (town !== townHere() ? ' (from afar)' : '') : d > 1500 ? 'The World' : mapCam.x > 1880 ? 'Valdoria' : mapCam.x > 1150 ? 'The Sundering Sea' : 'Alderwyn';
+  const name = town ? MAP_C.name + (town !== townHere() ? ' (from afar)' : '') : d > 1500 ? 'The World' : mapCam.x > Sim.VSHORE(mapCam.z) - 40 ? 'Valdoria' : mapCam.x > Sim.ALD_COAST(mapCam.z) + 40 ? (Math.hypot(mapCam.x - Sim.ISLE.x, mapCam.z - Sim.ISLE.z) < 160 ? 'Stormrest Isle' : 'The Sundering Sea') : 'Alderwyn';
   const txt = name, hr = Sim.hourOf(G), sub = 'Day ' + G.day + ' · ' + Sim.clock(G.t) + ' · time runs at 1×' + (hr < 5.5 || hr >= 21.5 ? ' · night: most people are indoors' : '');
   if (LM.title !== txt) { LM.title = txt; $('mapTitle').textContent = txt; }
   if (LM.sub !== sub) { LM.sub = sub; $('mapClock').textContent = sub; }
@@ -7999,15 +8036,15 @@ const Mini = (function () {
       rect(3, c.x, c.z, 48, 40, -c.face, COL.plaza); line(5, [P(-24, -20), P(24, -20), P(24, 20), P(-24, 20), P(-24, -20)], 2.4, COL.wall); const k = P(0, -4); rect(4, k[0], k[1], 16, 14, c.face, COL.big); }
     line(5, O.wall, 2, COL.wall); }
   // Ironcrest and Eastwatch, and the sea
-  for (let z = -1500; z < 1000; z += 20) rect(1, 1140 + 16 * Math.sin(z / 95) + 210, z, 420, 22, 0, COL.water);
+  for (let z = -1500; z < 1000; z += 20) rect(1, Sim.ALD_COAST(z) + 210, z, 420, 22, 0, COL.water);
   rect(1, 1300, -300, 320, 270, 0, COL.water);
   // the Sundering Sea out to Valdoria's shore, Stormrest Isle in the middle, and Dawnport
-  for (let z = -1500; z < 1000; z += 20) { const a = 1140 + 16 * Math.sin(z / 95), b = Math.abs(z + 300) < 92 ? 1909 : Sim.VSHORE(z); rect(1, (a + b) / 2, z, b - a, 22, 0, COL.water); }
+  for (let z = -1500; z < 1000; z += 20) { const a = Sim.ALD_COAST(z), b = Math.abs(z + 300) < 92 ? 8659 : Sim.VSHORE(z); rect(1, (a + b) / 2, z, b - a, 22, 0, COL.water); }
   circ(2, Sim.ISLE.x, Sim.ISLE.z, 48, '#8fa25e'); rect(4, Sim.ISLE.x - 12, Sim.ISLE.z, 7, 10, Math.PI / 2, COL.house);
   ['vgold', 'vthorn', 'vstone'].forEach(k => line(2, Sim.ROADS[k], 4, COL.road));
   for (const O of [Sim.GM, Sim.TW, Sim.SW]) { O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); }
   line(5, Sim.SW.wall, 2, COL.wall); rect(4, Sim.SW.keep.x, Sim.SW.keep.z, 16, 14, 0, COL.big);
-  { const O = Sim.DP; O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); rect(4, O.palace.x, O.palace.z, 14, 26, 0, COL.big); rect(4, O.customs.x, O.customs.z, 9, 20, 0, COL.big); [-350, -300, -250].forEach(z => line(3, [[1907, z], [1872, z]], 3, COL.road)); }
+  { const O = Sim.DP; O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); rect(4, O.palace.x, O.palace.z, 14, 26, 0, COL.big); rect(4, O.customs.x, O.customs.z, 9, 20, 0, COL.big); [-350, -300, -250].forEach(z => line(3, [[8657, z], [8622, z]], 3, COL.road)); }
   for (const O of [Sim.IC, Sim.EW]) {
     O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street));
     O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house));
@@ -8066,7 +8103,7 @@ const Mini = (function () {
       if (acc < 0.1) return;
       acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
       draw(p.x, p.z, cam.yaw, R);
-      const t = townHere(), inTown = R !== 120, nm = inTown ? TOWN_NAMES[t] : Math.hypot(p.x - Sim.ISLE.x, p.z - Sim.ISLE.z) < 70 ? 'Stormrest Isle' : p.x > 1300 && p.x < 1880 ? 'The Sundering Sea' : p.x >= 1880 ? 'Valdoria' : 'On the road';
+      const t = townHere(), inTown = R !== 120, nm = inTown ? TOWN_NAMES[t] : Math.hypot(p.x - Sim.ISLE.x, p.z - Sim.ISLE.z) < 70 ? 'Stormrest Isle' : p.x > Sim.ALD_COAST(p.z) + 10 && p.x < Sim.VSHORE(p.z) - 10 ? 'The Sundering Sea' : p.x >= Sim.VSHORE(p.z) - 10 ? 'Valdoria' : 'On the road';
       if (nm !== lt) { $('miniName').textContent = nm; lt = nm; }
     }
   };
@@ -8529,6 +8566,7 @@ function frameBody(now) {
   { const w = weatherFor(G, UI.mode === 'title' ? 18 : Sim.hourOf(G)); WX.rain += (w.rain - WX.rain) * Math.min(1, dt * 0.6); WX.mist += (w.mist - WX.mist) * Math.min(1, dt * 0.6); stepRain(dt, G); syncHouseSigns(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
   syncCamera(G, dt, t);
+  { const far = UI.overlay === 'map' ? Math.max(3200, mapCam.dist * 2.4) : 3200; if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); } }
   if (UI.overlay === 'map') { scene.fog.near = mapCam.dist * 1.6 + 60; scene.fog.far = mapCam.dist * 3.2 + 280; lmChrome(); updatePins(); }
   if (UI.overlay !== 'map' && document.body.classList.contains('mapping')) { document.body.classList.remove('mapping'); $('mapui').hidden = true; UI.mapPid = null; }   // something else took the screen while the map was up
   lmFrame(now, t);
@@ -8897,6 +8935,14 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.96', date: '13 November', title: 'A wider sea', items: [
+    'The Sundering Sea is ten times wider. Valdoria now lies far across open water, and Stormrest Isle sits alone in the middle. A passage from Eastwatch to Dawnport takes about twelve hours: leave in the morning, land in the evening.',
+    'Both coasts are ragged now, with bays and headlands, and lie straight only along the quays of the ports. The sea follows every bay.',
+    'The map: zoomed right out, the land and sea fade into haze at the edges of the known world instead of ending in a square. The northern mountains have ridges, with snow on the heights.',
+    'The grey squares and circles over towns on the map are gone: they were far-off silhouettes meant only for the street view.',
+    'You can now walk anywhere in Valdoria; before, part of it could not be reached on foot.',
+    'Old saves move everything in Valdoria across the wider sea with it.'
+  ] },
   { v: '0.95', date: '13 November', title: 'Maybe later, now', items: [
     'Crises: fire, fever, blight and floods now strike the towns, usually with a day or two of warning. Pay for a fire-cart, a physician, grain from afar or a dyke to stop the worst of it, or help the families afterwards. They are real but you can recover, and the town remembers who stepped up.',
     'Fairs and players: a travelling fair or a company of players sometimes comes to town, fills the square and every shop, and dresses the square for the occasion. Sponsor one and your name is on every lip.',

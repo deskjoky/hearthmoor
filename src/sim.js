@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 19;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
+  const VERSION = 20;   // 17: v0.54's economy and climb; older saves cannot be carried over. 18: Hearthmoor re-laid on a medieval plan
   const DAY = 1440;
   const CARRY = 20;
   const SERVE_MIN = 3;
@@ -3517,25 +3517,31 @@
   /* ---------- Valdoria, across the Sundering Sea: Dawnport, and Stormrest Isle on the way ---------- */
   // Valdoria's coast faces Alderwyn across about 760 m of open water. Dawnport is its great port: sandstone, red tiles,
   // arcaded streets, a customs house on the quay and the Consul's palace on the rise behind the town.
-  const VSHORE = z => 1900 + 10 * Math.sin(z / 70) + 4 * Math.sin(z / 23);
-  const ISLE = { x: 1520, z: -330, r: 46 };
+  /* ---------- the Sundering Sea: one wide, open sea between the two kingdoms. Everything about its shape lives here, so that
+     anything that crosses it (passage ships today; ships of your own to sail, later) reads the same coasts and isles ---------- */
+  // a coast is ragged with bays and headlands, and lies straight only along the quays of the ports
+  const ragged = (z, ph) => { const w = Math.min(1, Math.max(0, (Math.abs(z + 300) - 110) / 130)), k = w * w * (3 - 2 * w); return k * (70 * Math.sin(z / 410 + ph) + 60 * Math.sin(z / 190 + ph * 2.3) + 38 * Math.sin(z / 83 + ph * 0.7) + 16 * Math.sin(z / 31 + ph * 1.9) + 6 * Math.sin(z / 13 + ph * 3.1)); };
+  const ALD_COAST = z => 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31) - ragged(z, 0.7);   // Alderwyn's east coast: bays bite west into the land
+  const VSHORE = z => 8650 + 10 * Math.sin(z / 70) + 4 * Math.sin(z / 23) + ragged(z, 2.4);          // Valdoria's west coast: bays bite east
+  const SEA = { x0: 1140, x1: 8650, band: { x0: -1400, x1: 10500, z0: -2800, z1: 1400 }, level: 'SEA_Y in the drawing' };
+  const ISLE = { x: 4895, z: -330, r: 46 };   // Stormrest Isle, alone in the middle of the Sundering Sea
   const DP = (function () {
-    const C = { x: 1990, z: -300 }, R = 104;
+    const C = { x: 8740, z: -300 }, R = 104;
     const T = makeTown({
       id: 'dawnport', lanes: VAL_LANES, C, seed: 20231, R: R - 6, maxHouses: 104, tall: 0.6,
-      inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 3 && x > 1908,
-      avoid: (x, z, rad) => x < 1916 + rad || Math.hypot(x - 2084, z + 300) < 22 + rad || Math.hypot(x - 1934, z + 366) < 12 + rad,
+      inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 3 && x > 8658,
+      avoid: (x, z, rad) => x < 8666 + rad || Math.hypot(x - 8834, z + 300) < 22 + rad || Math.hypot(x - 8684, z + 366) < 12 + rad,
       streets: [
-        { name: 'the High Calle', w: 5.2, pts: [[1918, -300], [1960, -300], [2010, -300], [2062, -300]] },
-        { name: 'the Quay', w: 5.4, pts: [[1912, -392], [1912, -300], [1912, -210]], noHouses: true },
-        { name: 'Salt Street', w: 3.8, pts: [[1960, -300], [1964, -348], [1996, -386]] },
-        { name: 'Vine Street', w: 3.8, pts: [[1960, -300], [1964, -252], [1996, -214]] },
-        { name: 'the Arcade', w: 4.2, pts: [[2010, -300], [2014, -346], [2050, -360]] },
-        { name: 'Fountain Lane', w: 3.6, pts: [[2010, -300], [2014, -254], [2050, -240]] },
-        { name: 'Palace Steps', w: 4.4, pts: [[2062, -300], [2070, -300]], noHouses: true }
+        { name: 'the High Calle', w: 5.2, pts: [[8668, -300], [8710, -300], [8760, -300], [8812, -300]] },
+        { name: 'the Quay', w: 5.4, pts: [[8662, -392], [8662, -300], [8662, -210]], noHouses: true },
+        { name: 'Salt Street', w: 3.8, pts: [[8710, -300], [8714, -348], [8746, -386]] },
+        { name: 'Vine Street', w: 3.8, pts: [[8710, -300], [8714, -252], [8746, -214]] },
+        { name: 'the Arcade', w: 4.2, pts: [[8760, -300], [8764, -346], [8800, -360]] },
+        { name: 'Fountain Lane', w: 3.6, pts: [[8760, -300], [8764, -254], [8800, -240]] },
+        { name: 'Palace Steps', w: 4.4, pts: [[8812, -300], [8820, -300]], noHouses: true }
       ],
-      plazas: [{ id: 'harbour', name: 'the Harbour Plaza', x: 1934, z: -300, r0: 4, r1: 13, w: 4 }, { id: 'mayor', name: 'the Plaza Mayor', x: 2010, z: -300, r0: 3, r1: 11, w: 3 }, { id: 'fish', name: 'the fish market', x: 1922, z: -238, r0: 2, r1: 7, w: 2 }],
-      marks: [{ x: 2084, z: -300, r: 20 }, { x: 1934, z: -366, r: 12 }, { x: 2040, z: -274, r: 6 }],
+      plazas: [{ id: 'harbour', name: 'the Harbour Plaza', x: 8684, z: -300, r0: 4, r1: 13, w: 4 }, { id: 'mayor', name: 'the Plaza Mayor', x: 8760, z: -300, r0: 3, r1: 11, w: 3 }, { id: 'fish', name: 'the fish market', x: 8672, z: -238, r0: 2, r1: 7, w: 2 }],
+      marks: [{ x: 8834, z: -300, r: 20 }, { x: 8684, z: -366, r: 12 }, { x: 8790, z: -274, r: 6 }],
       biz: [
         ['d_gull', 'tavern', 'The Red Gull', 'Marisol Ferrer', 0, 0.12, 1, 'harbour'], ['d_vine', 'tavern', 'The Vine and Barrel', 'Rodrigo Vidal', 0, 0.62, -1, 'high'], ['d_lamp', 'tavern', 'The Lamplighter', 'Leonor Serra', 3, 0.5, 1, 'vine'],
         ['d_oven1', 'bakery', 'Saint Olalla’s Ovens', 'Tomas Puig', 0, 0.42, -1, 'high'], ['d_oven2', 'bakery', 'The Fig Tree Bakery', 'Elvira Bosch', 4, 0.5, 1, 'arcade'],
@@ -3545,88 +3551,88 @@
         ['d_gold', 'goldsmith', 'The Counting House', 'Diego Medina', 0, 0.82, 1, 'high'], ['d_apoth', 'apothecary', 'The Orange Tree Apothecary', 'Ines Arenas', 5, 0.25, -1, 'fountain'],
         ['d_cart', 'carter', 'Quay Carters', 'Nuno Torres', 1, 0.75, -1, 'quay'], ['d_mason', 'mason', 'Sandstone Masons', 'Pelayo Rius', 2, 0.25, 1, 'salt'], ['d_potter', 'potter', 'The Red Clay Pottery', 'Blanca Salvat', 3, 0.25, -1, 'vine'], ['d_tanner', 'tanner', 'Dawnport Tannery', 'Sancho Vidal', 1, 0.3, 1, 'quay']
       ],
-      spots: { dp_dock: { x: 1916, z: -300, rx: 2.5, rz: 70 }, dp_fish: { x: 1918, z: -230, rx: 2, rz: 12 }, dp_salt: { x: 1960, z: -398, rx: 12, rz: 4 }, dp_sail: { x: 1916, z: -352, rx: 2, rz: 18 }, dp_vine: { x: 2030, z: -206, rx: 12, rz: 5 }, dp_watch: { x: 2060, z: -300, rx: 3, rz: 4 } },
-      board: { x: 1944, z: -288 }, entry: { x: 1918, z: -300 },
-      extra: { palace: { x: 2084, z: -300, face: -Math.PI / 2 }, customs: { x: 1934, z: -366, face: Math.PI / 2 }, fountain: { x: 2010, z: -300 }, quayX: 1910 }
+      spots: { dp_dock: { x: 8666, z: -300, rx: 2.5, rz: 70 }, dp_fish: { x: 8668, z: -230, rx: 2, rz: 12 }, dp_salt: { x: 8710, z: -398, rx: 12, rz: 4 }, dp_sail: { x: 8666, z: -352, rx: 2, rz: 18 }, dp_vine: { x: 8780, z: -206, rx: 12, rz: 5 }, dp_watch: { x: 8810, z: -300, rx: 3, rz: 4 } },
+      board: { x: 8694, z: -288 }, entry: { x: 8668, z: -300 },
+      extra: { palace: { x: 8834, z: -300, face: -Math.PI / 2 }, customs: { x: 8684, z: -366, face: Math.PI / 2 }, fountain: { x: 8760, z: -300 }, quayX: 8660 }
     });
     return T;
   })();
   const DP_JOBS = { dp_dock: ['Docker', 'Unloading ships on the quay'], dp_fish: ['Fisher', 'Fishing from the boats'], dp_salt: ['Salt raker', 'Raking the salt pans'], dp_sail: ['Sailor', 'Crewing a merchant ship'], dp_vine: ['Vine dresser', 'Working the vineyards above the town'], dp_watch: ['Harbour guard', 'Keeping the quay for the Consul'] };
   DP.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
   TOWNS.dawnport = { name: 'Dawnport', x: DP.C.x, z: DP.C.z, r: 106, open: true, foreign: 'valdoria' };
-  LOCS.dpharbour = { x: 1934, z: -300, r: 11, name: 'the Harbour Plaza', town: 'dawnport' };
-  LOCS.dpquay = { x: 1916, z: -300, r: 8, name: 'Dawnport Quay', town: 'dawnport', port: 'dawnport' };
-  LOCS.dpcustoms = { x: 1934, z: -352, r: 6, name: 'the Customs House', town: 'dawnport' };
-  LOCS.dppalace = { x: 2064, z: -300, r: 6, name: 'the Consul’s Palace', town: 'dawnport' };
-  LOCS.dpplaza = { x: 2010, z: -300, r: 10, name: 'the Plaza Mayor', town: 'dawnport' };
+  LOCS.dpharbour = { x: 8684, z: -300, r: 11, name: 'the Harbour Plaza', town: 'dawnport' };
+  LOCS.dpquay = { x: 8666, z: -300, r: 8, name: 'Dawnport Quay', town: 'dawnport', port: 'dawnport' };
+  LOCS.dpcustoms = { x: 8684, z: -352, r: 6, name: 'the Customs House', town: 'dawnport' };
+  LOCS.dppalace = { x: 8814, z: -300, r: 6, name: 'the Consul’s Palace', town: 'dawnport' };
+  LOCS.dpplaza = { x: 8760, z: -300, r: 10, name: 'the Plaza Mayor', town: 'dawnport' };
   DP.biz.forEach(b0 => { LOCS['db:' + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town: 'dawnport' }; });
   // Valdoria's other towns: Goldmeadow on the plains to the south-east, Thornwick at the forest's edge to the east,
   // and Stonewatch, the walled fortress guarding the northern pass. Roads run to each from Dawnport.
   const GM = makeTown({
-    id: 'goldmeadow', lanes: VAL_LANES, C: { x: 2210, z: 168 }, seed: 31337, R: 62, maxHouses: 26, tall: 0.15,
+    id: 'goldmeadow', lanes: VAL_LANES, C: { x: 8960, z: 168 }, seed: 31337, R: 62, maxHouses: 26, tall: 0.15,
     streets: [
-      { name: 'the Harvest Road', w: 4.4, pts: [[2194, 108], [2203, 140], [2210, 170], [2218, 214]] },
-      { name: 'Paddock Lane', w: 3.4, pts: [[2158, 172], [2210, 170], [2262, 174]] }
+      { name: 'the Harvest Road', w: 4.4, pts: [[8944, 108], [8953, 140], [8960, 170], [8968, 214]] },
+      { name: 'Paddock Lane', w: 3.4, pts: [[8908, 172], [8960, 170], [9012, 174]] }
     ],
-    plazas: [{ id: 'green', name: 'the Green', x: 2210, z: 170, r0: 3, r1: 10, w: 3 }],
-    marks: [{ x: 2262, z: 140, r: 9 }],
+    plazas: [{ id: 'green', name: 'the Green', x: 8960, z: 170, r0: 3, r1: 10, w: 3 }],
+    marks: [{ x: 9012, z: 140, r: 9 }],
     biz: [['g_sheaf', 'tavern', 'The Golden Sheaf', 'Constanza Fuster', 0, 0.42, 1, 'green'], ['g_oven', 'bakery', 'Goldmeadow Ovens', 'Martí Prats', 0, 0.7, -1, 'green'], ['g_butch', 'butcher', 'Horse Fair Butchers', 'Sancha Valls', 1, 0.25, 1, 'paddock'], ['g_cart', 'carter', 'Horse Fair Carters', 'Esteve Soler', 1, 0.75, -1, 'paddock'], ['g_cooper', 'cooper', 'Ale Coopers', 'Oriol Mirall', 0, 0.2, -1, 'road']],
-    spots: { gm_field: { x: 2150, z: 230, rx: 26, rz: 10 }, gm_horse: { x: 2270, z: 200, rx: 12, rz: 10 }, gm_harvest: { x: 2140, z: 120, rx: 18, rz: 8 }, gm_watch: { x: 2196, z: 116, rx: 3, rz: 3 } },
-    board: { x: 2216, z: 160 }, entry: { x: 2194, z: 108 },
-    extra: { windmill: { x: 2262, z: 140 } }
+    spots: { gm_field: { x: 8900, z: 230, rx: 26, rz: 10 }, gm_horse: { x: 9020, z: 200, rx: 12, rz: 10 }, gm_harvest: { x: 8890, z: 120, rx: 18, rz: 8 }, gm_watch: { x: 8946, z: 116, rx: 3, rz: 3 } },
+    board: { x: 8966, z: 160 }, entry: { x: 8944, z: 108 },
+    extra: { windmill: { x: 9012, z: 140 } }
   });
   const TW = makeTown({
-    id: 'thornwick', lanes: VAL_LANES, C: { x: 2385, z: -186 }, seed: 40404, R: 52, maxHouses: 20, tall: 0.1,
+    id: 'thornwick', lanes: VAL_LANES, C: { x: 9135, z: -186 }, seed: 40404, R: 52, maxHouses: 20, tall: 0.1,
     streets: [
-      { name: 'Timber Street', w: 4.2, pts: [[2326, -186], [2360, -186], [2400, -187], [2436, -190]] },
-      { name: 'Sawpit Lane', w: 3.2, pts: [[2386, -187], [2389, -226]] },
-      { name: 'Ridge Lane', w: 3.2, pts: [[2386, -187], [2382, -150]] }
+      { name: 'Timber Street', w: 4.2, pts: [[9076, -186], [9110, -186], [9150, -187], [9186, -190]] },
+      { name: 'Sawpit Lane', w: 3.2, pts: [[9136, -187], [9139, -226]] },
+      { name: 'Ridge Lane', w: 3.2, pts: [[9136, -187], [9132, -150]] }
     ],
-    plazas: [{ id: 'yard', name: 'the Timber Yard', x: 2386, z: -187, r0: 3, r1: 9, w: 3 }],
-    marks: [{ x: 2430, z: -222, r: 10 }],
+    plazas: [{ id: 'yard', name: 'the Timber Yard', x: 9136, z: -187, r0: 3, r1: 9, w: 3 }],
+    marks: [{ x: 9180, z: -222, r: 10 }],
     biz: [['t_oak', 'tavern', 'The Felled Oak', 'Gaspar Cabrera', 0, 0.45, 1, 'yard'], ['t_join', 'joinery', 'Thornwick Joiners', 'Pilar Fuster', 0, 0.7, -1, 'timber'], ['t_axe', 'smithy', 'Axe and Wedge', 'Nuno Prats', 0, 0.25, -1, 'timber'], ['t_cart', 'carter', 'Log Carters', 'Rosalind Valls', 1, 0.6, 1, 'sawpit'], ['t_chand', 'chandler', 'Pitch and Tallow', 'Lope Soler', 2, 0.6, -1, 'ridge']],
-    spots: { tw_fell: { x: 2440, z: -140, rx: 20, rz: 12 }, tw_saw: { x: 2430, z: -222, rx: 6, rz: 5 }, tw_char: { x: 2460, z: -230, rx: 6, rz: 6 }, tw_watch: { x: 2330, z: -190, rx: 3, rz: 3 } },
-    board: { x: 2392, z: -178 }, entry: { x: 2326, z: -186 },
-    extra: { sawmill: { x: 2430, z: -222 } }
+    spots: { tw_fell: { x: 9190, z: -140, rx: 20, rz: 12 }, tw_saw: { x: 9180, z: -222, rx: 6, rz: 5 }, tw_char: { x: 9210, z: -230, rx: 6, rz: 6 }, tw_watch: { x: 9080, z: -190, rx: 3, rz: 3 } },
+    board: { x: 9142, z: -178 }, entry: { x: 9076, z: -186 },
+    extra: { sawmill: { x: 9180, z: -222 } }
   });
   const SW = (function () {
-    const C = { x: 2232, z: -732 }, R = 82;
+    const C = { x: 8982, z: -732 }, R = 82;
     const wall = []; for (let a = 0; a < 360.1; a += 9) { const t0 = a * Math.PI / 180; wall.push([C.x + Math.cos(t0) * R, C.z + Math.sin(t0) * R]); }
     const gate = { x: C.x - 6, z: C.z + R, face: 0 };
     const T = makeTown({
       id: 'stonewatch', lanes: VAL_LANES, C, seed: 50505, R: R - 8, maxHouses: 56, tall: 0.5,
       inside: (x, z) => Math.hypot(x - C.x, z - C.z) < R - 4,
-      avoid: (x, z, rad) => Math.hypot(x - 2240, z + 800) < 20 + rad,
+      avoid: (x, z, rad) => Math.hypot(x - 8990, z + 800) < 20 + rad,
       streets: [
-        { name: 'Gate Street', w: 4.6, pts: [[2226, -656], [2228, -700], [2232, -735], [2236, -778]] },
-        { name: 'the Ramparts Road', w: 3.8, pts: [[2168, -732], [2232, -735], [2296, -738]] },
-        { name: 'Armourers’ Row', w: 3.4, pts: [[2228, -700], [2272, -692]] },
-        { name: 'Quarry Lane', w: 3.4, pts: [[2232, -760], [2186, -772]] }
+        { name: 'Gate Street', w: 4.6, pts: [[8976, -656], [8978, -700], [8982, -735], [8986, -778]] },
+        { name: 'the Ramparts Road', w: 3.8, pts: [[8918, -732], [8982, -735], [9046, -738]] },
+        { name: 'Armourers’ Row', w: 3.4, pts: [[8978, -700], [9022, -692]] },
+        { name: 'Quarry Lane', w: 3.4, pts: [[8982, -760], [8936, -772]] }
       ],
-      plazas: [{ id: 'parade', name: 'the Parade Ground', x: 2232, z: -735, r0: 3, r1: 12, w: 4 }],
-      marks: [{ x: 2240, z: -800, r: 20 }],
+      plazas: [{ id: 'parade', name: 'the Parade Ground', x: 8982, z: -735, r0: 3, r1: 12, w: 4 }],
+      marks: [{ x: 8990, z: -800, r: 20 }],
       biz: [['s_gate', 'tavern', 'The Iron Gate', 'Fernan Torres', 0, 0.3, 1, 'gate'], ['s_arm1', 'armourer', 'The King’s Armourers', 'Gonzalo Puig', 2, 0.5, 1, 'armourers'], ['s_arm2', 'weaponsmith', 'Shield and Sword', 'Urraca Serra', 2, 0.8, -1, 'armourers'], ['s_bake', 'bakery', 'Garrison Ovens', 'Juana Rius', 0, 0.55, -1, 'gate'], ['s_butch', 'butcher', 'Rampart Butchers', 'Diego Soler', 1, 0.25, 1, 'ramparts'], ['s_mason', 'mason', 'Stonewatch Masons', 'Alvaro Castell', 3, 0.6, 1, 'quarry'], ['s_tan', 'tanner', 'Saddlers and Tanners', 'Mencia Oliver', 1, 0.8, -1, 'ramparts'], ['s_cart', 'carter', 'Pass Carters', 'Bernat Prats', 0, 0.12, -1, 'gate'], ['s_apoth', 'apothecary', 'The Surgeon’s House', 'Elvira Mirall', 1, 0.7, 1, 'ramparts']],
-      spots: { sw_garrison: { x: 2232, z: -735, rx: 10, rz: 8 }, sw_quarry: { x: 2180, z: -830, rx: 10, rz: 6 }, sw_wall: { x: 2300, z: -735, rx: 3, rz: 20 }, sw_watch: { x: gate.x, z: gate.z - 8, rx: 3, rz: 2 } },
-      board: { x: 2240, z: -724 }, entry: { x: gate.x, z: gate.z + 6 },
-      extra: { wall, gate, keep: { x: 2240, z: -800, face: 0 } }
+      spots: { sw_garrison: { x: 8982, z: -735, rx: 10, rz: 8 }, sw_quarry: { x: 8930, z: -830, rx: 10, rz: 6 }, sw_wall: { x: 9050, z: -735, rx: 3, rz: 20 }, sw_watch: { x: gate.x, z: gate.z - 8, rx: 3, rz: 2 } },
+      board: { x: 8990, z: -724 }, entry: { x: gate.x, z: gate.z + 6 },
+      extra: { wall, gate, keep: { x: 8990, z: -800, face: 0 } }
     });
     return T;
   })();
   // Valdor, the royal capital: on the high ground beyond Thornwick's forest, at the end of the Queen's Road. The Calle Mayor
   // runs from the west gate to the Plaza de la Reina; the cathedral stands north of it, the Alcázar on the rise to the east.
   const VD = makeTown({
-    id: 'valdor', lanes: VAL_LANES, C: { x: 2720, z: -300 }, seed: 60606, R: 94, maxHouses: 72, tall: 0.6,
-    avoid: (x, z, rad) => Math.hypot(x - 2806, z + 300) < 30 + rad || Math.hypot(x - 2720, z + 352) < 18 + rad || Math.hypot(x - 2622, z + 318) < 12 + rad,
+    id: 'valdor', lanes: VAL_LANES, C: { x: 9470, z: -300 }, seed: 60606, R: 94, maxHouses: 72, tall: 0.6,
+    avoid: (x, z, rad) => Math.hypot(x - 9556, z + 300) < 30 + rad || Math.hypot(x - 9470, z + 352) < 18 + rad || Math.hypot(x - 9372, z + 318) < 12 + rad,
     streets: [
-      { name: 'the Calle Mayor', w: 5.2, pts: [[2632, -300], [2676, -300], [2720, -300], [2772, -300]] },
-      { name: 'Calle de la Catedral', w: 4, pts: [[2720, -300], [2716, -334]] },
-      { name: 'Calle de los Plateros', w: 3.8, pts: [[2720, -300], [2724, -256], [2718, -222]] },
-      { name: 'Calle del Mercado', w: 3.6, pts: [[2676, -300], [2672, -256], [2664, -230]] },
-      { name: 'Calle Nueva', w: 3.4, pts: [[2676, -300], [2668, -344], [2660, -368]] },
-      { name: 'Calle de las Monjas', w: 3.2, pts: [[2724, -256], [2770, -252]] }
+      { name: 'the Calle Mayor', w: 5.2, pts: [[9382, -300], [9426, -300], [9470, -300], [9522, -300]] },
+      { name: 'Calle de la Catedral', w: 4, pts: [[9470, -300], [9466, -334]] },
+      { name: 'Calle de los Plateros', w: 3.8, pts: [[9470, -300], [9474, -256], [9468, -222]] },
+      { name: 'Calle del Mercado', w: 3.6, pts: [[9426, -300], [9422, -256], [9414, -230]] },
+      { name: 'Calle Nueva', w: 3.4, pts: [[9426, -300], [9418, -344], [9410, -368]] },
+      { name: 'Calle de las Monjas', w: 3.2, pts: [[9474, -256], [9520, -252]] }
     ],
-    plazas: [{ id: 'reina', name: 'the Plaza de la Reina', x: 2720, z: -300, r0: 3, r1: 14, w: 4 }],
-    marks: [{ x: 2806, z: -300, r: 30 }, { x: 2720, z: -352, r: 18 }],
+    plazas: [{ id: 'reina', name: 'the Plaza de la Reina', x: 9470, z: -300, r0: 3, r1: 14, w: 4 }],
+    marks: [{ x: 9556, z: -300, r: 30 }, { x: 9470, z: -352, r: 18 }],
     biz: [
       ['v_crown', 'tavern', 'The Crown of Valdor', 'Beatriz Montoro', 0, 0.62, 1, 'mayor'], ['v_pilg', 'tavern', 'The Pilgrim’s Rest', 'Anselmo Ribas', 1, 0.5, -1, 'catedral'],
       ['v_oven1', 'bakery', 'The Queen’s Ovens', 'Fermín Lozano', 0, 0.4, -1, 'mayor'], ['v_oven2', 'bakery', 'Saint Eulalia’s Bakery', 'Rosa Quintana', 3, 0.55, 1, 'mercado'],
@@ -3637,9 +3643,9 @@
       ['v_cart', 'carter', 'Queen’s Road Carters', 'Mateo Barral', 0, 0.12, -1, 'mayor'], ['v_mason', 'mason', 'Cathedral Masons', 'Pere Fortuny', 4, 0.25, -1, 'nueva'],
       ['v_cooper', 'cooper', 'Valdor Coopers', 'Lucía Pons', 3, 0.8, 1, 'mercado']
     ],
-    spots: { vd_guard: { x: 2790, z: -300, rx: 4, rz: 10 }, vd_cath: { x: 2720, z: -360, rx: 10, rz: 4 }, vd_porter: { x: 2720, z: -300, rx: 10, rz: 10 }, vd_scribe: { x: 2800, z: -284, rx: 4, rz: 3 }, vd_garden: { x: 2830, z: -270, rx: 8, rz: 6 }, vd_watch: { x: 2638, z: -300, rx: 3, rz: 3 } },
-    board: { x: 2732, z: -290 }, entry: { x: 2632, z: -300 },
-    extra: { alcazar: { x: 2806, z: -300, face: -Math.PI / 2 }, cathedral: { x: 2720, z: -352, face: 0 }, fountain: { x: 2720, z: -300 } }
+    spots: { vd_guard: { x: 9540, z: -300, rx: 4, rz: 10 }, vd_cath: { x: 9470, z: -360, rx: 10, rz: 4 }, vd_porter: { x: 9470, z: -300, rx: 10, rz: 10 }, vd_scribe: { x: 9550, z: -284, rx: 4, rz: 3 }, vd_garden: { x: 9580, z: -270, rx: 8, rz: 6 }, vd_watch: { x: 9388, z: -300, rx: 3, rz: 3 } },
+    board: { x: 9482, z: -290 }, entry: { x: 9382, z: -300 },
+    extra: { alcazar: { x: 9556, z: -300, face: -Math.PI / 2 }, cathedral: { x: 9470, z: -352, face: 0 }, fountain: { x: 9470, z: -300 } }
   });
   const VAL_JOBS = {
     gm_field: ['Field hand', 'Working the wheat fields'], gm_horse: ['Horse breeder', 'Tending the horses in the paddocks'], gm_harvest: ['Harvester', 'Bringing in the sheaves'], gm_watch: ['Reeve’s man', 'Keeping the road into Goldmeadow'],
@@ -3652,23 +3658,23 @@
   TOWNS.thornwick = { name: 'Thornwick', x: TW.C.x, z: TW.C.z, r: 56, open: true, foreign: 'valdoria' };
   TOWNS.stonewatch = { name: 'Stonewatch', x: SW.C.x, z: SW.C.z, r: 86, open: true, foreign: 'valdoria' };
   TOWNS.valdor = { name: 'Valdor', x: VD.C.x, z: VD.C.z, r: 100, open: true, foreign: 'valdoria' };
-  LOCS.vdplaza = { x: 2720, z: -300, r: 11, name: 'the Plaza de la Reina', town: 'valdor' };
-  LOCS.vdalcazar = { x: 2773, z: -300, r: 7, name: 'the Alcázar', town: 'valdor' };
-  LOCS.vdcathedral = { x: 2720, z: -338, r: 6, name: 'the Cathedral of Valdor', town: 'valdor' };
-  LOCS.gmgreen = { x: 2210, z: 170, r: 9, name: 'the Green', town: 'goldmeadow' };
-  LOCS.twyard = { x: 2386, z: -187, r: 8, name: 'the Timber Yard', town: 'thornwick' };
-  LOCS.swparade = { x: 2232, z: -735, r: 10, name: 'the Parade Ground', town: 'stonewatch' };
-  LOCS.swkeep = { x: 2240, z: -780, r: 6, name: 'the Castellan’s Keep', town: 'stonewatch' };
+  LOCS.vdplaza = { x: 9470, z: -300, r: 11, name: 'the Plaza de la Reina', town: 'valdor' };
+  LOCS.vdalcazar = { x: 9523, z: -300, r: 7, name: 'the Alcázar', town: 'valdor' };
+  LOCS.vdcathedral = { x: 9470, z: -338, r: 6, name: 'the Cathedral of Valdor', town: 'valdor' };
+  LOCS.gmgreen = { x: 8960, z: 170, r: 9, name: 'the Green', town: 'goldmeadow' };
+  LOCS.twyard = { x: 9136, z: -187, r: 8, name: 'the Timber Yard', town: 'thornwick' };
+  LOCS.swparade = { x: 8982, z: -735, r: 10, name: 'the Parade Ground', town: 'stonewatch' };
+  LOCS.swkeep = { x: 8990, z: -780, r: 6, name: 'the Castellan’s Keep', town: 'stonewatch' };
   for (const [L0, town, pre] of [[GM, 'goldmeadow', 'gb:'], [TW, 'thornwick', 'tb:'], [SW, 'stonewatch', 'sb:'], [VD, 'valdor', 'vb:']]) L0.biz.forEach(b0 => { LOCS[pre + b0.id] = { x: b0.x + Math.sin(b0.face) * 3.6, z: b0.z + Math.cos(b0.face) * 3.6, r: 3.2, name: b0.name, biz: b0.id, town }; });
-  ROADS.vgold = [[1996, -214], [2040, -150], [2100, -60], [2150, 30], [2186, 92], [2194, 108]];
-  ROADS.vthorn = [[2050, -240], [2140, -222], [2240, -204], [2326, -186]];
-  ROADS.vqueen = [[2436, -190], [2490, -206], [2548, -240], [2598, -280], [2632, -300]];   // the Queen's Road, through the forest to Valdor
-  ROADS.vstone = [[1996, -386], [2030, -460], [2090, -560], [2160, -630], [2220, -652], [2226, -656]];
+  ROADS.vgold = [[8746, -214], [8790, -150], [8850, -60], [8900, 30], [8936, 92], [8944, 108]];
+  ROADS.vthorn = [[8800, -240], [8890, -222], [8990, -204], [9076, -186]];
+  ROADS.vqueen = [[9186, -190], [9240, -206], [9298, -240], [9348, -280], [9382, -300]];   // the Queen's Road, through the forest to Valdor
+  ROADS.vstone = [[8746, -386], [8780, -460], [8840, -560], [8910, -630], [8970, -652], [8976, -656]];
   // the passage: ships sail from Eastwatch's quay, call at Stormrest Isle, and on to Dawnport. Anyone who can pay may go.
   const PORTS = {
     eastwatch: { x: 1128, z: -330, face: -Math.PI / 2, name: 'Eastwatch Quay' },
     stormrest: { x: ISLE.x - 30, z: ISLE.z, face: Math.PI / 2, name: 'Stormrest Harbour' },
-    dawnport: { x: 1918, z: -300, face: Math.PI / 2, name: 'Dawnport Quay' }
+    dawnport: { x: 8668, z: -300, face: Math.PI / 2, name: 'Dawnport Quay' }
   };
   LOCS.ewpassage = { x: PORTS.eastwatch.x, z: PORTS.eastwatch.z, r: 7, name: 'The Passage Office', town: 'eastwatch', port: 'eastwatch' };
   LOCS.stormrest = { x: ISLE.x - 22, z: ISLE.z, r: 9, name: 'The Stormrest Inn', port: 'stormrest' };
@@ -3727,11 +3733,11 @@
     if (nb) st.face = Math.atan2(nb.x - st.x, nb.z - st.z);
   }
   Object.assign(STAGE, {
-    dawnport: { x: 2046, z: -232, face: Math.PI, name: 'Dawnport Coach House' },
-    goldmeadow: { x: 2180, z: 116, face: Math.PI / 2, name: 'Goldmeadow Coach House' },
-    thornwick: { x: 2334, z: -174, face: Math.PI, name: 'Thornwick Coach House' },
-    stonewatch: { x: 2206, z: -640, face: Math.PI / 2, name: 'Stonewatch Coach House' },
-    valdor: { x: 2622, z: -318, face: 0, name: 'Valdor Coach House' }
+    dawnport: { x: 8796, z: -232, face: Math.PI, name: 'Dawnport Coach House' },
+    goldmeadow: { x: 8930, z: 116, face: Math.PI / 2, name: 'Goldmeadow Coach House' },
+    thornwick: { x: 9084, z: -174, face: Math.PI, name: 'Thornwick Coach House' },
+    stonewatch: { x: 8956, z: -640, face: Math.PI / 2, name: 'Stonewatch Coach House' },
+    valdor: { x: 9372, z: -318, face: 0, name: 'Valdor Coach House' }
   });
   for (const id in STAGE) LOCS['stage:' + id] = { x: STAGE[id].x, z: STAGE[id].z, r: 5, name: STAGE[id].name, town: id === 'hearthmoor' ? undefined : id, stage: id };
   const polyLen = pts => { let L = 0; for (let i = 0; i < pts.length - 1; i++) L += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); return L; };
@@ -8757,6 +8763,20 @@
     return JSON.stringify(Object.assign({}, s, { people }));
   }
   function inflatePeople(s) { if (s.people) for (const id in s.people) { const p = Object.assign({}, PERSON_TEMPLATE, s.people[id]); if (!p.log) p.log = []; s.people[id] = p; } }
+  // v20: the Sundering Sea is ten times wider. Everything that stood in Valdoria moves east with it, and Stormrest Isle to the middle of the sea
+  function widenSea(s) {
+    const DX = 6750, seen = new Set();
+    const move = o => { if (o.x >= 1700 && o.x < 3400) o.x += DX; else if (o.x >= 1350 && o.x < 1700 && Math.abs(o.z + 330) < 90) o.x += DX / 2; };
+    const walk = o => {
+      if (!o || typeof o !== 'object' || seen.has(o)) return; seen.add(o);
+      if (Array.isArray(o)) { for (const v of o) walk(v); return; }
+      if (typeof o.x === 'number' && typeof o.z === 'number') move(o);
+      for (const k in o) { const v = o[k]; if (v && typeof v === 'object') walk(v); }
+    };
+    walk(s);
+    if (s.player) { s.player.path = null; if (s.player.dest && typeof s.player.dest === 'object' && s.player.dest.x == null) s.player.dest = null; }
+    event(s, 'The Sundering Sea is far wider than the old charts showed: the crossing from Eastwatch to Dawnport now takes most of a day, and Stormrest Isle lies alone in the middle of it.', 'story');
+  }
   function migrateV1(o) {
     const s = newGame(o.rng, 'Wren');
     s.t = o.t; s.day = o.day; s.coins = o.coins; s.trades.bakery = LEARN_SHIFTS;
@@ -8905,6 +8925,7 @@
     if (s.v === 16) s.v = 17;
     if (s.v === 17) { s.v = 18; relayHearthmoor(s); rebuildOakbridge(s, 'Oakbridge has been rebuilt as a bridge town: a High Street from the South Gate to the bridge, a market place at the bridgehead, a church, a keep in its bailey, and three gates in the wall. Every home keeps its people and its owner.'); relayTowns(s); }
     if (s.v === 18) { s.v = 19; if (s.people) { setupPpl(s); pickKey(s, true); crowdDay(s); for (const id in s.ppl.crowd) s.ppl.crowd[id].warn = 0; const n = Object.keys(s.ppl.key).length; event(s, 'The people have changed. ' + n + ' people across the towns now count as people who matter, each with an aim, a loyalty and plans of their own; everyone else keeps a want and a memory of how you treated them; and every town has a mood that can turn. See People of note in the book.', 'story'); } }
+    if (s.v === 19) { s.v = 20; widenSea(s); }
     if (!s.player || !Array.isArray(s.shops) || !Array.isArray(s.agents) || !s.rec) throw new Error('Save is missing data');
     // straight away on loading: every court's list of unfinished sentences exists, and nothing is owed on a conviction overturned on appeal
     for (const C of allCourts(s)) if (Array.isArray(C.closed)) {
@@ -11503,7 +11524,7 @@
     HAPS, hapView, hapStart, hapDay, hapMul, AMBITIONS, ambitionView, lifeTitle, snapshot, digest, whyOf,
     CONSULADO, consuladoView, GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
-    DP, DP_JOBS, PORTS, ISLE, VSHORE, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
+    DP, DP_JOBS, PORTS, ISLE, VSHORE, ALD_COAST, SEA, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, TRAITS, GIFTS, OUTINGS, STAGE_NAME, WEDDINGS, UPBRING, natureOf, loveOf, suits, stageOf, GROW_DAYS, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
