@@ -554,7 +554,7 @@
   function closeDay(s) {
     const st = s.stats;
     if (s.player.horse) { spend(s, STABLING); st.stabling = (st.stabling || 0) + STABLING; }
-    if (s.ship) { spend(s, SHIP_UPKEEP); st.ship = (st.ship || 0) + SHIP_UPKEEP; }
+    if (s.ship) { const up = shipClass(s.ship).upkeep; spend(s, up); st.ship = (st.ship || 0) + up; }
     if (s.village.cottage === 'let') { earn(s, 5); st.rent += 5; s.rec.rentCollected += 5; }
     if (s.people) { guard(s, 'the businesses closed for the day', () => bizDay(s)); guard(s, 'the evening in the village', () => peopleEvening(s)); }
     if (s.gov) guard(s, 'the village government met', () => govEvening(s));
@@ -3685,6 +3685,212 @@
   // one winter day in five the sea is too rough to sail (the same days for everyone, so the forecast can be told)
   const seaRough = (s, d) => calendar({ day: d || s.day }).season === 'winter' && (((d || s.day) * 2654435761) >>> 0) % 100 < 20;
   const portHere = s => Object.keys(PORTS).find(k => Math.hypot(s.player.x - PORTS[k].x, s.player.z - PORTS[k].z) < 10) || null;
+  /* ---------- the Sea Road, Stage I: ships of your own, sailed by your own hand ----------
+     Four classes, sold at the shipyards. Aboard, the helm turns her and the sail sets her speed; the wind helps or hinders but
+     never stops her. A ship is either moored (ship.port names the port) or at sea (ship.port is null and ship.sea says where).
+     Speeds are metres a game minute, so the clock's own speed-up is the ship's speed-up. Plain numbers only, so it tests without a screen. */
+  const SHIP_CLASSES = {
+    skiff: { id: 'skiff', name: 'skiff', price: 150, hold: 12, upkeep: 1, crew: 0, mpm: 10, turn: 1.1, accel: 0.5, draft: 0.5, len: 7, beam: 2.3, blurb: 'An open boat with one sail. Slow and small, but she turns on a coin and floats where nothing else will.' },
+    cutter: { id: 'cutter', name: 'cutter', price: 480, hold: 36, upkeep: 2, crew: 3, mpm: 15.5, turn: 0.75, accel: 0.35, draft: 1, len: 12, beam: 3.4, blurb: 'Fast and handy, with a modest hold. The quickest way across.' },
+    cog: { id: 'cog', name: 'merchant cog', price: 800, hold: 80, upkeep: 3, crew: 6, mpm: 12.65, turn: 0.5, accel: 0.22, draft: 1.5, len: 18, beam: 4.6, blurb: 'The merchant’s workhorse: a deep hold and an honest pace.' },
+    galleon: { id: 'galleon', name: 'great galleon', price: 2800, hold: 240, upkeep: 8, crew: 14, mpm: 14, turn: 0.3, accel: 0.13, draft: 2.4, len: 30, beam: 7.6, blurb: 'Three masts and a hold like a warehouse. Quick once she is moving, slow to turn, and she wants deep water.' }
+  };
+  const SHIP_ORDER = ['skiff', 'cutter', 'cog', 'galleon'];
+  const SAIL_SET = [0, 0.45, 0.75, 1], SAIL_NAME = ['furled', 'reefed', 'half sail', 'full sail'];
+  const shipClass = S => SHIP_CLASSES[(S && S.cls) || 'cog'] || SHIP_CLASSES.cog;
+  // where each port keeps your ship: clear of the piers and of the ships already lying there
+  const BERTHS = {
+    eastwatch: { x: 1190, z: -300, hdg: 0 },
+    stormrest: { x: ISLE.x - 70, z: ISLE.z - 6, hdg: 0 },
+    dawnport: { x: 8600, z: -275, hdg: 0 }
+  };
+  // the shipyards: the slip at Eastwatch and the shipwrights of both ports
+  const SHIPYARDS = { ewyard: 'eastwatch', 'eb:e_ship1': 'eastwatch', 'eb:e_ship2': 'eastwatch', 'db:d_yard': 'dawnport' };
+  const yardHere = s => { for (const k in SHIPYARDS) { const L = LOCS[k]; if (L && Math.hypot(s.player.x - L.x, s.player.z - L.z) < (L.r || 3) + 2.5) return SHIPYARDS[k]; } return null; };
+  // the wind over the Sundering Sea: where it blows to, and how hard. It is read from the clock, so it is the same for everyone and never needs saving
+  const wh01 = n => (((n * 2654435761) >>> 0) % 10000) / 10000;
+  function windAt(s) {
+    const tt = s.t / 1440, i = Math.floor(tt), f0 = tt - i, f = f0 * f0 * (3 - 2 * f0);
+    const a0 = wh01(i * 3 + 11) * Math.PI * 2, a1 = wh01(i * 3 + 14) * Math.PI * 2, da = Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0));
+    const rough = seaRough(s);
+    return { to: a0 + da * f + 0.22 * Math.sin(tt * Math.PI * 6), str: rough ? 1.25 : 0.9 + 0.2 * (wh01(i * 5 + 2) * (1 - f) + wh01(i * 5 + 7) * f), rough };
+  }
+  // how well a ship goes for the wind: best with it behind, slowest straight into it, but she always makes some way
+  const windFactor = (hdg, to) => 0.62 + 0.38 * Math.pow((1 + Math.cos(hdg - to)) / 2, 0.7);
+  // how deep the water is, in metres: shelving up to every coast and to the isle, and nothing at all at a quay wall, a pier or a moored ship
+  const SEA_FLOOR = 3.5;
+  const SEA_HAZARDS = (function () {
+    const out = [], seg = (ax, az, bx, bz, r) => out.push({ ax, az, bx, bz, r, x0: Math.min(ax, bx) - r - 6, x1: Math.max(ax, bx) + r + 6, z0: Math.min(az, bz) - r - 6, z1: Math.max(az, bz) + r + 6 });
+    const hull = (x, z, ry, big) => { const h = (big ? 18 : 12) / 2 - 2; seg(x - Math.sin(ry) * h, z - Math.cos(ry) * h, x + Math.sin(ry) * h, z + Math.cos(ry) * h, (big ? 4.6 : 3.4) / 2 + 0.2); };
+    for (const z of [-350, -300, -250]) { seg(1138, z, 1172, z, 2.2); seg(8657, z, 8622, z, 2.2); }   // the piers of both ports
+    seg(1136, -430, 1170, -442, 2.8); seg(1170, -442, 1170, -442, 3.6);                               // Eastwatch's mole and its lighthouse
+    hull(1158, -357, 0, true); hull(1158, -293, Math.PI, true); hull(1162, -243, 0, false); hull(1190, -330, 0.4, true); hull(1205, -260, 2.6, false);
+    hull(8628, -357, 0, true); hull(8628, -293, Math.PI, true); hull(8626, -243, 0, false); hull(8600, -320, 0.5, true);
+    return out;
+  })();
+  function seaDepth(x, z) {
+    const inW = Math.abs(z + 300) < 135, inE = Math.abs(z + 300) < 96;
+    let d = Math.min((x - (inW ? 1138.4 : ALD_COAST(z) - 7)) * (inW ? 1.2 : 0.37), ((inE ? 8656.6 : VSHORE(z) - 8) - x) * (inE ? 1.2 : 0.44), SEA_FLOOR);
+    if (d <= 0) return 0;
+    if (x > ISLE.x - 90 && x < ISLE.x + 90) { const di = Math.hypot(x - ISLE.x, (z - ISLE.z) * 1.3); if (di < 70) d = Math.min(d, (di - 54.5) * 0.3); }
+    if (x < 1240 || x > 8560) for (const h of SEA_HAZARDS) {
+      if (x < h.x0 || x > h.x1 || z < h.z0 || z > h.z1) continue;
+      const vx = h.bx - h.ax, vz = h.bz - h.az, L2 = vx * vx + vz * vz, t = L2 ? clamp(((x - h.ax) * vx + (z - h.az) * vz) / L2, 0, 1) : 0;
+      d = Math.min(d, (Math.hypot(x - h.ax - vx * t, z - h.az - vz * t) - h.r) * 1.5);
+    }
+    return Math.max(0, d);
+  }
+  const SEA_EDGE = { z0: SEA.band.z0 + 220, z1: SEA.band.z1 - 220 };   // north and south of this there is only open ocean, and the crew will not go
+  const shipPose = S => S ? (S.sea || (S.port && BERTHS[S.port]) || null) : null;
+  const nearestPort = q => Object.keys(BERTHS).sort((a, b) => Math.hypot(q.x - BERTHS[a].x, q.z - BERTHS[a].z) - Math.hypot(q.x - BERTHS[b].x, q.z - BERTHS[b].z))[0];
+  // the port she could tie up at right now: close to its berth, and slow enough to come alongside
+  function canMoor(s) {
+    const S = s.ship; if (!S || S.port || !S.sea) return null;
+    const q = S.sea, C = shipClass(S); if (q.spd > C.mpm * 0.55) return null;
+    for (const k in BERTHS) if (Math.hypot(q.x - BERTHS[k].x, q.z - BERTHS[k].z) < 70) return k;
+    return null;
+  }
+  // the nearest port from the helm, for the chart and the card: its name and how far
+  function seaBearings(s) { const q = shipPose(s.ship); if (!q) return []; return Object.keys(BERTHS).map(k => ({ port: k, name: PORTS[k].name, x: BERTHS[k].x, z: BERTHS[k].z, d: Math.hypot(q.x - BERTHS[k].x, q.z - BERTHS[k].z) })); }
+  const SHIP_PROBES = [[0, 0.47], [0, -0.47], [0.45, 0.12], [-0.45, 0.12], [0.4, -0.3], [-0.4, -0.3]];   // bow, stern and both sides, as fractions of beam and length
+  function shipClear(q, C, fix) {
+    const sh = Math.sin(q.hdg), ch = Math.cos(q.hdg); let hit = false;
+    for (const [bx, lz] of SHIP_PROBES) {
+      const ox = bx * C.beam, oz = lz * C.len, px = q.x + ch * ox + sh * oz, pz = q.z - sh * ox + ch * oz;
+      if (seaDepth(px, pz) >= C.draft) continue;
+      hit = true; if (!fix) return false;
+      const e = 1.2, gx = seaDepth(px + e, pz) - seaDepth(px - e, pz), gz = seaDepth(px, pz + e) - seaDepth(px, pz - e), g = Math.hypot(gx, gz);
+      if (g > 1e-4) { q.x += gx / g * 0.4; q.z += gz / g * 0.4; }
+      else if (q.gx != null) { const dx = q.gx - q.x, dz = q.gz - q.z, d = Math.hypot(dx, dz); if (d > 1e-4) { q.x += dx / d * 0.5; q.z += dz / d * 0.5; } }
+    }
+    return !hit;
+  }
+  // one moment at the helm: helm is -1 (hard to port) to 1 (hard to starboard), dt is game minutes. The screen calls this as time passes;
+  // nothing else moves the ship, so sleeping or waiting never sails her blind
+  function sailStep(s, dt, helm) {
+    const S = s.ship, p = s.player; if (!S || !p.aboard || S.port || !S.sea || !(dt > 0)) return null;
+    const C = shipClass(S), q = S.sea, W = windAt(s); dt = Math.min(dt, 2);
+    q.rud = (q.rud || 0) + (clamp(helm || 0, -1, 1) - (q.rud || 0)) * Math.min(1, dt * 4);
+    const used = Object.values(S.hold || {}).reduce((a, b) => a + b, 0), laden = 1 - 0.12 * Math.min(1, used / Math.max(1, S.cap || C.hold));
+    const want = C.mpm * SAIL_SET[q.sail | 0] * windFactor(q.hdg, W.to) * W.str * laden;
+    q.spd += (want - q.spd) * Math.min(1, dt * C.accel * (want < q.spd ? 1.6 : 1));
+    if (q.spd < 0.02 && want === 0) q.spd = 0;
+    // she answers the helm best with way on, but a little even stopped, so she can always be worked off
+    q.hdg -= q.rud * C.turn * (0.3 + 0.7 * Math.min(1, q.spd / (C.mpm * 0.45))) * dt;
+    q.hdg = Math.atan2(Math.sin(q.hdg), Math.cos(q.hdg));
+    const go = q.spd * dt, n = Math.max(1, Math.ceil(go / 1.2)); let touched = false, edge = false;
+    for (let i = 0; i < n; i++) {
+      q.x += Math.sin(q.hdg) * go / n; q.z += Math.cos(q.hdg) * go / n;
+      if (q.z < SEA_EDGE.z0) { q.z = SEA_EDGE.z0; edge = true; } else if (q.z > SEA_EDGE.z1) { q.z = SEA_EDGE.z1; edge = true; }
+      let ok = shipClear(q, C, false);
+      for (let k = 0; !ok && k < 10; k++) { touched = true; shipClear(q, C, true); ok = shipClear(q, C, false); }
+      if (ok) { q.gx = q.x; q.gz = q.z; } else if (q.gx != null) { q.x = q.gx; q.z = q.gz; }   // never left in the shallows: back to the last clear water
+    }
+    if (touched) { q.spd = Math.min(q.spd, C.mpm * 0.12); if (s.t - (q.touchAt || -99) > 4) event(s, S.name + ' touches bottom and slides off into deeper water. Keep clear of the shallows.', 'info'); q.touchAt = s.t; }
+    if (edge) { q.spd = Math.min(q.spd, C.mpm * 0.2); if (s.t - (q.edgeAt || -99) > 6) event(s, 'Beyond here is only open ocean. The crew will not sail on: put the helm over.', 'info'); q.edgeAt = s.t; }
+    p.x = q.x; p.z = q.z; p.face = q.hdg; p.moving = false;
+    s.rec.seaMiles = (s.rec.seaMiles || 0) + go;
+    return { spd: q.spd, want, wind: W, touched, edge };
+  }
+  // called as time passes: old saves get their ship's class, a storm at sea takes its toll, and a ship is never left adrift without you
+  function shipTick(s) {
+    const S = s.ship, p = s.player;
+    if (!S) { if (p.aboard) p.aboard = false; return; }
+    if (!S.cls) { S.cls = 'cog'; if (!S.cap) S.cap = SHIP_CLASSES.cog.hold; }
+    if (S.port === undefined || (!S.port && !S.sea)) { S.port = S.from && BERTHS[S.from] ? S.from : 'eastwatch'; S.sea = null; }
+    if (p.aboard) {
+      const q = shipPose(S);
+      if (S.impounded || !q || Math.hypot(p.x - q.x, p.z - q.z) > 6) {   // something took you off her (a summons, the watch, a fight): the crew see to the ship
+        p.aboard = false;
+        if (!S.port) { const k = nearestPort(S.sea); S.port = k; S.sea = null; event(s, 'With you gone from the deck, the crew bring ' + S.name + ' into ' + PORTS[k].name + ' and moor her there.', 'info'); }
+        else S.sea = null;
+      } else if (S.port && !S.sea) S.sea = { x: q.x, z: q.z, hdg: q.hdg, spd: 0, sail: 0 };
+    } else if (!S.port) { const k = nearestPort(S.sea); S.port = k; S.sea = null; }
+    else if (S.sea) S.sea = null;
+    if (!S.port && seaRough(s) && S.stormDay !== s.day) {
+      S.stormDay = s.day;
+      if (rand(s) < 0.35) { let n = 0; for (const g in S.hold) { const l = Math.ceil(S.hold[g] / 3); if (l) { S.hold[g] -= l; n += l; if (S.paid) S.paid[g] = Math.round((S.paid[g] || 0) * 2 / 3); } } if (n) event(s, 'The storm breaks over ' + S.name + ' and washes a third of her cargo overboard.', 'bad'); }
+    }
+  }
+  function shipCmd(s, name, a, b) {
+    const ok = (m, x) => Object.assign({ ok: true, msg: m }, x || {}), fail = m => ({ ok: false, msg: m }), p = s.player, S = s.ship;
+    const ashoreAt = k => { const P1 = PORTS[k]; p.x = P1.x + Math.sin(P1.face) * 3; p.z = P1.z + Math.cos(P1.face) * 3; p.dest = null; p.action = null; p.riding = false; p.aboard = false; };
+    switch (name) {
+      case 'buyShip': {   // a: the class, b: her name. With a ship already moored in this port, she is taken in part exchange
+        const yard = yardHere(s), C = SHIP_CLASSES[a || 'cog']; if (!yard) return fail('Ships are built and sold at the shipyards of Eastwatch and Dawnport.');
+        if (!C) return fail('The shipwrights build skiffs, cutters, cogs and galleons.');
+        let credit = 0;
+        if (S) {
+          if (p.aboard) return fail('Step ashore first.');
+          if (S.impounded) return fail(S.name + ' is impounded. She cannot be traded in.');
+          if (S.port !== yard) return fail('You already own ' + S.name + '. Bring her to this port and the shipwrights will take her in part exchange.');
+          if (Object.values(S.hold).some(n => n > 0)) return fail('Sell the cargo in ' + S.name + '’s hold first.');
+          credit = Math.round(shipClass(S).price * 0.6);
+        }
+        if (s.coins + credit < C.price) return fail('A ' + C.name + ' costs ' + C.price + 'c' + (credit ? ', less ' + credit + 'c for ' + S.name : '') + '.');
+        const old = S ? S.name : null;
+        if (credit) earn(s, credit); spend(s, C.price);
+        s.ship = { name: (b && String(b).slice(0, 24)) || (S ? S.name : 'the Hearthmoor Rose'), cls: C.id, port: yard, hold: {}, cap: C.hold, since: s.day };
+        event(s, 'You buy a ' + C.name + ', ' + s.ship.name + (old ? ', and the shipwrights take ' + (old === s.ship.name ? 'your old ship' : old) + ' for ' + credit + 'c' : '') + '. She holds ' + C.hold + ' loads and lies at ' + PORTS[yard].name + '. Step aboard at the quay to sail her.', 'story');
+        return ok();
+      }
+      case 'sellShip': {
+        if (!S) return fail('You have no ship.'); if (p.aboard) return fail('Step ashore first.');
+        if (S.impounded) return fail(S.name + ' is impounded until there is peace.');
+        if (!S.port || (portHere(s) !== S.port && yardHere(s) !== S.port)) return fail('Go to where your ship is moored.');
+        if (Object.values(S.hold).some(n => n > 0)) return fail('Sell the cargo first.');
+        earn(s, Math.round(shipClass(S).price * 0.6)); s.ship = null; return ok();
+      }
+      case 'board': {
+        if (!S) return fail('You have no ship.'); if (p.aboard) return ok();
+        if (S.impounded) return fail(S.name + ' is impounded at Dawnport until there is peace.');
+        if (!S.port || portHere(s) !== S.port) return fail(S.name + ' is moored at ' + (S.port ? PORTS[S.port].name : 'sea') + '.');
+        const B = BERTHS[S.port]; S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 0 };
+        p.aboard = true; p.x = B.x; p.z = B.z; p.face = B.hdg; p.dest = null; p.action = null; p.riding = false; p.moving = false; p.helm = 0;
+        return ok();
+      }
+      case 'ashore': {
+        if (!S || !p.aboard) return fail('You are not aboard.');
+        if (!S.port) return fail('Bring her alongside and moor her first.');
+        S.sea = null; ashoreAt(S.port); return ok();
+      }
+      case 'castOff': {   // a: true to sail though a storm is up
+        if (!S || !p.aboard) return fail('Step aboard first.'); if (!S.port) return ok();
+        if (S.impounded) return fail(S.name + ' is impounded at Dawnport until there is peace.');
+        if (seaRough(s) && !a) return fail('A storm is up. Cast off anyway, or wait for calmer water.');
+        const from = S.port;
+        if (atWar(s) && from === 'dawnport') {
+          const V = s.valdoria, SR = setupStormrest(s), cap = WAR.capture + (SR.holder === 'valdoria' ? 0.1 : SR.holder === 'alderwyn' ? -0.1 : 0);
+          if (rand(s) < cap) { const nm = S.name; V.war.taken++; s.ship = null; ashoreAt('stormrest'); valLog(s, 'Valdorian galleys take ' + nm + ' as she clears the harbour, with all her cargo. You and the crew are set ashore on Stormrest Isle.', 'bad'); return ok(null, { taken: true }); }
+        }
+        const B = BERTHS[from]; S.from = from; S.port = null; S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 0, gx: B.x, gz: B.z }; S.leftAt = s.t;
+        return ok();
+      }
+      case 'setSail': {
+        if (!S || !p.aboard || S.port || !S.sea) return fail('Cast off first.');
+        S.sea.sail = clamp(Math.round(a || 0), 0, 3); return ok();
+      }
+      case 'moor': {
+        if (!S || !p.aboard) return fail('You are not aboard.'); if (S.port) return ok();
+        const k = canMoor(s); if (!k) return fail('Bring her close to a port and take in sail before you tie up.');
+        const from = S.from || k, C = shipClass(S);
+        if (atWar(s) && k === 'dawnport') {
+          const V = s.valdoria, SR = setupStormrest(s), cap = WAR.capture + (SR.holder === 'valdoria' ? 0.1 : SR.holder === 'alderwyn' ? -0.1 : 0);
+          if (rand(s) < cap) { const nm = S.name; V.war.taken++; s.ship = null; ashoreAt('stormrest'); valLog(s, 'Valdorian galleys take ' + nm + ' off Dawnport, with all her cargo. You and the crew are set ashore on Stormrest Isle.', 'bad'); return ok(null, { taken: true }); }
+          if (!V.warrant) { S.port = 'dawnport'; S.sea = null; S.impounded = true; ashoreAt('eastwatch'); valLog(s, S.name + ' is impounded the moment she ties up at Dawnport, cargo and all, until there is peace. The harbour guard puts you on a neutral ship back to Eastwatch.', 'bad'); return ok(null, { impounded: true }); }
+        }
+        const B = BERTHS[k], mins = Math.max(0, Math.round(s.t - (S.leftAt == null ? s.t : S.leftAt)));
+        S.port = k; S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 0 }; p.x = B.x; p.z = B.z; p.face = B.hdg;
+        if (k !== from) {
+          s.rec.sailed = (s.rec.sailed || 0) + 1; if (C.crew) { spend(s, C.crew); if (s.stats) s.stats.ship = (s.stats.ship || 0) + C.crew; }
+          if (k === 'dawnport' && !s.rec.landedValdoria) { s.rec.landedValdoria = s.day; event(s, 'You bring her in under the sandstone walls of Dawnport. Red tiles, the smell of salt pans and oranges: Valdoria.', 'story'); }
+          event(s, 'You moor ' + S.name + ' at ' + PORTS[k].name + ', ' + (mins >= 90 ? Math.round(mins / 60) + ' hours' : mins + ' minutes') + ' out of ' + PORTS[from].name.replace(/ (Quay|Harbour)$/, '') + '.' + (C.crew ? ' The crew take ' + C.crew + 'c for the voyage.' : ''), 'info');
+        }
+        S.from = k; return ok(null, { port: k });
+      }
+    }
+    return null;
+  }
   IC.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
   EW.biz.forEach(b => { b.spot = { x: b.x + Math.sin(b.face) * 1.2, z: b.z + Math.cos(b.face) * 1.2 }; b.front = { x: b.x + Math.sin(b.face) * 4, z: b.z + Math.cos(b.face) * 4 }; BIZ_SITES.push(b); });
   ROADS.iron = [[CM.gate.x + Math.sin(CM.gate.face) * 30, CM.gate.z + Math.cos(CM.gate.face) * 30], [330, -806], [430, -812], [512, -830], [575, -880], [632, -975], [676, -1080], [698, -1150], [IC.entry.x, IC.entry.z]];
@@ -7395,6 +7601,7 @@
     if (d && s.stats) { const f = s.stats.flows = s.stats.flows || {}; f[name] = (f[name] || 0) + d; }
     return r;
   }
+  const SEA_BLOCK = new Set(['walk', 'goto', 'gather', 'journey', 'coach', 'sail', 'ride']), SHIP_CMDS = new Set(['buyShip', 'sellShip', 'board', 'ashore', 'castOff', 'setSail', 'moor']);
   function cmd0(s, name, a, b, c) {
     const p = s.player;
     if (s.you && s.you.regent && REGENCY_BLOCK.has(name)) return fail('You are still a child. ' + s.you.regent.name.charAt(0).toUpperCase() + s.you.regent.name.slice(1) + ' acts for you until you are 16.');
@@ -7414,6 +7621,8 @@
     if (/^o[A-Z]/.test(name)) { const r = officeCmd(s, name, a, b, c); if (r) return r; }
     if (/^l[A-Z]/.test(name)) { const r = loveCmd(s, name, a, b, c); if (r) return r; }
     if (name === 'separate') return loveCmd(s, 'lSeparate');
+    if (p.aboard && SEA_BLOCK.has(name)) return fail('You are aboard ' + (s.ship ? s.ship.name : 'your ship') + '. ' + (s.ship && s.ship.port ? 'Step ashore first.' : 'Bring her into port and step ashore first.'));
+    if (SHIP_CMDS.has(name)) { const r = shipCmd(s, name, a, b); if (r) return r; }
     switch (name) {
       case 'walk': walkTo(s, a); return ok();
       case 'goto': {
@@ -8316,14 +8525,6 @@
         event(s, 'You sail to ' + P1.name + (via ? ' by way of Stormrest Isle' : '') + ' for ' + f + 'c. The crossing takes ' + mins + ' minutes.', 'info');
         return { ok: true, mins };
       }
-      case 'buyShip': {
-        if (portHere(s) !== 'eastwatch') return fail('Ships are built and sold at Eastwatch.');
-        if (s.ship) return fail('You already own a ship.');
-        if (s.coins < SHIP_PRICE) return fail('A merchant cog costs ' + SHIP_PRICE + 'c.');
-        spend(s, SHIP_PRICE); s.ship = { name: a && String(a).slice(0, 24) || 'the Hearthmoor Rose', port: 'eastwatch', hold: {}, cap: SHIP_HOLD, since: s.day };
-        event(s, 'You buy a merchant cog, ' + s.ship.name + '. It holds ' + SHIP_HOLD + ' loads of cargo, and its crew costs ' + SHIP_UPKEEP + 'c a day in port and ' + SHIP_CREW + 'c a voyage.', 'story'); return ok();
-      }
-      case 'sellShip': { if (!s.ship) return fail('You have no ship.'); if (portHere(s) !== s.ship.port) return fail('Go to where your ship is moored.'); if (Object.values(s.ship.hold).some(n => n > 0)) return fail('Sell the cargo first.'); earn(s, Math.round(SHIP_PRICE * 0.6)); s.ship = null; return ok(); }
       case 'cargoBuy': {
         const port = portHere(s), n = Math.round(b || 0); if (!s.ship || s.ship.port !== port || !SEA_PORTS.includes(port)) return fail('Your ship must be here, in a port with a market.');
         if (!SEA_GOODS[a] || n <= 0) return fail('Nothing to buy.');
@@ -8359,30 +8560,6 @@
         if (port === 'dawnport' && V && !c && foreign && brought > 0) { if (V.nameDay !== s.day) { V.nameDay = s.day; V.nameToday = 0; } const g = Math.min(Math.ceil(brought / 30), 3 - V.nameToday); if (g > 0) { V.nameToday += g; V.standing = clamp(V.standing + g, 0, 100); } }
         s.rec.seaTrade = (s.rec.seaTrade || 0) + (gross - tax - share);
         return ok(c ? 'landed' : { gross, tax, profit: gross - tax - share });
-      }
-      case 'sailShip': {
-        // your own ship goes when you say, by day or night; in a storm you may sail anyway, at a risk to the cargo
-        const from = portHere(s); if (!s.ship || s.ship.port !== from) return fail('Your ship is moored at ' + (s.ship ? PORTS[s.ship.port].name : 'nowhere') + '.');
-        if (!PORTS[a] || a === from) return fail('Choose where to sail.');
-        if (s.ship.impounded) return fail(s.ship.name + ' is impounded at Dawnport until there is peace.');
-        if (seaRough(s) && !b) return fail('A storm is up. Sail anyway, or wait for calmer water.');
-        if (s.coins < SHIP_CREW) return fail('The crew want ' + SHIP_CREW + 'c for the voyage.');
-        spend(s, SHIP_CREW);
-        let lost = '';
-        if (seaRough(s) && rand(s) < 0.35) { for (const g in s.ship.hold) { const l = Math.ceil(s.ship.hold[g] / 3); if (l) { s.ship.hold[g] -= l; if (s.ship.paid) s.ship.paid[g] = Math.round((s.ship.paid[g] || 0) * 2 / 3); } } lost = ' The storm washes a third of the cargo overboard.'; }
-        const mins = Math.round(seaDist(from, a) / (SAIL_MPM * 1.15)), P1 = PORTS[a];
-        if (atWar(s) && (a === 'dawnport' || from === 'dawnport')) {
-          const V = s.valdoria;
-          const SR = setupStormrest(s), cap = WAR.capture + (SR.holder === 'valdoria' ? 0.1 : SR.holder === 'alderwyn' ? -0.1 : 0);
-          if (rand(s) < cap) { const nm = s.ship.name; V.war.taken++; s.ship = null; const P2 = PORTS.stormrest; s.player.x = P2.x + 3; s.player.z = P2.z; s.player.dest = null; s.player.action = null; p.riding = false;
-            valLog(s, 'Valdorian galleys take ' + nm + ' at sea, with all her cargo. You and the crew are set ashore on Stormrest Isle.', 'bad'); return { ok: true, mins, taken: true }; }
-          if (a === 'dawnport' && !V.warrant) { s.ship.port = 'dawnport'; s.ship.impounded = true; const P3 = PORTS.eastwatch; s.player.x = P3.x + Math.sin(P3.face) * 3; s.player.z = P3.z + Math.cos(P3.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
-            valLog(s, s.ship.name + ' is impounded the moment she ties up at Dawnport, cargo and all, until there is peace. The harbour guard puts you on a neutral ship back to Eastwatch.', 'bad'); return { ok: true, mins, impounded: true }; }
-        }
-        s.ship.port = a; s.player.x = P1.x + Math.sin(P1.face) * 3; s.player.z = P1.z + Math.cos(P1.face) * 3; s.player.dest = null; s.player.action = null; p.riding = false;
-        s.rec.sailed = (s.rec.sailed || 0) + 1; if (a === 'dawnport' && !s.rec.landedValdoria) s.rec.landedValdoria = s.day;
-        event(s, s.ship.name + ' brings you to ' + P1.name + ' in ' + mins + ' minutes.' + lost, lost ? 'bad' : 'info');
-        return { ok: true, mins };
       }
       case 'customsContact': {
         // pay a customs clerk to look the other way for ten days; it works, and it is a secret with someone else in it
@@ -8664,7 +8841,8 @@
     for (const sh of s.shops) if (sh.worker && !sh.worker.indoors && sh.worker.moving) return false;
     return true;
   }
-  function rate(s) { const h = hourOf(s); if (h < 6) return 45; if (h < 21) return DAY_RATE; return h >= 22.5 || settled(s) ? 45 : DAY_RATE; }
+  function rate(s) { const h = hourOf(s); if (s.player.aboard && s.ship && !s.ship.port && s.ship.sea && (s.ship.sea.sail || s.ship.sea.spd > 0.5)) return DAY_RATE;   // under way, the night passes at the day's pace: nobody sleeps at the helm
+    if (h < 6) return 45; if (h < 21) return DAY_RATE; return h >= 22.5 || settled(s) ? 45 : DAY_RATE; }
   function step(s, dt) {
     const before = s.t;
     s.t += dt;
@@ -8677,6 +8855,7 @@
     if (h >= 6 && h < 21) spawnScheduled(s);
     if (s.valdoria && s.courts && Math.floor(before / 60) !== Math.floor(s.t / 60) && h >= 8 && h < 19) valCutpurse(s);
     updatePlayer(s, dt);
+    if (s.ship || s.player.aboard) shipTick(s);
     for (const shop of s.shops) { fetchStep(s, shop, !shop.work.loaded && !canProduce(shop), hourOf(s), workerHours(shop), dt); updateWorker(s, shop, dt); }   // supplies are fetched whether or not the worker is in
     updateAgents(s, dt);
     for (const shop of s.shops) updateCounter(s, shop, dt);
@@ -10752,7 +10931,7 @@
     const upkeep = (s.shops || []).reduce((a, sh) => a + tierOf(sh).upkeep, 0);
     const due = [];
     if (wages) due.push({ when: 'Tonight', what: 'Wages', n: -wages }); if (upkeep) due.push({ when: 'Tonight', what: 'Shop upkeep', n: -upkeep });
-    if (s.player.horse) due.push({ when: 'Tonight', what: 'Stabling', n: -STABLING }); if (s.ship) due.push({ when: 'Tonight', what: 'Your ship’s crew and upkeep', n: -SHIP_UPKEEP });
+    if (s.player.horse) due.push({ when: 'Tonight', what: 'Stabling', n: -STABLING }); if (s.ship) due.push({ when: 'Tonight', what: 'Your ship’s crew and upkeep', n: -shipClass(s.ship).upkeep });
     if (s.coins < 0) due.push({ when: 'Tonight', what: 'Interest on your debt', n: -Math.max(1, Math.ceil(-s.coins * loanRate(s))) });
     for (const L of yourLoans(s)) due.push({ when: 'Day ' + L.next, what: 'Payment to ' + BANK_NAME[L.bank] + (L.missed ? ' (' + L.missed + ' missed)' : ''), n: -Math.ceil(Math.min(L.balance, Math.ceil(L.principal / LOAN_N)) + L.interest + L.arrears + L.balance * L.rate * Math.max(0, L.next - s.day)) });
     for (const d of (s.deals ? s.deals.list : [])) if (d.taken && !d.done) due.push({ when: 'Day ' + d.due, what: d.kind === 'ship' ? 'Your cargo comes back (likely ' + Math.round(d.cost * 1.35) + 'c)' : d.kind === 'feast' ? 'The feast order (' + d.reward + 'c)' : d.title, n: null });
@@ -11525,6 +11704,7 @@
     CONSULADO, consuladoView, GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
     smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, ALD_COAST, SEA, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
+    SHIP_CLASSES, SHIP_ORDER, SAIL_SET, SAIL_NAME, shipClass, BERTHS, SHIPYARDS, yardHere, windAt, windFactor, seaDepth, SEA_FLOOR, SEA_HAZARDS, SEA_EDGE, shipPose, canMoor, seaBearings, sailStep, shipTick,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, TRAITS, GIFTS, OUTINGS, STAGE_NAME, WEDDINGS, UPBRING, natureOf, loveOf, suits, stageOf, GROW_DAYS, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
