@@ -3964,11 +3964,15 @@
     q.hdg = Math.atan2(Math.sin(q.hdg), Math.cos(q.hdg));
     const go = q.spd * dt, n = Math.max(1, Math.ceil((go + 2.2 * dt) / 1.2)); let touched = false, edge = false;
     for (let i = 0; i < n; i++) {
-      q.x += (Math.sin(q.hdg) * go + dfx * dt) / n; q.z += (Math.cos(q.hdg) * go + dfz * dt) / n;
+      q.x += Math.sin(q.hdg) * go / n; q.z += Math.cos(q.hdg) * go / n;
       if (q.z < SEA_EDGE.z0) { q.z = SEA_EDGE.z0; edge = true; } else if (q.z > SEA_EDGE.z1) { q.z = SEA_EDGE.z1; edge = true; }
       let ok = shipClear(q, C, false);
       for (let k = 0; !ok && k < 10; k++) { touched = true; shipClear(q, C, true); ok = shipClear(q, C, false); }
       if (ok) { q.gx = q.x; q.gz = q.z; } else if (q.gx != null) { q.x = q.gx; q.z = q.gz; }   // never left in the shallows: back to the last clear water
+      if (dfx || dfz) {   // the storm sets her downwind, but never onto the ground: on a lee shore she holds where she is and can still be worked off
+        const ox = q.x, oz = q.z; q.x += dfx * dt / n; q.z = clamp(q.z + dfz * dt / n, SEA_EDGE.z0, SEA_EDGE.z1);
+        if (shipClear(q, C, false)) { q.gx = q.x; q.gz = q.z; } else { q.x = ox; q.z = oz; }
+      }
     }
     if (touched) { q.spd = Math.min(q.spd, C.mpm * 0.12); if (s.t - (q.touchAt || -99) > 4) event(s, S.name + ' touches bottom and slides off into deeper water. Keep clear of the shallows.', 'info'); q.touchAt = s.t; }
     if (edge) { q.spd = Math.min(q.spd, C.mpm * 0.2); if (s.t - (q.edgeAt || -99) > 6) event(s, 'Beyond here is only open ocean. The crew will not sail on: put the helm over.', 'info'); q.edgeAt = s.t; }
@@ -4069,7 +4073,7 @@
   function crewMood(s, S, d) { for (const c of crewOf(s, S)) c.p.mood = clamp((c.p.mood || 50) + d, 0, 100); }
   function crewHurt(s, S, why, sick) { const cs = sailors(s, S).filter(c => !(c.p.hurtUntil > s.day)); if (!cs.length) return null; const c = cs[Math.floor(rand(s) * cs.length)]; c.p.hurtUntil = s.day + (sick ? 3 : 2) + Math.floor(rand(s) * 3); plog(s, c.p, (sick ? 'Fell sick aboard ' : 'Hurt aboard ') + S.name + '.'); return c.p; }
   // who will sign on at a quay: grown people of the town with no work, or common work, who are not your own family or someone of rank
-  function crewCandidates(s, town, post) {
+  function crewCandidates(s, town, post, limit) {
     if (!town || !s.people) return [];
     const me = s.you && s.you.pid, fame = fameAt(s, town), out = [];
     for (const p of Object.values(s.people)) {
@@ -4079,7 +4083,7 @@
       out.push(p);
     }
     out.sort((a, b) => (b.skill || 0) - (a.skill || 0) || (a.id < b.id ? -1 : 1));
-    return out.slice(0, 10).map(p => ({ pid: p.id, name: p.name, skill: Math.round(p.skill || 0), age: p.age, ask: crewAsk(post || 'hand', p, fame) }));
+    return out.slice(0, limit || 10).map(p => ({ pid: p.id, name: p.name, skill: Math.round(p.skill || 0), age: p.age, ask: crewAsk(post || 'hand', p, fame) }));
   }
   const crewAsk = (post, p, fame) => Math.max(3, Math.round(CREW_POSTS[post].wage * (0.85 + (p.skill || 0) / 140) * (1.08 - (fame || 0) / 500)));
   function signOn(s, S, p, post, wage) {
@@ -4092,7 +4096,7 @@
   function fillCrew(s, S, town) {
     const C = shipClass(S); let need = C.hands - sailors(s, S).length;
     const towns = [town].concat(Object.keys(MARKET_AT).filter(t => t !== town && kingdomOf(t) === kingdomOf(town)));
-    for (const t of towns) { if (need <= 0) break; for (const c of crewCandidates(s, t, 'hand')) { if (need <= 0) break; const p = s.people[c.pid]; if (!p || p.job) continue; const post = !crewPost(s, S, 'mate') && C.hands >= 4 ? 'mate' : !crewPost(s, S, 'cook') && C.hands >= 6 ? 'cook' : !crewPost(s, S, 'bosun') && C.hands >= 8 ? 'bosun' : 'hand'; signOn(s, S, p, post, crewAsk(post, p, 0)); need--; } }
+    for (const t of towns) { if (need <= 0) break; for (const c of crewCandidates(s, t, 'hand', 60)) { if (need <= 0) break; const p = s.people[c.pid]; if (!p || (p.job && p.job.type !== 'commons')) continue; const post = !crewPost(s, S, 'mate') && C.hands >= 4 ? 'mate' : !crewPost(s, S, 'cook') && C.hands >= 6 ? 'cook' : !crewPost(s, S, 'bosun') && C.hands >= 8 ? 'bosun' : 'hand'; signOn(s, S, p, post, crewAsk(post, p, 0)); need--; } }
   }
   function townOfPort(k) { return TOWNS[k] ? k : null; }
   // crew are away when their ship is at sea or lying in another town: they do not walk about their home town meanwhile
@@ -4143,13 +4147,18 @@
     const G0 = routeGrid(), A = BERTHS[from], B = BERTHS[to], cell = (x, z) => [clamp(Math.floor((x - G0.x0) / G0.step), 0, G0.nx - 1), clamp(Math.floor((z - G0.z0) / G0.step), 0, G0.nz - 1)];
     const free = (x, z) => { const [ci, cj] = cell(x, z); let best = null, bd = 1e9; for (let r = 0; r < 8 && !best; r++) for (let i = ci - r; i <= ci + r; i++) for (let j = cj - r; j <= cj + r; j++) { if (i < 0 || j < 0 || i >= G0.nx || j >= G0.nz || G0.block[i * G0.nz + j]) continue; const d = Math.hypot(i - ci, j - cj); if (d < bd) { bd = d; best = [i, j]; } } return best; };
     const s0 = free(A.x, A.z), g0 = free(B.x, B.z); if (!s0 || !g0) return (ROUTES[key] = [[B.x, B.z]]);
-    const N = G0.nx * G0.nz, gs = new Float32Array(N).fill(1e9), came = new Int32Array(N).fill(-1), open = [], idx = (i, j) => i * G0.nz + j, h = (i, j) => Math.hypot(i - g0[0], j - g0[1]);
-    gs[idx(s0[0], s0[1])] = 0; open.push([h(s0[0], s0[1]), s0[0], s0[1]]);
-    let found = false, guard = 0;
-    while (open.length && guard++ < 60000) {
-      let bi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k; const [, i, j] = open.splice(bi, 1)[0];
-      if (i === g0[0] && j === g0[1]) { found = true; break; }
-      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= G0.nx || nj >= G0.nz || G0.block[idx(ni, nj)]) continue; const g = gs[idx(i, j)] + (di && dj ? 1.414 : 1); if (g < gs[idx(ni, nj)]) { gs[idx(ni, nj)] = g; came[idx(ni, nj)] = idx(i, j); open.push([g + h(ni, nj), ni, nj]); } }
+    const N = G0.nx * G0.nz, gs = new Float32Array(N).fill(1e9), came = new Int32Array(N).fill(-1), shut = new Uint8Array(N), idx = (i, j) => i * G0.nz + j, h = (i, j) => Math.hypot(i - g0[0], j - g0[1]);
+    // a binary heap of [cost, cell]: the whole sea is searched in a few milliseconds, so the first order to a captain never stalls the game
+    const hf = [], hk = [];
+    const push = (f, k) => { let n = hf.length; hf.push(f); hk.push(k); while (n > 0) { const u = (n - 1) >> 1; if (hf[u] <= hf[n]) break; const tf = hf[u], tk = hk[u]; hf[u] = hf[n]; hk[u] = hk[n]; hf[n] = tf; hk[n] = tk; n = u; } };
+    const pop = () => { const k = hk[0], lf = hf.pop(), lk = hk.pop(); if (hf.length) { hf[0] = lf; hk[0] = lk; let n = 0; for (;;) { const a = 2 * n + 1, b = a + 1; let m = n; if (a < hf.length && hf[a] < hf[m]) m = a; if (b < hf.length && hf[b] < hf[m]) m = b; if (m === n) break; const tf = hf[m], tk = hk[m]; hf[m] = hf[n]; hk[m] = hk[n]; hf[n] = tf; hk[n] = tk; n = m; } } return k; };
+    const goal = idx(g0[0], g0[1]); gs[idx(s0[0], s0[1])] = 0; push(h(s0[0], s0[1]), idx(s0[0], s0[1]));
+    let found = false;
+    while (hf.length) {
+      const k = pop(); if (shut[k]) continue; shut[k] = 1; if (k === goal) { found = true; break; }
+      const i = Math.floor(k / G0.nz), j = k % G0.nz;
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= G0.nx || nj >= G0.nz) continue; const nk = idx(ni, nj); if (G0.block[nk] || shut[nk]) continue; if (di && dj && (G0.block[idx(ni, j)] || G0.block[idx(i, nj)])) continue;   // no cutting a corner of the land
+        const g = gs[k] + (di && dj ? 1.414 : 1); if (g < gs[nk]) { gs[nk] = g; came[nk] = k; push(g + h(ni, nj), nk); } }
     }
     let pts = [];
     if (found) { let k = idx(g0[0], g0[1]); while (k >= 0) { const i = Math.floor(k / G0.nz), j = k % G0.nz; pts.unshift([G0.x0 + (i + 0.5) * G0.step, G0.z0 + (j + 0.5) * G0.step]); k = came[k]; } }
@@ -4174,12 +4183,11 @@
     for (const g of Object.keys(S.hold)) { const n = S.hold[g] | 0; if (!n || SEA_GOODS[g].made === port) continue; const gross = seaLoad(s, port, g, n, 1), tax = Math.round(gross * landingTax(s, port, g)); earn(s, gross - tax); M[port][g] += n; S.hold[g] = 0; V.sold += gross - tax; gainFame(s, port, Math.min(3, gross / 300)); s.rec.seaTrade = (s.rec.seaTrade || 0) + gross - tax; }
     const O = S.orders; if (!O || !O.route || O.mode === 'move') return;
     const next = O.route[(O.i + 1) % O.route.length]; if (!next || !SEA_PORTS.includes(next)) return;
-    let best = null, bm = 1.15;
-    for (const g in SEA_GOODS) { if (g === 'fish') continue; const buy = seaPrice(s, port, g), sell = seaPrice(s, next, g) * (1 - landingTax(s, next, g)); if (sell / buy > bm) { bm = sell / buy; best = g; } }
+    // what to load: the whole price of the load here against what the whole load fetches there, since a full hold moves both markets
+    const used = Object.values(S.hold).reduce((a, b) => a + b, 0), room = Math.min(S.cap - used, 240), budget = Math.max(0, Math.min(s.coins - 200, S.cap * 60));
+    let best = null, n = 0, bp = 0;
+    for (const g in SEA_GOODS) { if (g === 'fish' || SEA_GOODS[g].made === next) continue; for (const f of [1, 0.75, 0.5, 0.3]) { const k = Math.floor(room * f); if (k < 3) continue; const cost = seaLoad(s, port, g, k, -1); if (cost > budget) continue; const profit = Math.round(seaLoad(s, next, g, k, 1) * (1 - landingTax(s, next, g))) - cost; if (profit > bp && profit >= Math.max(8, cost * 0.08)) { bp = profit; best = g; n = k; } } }
     if (!best) return;
-    const used = Object.values(S.hold).reduce((a, b) => a + b, 0), budget = Math.max(0, Math.min(s.coins - 200, S.cap * 20)); let n = Math.min(S.cap - used, 200);
-    while (n > 0 && seaLoad(s, port, best, n, -1) > budget) n = Math.floor(n * 0.7);
-    if (n < 3) return;
     const cost = seaLoad(s, port, best, n, -1); spend(s, cost); M[port][best] -= n; S.hold[best] = (S.hold[best] || 0) + n; const og = shipOrigin(S, best); og[port] = (og[port] || 0) + n; V.bought += cost;
     shipLog(s, S, 'Loaded ' + n + ' ' + SEA_GOODS[best].name + ' at ' + PORTS[port].name + ' for ' + cost + 'c, for ' + PORTS[next].name.replace(/ (Quay|Harbour)$/, '') + '.');
   }
@@ -4197,23 +4205,25 @@
       const cap = crewPost(s, S, 'captain'), O = S.orders;
       if (S.port) {
         if (!O || !cap || S.impounded) continue;
-        if (S.waitUntil == null) { S.waitUntil = s.t + 60; tradeAt(s, S, S.port); if ((S.prov || 0) < 6) { const n = 10 - (S.prov || 0), c = n * Math.max(1, crewOf(s, S).length); if (s.coins >= c) { spend(s, c); S.prov = 10; if (S.voyage) S.voyage.costs += c; } } }
+        if (S.waitUntil == null) { S.waitUntil = s.t + 60; tradeAt(s, S, S.port); if ((S.hull == null ? 100 : S.hull) < 70 && Object.values(SHIPYARDS).includes(S.port)) { const c = Math.round((100 - S.hull) * (S.cost || shipClass(S).price) / 400); if (s.coins >= c + 300) { spend(s, c); S.hull = 100; if (S.voyage) S.voyage.costs += c; shipLog(s, S, 'Repaired at ' + PORTS[S.port].name + ' for ' + c + 'c.'); } } if ((S.prov || 0) < 6) { const n = 10 - (S.prov || 0), c = n * Math.max(1, crewOf(s, S).length); if (s.coins >= c) { spend(s, c); S.prov = 10; if (S.voyage) S.voyage.costs += c; } } }
         if (s.t < S.waitUntil) continue;
         if (fitCount(s, S) < minCrew(S)) { if (S.shortNote !== s.day) { S.shortNote = s.day; shipLog(s, S, 'Cannot sail: too few fit hands.'); } continue; }
         const route = O.route || [], to = O.mode === 'move' ? route[0] : route[(O.i + 1) % route.length];
         if (!to || to === S.port || !BERTHS[to]) { if (O.mode === 'move') S.orders = null; else O.i = (O.i + 1) % Math.max(1, route.length); continue; }
         if (atWar(s) && to === 'dawnport' && !(s.valdoria && s.valdoria.warrant)) { if (S.warNote !== s.day) { S.warNote = s.day; shipLog(s, S, 'Will not sail for Dawnport while the crowns are at war.'); } continue; }
         const B = BERTHS[S.port]; S.voyage = S.voyage && S.voyage.from === S.port ? S.voyage : { from: S.port, left: s.t, bought: 0, sold: 0, costs: 0, events: [] }; S.voyage.left = s.t;
-        S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 3, path: seaRoute(S.port, to).map(p => p.slice()), pi: 0, to };
+        S.sea = { x: B.x, z: B.z, hdg: B.hdg, spd: 0, sail: 3, path: seaRoute(S.port, to).map(p => p.slice()), pi: 0, to }; if (S.sea.path[0]) S.sea.hdg = Math.atan2(S.sea.path[0][0] - B.x, S.sea.path[0][1] - B.z);   // warped out with her head on her course
         shipLog(s, S, (cap.p.name.split(' ')[0]) + ' takes her out of ' + PORTS[S.port].name + ' for ' + PORTS[to].name.replace(/ (Quay|Harbour)$/, '') + '.'); S.port = null; S.waitUntil = null;
         continue;
       }
       const q = S.sea; if (!q) { S.port = 'eastwatch'; continue; }
       const W = windAt(s), wp = q.path[q.pi] || [BERTHS[q.to].x, BERTHS[q.to].z], want = Math.atan2(wp[0] - q.x, wp[1] - q.z);
-      q.hdg += clamp(Math.atan2(Math.sin(want - q.hdg), Math.cos(want - q.hdg)), -0.6 * dt, 0.6 * dt);
-      const v = shipSpeed(s, S) * windFactor(q.hdg, W.to) * W.str * (cap ? 0.9 + (cap.p.skill || 0) / 500 : 0.85);
+      const off = Math.atan2(Math.sin(want - q.hdg), Math.cos(want - q.hdg));
+      q.hdg += clamp(off, -0.6 * dt, 0.6 * dt);
+      const v = shipSpeed(s, S) * windFactor(q.hdg, W.to) * W.str * (cap ? 0.9 + (cap.p.skill || 0) / 500 : 0.85) * Math.max(0.2, Math.cos(off));   // a captain shortens sail to turn, so she keeps to the charted water
       q.spd += (v - q.spd) * Math.min(1, dt * 0.3);
-      q.x += Math.sin(q.hdg) * q.spd * dt + (W.rough ? Math.sin(W.to) * 0.8 * dt : 0); q.z += Math.cos(q.hdg) * q.spd * dt + (W.rough ? Math.cos(W.to) * 0.8 * dt : 0);
+      q.x += Math.sin(q.hdg) * q.spd * dt; q.z += Math.cos(q.hdg) * q.spd * dt;
+      if (W.rough) { const dx = Math.sin(W.to) * 0.8 * dt, dz = Math.cos(W.to) * 0.8 * dt; if (seaDepth(q.x + dx * 12, q.z + dz * 12) >= 2.6) { q.x += dx; q.z += dz; } }   // a storm sets her downwind, but never onto a lee shore
       if (Math.hypot(wp[0] - q.x, wp[1] - q.z) < 16) q.pi++;
       if (q.pi >= q.path.length) {
         const to = q.to; S.port = to; S.sea = null; S.waitUntil = null;
@@ -4400,7 +4410,7 @@
       }
       case 'encLost': {
         let text;
-        if (N.kind === 'navy') { text = 'The marines take the ship.'; s.encounter = null; return encounterCmd(s, 'encSurrender'); }
+        if (N.kind === 'navy') return encounterCmd(s, 'encSurrender');
         if (N.kind === 'patrol') { const n = seizeContraband(s, S), fine = Math.min(Math.max(0, s.coins), 200 + n * 6); spend(s, fine); valdoriaOrRealmStanding(s, N.kingdom, -8); text = 'The officers overpower you. They seize ' + n + ' loads and fine you ' + fine + 'c.'; }
         else text = lose();
         event(s, text, 'bad'); shipLog(s, S, text); N.mode = 'leave'; s.encounter = null; return ok(null);
@@ -4450,7 +4460,7 @@
         const S = shipById(s, a); if (!S || S === s.ship) return fail('You sail your own ship.');
         if (!crewPost(s, S, 'captain')) return fail(S.name + ' needs a captain.');
         const route = (Array.isArray(b) ? b : []).filter(k => BERTHS[k]).slice(0, 6); if (!route.length) { S.orders = null; return ok('Orders cancelled: she waits where she is.'); }
-        S.orders = { route, i: Math.max(0, route.indexOf(S.port)), mode: c === 'move' ? 'move' : 'trade' }; if (S.orders.mode === 'trade' && route.length < 2) return fail('A trade route needs two ports or more.');
+        if (c !== 'move' && route.length < 2) return fail('A trade route needs two ports or more.'); S.orders = { route, i: Math.max(0, route.indexOf(S.port)), mode: c === 'move' ? 'move' : 'trade' };
         if (S.orders.mode === 'trade' && !route.includes(S.port || '')) S.orders.i = route.length - 1;   // first leg: to the route's first port
         S.waitUntil = S.port ? s.t + 10 : null; shipLog(s, S, c === 'move' ? 'Ordered to ' + PORTS[route[0]].name + '.' : 'Ordered to trade between ' + route.map(k => PORTS[k].name.replace(/ (Quay|Harbour)$/, '')).join(', ') + '.');
         return ok(S.name + ': orders given.');
@@ -12456,9 +12466,9 @@
     GRANT_PRICE, VILLAGE_MILESTONES, amendsCost, bribeCost, WEALTH, LAND, BIZ_TOWN_PRICE, spotMul, prestigeIds, isPrestige, setupFolk, folkDay, wrong, kindness, deed, hateStep, hateIdx, HATE_STEPS, FAIR_WAGE, fairWage, PRICE_MODES, moralName, moralWord, fameName, fameTarget, yourTitle, regardOf, nemeses, nemWhere, confrontOpts, threatOdds, authOver, yourGuards, fightOf, willWork, AUDIENCE, townOwnership, DENS, isForeign, warGrief, leaveTown, temperOf, townName,
     HAPS, hapView, hapStart, hapDay, hapMul, AMBITIONS, ambitionView, lifeTitle, snapshot, digest, whyOf,
     CONSULADO, consuladoView, GM, TW, SW, VD, VAL_JOBS, kingdomOf, TREATY, setupRoyals, queenTerms, REBEL, plotOf, plotTargets, rebelMen, crownMen, loyalLords, exileForTreason, WAR, atWar, startWar, endWar, peaceTerms, warWord, WAR_GOALS, surrender, setupStormrest, setStormHolder, setupQueen, queenOf, QUEEN_MOOD, canAudience, VAL_COURT, foreignCourt, VAL_BANDITS,
-    smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
+    smuggleRisk, evidencePool, newCase, SEA_GOODS, SEA_PORTS, seaLoad, landingTax, SHIP_PRICE, SHIP_HOLD, SHIP_UPKEEP, SHIP_CREW, seaPrice, seaLoad, landingTax, setupSeaMarket, valdoriaDay,
     DP, DP_JOBS, PORTS, ISLE, VSHORE, ALD_COAST, SEA, passageFare, seaDist, SAIL_MPM, portHere, seaRough, setupValdoria,
-    SHIP_CLASSES, SHIP_ORDER, SAIL_SET, SAIL_NAME, shipClass, shipWorth, CREW_POSTS, allShips, shipById, crewOf, sailors, fitCount, crewPost, minCrew, morale, crewCandidates, crewAsk, fameAt, fameWord, setupMerchant, priceMood, seaRoute, cargoValue, shipStrength, shipSpeed, NPC_KIND, npcById, contraband, insurePremium, hasLetter, LETTER_PRICE, ESCORT_DAY, TOKEN_PRICE, REFITS, EXCHANGES, GUARD_ROOM, MAX_SHIPS, Q_WREN, Q_CAST, WR, CK, NEW_PORT_TOWNS, aldQuay, valQuay, PORT_JOBS, pirateRisk, watersOf, ensureShipId, ISLES, ISLE_BY, SEA_PLACES, WRECKS, FISHING, isleRel, ISLE_TOWNS, SH, MR, GU, ISLE_JOBS, ISLE_PORTS, seaWeather, crewK, deckWorld, restAboard, setupSeaChart, flotsamNow, fishingHere, wreckHere, sightRange, NET_MINS, isNight, BERTHS, SHIPYARDS, yardHere, windAt, windFactor, seaDepth, SEA_FLOOR, SEA_HAZARDS, SEA_EDGE, shipPose, canMoor, seaBearings, sailStep, shipTick,
+    SHIP_CLASSES, SHIP_ORDER, SAIL_SET, SAIL_NAME, shipClass, shipWorth, CREW_POSTS, allShips, shipById, crewAway, nearestPort, npcSpawn, atWar, fleetStep, crewOf, sailors, fitCount, crewPost, minCrew, morale, crewCandidates, crewAsk, fameAt, fameWord, setupMerchant, priceMood, seaRoute, cargoValue, shipStrength, shipSpeed, NPC_KIND, npcById, contraband, insurePremium, hasLetter, LETTER_PRICE, ESCORT_DAY, TOKEN_PRICE, REFITS, EXCHANGES, GUARD_ROOM, MAX_SHIPS, Q_WREN, Q_CAST, WR, CK, NEW_PORT_TOWNS, aldQuay, valQuay, PORT_JOBS, pirateRisk, watersOf, ensureShipId, ISLES, ISLE_BY, SEA_PLACES, WRECKS, FISHING, isleRel, ISLE_TOWNS, SH, MR, GU, ISLE_JOBS, ISLE_PORTS, seaWeather, crewK, deckWorld, restAboard, setupSeaChart, flotsamNow, fishingHere, wreckHere, sightRange, NET_MINS, isNight, BERTHS, SHIPYARDS, yardHere, windAt, windFactor, seaDepth, SEA_FLOOR, SEA_HAZARDS, SEA_EDGE, shipPose, canMoor, seaBearings, sailStep, shipTick,
     REALM, RUMORS, PROJECTS, TOLLS, DISPUTES, STEPS, stepText, PETITION_CHOICES, CHAPTERS, skillPct, OFFICES, NEW_HUTS, MANOR_HOME,
     elderTitle, lordTitle, person, living, occupation, homeText, income, setupCourts, canJudge, tradeJudge, talkChance, hushed, sentenceBandits, referenceOf, charOf, MERCY, mercyReasons, mercyFits, HUSH_DAYS, maxDays, maxFine, JAIL, allCourts, courtOf, watchTarget, TOWN_WATCH_JOB, setupJustice, coverage, caseWeight, DUTIES, CRIME, guardCandidates, watchPeople, cellsFree, youJudge, youHearAppeals, J_DETAIN_MAX, J_KIT, isHeld, houseById, sellerWilling, areaOf, LAND, leaseRent, leaseBreakable, handRoom, roundQuota, assignRoles, ensureRaces, upcomingRaces, startFight, fightStep, endFight, TRAITS, GIFTS, OUTINGS, STAGE_NAME, WEDDINGS, UPBRING, natureOf, loveOf, suits, stageOf, GROW_DAYS, postsBelow, fireCands, AGENDA, setupWild, campOpen, CAMPS, GROUNDS, tourneyToday, townSquareNear, TOURNEY_PRIZE, FOE_KIT, weaponOf, SKILLS, SKILL_GROUPS, PERKS, ITEMS, SLOTS, STOCK, BUYS, setupChar, setupBag, skillLv, perk, skillUse, gainXP, skillNeed, levelNeed, canTakePerk, addItem, itemByU, equipped, countItem, itemsWeight, carryCap, gearStats, itemPrice, stockOf, buysHere, atShop, shopKind, HERALDRY, validBanner, TENURE, heldDays, townSize, smallTowns, nextVote, canVote, voteTowns, pollingToday, raceVenue, venueName, atVenue, inTown, refuses, pledgesFor, challengeBar, standBar, standFee, pollNow, raceLabel, electionsOn, yourOffice, PLEDGES, ELECT_SEASON, electState, speechGain, ROLES, ROLE_NAME, staffOn, crowdOver, crowdMul, supplier, HAND_MAX, seatNeeds, COUNCIL_PATH, PATH_NAME, LORDSHIP_FEE, landlordName, holderName, bizPrice, housePrice, appoint, vacancy,
     VERSION, TRADES, TRADE_KEYS, PLOTS, REL, EMPLOYERS, LOCS, P, HOMES, WORKER_HOMES, BUY, SELL, GATHER, GOALS, CARRY, GOODS, LEARN_SHIFTS, WHY,
