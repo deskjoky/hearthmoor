@@ -13479,8 +13479,8 @@ function openStore() {
     } catch (e) { finish(); }
   });
 }
-let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'all', motion: 'full', lookX: 'normal', lookY: 'normal', lookSpeed: 'normal', music: 'normal', sfx: 'normal', amb: 'normal' } };
-try { const m = JSON.parse(store.get(META) || 'null'); if (m) meta = Object.assign(meta, m, { settings: Object.assign(meta.settings, m.settings || {}) }); } catch (e) { }
+let meta = { lastSlot: null, settings: { pace: 'normal', toasts: 'important', motion: 'full', lookX: 'normal', lookY: 'normal', lookSpeed: 'normal', music: 'normal', sfx: 'normal', amb: 'normal' } };
+try { const m = JSON.parse(store.get(META) || 'null'); if (m) { meta = Object.assign(meta, m, { settings: Object.assign(meta.settings, m.settings || {}) }); if (!m.quietNotes) { meta.settings.toasts = 'important'; meta.quietNotes = 1; } } } catch (e) { }   // once: the little notes on screen default to important-only, for saved settings too
 function saveMeta() { if (!window.FIGHT_TEST) store.set(META, JSON.stringify(meta)); }
 // the first version kept one save under an older key: move it into slot 1
 (function legacy() { const old = store.get('hearthmoor.save'); if (old && !store.get(KEY(1))) { store.set(KEY(1), old); const b = store.get('hearthmoor.save.bak'); if (b) store.set(BAK(1), b); meta.lastSlot = 1; saveMeta(); } })();
@@ -17531,7 +17531,7 @@ function act(c) {
   return r;
 }
 function toast(text, kind, force) {
-  if (!force && meta.settings.toasts === 'important' && (kind === 'coin' || kind === 'info')) return;
+  if (!force && meta.settings.toasts === 'important' && (kind === 'coin' || kind === 'info' || kind === 'good')) return;
   const box = $('toasts'), el = document.createElement('div');
   el.className = 'toast ' + (kind || 'info'); el.textContent = text;
   box.appendChild(el);
@@ -21077,7 +21077,7 @@ function settingsHTML() {
   return `<h3>Settings</h3>
   ${G ? `<div class="setting"><span>Ageing</span>${seg2('ageRate', ar, [['steady', 'Steady'], ['calendar', 'Slow'], ['quick', 'Quick'], ['off', 'Off']])}<p>How fast everyone grows older. Steady (the usual) is a year of life every season, 15 days: a child grows up in about 240 days, so you can play your heirs. Slow follows the calendar, a year of life every 60 days, for one long life. Quick is a year every 4 days. Off stops ageing. When an heir is grown, you can hand everything over and retire from the Family page.</p></div>` : ''}
   <div class="setting"><span>Day length</span>${seg('pace', st.pace, [['brisk', 'Brisk'], ['normal', 'Normal'], ['relaxed', 'Relaxed']])}<p>Brisk days last about 12 minutes, normal about 18, relaxed about 24. Wages, hunger, rent and work all follow the same clock.</p></div>
-  <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides individual sales and small updates.</p></div>
+  <div class="setting"><span>Notes along the top</span>${seg('toasts', st.toasts, [['all', 'Everything'], ['important', 'Important only']])}<p>Important only hides sales, who made what, and other small updates. They stay in your ledger and news.</p></div>
   <div class="setting"><span>Place cards</span>${seg('cards', st.cards || 'tab', [['tab', 'Name only until tapped'], ['open', 'Open as you arrive']])}<p>Walking past a place shows just its name at the bottom; tap it for the full card.</p></div>
   <div class="setting"><span>Minimap</span>${seg('minimap', st.minimap || 'on', [['on', 'Shown'], ['off', 'Hidden']])}<p>A small map in the top corner, north at the top. Tap it to open the full map.</p></div>
   <div class="setting"><span>Motion</span>${seg('motion', st.motion, [['full', 'Full'], ['reduced', 'Reduced']])}<p>Reduced stops the title camera, page turns and bobbing icons.</p></div>
@@ -21378,7 +21378,7 @@ function drainEvents() {
   const said = fresh.filter(e => /["\u201c]/.test(e.text));
   if (said.length) { said.forEach(e => pagesOf(e.text).forEach(t => UI.dialog.push(t))); renderDialog(); }
   const coins = fresh.filter(e => e.kind === 'coin'), rest = fresh.filter(e => e.kind !== 'coin' && !said.includes(e));
-  rest.slice(-2).forEach(e => toast(e.text, e.kind));
+  rest.slice(-1).forEach(e => toast(e.text, e.kind));
   // sales no longer pop up or chime: they are counted in the ledger
 }
 let last = performance.now(), uiTimer = 0;
@@ -22366,7 +22366,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.14.0010';
+const BUILD = '2026.11.14.0139';
 const NOTES = [
   { v: '0.99', date: '13 November', title: 'The Sea Road, III: merchants and dangers', items: [
     'Every sailor is someone from the towns. Sign on hands, a mate, a bosun, a cook and guards at the quay; each has a name, a skill, a wage and a mood. Pay them each night, keep the stores full, and they stay; let morale sink and they desert in port. A short-handed ship sails badly, and will not sail at all with too few.',
