@@ -786,6 +786,12 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
 .scenebox { border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.6), 0 0 0 3px rgba(53,37,27,.55); }
 .choice { padding: 9px 12px; }
 
+.chartsheet { position: fixed; inset: 0; z-index: 9; background: rgba(20,14,10,.6); display: flex; align-items: center; justify-content: center; padding: calc(env(safe-area-inset-top, 0px) + 10px) max(10px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(10px, env(safe-area-inset-left, 0px)); }
+.chartbox { box-sizing: border-box; width: min(100%, 980px); height: min(100%, 720px); display: flex; flex-direction: column; background: #ead9b0; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.6), inset 0 0 0 2px rgba(107,90,58,.5); padding: 8px 10px 6px; }
+.charthead { display: flex; align-items: center; justify-content: space-between; font: 400 21px var(--f-display); color: #2a1f16; }
+.charthead .close { position: static; }
+.chartcv { flex: 1; min-height: 0; position: relative; } .chartcv canvas { position: absolute; inset: 0; border-radius: 6px; }
+#chartNote { margin: 4px 2px 0; font-size: 13px; color: #5e4a38; }
 /* ----- the helm: compass, sail slider and deck orders, shown while you are aboard your ship ----- */
 .helm { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
 .helm > * { position: absolute; pointer-events: auto; }
@@ -808,6 +814,9 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
 .hacts > * { pointer-events: auto; }
 .hinfo, .hnote { font-size: 13px; color: #f1e3c2; background: rgba(32,26,20,.74); border-radius: 6px; padding: 4px 10px; text-align: center; }
 .hinfo b { font: 400 15px var(--f-display); color: #f5cf73; }
+.hchest { pointer-events: auto; max-height: 46vh; overflow-y: auto; width: min(92vw, 420px); background: rgba(239,224,189,.97); color: #2a1f16; border-radius: 10px; padding: 8px 10px; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+.hchest > b { display: block; font: 400 16px var(--f-display); margin: 4px 0; } .hchest p { margin: 2px 0 6px; font-size: 13px; color: #5e4a38; }
+.chrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(42,31,22,.12); font-size: 14px; } .chrow .btn { min-height: 34px; padding: 4px 12px; }
 .hbtns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .hbtns .btn { min-height: 46px; box-shadow: 0 3px 10px rgba(0,0,0,.45); }
 @media (max-height: 520px) {
@@ -840,6 +849,7 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
   <div class="stick l" id="stickL"><i></i><span>Walk</span></div>
   <div class="lookhint" id="stickR"><span>Drag here to look</span><span>Pinch to zoom</span></div>
 </div>
+<div class="chartsheet" id="chart" hidden role="dialog" aria-label="Your sea chart"><div class="chartbox"><div class="charthead"><b>Your sea chart</b><button type="button" class="close" data-c='["ui","chartClose"]' aria-label="Close the chart">&times;</button></div><div class="chartcv"><canvas id="chartCv"></canvas></div><p id="chartNote"></p></div></div>
 <div class="helm" id="helm" hidden>
   <div class="hcompass"><canvas id="compassCv" width="176" height="176" role="img" aria-label="Compass: the top is your heading, the blue arrow flies the way the wind blows"></canvas><b id="hSpeed">0 kn</b><span id="hWind">Fair wind</span></div>
   <div class="hsail off" id="hSail" role="slider" tabindex="0" aria-orientation="vertical" aria-label="Sail" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" aria-valuetext="furled"><span class="hsl">Sail</span><div class="htrack" id="hTrack"><u></u><i class="hfill"></i><em data-n="3">Full</em><em data-n="2">Half</em><em data-n="1">Reef</em><em data-n="0" class="on">Furl</em><b class="hthumb"></b></div></div>
@@ -1016,7 +1026,7 @@ scene.add(hemi, sun);
 /* ================= the new look, stage one: light, shadow, surface, sky, water, grass =================
    Every surface is still coloured by its makers, but now it is lit by a sun that casts shadows, carries a
    grain you can see up close, and sits under a real sky. Nothing here loads a file: it is all made in code. */
-const GFX = { stands: [], frustum: new THREE.Frustum(), pm: new THREE.Matrix4(), time: { value: 0 }, sunDir: { value: new THREE.Vector3(-0.6, 0.7, 0.3) }, sunCol: { value: new THREE.Color(1, 0.9, 0.7) }, skyTop: { value: new THREE.Color('#4a7fc0') }, skyHor: { value: new THREE.Color('#a3b5b1') }, night: { value: 0 }, noise: { value: null }, quality: 2, look: { value: new THREE.Vector4(1, 1, 1, 0) }, lookTint: { value: new THREE.Vector3(1, 1, 1) }, lookId: 'classic' };
+const GFX = { stands: [], frustum: new THREE.Frustum(), pm: new THREE.Matrix4(), time: { value: 0 }, sunDir: { value: new THREE.Vector3(-0.6, 0.7, 0.3) }, sunCol: { value: new THREE.Color(1, 0.9, 0.7) }, skyTop: { value: new THREE.Color('#4a7fc0') }, skyHor: { value: new THREE.Color('#a3b5b1') }, night: { value: 0 }, storm: { value: 0 }, noise: { value: null }, quality: 2, look: { value: new THREE.Vector4(1, 1, 1, 0) }, lookTint: { value: new THREE.Vector3(1, 1, 1) }, lookId: 'classic' };
 // one tiling texture of noise, three kinds in its three channels: fine grain, soft blotches, long streaks
 GFX.noise.value = (function () {
   const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N; const cx = cv.getContext('2d'), im = cx.createImageData(N, N), d = im.data;
@@ -1050,7 +1060,7 @@ applyLook((function () { try { return new URLSearchParams(location.search).get('
 // teach a plain material to show grain, weathering and a little relief, in world space, so no model needs unwrapping
 function surface(m, kind) {
   m.onBeforeCompile = sh => {
-    sh.uniforms.uNoise = GFX.noise; sh.uniforms.uSun = GFX.sunDir; sh.uniforms.uTime = GFX.time; sh.uniforms.uSkyTop = GFX.skyTop; sh.uniforms.uSunCol = GFX.sunCol; sh.uniforms.uLook = GFX.look; sh.uniforms.uLookTint = GFX.lookTint;
+    sh.uniforms.uNoise = GFX.noise; sh.uniforms.uStorm = GFX.storm; sh.uniforms.uSun = GFX.sunDir; sh.uniforms.uTime = GFX.time; sh.uniforms.uSkyTop = GFX.skyTop; sh.uniforms.uSunCol = GFX.sunCol; sh.uniforms.uLook = GFX.look; sh.uniforms.uLookTint = GFX.lookTint;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aKind; varying float vKind; varying vec3 vWp; varying vec3 vWn;').replace('#include <begin_vertex>', '#include <begin_vertex>\n vKind = aKind;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n vec4 wp4 = vec4(transformed, 1.0);\n #ifdef USE_INSTANCING\n wp4 = instanceMatrix * wp4;\n #endif\n vWp = (modelMatrix * wp4).xyz;\n vec3 wn3 = objectNormal;\n #ifdef USE_INSTANCING\n wn3 = mat3(instanceMatrix) * wn3;\n #endif\n vWn = normalize(mat3(modelMatrix) * wn3);');
     const body = kind === 'ground' ? `
@@ -1064,11 +1074,12 @@ function surface(m, kind) {
       vec2 p = vWp.xz; float t = uTime;
       vec2 n = vec2(texture2D(uNoise, p * 0.11 + vec2(t * 0.021, t * 0.013)).r - texture2D(uNoise, p * 0.11 + vec2(0.31 - t * 0.017, 0.2 + t * 0.019)).r, texture2D(uNoise, p * 0.09 + vec2(0.5 + t * 0.015, -t * 0.022)).g - texture2D(uNoise, p * 0.13 - vec2(t * 0.02, 0.4 + t * 0.011)).g);
       n += 0.5 * vec2(texture2D(uNoise, p * 0.47 + t * 0.05).r - 0.5, texture2D(uNoise, p * 0.47 - t * 0.04 + 0.37).r - 0.5);
+      n *= 1.0 + uStorm * 1.6; n += uStorm * max(uStorm, 0.0) * 0.6 * vec2(texture2D(uNoise, p * 0.05 + t * 0.06).r - 0.5, texture2D(uNoise, p * 0.05 - t * 0.05).g - 0.5);   // a storm heaps the sea up; a calm smooths it out
       vec3 N3 = normalize(vec3(n.x * 1.6, 1.0, n.y * 1.6)), V = normalize(cameraPosition - vWp);
       float fres = pow(1.0 - max(dot(V, N3), 0.0), 3.0); vec3 R = reflect(-V, N3);
       vec3 sky = mix(uSkyTop * 0.55 + 0.2, uSkyTop, clamp(R.y, 0.0, 1.0));
       float glint = pow(max(dot(R, normalize(uSun)), 0.0), 220.0) * 1.6 + pow(max(dot(R, normalize(uSun)), 0.0), 24.0) * 0.18;
-      vec3 deep = gl_FragColor.rgb * vec3(0.5, 0.74, 0.7) * (0.92 + 0.45 * (n.x + n.y));
+      vec3 deep = gl_FragColor.rgb * vec3(0.5, 0.74, 0.7) * (0.92 + 0.45 * (n.x + n.y)) * (1.0 - max(uStorm, 0.0) * 0.3);
       gl_FragColor.rgb = mix(deep, sky, 0.1 + 0.62 * fres) + uSunCol * glint; gl_FragColor.a = mix(0.82, 0.97, fres);`
       : `
       vec3 w = abs(vWn); w = w * w; w /= (w.x + w.y + w.z);
@@ -1094,7 +1105,7 @@ function surface(m, kind) {
         float lf = texture2D(uNoise, vWp.xz * 1.9 + vWp.y * 0.7).r, lf2 = texture2D(uNoise, vWp.zy * 0.6 + vWp.x * 0.3).g; c *= 0.66 + 0.6 * lf; c = mix(c * 0.86, c * vec3(1.14, 1.16, 0.84), smoothstep(-0.5, 0.9, vWn.y) * (0.45 + 0.55 * lf2)); c += vec3(0.03, 0.05, 0.01) * (1.0 - smoothstep(-0.2, 0.4, vWn.y)); }
       c = mix(c0, c, k > 5.5 ? 1.0 : far);
       gl_FragColor.rgb = c;`;
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec3 uSun; uniform float uTime; uniform vec3 uSkyTop; uniform vec3 uSunCol; uniform vec4 uLook; uniform vec3 uLookTint; varying vec3 vWp; varying vec3 vWn; varying float vKind;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform float uStorm; uniform vec3 uSun; uniform float uTime; uniform vec3 uSkyTop; uniform vec3 uSunCol; uniform vec4 uLook; uniform vec3 uLookTint; varying vec3 vWp; varying vec3 vWn; varying float vKind;')
       .replace('#include <fog_fragment>', '{ vec3 cIn = gl_FragColor.rgb;' + body + LOOK_GRADE(kind !== 'water') + '}\n#include <fog_fragment>');
   };
   m.customProgramCacheKey = () => 'gfx-' + (kind || 'plain');
@@ -1350,6 +1361,7 @@ function groundH(x, z) {
     const sy = worldH(1060, -300) - 1.3, floor = sy - 3.5;
     const di = Math.hypot(x - Sim.ISLE.x, (z - Sim.ISLE.z) * 1.3);
     if (di < 70) { const isle = sy + 1.8 + 3.2 * smooth01((40 - di) / 30) + 0.4 * Math.sin(x * 0.2) * Math.cos(z * 0.17); h = Math.max(h, floor * (1 - smooth01((70 - di) / 26)) + isle * smooth01((70 - di) / 26)); }
+    { const ir = Sim.isleRel(x, z); if (ir != null) h = Math.max(h, sy + ir); }   // the islands, reefs and coves of Stage II, read from the sim
     const vs = Sim.VSHORE(z), inPort = Math.abs(z + 300) < 96;
     const edgeV = inPort ? 8659 : vs;
     if (x > edgeV - 16) {
@@ -1469,8 +1481,8 @@ function wildClear(x, z) {
   return true;
 }
 const FARMS = [{ x: 150, z: 26, w: 46, d: 26 }, { x: 190, z: 14, w: 22, d: 18 }, { x: 378, z: -250, w: 36, d: 28 }, { x: 330, z: -300, w: 30, d: 22 }];
-const C_DRY = new THREE.Color('#b5a462');
-const openSeaTile = (x0, z0) => x0 > 1390 && x0 + TILE < 8410 && Math.hypot(clamp(Sim.ISLE.x, x0, x0 + TILE) - Sim.ISLE.x, clamp(Sim.ISLE.z, z0, z0 + TILE) - Sim.ISLE.z) > 80;
+const C_DRY = new THREE.Color('#b5a462'), C_SAND = new THREE.Color('#d6c8a0');
+const openSeaTile = (x0, z0) => x0 > 1390 && x0 + TILE < 8410 && Math.hypot(clamp(Sim.ISLE.x, x0, x0 + TILE) - Sim.ISLE.x, clamp(Sim.ISLE.z, z0, z0 + TILE) - Sim.ISLE.z) > 80 && Sim.ISLES.every(I => x0 > I.x + I.R || x0 + TILE < I.x - I.R || z0 > I.z + I.R || z0 + TILE < I.z - I.R);
 let SEABED_GEO = null;
 function buildTile(i, j) {
   const x0 = i * TILE, z0 = j * TILE;
@@ -1494,6 +1506,7 @@ function buildTile(i, j) {
     if (x < -100 && z < -300) wet = Math.min(wet, segDist(x, z, GREEN) - 3);
     if (wet < 4.5) C_TMP.lerp(C_BANK, 0.55);
     if (x > 8630) C_TMP.lerp(C_DRY, 0.45);   // Valdoria's sun-dried grass
+    if (x > 1300 && x < 8560 && y < SEA_Y + 1.3 && Sim.isleRel(x, z) != null) C_TMP.lerp(C_SAND, 0.75);   // island beaches
     if (y > 12) C_TMP.lerp(C_ROCK, Math.min(1, (y - 12) / 14));
     { const sl = 50 + 9 * Math.sin(x * 0.021 + 0.4) * Math.cos(z * 0.017) + 5 * Math.sin((x - z) * 0.05); if (y > sl) C_TMP.lerp(C_SNOW, Math.min(0.92, (y - sl) / 12)); }   // snow on the heights, in drifts, not one white sheet
     for (let q = 0; q < 3; q++) { col[(k + q) * 3] = C_TMP.r; col[(k + q) * 3 + 1] = C_TMP.g; col[(k + q) * 3 + 2] = C_TMP.b; }
@@ -3764,9 +3777,9 @@ const SHIP_LOOK = {
     masts: [{ z: 0.7, h: 5.4 }], sails: [{ m: 0, top: 4.9, w: 3.1, h: 3.7, foot: 1.1 }] },
   cutter: { free: 1.0, depth: 0.9, stern: 0.62, sheer: 0.32, bul: 0.42, hull: '#5b4029', deck: '#94744c', castles: [{ z0: -6, z1: -3.2, top: 1.45 }], helm: [0, 1.47, -4.6], sprit: 3.4,
     masts: [{ z: 1.2, h: 11 }], sails: [{ m: 0, top: 10, w: 6.2, h: 7.2, foot: 1.12 }, { tri: 1, a: [0, 10.4, 1.3], b: [0, 1.5, 8.9], c: [0, 1.9, 2.2] }] },
-  cog: { free: 1.55, depth: 1.4, stern: 0.72, sheer: 0.36, bul: 0.5, hull: '#5b4029', deck: '#8f7048', castles: [{ z0: -9, z1: -4.6, top: 2.75, rail: 1 }, { z0: 6.2, z1: 8.6, top: 2.5, rail: 1 }], helm: [0, 2.77, -6.6], sprit: 2.6, nest: 11.4,
+  cog: { free: 1.55, depth: 1.4, stern: 0.72, sheer: 0.36, bul: 0.5, hull: '#5b4029', deck: '#8f7048', castles: [{ z0: -9, z1: -4.6, top: 3.3, rail: 1, room: [-1.6, -0.6] }, { z0: 6.2, z1: 8.6, top: 3.2, rail: 1, room: [0.6, 1.6] }], helm: [0, 3.32, -6.6], sprit: 2.6, nest: 11.4,
     masts: [{ z: 0.8, h: 14.5 }], sails: [{ m: 0, top: 12.6, w: 8.6, h: 8.6, foot: 1.1 }] },
-  galleon: { free: 2.7, depth: 2.3, stern: 0.74, sheer: 0.3, bul: 0.6, hull: '#4f3826', deck: '#8f7048', band: '#8e2b22', castles: [{ z0: -15, z1: -5.4, top: 4.3, rail: 1 }, { z0: -15, z1: -10.6, top: 5.7, rail: 1 }, { z0: 8.4, z1: 13.2, top: 4.0, rail: 1 }], helm: [0, 4.32, -7.4], sprit: 6, nest: 17,
+  galleon: { free: 2.7, depth: 2.3, stern: 0.74, sheer: 0.3, bul: 0.6, hull: '#4f3826', deck: '#8f7048', band: '#8e2b22', castles: [{ z0: -15, z1: -5.4, top: 4.3, rail: 1, room: [-0.7, 0.7] }, { z0: -15, z1: -10.6, top: 5.7, rail: 1 }, { z0: 8.4, z1: 13.2, top: 4.4, rail: 1, room: [1.4, 2.4] }], helm: [0, 4.32, -7.4], sprit: 6, nest: 17,
     masts: [{ z: 9.4, h: 19 }, { z: 0, h: 24 }, { z: -9.4, h: 16.5 }],
     sails: [{ m: 0, top: 11.6, w: 9.6, h: 7.2, foot: 1.08 }, { m: 0, top: 17.6, w: 7, h: 5.2, foot: 1.25 }, { m: 1, top: 13.4, w: 11.6, h: 8.6, foot: 1.08 }, { m: 1, top: 21.6, w: 8.4, h: 7.2, foot: 1.28 }, { m: 2, top: 14.6, w: 6.8, h: 8, foot: 1.2 }, { tri: 1, a: [0, 17.4, 9.6], b: [0, 4.9, 19.6], c: [0, 5.6, 11] }] }
 };
@@ -3792,47 +3805,157 @@ function shipDeckGeo(C, K, y0) {   // a deck from rail to rail, following her sh
   for (let i = 0; i < NS; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
 }
+// half her breadth inside the hull at a height y (her own frame) and a point z along her
+function hullHalfAt(C, K, z, y) { const H = hullAt(C, K, clamp(z / C.len + 0.5, 0, 1)), k = clamp((y - H.keel) / (H.top - H.keel), 0, 1); return H.b * Math.pow(Math.sin(Math.acos(1 - k)), 0.75); }
+const mainDeckY = (C, K, z) => { const H = hullAt(C, K, clamp(z / C.len + 0.5, 0, 1)); return H.top - K.bul; };
+/* where you can walk aboard each class, deck by deck. Each level has a height (a number, or 'main' for the weather deck that follows her sheer),
+   the stretch of her length it covers, walls and fittings you cannot walk through, places to do things, and ladders and hatches to the next deck.
+   'below' decks are inside the hull: when you go down, the decks above and the near side of the hull are lifted away like a doll's house. */
+const DECK_PLAN = {
+  skiff: { levels: {
+    main: { name: 'the boat', y: 0.12, z0: -2.9, z1: 3, solids: [[0, 0.7, 0.18]], spots: [['helm', 0, -2.2, 'The tiller'], ['chest', 0.45, -1.3, 'Your sea chest, under the thwart'], ['bed', 0, 2.2, 'A sail to sleep under']], portals: [] } },
+    cargo: { lv: 'main', x: 0.75, z0: -1.1, z1: 1.6, y: 0.12 } },
+  cutter: { levels: {
+    main: { name: 'the main deck', y: 'main', z0: -3, z1: 5.2, solids: [[0, 1.2, 0.2]], spots: [], portals: [[0.9, -2.85, 'quarter', 0.9, -3.75, 'Climb to the quarterdeck'], [0, -0.6, 'below', 0, -0.6, 'Go below']] },
+    quarter: { name: 'the quarterdeck', y: 1.45, z0: -5.7, z1: -3.4, castle: 0, solids: [], spots: [['helm', 0, -4.6, 'The tiller']], portals: [[0.9, -3.75, 'main', 0.9, -2.85, 'Down to the main deck']] },
+    below: { name: 'below decks', below: 1, y: -0.5, z0: -4.8, z1: 3.6, walls: [[-1.6, 'x', [[-0.42, 0.42]]], [2.2, 'x', [[-0.42, 0.42]]]], solids: [], spots: [['bed', 0.5, -4.1, 'Your bunk'], ['chest', -0.5, -3.4, 'Your sea chest'], ['table', 0.5, -2.4, 'The chart table'], ['stove', -0.35, 2.9, 'The galley stove'], ['bed', 0.4, 3.2, 'A hammock in the forepeak']], portals: [[0, -0.6, 'main', 0, -0.6, 'Up on deck']] } },
+    cargo: { lv: 'below', x: 1, z0: -1.3, z1: 2, y: -0.5 } },
+  cog: { levels: {
+    main: { name: 'the main deck', y: 'main', z0: -8.7, z1: 8.3, walls: [[-4.6, 'x', [[-1.6, -0.6]]], [6.2, 'x', [[0.6, 1.6]]]], solids: [[0, 0.8, 0.26]], spots: [['bed', 1.25, -8, 'Your bunk in the great cabin'], ['chest', -1.3, -8.1, 'Your sea chest'], ['table', 0.8, -6, 'The chart table'], ['bed', -0.9, 7.6, 'A hammock in the forecastle']], portals: [[1.5, -4.25, 'quarter', 1.5, -5.15, 'Climb to the quarterdeck'], [-1.4, 5.85, 'fore', -1.4, 6.75, 'Climb to the forecastle'], [0, -1.6, 'hold', 0, -1.6, 'Down the hatch to the hold']] },
+    quarter: { name: 'the quarterdeck', y: 3.3, z0: -8.8, z1: -4.8, castle: 0, solids: [], spots: [['helm', 0, -6.6, 'The wheel']], portals: [[1.5, -5.15, 'main', 1.5, -4.25, 'Down to the main deck']] },
+    fore: { name: 'the forecastle', y: 3.2, z0: 6.4, z1: 8.4, castle: 1, solids: [], spots: [], portals: [[-1.4, 6.75, 'main', -1.4, 5.85, 'Down to the main deck']] },
+    hold: { name: 'the hold', below: 1, y: -0.6, z0: -6.6, z1: 6.8, walls: [[-3, 'x', [[-1.3, -0.5], [0.5, 1.3]]], [0, 'z', [], -6.6, -3]], solids: [[0, 0.8, 0.26]], spots: [['stove', -1.05, -5.3, 'The galley stove'], ['bed', 1.05, -5.5, 'A passenger’s bunk']], portals: [[0, -1.6, 'main', 0, -1.6, 'Up the ladder to the deck']] } },
+    cargo: { lv: 'hold', x: 1.6, z0: -2.6, z1: 6.4, y: -0.6 } },
+  galleon: { levels: {
+    main: { name: 'the main deck', y: 'main', z0: -14.6, z1: 12.8, walls: [[-5.4, 'x', [[-0.7, 0.7]]], [8.4, 'x', [[1.4, 2.4]]]], solids: [[0, 9.4, 0.34], [0, 0, 0.4], [0, -9.4, 0.32]], spots: [['bed', 2.4, -13.2, 'Your bed in the great cabin'], ['chest', -2.4, -13.4, 'Your sea chest'], ['table', 1.8, -7.6, 'The chart table'], ['bed', -1.6, 11, 'A hammock in the forecastle']], portals: [[3, -5, 'quarter', 3, -6, 'Climb to the quarterdeck'], [-2.5, 7.9, 'fore', -2.5, 8.9, 'Climb to the forecastle'], [0, 3.5, 'lower', 0, 3.5, 'Down to the lower deck']] },
+    quarter: { name: 'the quarterdeck', y: 4.3, z0: -10.4, z1: -5.6, castle: 0, solids: [], spots: [['helm', 0, -7.4, 'The wheel']], portals: [[3, -6, 'main', 3, -5, 'Down to the main deck'], [-2.6, -10.15, 'poop', -2.6, -11.15, 'Climb to the poop deck']] },
+    poop: { name: 'the poop deck', y: 5.7, z0: -14.8, z1: -10.8, castle: 1, solids: [], spots: [], portals: [[-2.6, -11.15, 'quarter', -2.6, -10.15, 'Down to the quarterdeck']] },
+    fore: { name: 'the forecastle', y: 4.4, z0: 8.6, z1: 13, castle: 2, solids: [], spots: [], portals: [[-2.5, 8.9, 'main', -2.5, 7.9, 'Down to the main deck']] },
+    lower: { name: 'the lower deck', below: 1, y: 0.3, z0: -12.5, z1: 11.5, walls: [[-7, 'x', [[-2.2, -1.2], [1.2, 2.2]]], [0, 'z', [], -12.5, -7], [4, 'x', [[-0.6, 0.6]]]], solids: [[0, 9.4, 0.34], [0, 0, 0.4], [0, -9.4, 0.32]], spots: [['bed', -2.3, -10.5, 'A passenger cabin'], ['bed', 2.3, -10.5, 'A passenger cabin'], ['stove', -2, -1.2, 'The galley stove'], ['bed', 0, 8, 'The crew’s hammocks']], portals: [[0, 3.5, 'main', 0, 3.5, 'Up to the main deck'], [1.8, -4.5, 'hold', 1.8, -4.5, 'Down to the hold']] },
+    hold: { name: 'the hold', below: 2, y: -1.5, z0: -10, z1: 10, solids: [[0, 9.4, 0.34], [0, 0, 0.4], [0, -9.4, 0.32]], spots: [], portals: [[1.8, -4.5, 'lower', 1.8, -4.5, 'Up to the lower deck']] } },
+    cargo: { lv: 'hold', x: 2.2, z0: -9.4, z1: 9.4, y: -1.5 } }
+};
+const levelY = (C, K, L, z) => L.y === 'main' ? mainDeckY(C, K, z) : L.y;
+// the walls of a level, as boxes in her frame: [at, 'x' (across her) or 'z' (along her), door gaps, from, to]
+function levelWalls(C, K, L) {
+  const out = [];
+  for (const [at, ax, doors, a0, a1] of (L.walls || [])) {
+    if (ax === 'x') { const y = levelY(C, K, L, at), hw = hullHalfAt(C, K, at, y + 0.8); let x = -hw; for (const [d0, d1] of doors.concat([[hw, hw]])) { if (d0 > x) out.push({ x: (x + d0) / 2, z: at, hx: (d0 - x) / 2, hz: 0.1 }); x = d1; } }
+    else out.push({ x: at, z: (a0 + a1) / 2, hx: 0.1, hz: (a1 - a0) / 2 });
+  }
+  return out;
+}
+// one half of her hull: side -1 for port, 1 for starboard, so the near side can be lifted away when you are below
+function shipHullHalfGeo(C, K, side) {
+  const NS = 14, NR = 6, pos = [], idx = [], rows = [];
+  for (let i = 0; i <= NS; i++) { const t = i / NS, z = (t - 0.5) * C.len, H = hullAt(C, K, t), row = [];
+    for (let j = 0; j <= NR; j++) { const u = j / NR; row.push(pos.length / 3); pos.push(side * H.b * Math.pow(Math.sin(u * Math.PI / 2), 0.75), H.keel + (H.top - H.keel) * (1 - Math.cos(u * Math.PI / 2)), z); }
+    rows.push(row); }
+  for (let i = 0; i < NS; i++) for (let j = 0; j < NR; j++) { const a = rows[i][j], b = rows[i][j + 1], c = rows[i + 1][j], d = rows[i + 1][j + 1]; if (side > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c); }
+  { const c = pos.length / 3; pos.push(0, K.free * 0.4, -C.len / 2); for (let j = 0; j < NR; j++) { if (side > 0) idx.push(c, rows[0][j + 1], rows[0][j]); else idx.push(c, rows[0][j], rows[0][j + 1]); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+// keeps the sea out of her hull: drawn just before the water, it writes depth and no colour over her inside
+const HULL_MASK_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, transparent: true });
+const CARGO_LOOK = { salt: ['sack', '#e8e2d2'], wool: ['sack', '#d8ccb0'], wine: ['barrel', '#6b2f2f'], fish: ['barrel', '#7a6a52'], saltfish: ['barrel', '#8a7a5a'], iron: ['crate', '#5a5f66'], amber: ['crate', '#c9962b'], dye: ['crate', '#7a2f5a'] };
 const SHIPS3D = {};
 function shipModel(cls) {
   if (SHIPS3D[cls]) return SHIPS3D[cls];
-  const C = Sim.SHIP_CLASSES[cls], K = SHIP_LOOK[cls], parts = [], I = new THREE.Matrix4();
+  const C = Sim.SHIP_CLASSES[cls], K = SHIP_LOOK[cls], P0 = DECK_PLAN[cls], I = new THREE.Matrix4();
   const M = (x, y, z, sx, sy, sz, rx, ry, rz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx, sy, sz));
-  const bx = (c, x, y, z, w, h, d, rx, ry, rz) => parts.push({ geo: G_BOX, color: c, m: M(x, y, z, w, h, d, rx, ry, rz) });
-  const cyl = (c, x, y, z, r, h, rx, rz) => parts.push({ geo: G_CYL, color: c, m: M(x, y, z, r, h, r, rx, 0, rz) });
-  const tAt = z => z / C.len + 0.5, DARK = '#3a2a1c', SPAR = '#4a3424';
-  parts.push({ geo: shipHullGeo(C, K), color: K.hull, m: I, smooth: true, kind: 3 });
-  parts.push({ geo: shipDeckGeo(C, K, cls === 'skiff' ? 0.12 : null), color: K.deck, m: I, kind: 3 });
-  // the rail along her sheer, and a painted band below it on the great ship
+  const bins = { main: [], rig: [], roofs: K.castles.map(() => []), lv: {} };
+  let cur = bins.main;
+  const bx = (c, x, y, z, w, h, d, rx, ry, rz) => cur.push({ geo: G_BOX, color: c, m: M(x, y, z, w, h, d, rx, ry, rz) });
+  const cyl = (c, x, y, z, r, h, rx, rz) => cur.push({ geo: G_CYL, color: c, m: M(x, y, z, r, h, r, rx, 0, rz) });
+  const tAt = z => z / C.len + 0.5, DARK = '#3a2a1c', SPAR = '#4a3424', PLANK = '#7a5a3a';
+  // the weather deck and the rails along her sheer, and a painted band below them on the great ship
+  bins.main.push({ geo: shipDeckGeo(C, K, cls === 'skiff' ? 0.12 : null), color: K.deck, m: I, kind: 3 });
   for (let i = 0; i < 14; i++) { const t0 = i / 14, t1 = (i + 1) / 14, A = hullAt(C, K, t0), B = hullAt(C, K, t1), z0 = (t0 - 0.5) * C.len, z1 = (t1 - 0.5) * C.len, L0 = Math.hypot(z1 - z0, B.b - A.b, B.top - A.top);
     for (const sd of [-1, 1]) { const ry = Math.atan2((B.b - A.b) * sd, z1 - z0), rx = -Math.atan2(B.top - A.top, z1 - z0);
       bx(DARK, sd * (A.b + B.b) / 2, (A.top + B.top) / 2 + 0.03, (z0 + z1) / 2, 0.14 + C.beam * 0.012, 0.1 + C.len * 0.004, L0 + 0.05, rx, ry);
       if (K.band) bx(K.band, sd * ((A.b + B.b) / 2 + 0.02), (A.top + B.top) / 2 - K.free * 0.3, (z0 + z1) / 2, 0.08, K.free * 0.16, L0 + 0.05, rx, ry); } }
-  // castles fore and aft: each as wide as the hull under it, with a rail round the top
-  for (const c of K.castles) { const zm = (c.z0 + c.z1) / 2, H0 = hullAt(C, K, tAt(c.z0)), H1 = hullAt(C, K, tAt(c.z1)), w = Math.min(H0.b, H1.b) * 2 * 0.98 + (Math.max(H0.b, H1.b) - Math.min(H0.b, H1.b)) * 0.9, base = K.free - K.bul - 0.05, d = c.z1 - c.z0;
-    bx(K.hull, 0, (base + c.top) / 2, zm, w, c.top - base, d); bx(K.deck, 0, c.top, zm, w + 0.24, 0.1, d + 0.24);
-    if (c.rail) { for (const sd of [-1, 1]) bx(DARK, sd * (w / 2 + 0.06), c.top + 0.5, zm, 0.1, 0.9, d + 0.2); bx(DARK, 0, c.top + 0.5, c.z0 < 0 ? c.z0 - 0.06 : c.z1 + 0.06, w + 0.2, 0.9, 0.1); } }
+  // castles: their walls stand on the main deck (a cabin inside, where the plan has one); their roofs, the decks above, lift away when you go in
+  K.castles.forEach((c, ci) => { const zm = (c.z0 + c.z1) / 2, d = c.z1 - c.z0, base = Math.min(mainDeckY(C, K, c.z0), mainDeckY(C, K, c.z1)) - 0.05, w = Math.min(hullHalfAt(C, K, c.z0, c.top), hullHalfAt(C, K, c.z1, c.top)) * 2 + 0.3;
+    const room = c.room, front = c.z0 < 0 ? c.z1 : c.z0, under = K.castles.find(o => o !== c && o.z0 <= c.z0 && o.z1 >= c.z1 && o.top < c.top);
+    cur = under ? bins.roofs[ci] : bins.main;
+    if (!room) { const b0 = under ? under.top : base; bx(K.hull, 0, (b0 + c.top) / 2, zm, w, c.top - b0, d); }
+    else { for (const sd of [-1, 1]) bx(K.hull, sd * (w / 2 - 0.08), (base + c.top) / 2, zm, 0.16, c.top - base, d);   // side walls
+      const back = c.z0 < 0 ? c.z0 : c.z1; bx(K.hull, 0, (base + c.top) / 2, back, w, c.top - base, 0.16);
+      const [d0, d1] = room; let x = -w / 2; for (const [a, b] of [[d0, d1], [w / 2, w / 2]]) { if (a > x) bx(K.hull, (x + a) / 2, (base + c.top) / 2, front, a - x, c.top - base, 0.16); x = b; }
+      bx(K.hull, (d0 + d1) / 2, c.top - 0.25, front, d1 - d0, 0.5, 0.16);   // over the door
+      bx('#2a1f16', (d0 + d1) / 2, (base + c.top - 0.5) / 2, front + (c.z0 < 0 ? 0.09 : -0.09), (d1 - d0) * 0.98, c.top - 0.5 - base, 0.02);   // the doorway's shadow
+      for (const sd of [-1, 1]) bx('#e8d9a8', sd * (w / 2 - 0.17), (base + c.top) / 2 + 0.2, zm, 0.02, 0.5, 0.7); }   // a window each side
+    cur = bins.roofs[ci]; bx(K.deck, 0, c.top, zm, w + 0.24, 0.1, d + 0.24);
+    if (c.rail) { for (const sd of [-1, 1]) bx(DARK, sd * (w / 2 + 0.06), c.top + 0.5, zm, 0.1, 0.9, d + 0.2); bx(DARK, 0, c.top + 0.5, c.z0 < 0 ? c.z0 - 0.06 : c.z1 + 0.06, w + 0.2, 0.9, 0.1); } });
+  cur = bins.main;
   if (cls === 'skiff') { for (const z of [-1.5, 0.2, 1.7]) { const H = hullAt(C, K, tAt(z)); bx(K.deck, 0, K.free - 0.2, z, H.b * 1.86, 0.07, 0.34); } }
-  // spars
-  K.masts.forEach(m => { cyl(SPAR, 0, m.h / 2, m.z, 0.07 + m.h * 0.011, m.h); });
+  // the helm: a tiller for the boats, a wheel on its post for the ships; and a rudder hung on the stern
+  { const [hx, hy, hz] = K.helm, hb = K.castles.length && hz < K.castles[0].z1 && hz > K.castles[0].z0 ? 0 : -1; cur = hb === 0 ? bins.roofs[0] : bins.main;
+    if (cls === 'skiff' || cls === 'cutter') bx(SPAR, hx, hy + 0.75, hz - 0.75, 0.07, 0.07, 1.5, 0.12); else { bx(DARK, hx, hy + 0.5, hz + 0.75, 0.16, 1, 0.16); cur.push({ geo: G_CYL, color: '#7a5634', m: M(hx, hy + 1.0, hz + 0.62, 0.55, 0.08, 0.55, Math.PI / 2, 0, 0) }); }
+    cur = bins.main; bx(DARK, 0, (K.free - K.depth) / 2 - 0.1, -C.len / 2 - 0.12, 0.12, K.free + K.depth * 0.8, 0.5 + C.len * 0.02); }
+  if (cls === 'cutter' || cls === 'cog') { const z = K.castles[0].z0 + 0.25, c0 = K.castles[0]; cur = bins.roofs[0]; bx('#3a3632', 0, c0.top + 0.9, z, 0.32, 0.5, 0.32); bx('#ffd36a', 0, c0.top + 0.9, z, 0.24, 0.36, 0.24); cur = bins.main; }   // her stern lantern
+  if (cls === 'galleon') { cur = bins.roofs[1]; bx('#3a3632', 0, 5.7 + 1.5, -15.3, 0.5, 0.7, 0.5); bx('#ffd36a', 0, 5.7 + 1.5, -15.3, 0.36, 0.5, 0.36); cur = bins.main; for (let z = -11; z <= 7; z += 3) for (const sd of [-1, 1]) { const H = hullAt(C, K, tAt(z)); bx('#241a12', sd * (H.b * 0.99), K.free * 0.52, z, 0.1, 0.5, 0.6); } }
+  // spars, high above everything else
+  cur = bins.rig;
+  const deckTop = mainDeckY(C, K, 0);
+  K.masts.forEach(m => { cyl(SPAR, 0, deckTop + (m.h - deckTop) / 2, m.z, 0.07 + m.h * 0.011, m.h - deckTop); });
   K.sails.forEach(sl => { if (!sl.tri) cyl(SPAR, 0, sl.top + 0.1, K.masts[sl.m].z + 0.22, 0.06 + sl.w * 0.008, sl.w * 1.06, 0, Math.PI / 2); });
   if (K.nest) cyl(DARK, 0, K.nest, K.masts[K.masts.length > 1 ? 1 : 0].z, 0.75, 0.6);
   if (K.sprit) { const zb = C.len / 2 - 0.6, top = hullAt(C, K, 0.97).top; cyl(SPAR, 0, top + K.sprit * 0.22, zb + K.sprit * 0.42, 0.09 + K.sprit * 0.012, K.sprit, 1.12); }
-  // the helm: a tiller for the boats, a wheel on its post for the ships; and a rudder hung on the stern
-  { const [hx, hy, hz] = K.helm; if (cls === 'skiff' || cls === 'cutter') bx(SPAR, hx, hy + 0.75, hz - 0.75, 0.07, 0.07, 1.5, 0.12); else { bx(DARK, hx, hy + 0.5, hz + 0.75, 0.16, 1, 0.16); parts.push({ geo: G_CYL, color: '#7a5634', m: M(hx, hy + 1.0, hz + 0.62, 0.55, 0.08, 0.55, Math.PI / 2, 0, 0) }); }
-    bx(DARK, 0, (K.free - K.depth) / 2 - 0.1, -C.len / 2 - 0.12, 0.12, K.free + K.depth * 0.8, 0.5 + C.len * 0.02); }
-  if (cls === 'galleon') { bx('#3a3632', 0, 5.7 + 1.5, -15.3, 0.5, 0.7, 0.5); bx('#ffd36a', 0, 5.7 + 1.5, -15.3, 0.36, 0.5, 0.36); for (let z = -11; z <= 7; z += 3) for (const sd of [-1, 1]) { const H = hullAt(C, K, tAt(z)); bx('#241a12', sd * (H.b * 0.99), K.free * 0.52, z, 0.1, 0.5, 0.6); } }
+  // the decks below: a floor, walls, fittings, the masts passing down through them, and the ladders between
+  const furnish = (L, list) => { cur = list;
+    for (const [kind, x, z] of L.spots) { const y = levelY(C, K, L, z);
+      if (kind === 'bed') { if (L.below || /forecastle|hammock/i.test(L.name)) { bx('#c9b48a', x, y + 0.9, z, 0.8, 0.12, 1.9, 0, 0, 0.05); bx(DARK, x, y + 1.3, z - 0.95, 0.06, 0.8, 0.06); bx(DARK, x, y + 1.3, z + 0.95, 0.06, 0.8, 0.06); } else { bx('#5b4029', x, y + 0.25, z, 1, 0.5, 2); bx('#e8dcc0', x, y + 0.52, z + 0.1, 0.9, 0.1, 1.7); bx('#8e2b22', x, y + 0.56, z + 0.35, 0.92, 0.06, 1.2); } }
+      if (kind === 'chest') { bx('#5b4029', x, y + 0.3, z, 0.9, 0.6, 0.55); bx('#c9962b', x, y + 0.62, z, 0.94, 0.08, 0.6); }
+      if (kind === 'table') { bx('#6b4a2e', x, y + 0.8, z, 1.4, 0.08, 1); bx(DARK, x, y + 0.4, z, 0.2, 0.8, 0.2); bx('#e8d9b0', x, y + 0.85, z, 1.1, 0.02, 0.8, 0, 0.2); }
+      if (kind === 'stove') { bx('#4a4744', x, y + 0.45, z, 0.8, 0.9, 0.7); bx('#ff8a3a', x, y + 0.4, z + 0.36, 0.4, 0.25, 0.02); cyl('#3a3632', x, y + 1.6, z, 0.08, 1.4); bx('#7a5634', x + 0.9 * Math.sign(-x || 1), y + 0.75, z, 0.5, 0.05, 1.2); } } };
+  for (const id in P0.levels) {
+    const L = P0.levels[id];
+    if (L.below) { const list = bins.lv[id] = [];
+      list.push({ geo: shipDeckGeo(C, K, L.y), color: PLANK, m: I, kind: 3 });
+      cur = list; for (const W of levelWalls(C, K, L)) bx('#6b4a2e', W.x, L.y + 0.8, W.z, W.hx * 2, 1.6, W.hz * 2);
+      for (const [mx, mz, r] of L.solids) cyl(SPAR, mx, (L.y + deckTop) / 2, mz, r, deckTop - L.y);
+      for (const [x, z, to] of L.portals) { const up = !P0.levels[to].below || P0.levels[to].below < L.below; if (up) { const top = levelY(C, K, P0.levels[to], z); for (let s0 = 0; s0 < 5; s0++) bx('#7a5634', x, L.y + (s0 + 0.5) * (top - L.y) / 5, z + 0.5 - s0 * 0.18, 0.7, 0.05, 0.22); bx(DARK, x - 0.38, (L.y + top) / 2, z, 0.06, top - L.y, 0.9, 0.35); bx(DARK, x + 0.38, (L.y + top) / 2, z, 0.06, top - L.y, 0.9, 0.35); } }
+      furnish(L, list);
+    } else {
+      if (id === 'main') { furnish(L, bins.main);
+        for (const [x, z, to] of L.portals) if (P0.levels[to].below) { const y = levelY(C, K, L, z); bx('#1a120c', x, y + 0.02, z, 1.1, 0.04, 1.1); bx(DARK, x, y + 0.08, z - 0.6, 1.3, 0.16, 0.12); bx(DARK, x, y + 0.08, z + 0.6, 1.3, 0.16, 0.12); } }
+      if (id !== 'main') furnish(L, bins.roofs[L.castle] || bins.main);
+      // ladders up to the castle tops
+      for (const [x, z, to] of L.portals) { const T2 = P0.levels[to]; if (T2.below || T2.y === 'main' || (L.y !== 'main' && T2.y < L.y)) continue; const y0 = levelY(C, K, L, z), y1 = T2.y; cur = L.y === 'main' ? bins.main : bins.roofs[L.castle] || bins.main; for (let s0 = 0; s0 < 5; s0++) bx('#7a5634', x, y0 + (s0 + 0.5) * (y1 - y0) / 5, z + (to === 'fore' ? 1 : -1) * (s0 * 0.16), 0.7, 0.05, 0.22); }
+    }
+  }
   const g = new THREE.Group(); g.rotation.order = 'YXZ';
-  const body = new THREE.Mesh(mergeColored(parts), SHIP_MAT); g.add(body);
+  const mk = list => { const me = new THREE.Mesh(mergeColored(list), SHIP_MAT); g.add(me); return me; };
+  const hull = [-1, 1].map(sd => { const me = new THREE.Mesh(mergeColored([{ geo: shipHullHalfGeo(C, K, sd), color: K.hull, m: I, smooth: true, kind: 3 }]), SHIP_MAT); g.add(me); return me; });
+  const main = mk(bins.main), rig = mk(bins.rig), roofs = bins.roofs.map(l => l.length ? mk(l) : null), lv = {};
+  for (const id in bins.lv) lv[id] = mk(bins.lv[id]);
+  // the sea kept out of her: a plate at her waterline that the water cannot draw over
+  { const NS = 14, pos = [], idx = []; for (let i = 0; i <= NS; i++) { const t = i / NS, z = (t - 0.5) * C.len, w = hullHalfAt(C, K, z, 0.35) * 0.97; pos.push(-w, 0.35, z, w, 0.35, z); } for (let i = 0; i < NS; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); mg.setIndex(idx); const mask = new THREE.Mesh(mg, HULL_MASK_MAT); mask.renderOrder = -5; g.add(mask); }
+  // the cargo in her hold, one bale, barrel or crate for each load
+  const cargo = {}, CG = P0.cargo, geoOf = { sack: new THREE.SphereGeometry(0.34, 7, 5), barrel: new THREE.CylinderGeometry(0.3, 0.27, 0.62, 8), crate: new THREE.BoxGeometry(0.6, 0.55, 0.6) };
+  geoOf.sack.scale(1, 0.75, 1.15);
+  for (const gk in CARGO_LOOK) { const [shape, col] = CARGO_LOOK[gk], im = new THREE.InstancedMesh(geoOf[shape], new THREE.MeshLambertMaterial({ color: col }), C.hold); im.count = 0; im.frustumCulled = false; (lv[CG.lv] || main).add(im); cargo[gk] = im; }
   // every sail in one piece of cloth-work, reshaped as the wind and the reef change
   const N1 = 7, N2 = 5, per = N1 * N2, sgeo = new THREE.BufferGeometry(), spos = new Float32Array(K.sails.length * per * 3), sidx = [];
   K.sails.forEach((sl, k) => { for (let j = 0; j < N2 - 1; j++) for (let i = 0; i < N1 - 1; i++) { const a = k * per + j * N1 + i; sidx.push(a, a + N1, a + 1, a + 1, a + N1, a + N1 + 1); } });
   sgeo.setAttribute('position', new THREE.BufferAttribute(spos, 3)); sgeo.setIndex(sidx);
-  const sails = new THREE.Mesh(sgeo, SAIL_MAT); sails.frustumCulled = false; g.add(sails);
+  const sails = new THREE.Mesh(sgeo, SAIL_MAT); sails.frustumCulled = false; rig.add(sails);
   // her pennant, in your colours, streaming downwind from the tallest mast
   const tall = K.masts.reduce((a, b) => b.h > a.h ? b : a), flag = new THREE.Group(), fl = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({ color: MY_COLOURS[0], side: THREE.DoubleSide })), fl2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.34), new THREE.MeshLambertMaterial({ color: MY_COLOURS[1], side: THREE.DoubleSide }));
-  const fw = 0.8 + tall.h * 0.07; fl.scale.set(fw, fw * 0.6, 1); fl.rotation.y = Math.PI / 2; fl.position.set(0, 0, fw / 2); fl2.scale.set(fw, fw * 0.6, 1); fl2.rotation.y = Math.PI / 2; fl2.position.set(0.012, 0, fw / 2); flag.add(fl, fl2); flag.position.set(0, tall.h - fw * 0.36, tall.z); g.add(flag);
+  const fw = 0.8 + tall.h * 0.07; fl.scale.set(fw, fw * 0.6, 1); fl.rotation.y = Math.PI / 2; fl.position.set(0, 0, fw / 2); fl2.scale.set(fw, fw * 0.6, 1); fl2.rotation.y = Math.PI / 2; fl2.position.set(0.012, 0, fw / 2); flag.add(fl, fl2); flag.position.set(0, tall.h - fw * 0.36, tall.z); rig.add(flag);
   g.visible = false; scene.add(g);
-  return SHIPS3D[cls] = { g, C, K, sails, spos, per, N1, N2, flag, reef: 0.08 };
+  return SHIPS3D[cls] = { g, C, K, P: P0, hull, main, rig, roofs, lv, cargo, cargoKey: '', sails, spos, per, N1, N2, flag, reef: 0.08 };
+}
+// lay the cargo out in rows along the hold, stacked three high, as it is loaded
+function syncCargo(S3, hold) {
+  const key = JSON.stringify(hold || {}); if (key === S3.cargoKey) return; S3.cargoKey = key;
+  const { C, K, P, cargo } = S3, CG = P.cargo, Mx = new THREE.Matrix4(), cell = 0.66, slots = [];
+  for (let z = CG.z1 - 0.4; z > CG.z0 && slots.length < C.hold * 1.2; z -= cell) { const hw = Math.min(CG.x, hullHalfAt(C, K, z, CG.y + 0.3) - 0.45); for (let lay = 0; lay < 3; lay++) for (let x = -hw; x <= hw + 0.01; x += cell) if (Math.abs(x) > 0.55) slots.push([x, CG.y + 0.3 + lay * 0.58, z]); }
+  slots.sort((a, b) => a[1] - b[1] || b[2] - a[2]);
+  let k = 0; for (const gk in cargo) cargo[gk].count = 0;
+  for (const gk of Object.keys(hold || {})) { const im = cargo[gk]; if (!im) continue; let n = 0; for (let i = 0; i < (hold[gk] | 0) && k < slots.length; i++, k++, n++) { const [x, y, z] = slots[k]; Mx.makeRotationY((k * 0.37) % 0.3 - 0.15); Mx.setPosition(x, y, z); im.setMatrixAt(n, Mx); } im.count = n; im.instanceMatrix.needsUpdate = true; }
 }
 // reshape the cloth: reef is how much sail is shown, fill how hard it draws (negative: taken aback), side the lee side, luff how much it shakes
 function shapeSails(S3, reef, fill, side, luff, t) {
@@ -3892,7 +4015,7 @@ function stepWake(dt, on, x, z, hdg, C, frac) {
   W.me.geometry.attributes.position.needsUpdate = true; W.me.geometry.attributes.color.needsUpdate = true; W.me.visible = true;
 }
 // your own ship: at her berth in whichever port she was last moored, or wherever you have sailed her
-const MY_SHIP = { me: null, cls: null, at: null, x: 0, z: 0, hdg: 0, y: 0, roll: 0, pitch: 0, seaK: 0, frac: 0, lastHdg: null, fresh: true };
+const MY_SHIP = { me: null, cls: null, at: null, cut: false, x: 0, z: 0, hdg: 0, y: 0, roll: 0, pitch: 0, seaK: 0, frac: 0, lastHdg: null, fresh: true };
 const SHIP_V = new THREE.Vector3();
 function syncMyShip(s, dt, t) {
   const S = s && s.ship, pose = S ? Sim.shipPose(S) : null, cls = S && pose ? (S.cls || 'cog') : null, M0 = MY_SHIP;
@@ -3922,8 +4045,17 @@ function syncMyShip(s, dt, t) {
     shapeSails(S3, Math.max(0.035, S3.reef), fill, clamp(Math.sin(rel) * 1.6, -1, 1), set > 0 ? luff : 0.001, t);
     S3.flag.rotation.y = rel + (still ? 0 : Math.sin(t * 5.3) * 0.18 + Math.sin(t * 8.1) * 0.07); }
   stepWake(dt, atSea, M0.x, M0.z, M0.hdg, C, frac);
-  // you, at the helm: carried with her, standing on whatever deck the helm is on
-  if (aboard) { g.updateMatrixWorld(); SHIP_V.set(S3.K.helm[0], S3.K.helm[1], S3.K.helm[2]).applyMatrix4(g.matrixWorld); playerMesh.position.copy(SHIP_V); playerMesh.rotation.y = M0.hdg; horseMesh.visible = false;
+  // the doll's house: below decks the decks above and the near side of her hull lift away; in a cabin, its roof and the rigging do
+  const d = aboard ? s.player.deck : null, L = d && S3.P.levels[d.lv], below = L && L.below ? L.below : 0;
+  let inside = -1; if (L && L.y === 'main') S3.K.castles.forEach((c, k) => { if (c.room && d.z > c.z0 && d.z < c.z1) inside = k; });
+  M0.cut = below > 0 || inside >= 0;
+  S3.main.visible = !below; S3.rig.visible = !M0.cut;
+  S3.roofs.forEach((r, k) => { if (r) r.visible = !below && inside !== k && !(inside === 0 && cls === 'galleon' && k === 1); });
+  for (const id in S3.lv) S3.lv[id].visible = below > 0 && S3.P.levels[id].below >= below;
+  { let near = -1; if (below) { const dx = camera.position.x - g.position.x, dz = camera.position.z - g.position.z; near = Math.cos(M0.hdg) * dx - Math.sin(M0.hdg) * dz < 0 ? 0 : 1; } S3.hull[0].visible = near !== 0; S3.hull[1].visible = near !== 1; }
+  syncCargo(S3, S.hold);
+  // you: carried with her, at the helm or wherever you have walked on her decks
+  if (aboard) { g.updateMatrixWorld(); if (d && L) SHIP_V.set(d.x, levelY(C, S3.K, L, d.z), d.z); else SHIP_V.set(S3.K.helm[0], S3.K.helm[1], S3.K.helm[2]); SHIP_V.applyMatrix4(g.matrixWorld); playerMesh.position.copy(SHIP_V); playerMesh.rotation.y = M0.hdg + (d ? d.face || 0 : 0); horseMesh.visible = false;
     if (M0.lastHdg != null && atSea) cam.yaw += angD(M0.lastHdg, M0.hdg);   // the view turns with the ship, so astern stays astern
     M0.lastHdg = M0.hdg; } else M0.lastHdg = null;
 }
@@ -3932,6 +4064,31 @@ function sailHelm(s) {
   let mx = stick.move.x + (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   s.player.helm = Math.abs(mx) < 0.12 ? 0 : clamp(mx, -1, 1); UI.walking = false; s.player.pushing = false; s.player.moving = false;
 }
+// walking her decks: the move stick walks you, in her own frame, so she carries you as she sails. She holds her course while you are away from the helm
+const DECK_SOLIDS = {};
+function deckSolids(cls, lv) { const k = cls + ':' + lv; if (DECK_SOLIDS[k]) return DECK_SOLIDS[k]; const S3 = shipModel(cls), L = S3.P.levels[lv]; return (DECK_SOLIDS[k] = levelWalls(S3.C, S3.K, L).concat(L.solids.map(([x, z, r]) => ({ c: 1, x, z, r })))); }
+function deckWalk(s, dt) {
+  const p = s.player, d = p.deck, S3 = SHIPS3D[MY_SHIP.cls]; p.helm = 0; p.pushing = false; p.moving = false; UI.walking = false; if (!d || !S3) return;
+  const L = S3.P.levels[d.lv] || S3.P.levels.main; if (!S3.P.levels[d.lv]) d.lv = 'main';
+  let mx = stick.move.x + (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0), my = stick.move.y + (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
+  const m = Math.hypot(mx, my); if (m < 0.15) return; if (m > 1) { mx /= m; my /= m; }
+  const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw), vx = rx * mx + fx * -my, vz = rz * mx + fz * -my, c = Math.cos(MY_SHIP.hdg), sn = Math.sin(MY_SHIP.hdg);
+  const lx = c * vx - sn * vz, lz = sn * vx + c * vz, sp = 3.2 * dt, n = Math.max(1, Math.ceil(sp / 0.12)), sol = deckSolids(MY_SHIP.cls, d.lv), C = S3.C, K = S3.K;
+  for (let i = 0; i < n; i++) {
+    d.x += lx * sp / n; d.z += lz * sp / n; collide(d, sol);
+    d.z = clamp(d.z, L.z0, L.z1); const y = levelY(C, K, L, d.z), H = hullAt(C, K, clamp(d.z / C.len + 0.5, 0, 1)), hw = Math.max(0.2, hullHalfAt(C, K, d.z, Math.min(y + 0.6, H.top)) - 0.35); d.x = clamp(d.x, -hw, hw);
+  }
+  d.face = Math.atan2(lx, lz); UI.walking = true;
+}
+// what is within reach where you stand: a ladder or hatch, or something to use
+function deckNear(s) {
+  const d = s.player.deck, S3 = SHIPS3D[MY_SHIP.cls]; if (!d || !S3) return null; const L = S3.P.levels[d.lv]; if (!L) return null;
+  let best = null, bd = 1e9;
+  L.portals.forEach((q, i) => { const dd = Math.hypot(q[0] - d.x, q[1] - d.z); if (dd < 1.2 && dd < bd) { bd = dd; best = { portal: i, q }; } });
+  L.spots.forEach(q => { const dd = Math.hypot(q[1] - d.x, q[2] - d.z); if (dd < 1.5 && dd < bd) { bd = dd; best = { spot: q }; } });
+  return best;
+}
+function helmLevel(S3) { for (const id in S3.P.levels) { const q = S3.P.levels[id].spots.find(x => x[0] === 'helm'); if (q) return [id, q]; } return ['main', ['helm', 0, 0]]; }
 function setSail(n) { if (!G || !G.ship || !G.ship.sea) return; const r = Sim.cmd(G, 'setSail', clamp(n, 0, 3)); if (!r.ok && r.msg) toast(r.msg, 'info', true); Helm.sync(true); }
 function boardCam() { const S = G && G.ship, q = S && Sim.shipPose(S); if (!q) return; const C = Sim.shipClass(S); cam.yaw = q.hdg + Math.PI; cam.dist = lowView() ? C.len * 1.7 + 12 : C.len * 1.8 + 18; cam.pitch = lowView() ? 0.4 : 0.7; UI.camD = null; UI.camGy = null; MY_SHIP.fresh = true; MY_SHIP.lastHdg = null; }
 /* the helm on screen: a compass with the wind on it, the sail slider, and the few things you can do from the deck */
@@ -3954,14 +4111,33 @@ const Helm = (function () {
     cx.beginPath(); cx.moveTo(c, 2); cx.lineTo(c + 10, 20); cx.lineTo(c - 10, 20); cx.closePath(); cx.fillStyle = '#8e2b22'; cx.fill();
     cx.beginPath(); cx.arc(c, c, 5, 0, Math.PI * 2); cx.fillStyle = '#2a1f16'; cx.fill();
   }
+  function chestHTML(s) {
+    const S = s.ship, eq = Object.values(s.player.equip || {}), mine = (s.player.items || []).filter(it => !eq.includes(it.u) && Sim.ITEMS[it.id]), box = S.chest || [];
+    const row = (it, verb, cmd) => `<div class="chrow"><span>${esc(Sim.ITEMS[it.id] ? Sim.ITEMS[it.id].name : it.id)}${it.n > 1 ? ' \u00d7' + it.n : ''}</span>${B_(verb, [cmd, it.u], 'alt')}</div>`;
+    return `<div class="hchest"><b>Your sea chest</b>${box.length ? box.map(it => row(it, 'Take', 'chestTake')).join('') : '<p>Empty.</p>'}<b>What you carry</b>${mine.length ? mine.slice(0, 30).map(it => row(it, 'Stow', 'chestPut')).join('') : '<p>Nothing to stow. What you wear stays on you.</p>'}<div class="hbtns">${B_('Close the chest', ['ui', 'chest'], 'alt')}</div></div>`;
+  }
   function actsHTML(s) {
-    const S = s.ship, C = Sim.shipClass(S), used = Object.values(S.hold).reduce((a, b) => a + b, 0), rough = Sim.seaRough(s);
-    const info = `<div class="hinfo"><b>${esc(S.name)}</b> · ${esc(C.name)} · hold ${used}/${S.cap}</div>`;
-    if (S.port) return info + `<div class="hbtns">${B_(rough ? 'Cast off into the storm<small>you may lose a third of the cargo</small>' : 'Cast off', ['castOff', rough], rough ? 'warn' : '')}${B_('Step ashore', ['ashore'], 'alt')}</div>`;
-    const k = Sim.canMoor(s);
-    if (k) return info + `<div class="hbtns">${B_('Moor at ' + esc(Sim.PORTS[k].name), ['moor'])}</div>`;
+    const S = s.ship, C = Sim.shipClass(S), used = Object.values(S.hold).reduce((a, b) => a + b, 0), WX = Sim.seaWeather(s), rough = Sim.seaRough(s) || (WX.storm && !S.port), p = s.player;
+    const crew = C.hands ? ` · crew ${C.hands - (S.hurt || 0)}/${C.hands}${S.hurt ? ' fit' : ''}` : '';
+    if (p.deck) {
+      if (UI.chestOpen) return chestHTML(s);
+      const S3 = SHIPS3D[MY_SHIP.cls], L = S3 && S3.P.levels[p.deck.lv], nr = deckNear(s), b = [];
+      if (nr && nr.portal != null) b.push(B_(esc(nr.q[5]), ['ui', 'deckGo', nr.portal]));
+      if (nr && nr.spot) { const [k] = nr.spot; if (k === 'helm') b.push(B_('Take the helm', ['ui', 'takeHelm'])); if (k === 'bed') b.push(B_('Sleep here until 05:30', ['ui', 'sleepAboard'], '', !Sim.restAboard(s))); if (k === 'chest') b.push(B_('Open your sea chest', ['ui', 'chest'])); if (k === 'table') b.push(B_('Look at your chart', ['ui', 'chart'])); }
+      if (!nr || !nr.spot || nr.spot[0] !== 'helm') b.push(B_('Back to the helm', ['ui', 'takeHelm'], 'alt'));
+      const what = nr && nr.spot ? nr.spot[3] + (nr.spot[0] === 'bed' && !Sim.restAboard(s) ? '. You can sleep aboard when she is moored, or lying still with her sail furled and no storm blowing.' : nr.spot[0] === 'stove' ? '. The cook keeps it going day and night.' : '') : '';
+      return `<div class="hinfo"><b>${esc(S.name)}</b> · ${esc(L ? L.name : 'aboard')}${S.port ? '' : ' · she holds her course'}</div>${what ? `<div class="hnote">${esc(what)}</div>` : ''}<div class="hbtns">${b.join('')}</div>`;
+    }
+    const info = `<div class="hinfo"><b>${esc(S.name)}</b> · ${esc(C.name)} · hold ${used}/${S.cap}${crew}</div>`, walk = B_('Leave the helm', ['ui', 'leaveHelm'], 'alt'), chart = B_('Chart', ['ui', 'chart'], 'alt');
+    if (S.port) return info + `<div class="hbtns">${B_(rough ? 'Cast off into the storm<small>you may lose a third of the cargo</small>' : 'Cast off', ['castOff', rough], rough ? 'warn' : '')}${B_('Step ashore', ['ashore'], 'alt')}${walk}${chart}</div>`;
+    const k = Sim.canMoor(s), extra = [];
+    if (k) extra.push(B_('Moor at ' + esc(Sim.PORTS[k].name), ['moor']));
+    const F = Sim.fishingHere(s), Wk = Sim.wreckHere(s), slow = S.sea.spd <= 4;
+    if (F) extra.push(B_('Cast the nets<small>' + esc(F.name) + ' · an hour and a half</small>', ['castNets'], '', !slow || WX.storm));
+    if (Wk && !(s.seaChart && s.seaChart.wrecks[Wk.id])) extra.push(B_('Search the wreck<small>an hour</small>', ['searchWreck'], '', S.sea.spd > 2));
     const near = Sim.seaBearings(s).sort((a, b) => a.d - b.d)[0];
-    return info + (near && near.d < 260 ? `<div class="hnote">${esc(near.name)} is close. Take in sail and come within a ship’s length or two of the berth to tie up.</div>` : '');
+    const note = WX.storm ? 'A storm: the sea throws her about and drives her downwind. Hands can be hurt, and cargo washed overboard.' : WX.fog ? 'Fog: you can see little beyond the bow. The compass and the chart are your guide.' : WX.calm ? 'A flat calm: the sails hang slack and she barely moves.' : !k && near && near.d < 260 ? esc(near.name) + ' is close. Take in sail and come within a ship\u2019s length or two of the berth to tie up.' : F && !slow ? 'Fish under you. Take in sail to cast the nets.' : Wk && S.sea.spd > 2 ? 'Bring her almost to a stop to search the wreck.' : '';
+    return info + (note ? `<div class="hnote">${note}</div>` : '') + `<div class="hbtns">${extra.join('')}${walk}${chart}</div>`;
   }
   function sync(force) {
     const s = G, show = !!(s && UI.mode === 'play' && !UI.overlay && !UI.inside && s.player.aboard && s.ship && Sim.shipPose(s.ship)), E = el();
@@ -3972,7 +4148,8 @@ const Helm = (function () {
     const kn = (q.spd || 0) * 0.5, into = Math.cos(angD(q.hdg, W.to));
     $('hSpeed').textContent = COMPASS_PTS[Math.round(bearingOf(q.hdg) / 45) % 8] + ' · ' + (kn < 0.05 ? '0' : kn.toFixed(1)) + ' kn';
     $('hWind').textContent = W.rough ? 'A storm wind' : into > 0.5 ? 'Fair wind' : into > -0.4 ? 'Wind abeam' : 'Foul wind';
-    $('hSail').classList.toggle('off', !atSea);
+    $('hSail').classList.toggle('off', !atSea); $('hSail').hidden = !!s.player.deck;
+    if (s.player.deck) $('hSpeed').textContent = (kn < 0.05 ? 'Lying still' : 'Under way · ' + kn.toFixed(1) + ' kn');
     if (sail !== lastSail || force) { lastSail = sail; const hs = $('hSail'); hs.setAttribute('aria-valuenow', sail); hs.setAttribute('aria-valuetext', Sim.SAIL_NAME[sail]); hs.style.setProperty('--sail', sail / 3); hs.querySelectorAll('em').forEach(e => e.classList.toggle('on', +e.dataset.n === sail)); }
     const h = actsHTML(s); if (h !== lastActs) { lastActs = h; $('hActs').innerHTML = h; }
   }
@@ -3988,6 +4165,226 @@ const Helm = (function () {
   return { sync, init, frame(dt) { acc += dt; if (acc < 0.1) return; acc = 0; sync(false); }, hint(k, text) { if (hinted & k) return; hinted |= k; toast(text, 'story', true); } };
 })();
 Helm.init();
+/* ================= the Sea Road, Stage II: the islands, reefs, wrecks and creatures of the Sundering Sea =================
+   Shapes come from the sim (Sim.ISLES, Sim.isleRel), so what you see is what a ship can float in. Each place is one group, drawn
+   only when it is near; the far ones are a low silhouette. Nothing here touches the save. */
+const ISLE_OUTLINE = {};   // each place's shore, as a ring of points, for the silhouettes, the minimap and the chart
+function isleOutline(I, dn) {
+  const out = [], c = Math.cos(I.ang), sn = Math.sin(I.ang);
+  for (let k = 0; k < 64; k++) { const t = k / 64 * Math.PI * 2, f = dn / (1 + 0.1 * Math.sin(3 * t + I.seed) + 0.05 * Math.sin(7 * t + I.seed * 2)), lx = Math.cos(t) * I.rx * f, lz = Math.sin(t) * I.rz * f; out.push([I.x + lx * c - lz * sn, I.z + lx * sn + lz * c]); }
+  return out;
+}
+Sim.ISLES.forEach(I => { ISLE_OUTLINE[I.id] = isleOutline(I, I.kind === 'reef' ? 0.95 : 1.16); });
+const SEA_ISLES = (function () {
+  const all = [], R0 = new THREE.Euler(), rr = tileRand(311, 77);
+  const M4 = (x, y, z, ry, rx, rz, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(R0.set(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx || 1, sy || 1, sz || 1));
+  const onLand = (x, z) => { const r = Sim.isleRel(x, z); return r != null && r > 1.7; };
+  const G_ROCK = new THREE.DodecahedronGeometry(1, 0), G_CONE = new THREE.ConeGeometry(1, 1, 7), G_SPH = new THREE.SphereGeometry(1, 8, 6);
+  const finish = (id, parts, extra) => { const g = new THREE.Group(); if (parts.length) g.add(new THREE.Mesh(mergeColored(parts), vc)); (extra || []).forEach(o => g.add(o)); g.visible = false; scene.add(g); return g; };
+  const scatter = (I, n, avoid) => {   // trees and rocks over the island's high ground, away from the town and the paths
+    const parts = [];
+    for (let k = 0, m = 0; k < n * 6 && m < n; k++) {
+      const a = rr() * Math.PI * 2, d = Math.sqrt(rr()) * Math.max(I.rx, I.rz), x = I.x + Math.cos(a) * d, z = I.z + Math.sin(a) * d;
+      if (!onLand(x, z) || (avoid && avoid(x, z))) continue; m++;
+      const y = groundH(x, z), q = rr();
+      if (q < 0.45) { const s0 = 0.8 + rr() * 0.8; parts.push({ geo: G_BOX, color: '#4a3a2a', m: M4(x, y + 1.4 * s0, z, 0, 0, 0, 0.35 * s0, 2.8 * s0, 0.35 * s0) }, { geo: G_CONE, color: rr() < 0.5 ? '#2f4a3a' : '#3a5a3a', m: M4(x, y + 4 * s0, z, 0, 0, (rr() - 0.5) * 0.3, 1.8 * s0, 4.2 * s0, 1.8 * s0) }); }
+      else if (q < 0.7) { const s0 = 0.8 + rr() * 0.6; parts.push({ geo: G_BOX, color: '#5b4029', m: M4(x, y + 1.2 * s0, z, 0, 0, 0, 0.4 * s0, 2.4 * s0, 0.4 * s0) }, { geo: G_SPH, color: rr() < 0.5 ? '#4f6b3a' : '#5d7a40', m: M4(x, y + 3 * s0, z, 0, 0, 0, 2 * s0, 1.6 * s0, 2 * s0) }); }
+      else parts.push({ geo: G_ROCK, color: rr() < 0.5 ? '#7d7b70' : '#6c675a', m: M4(x, y + 0.3, z, rr() * 6, rr(), rr(), 0.8 + rr() * 2, 0.5 + rr(), 0.8 + rr() * 2) });
+    }
+    return parts;
+  };
+  // a far silhouette: a low cone from the shore to the hill, sitting just under the real ground so the near land always wins
+  function silhouette(I) {
+    const ring = ISLE_OUTLINE[I.id], pos = [I.x, SEA_Y + 1.2 + I.hill * 0.8, I.z], col = [], idx = [], green = new THREE.Color('#5d7040'), sand = new THREE.Color('#bfb391'), top = new THREE.Color(I.hill > 11 ? '#6c675a' : '#4f6236');
+    col.push(top.r, top.g, top.b);
+    ring.forEach(([x, z]) => { pos.push(I.x + (x - I.x) * 0.55, SEA_Y + 1.4 + I.hill * 0.45, I.z + (z - I.z) * 0.55); col.push(green.r, green.g, green.b); });
+    ring.forEach(([x, z]) => { pos.push(x, SEA_Y + 0.1, z); col.push(sand.r, sand.g, sand.b); });
+    const n = ring.length; for (let k = 0; k < n; k++) { const a = 1 + k, b = 1 + (k + 1) % n, c = 1 + n + k, d = 1 + n + (k + 1) % n; idx.push(0, b, a, a, b, d, a, d, c); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals(); g.translate(0, -0.45, 0);
+    const me = new THREE.Mesh(g, vc); me.visible = false; scene.add(me); return me;
+  }
+  // a reef: pale water over it, breakers round its edge, and rocks where it is barely covered
+  const FOAM_MAT = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.6 });
+  const SHOAL_MAT = new THREE.MeshBasicMaterial({ color: '#7fd0c0', transparent: true, opacity: 0.32, depthWrite: false });
+  function reef(I) {
+    const ring = ISLE_OUTLINE[I.id], pos = [I.x, SEA_Y + 0.04, I.z], idx = [];
+    ring.forEach(([x, z]) => pos.push(x, SEA_Y + 0.04, z)); for (let k = 0; k < ring.length; k++) idx.push(0, 1 + (k + 1) % ring.length, 1 + k);
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg.setIndex(idx); const shoal = new THREE.Mesh(sg, SHOAL_MAT); shoal.renderOrder = 1;
+    const fp = [], fc = [], fi = [];
+    const quad = (x, z, w, d, a, b) => { const o = fp.length / 3, c = Math.cos(a), sn = Math.sin(a); [[-w, -d], [w, -d], [w, d], [-w, d]].forEach(([u, v]) => { fp.push(x + u * c - v * sn, SEA_Y + 0.08, z + u * sn + v * c); fc.push(b, b, b); }); fi.push(o, o + 2, o + 1, o, o + 3, o + 2); };
+    ring.forEach(([x, z], k) => { const nx = ring[(k + 1) % ring.length]; quad(x, z, Math.hypot(nx[0] - x, nx[1] - z) * 0.6, 1.6 + rr() * 2, Math.atan2(nx[1] - z, nx[0] - x), 0.5 + rr() * 0.4); });
+    for (let k = 0; k < 40; k++) { const a = rr() * 6.28, d = Math.sqrt(rr()) * 0.8, c = Math.cos(I.ang), sn = Math.sin(I.ang), lx = Math.cos(a) * I.rx * d, lz = Math.sin(a) * I.rz * d; quad(I.x + lx * c - lz * sn, I.z + lx * sn + lz * c, 2 + rr() * 4, 0.8 + rr() * 1.2, rr() * 6, 0.25 + rr() * 0.3); }
+    const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(fc, 3)); fg.setIndex(fi);
+    const foam = new THREE.Mesh(fg, FOAM_MAT); foam.renderOrder = 2;
+    const parts = []; if (I.top < 1) for (let k = 0; k < 26; k++) { const a = rr() * 6.28, d = Math.sqrt(rr()) * 0.85, c = Math.cos(I.ang), sn = Math.sin(I.ang), lx = Math.cos(a) * I.rx * d, lz = Math.sin(a) * I.rz * d; parts.push({ geo: G_ROCK, color: '#3a3836', m: M4(I.x + lx * c - lz * sn, SEA_Y + 0.1, I.z + lx * sn + lz * c, rr() * 6, rr(), rr(), 1 + rr() * 2.5, 0.5 + rr() * 0.9, 1 + rr() * 2) }); }
+    return finish(I.id, parts, [shoal, foam]);
+  }
+  // a port: the quay, the town on the same plan as every other, and what the island lives by
+  const ISLE_LOOK = {
+    saltholm: { street: '#8a8274', plaza: '#9a9282', sign: { tavern: '#a8322a', cooper: '#6b4a2e', butcher: '#8e2b22', bakery: '#c48a3f' }, house: { stone: '#8b877c', stone2: '#7a766c', slate: '#4a5260', tile: '#4a5260', roofs: ['#4a5260', '#5a5a52', '#3f4a5a'], walls: ['#d8d4c8', '#c9c4b4', '#e0dccf', '#bdb8a8'] } },
+    merrow: { street: '#b8a882', plaza: '#c9b892', sign: { goldsmith: '#e2a83e', tavern: '#a8322a', weaver: '#4f6b3a', bakery: '#c48a3f' }, house: { stone: '#c4b090', stone2: '#b09a78', slate: '#6b7a5a', tile: '#8a6a3a', roofs: ['#9a8350', '#8a7445', '#6b7a5a'], walls: ['#f0e6cc', '#e8dab8', '#f4ecd6', '#e2d2ac'] } },
+    gullhaven: { street: '#8a6a5a', plaza: '#9a7a68', sign: { weaver: '#7a2f5a', tavern: '#a8322a', chandler: '#e8d36a', butcher: '#8e2b22' }, house: { stone: '#8a6a5a', stone2: '#7a5a4a', slate: '#a84a2c', tile: '#a84a2c', roofs: ['#a84a2c', '#b8603c', '#8a3a24'], walls: ['#c9846a', '#d4a084', '#b87458', '#e0b49a'] } }
+  };
+  function port(I) {
+    const T = Sim.ISLE_TOWNS[I.id], Q = I.q, A = (u, v) => Q.at(u, v), o = ISLE_LOOK[I.id], at = (x, z, ry) => fr(x, z, ry);
+    T.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: o.street, m: new THREE.Matrix4() }));
+    T.plazas.forEach(q => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: o.plaza, kind: 4, smooth: true }));
+    T.houses.forEach((h, i) => townHouse(at(h.x, h.z, h.face), h, i + 900 + Math.round(I.seed * 10), o.house));
+    T.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 930, Object.assign({}, o.house, { sign: o.sign[b.trade] || '#a8322a' })));
+    // the quay wall along the basin, and the basin's two side walls out to where the land ends
+    const ry = Q.qa, STONE = o.house.stone2;
+    { const [x, z] = A(0.8, 0); box(new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry, 0)), new THREE.Vector3(1, 1, 1)), STONE, 0, 0.9, 0, I.hw * 2 + 2, 3.4, 1.6); }
+    for (const sd of [-1, 1]) { let L0 = 0; for (let u = 2; u < 120; u += 2) { const [x, z] = A(u, sd * (I.hw + 1.5)); if ((Sim.isleRel(x, z) || -9) < 0) break; L0 = u; } if (L0 > 0) { const [x, z] = A(L0 / 2, sd * (I.hw + 0.8)); box(new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry, 0)), new THREE.Vector3(1, 1, 1)), STONE, 0, 0.9, 0, 1.6, 3.4, L0 + 1); }
+      // a harbour light on the end of each arm
+      const [lx, lz] = A(Math.max(4, L0), sd * (I.hw + 1.5)), f = new THREE.Matrix4().compose(new THREE.Vector3(lx, SEA_Y + 2.4, lz), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)); part(f, new THREE.CylinderGeometry(0.9, 1.2, 5, 8), '#e9e1cc', 0, 2.5, 0); box(f, '#ffd36a', 0, 5.4, 0, 1, 0.8, 1); part(f, new THREE.ConeGeometry(1.1, 1, 8), '#3a3632', 0, 6.3, 0); }
+    for (let v = -40; v <= 40; v += 8) { const [x, z] = A(0.2, v); part(fr(x, z, 0), G_CYL, '#3a3128', 0, 0.45, 0, 0, 0, 0, 0.22, 0.6, 0.22); }   // bollards
+    for (const v of [-30, -16, 22, 36]) { const [x, z] = A(4, v), f = new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y + 0.05, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry + Math.PI / 2 + (v % 3) * 0.1, 0)), new THREE.Vector3(1, 1, 1)); part(f, G_HEMI, '#6b4a2e', 0, 0.2, 0, 0, Math.PI, 0, 0.8, 0.6, 2.4); box(f, '#7a5634', 0, 0.22, 0, 1.2, 0.06, 4); }   // rowing boats
+    // what the island lives by
+    if (I.id === 'saltholm') { const [px, pz] = T.pans; for (let a = 0; a < 3; a++) for (let b = 0; b < 4; b++) { const f = at(px + a * 7 - 7, pz + b * 6 - 9); box(f, '#7d776a', 0, 0.1, 0, 6.4, 0.3, 5.4); box(f, '#eceae2', 0, 0.27, 0, 5.6, 0.04, 4.6); }
+      const [rx0, rz0] = T.racks; for (let k = 0; k < 5; k++) { const f = at(rx0 + k * 3 - 6, rz0, 0.2); box(f, '#5b4029', -1.6, 1, 0, 0.12, 2, 0.12); box(f, '#5b4029', 1.6, 1, 0, 0.12, 2, 0.12); box(f, '#5b4029', 0, 1.9, 0, 3.4, 0.1, 0.1); for (let j = -3; j < 4; j++) box(f, '#b8b0a0', j * 0.42, 1.45, 0, 0.12, 0.8, 0.05); } }
+    if (I.id === 'merrow') { const [dx, dz] = T.dunes; for (let k = 0; k < 9; k++) part(at(dx + (k % 3) * 9 - 9, dz + Math.floor(k / 3) * 7 - 7), G_HEMI, '#d9c9a0', 0, -0.4, 0, 0, 0, 0, 4 + (k % 2) * 2, 1.6, 3); for (let k = 0; k < 4; k++) { const f = at(dx + 14, dz - 6 + k * 4); box(f, '#6b4a2e', 0, 0.5, 0, 1.6, 1, 1); box(f, '#e2a83e', 0, 1.05, 0, 1.2, 0.1, 0.7); } }
+    if (I.id === 'gullhaven') { const [vx, vz] = T.vats; ['#8e2b22', '#2f4a8a', '#c9a63e', '#7a2f5a', '#8e2b22'].forEach((c, k) => { const f = at(vx + (k % 3) * 4.5 - 4.5, vz + Math.floor(k / 3) * 5 - 2); part(f, new THREE.CylinderGeometry(1.6, 1.6, 1.4, 12), '#6b4a2e', 0, 0.7, 0); part(f, new THREE.CylinderGeometry(1.4, 1.4, 0.05, 12), c, 0, 1.38, 0); }); const [cx, cz] = T.cliff; for (let k = 0; k < 14; k++) part(at(cx + (rr() - 0.5) * 30, cz + (rr() - 0.5) * 20), G_ROCK, '#8a7a6a', 0, 1.5, 0, rr() * 6, rr(), rr(), 3 + rr() * 4, 2 + rr() * 4, 3 + rr() * 4); }
+    const town = new THREE.Group(); if (PARTS.solid.length) town.add(new THREE.Mesh(mergeColored(PARTS.solid), vc)); if (PARTS.win.length) town.add(new THREE.Mesh(mergeColored(PARTS.win), windowMat)); PARTS.solid = []; PARTS.win = [];   // the town lives in the island's group, so the map shows it only once you have found it
+    const parts = scatter(I, 70, (x, z) => Math.hypot(x - T.C.x, z - T.C.z) < I.town.r + 14 || Math.hypot(x - Q.x, z - Q.z) < I.hw + 20 || (I.id === 'saltholm' && Math.hypot(x - T.pans[0], z - T.pans[1]) < 18));
+    return finish(I.id, parts, [town]);
+  }
+  function cove(I) {
+    const parts = scatter(I, 40, (x, z) => Math.hypot(x - 5650, z - 998) < 34), y0 = groundH(5650, 1000), people = [];
+    const P = (geo, c, x, y, z, ry, sx, sy, sz) => parts.push({ geo, color: c, m: M4(x, y, z, ry, 0, 0, sx, sy, sz) });
+    [[5632, 994], [5668, 992], [5650, 984]].forEach(([x, z], k) => { const y = groundH(x, z); P(G_CONE, ['#8a7a5a', '#6b5a44', '#9a8a6a'][k], x, y + 1.3, z, k, 2.4, 2.6, 2.4); });
+    P(G_CYL, '#3a2a1c', 5650, y0 + 0.15, 1004, 0, 1, 0.3, 1); P(G_BOX, '#ff8a3a', 5650, y0 + 0.5, 1004, 0.4, 0.6, 0.6, 0.6); P(G_BOX, '#ffd36a', 5650, y0 + 0.7, 1004, 1.1, 0.35, 0.5, 0.35);
+    for (let k = 0; k < 8; k++) { const x = 5638 + (k % 4) * 2.2, z = 1010 + Math.floor(k / 4) * 1.4, y = groundH(x, z); P(k % 2 ? G_BOX : G_BARREL, k % 2 ? '#6b4a2e' : '#5b4029', x, y + 0.4, z, k, k % 2 ? 1.1 : 1, k % 2 ? 0.8 : 1, k % 2 ? 0.9 : 1); }
+    { const x = 5672, z = 1016, y = groundH(x, z); P(G_HEMI, '#6b4a2e', x, y + 0.3, z, 0.4, 0.8, 0.6, 2.4); }
+    // the smugglers themselves, by their fire
+    [[5646, 1007, 2.6, '#3a4a3a'], [5655, 1006, -2.4, '#5a3a2a'], [5651, 1000, 0.1, '#2a2a3a']].forEach(([x, z, face, tunic], k) => { const g = makeChar({ tunic, skin: SKIN[(k * 2 + 1) % SKIN.length], hair: k === 1 ? 'beard' : 'short', gear: k === 2 ? { weapon: 'sword' } : {} }); placeChar(g, { x, z, face }, 0, {}); g.visible = true; people.push(g); });
+    const grp = finish(I.id, parts); people.forEach(g => { scene.remove(g); grp.add(g); }); return grp;
+  }
+  function isle(I) {
+    const parts = scatter(I, I.id === 'drowned' ? 0 : I.id === 'thornrock' ? 24 : Math.round(Math.max(I.rx, I.rz) * 0.6));
+    const P = (geo, c, x, y, z, ry, sx, sy, sz, rx, rz) => parts.push({ geo, color: c, m: M4(x, y, z, ry, rx, rz, sx, sy, sz) });
+    const top = () => { let b = null; for (let k = 0; k < 60; k++) { const x = I.x + (rr() - 0.5) * I.rx * 0.6, z = I.z + (rr() - 0.5) * I.rz * 0.6, y = groundH(x, z); if (!b || y > b[2]) b = [x, z, y]; } return b; };
+    if (I.id === 'kestrel') { const [x, z, y] = top(); for (const [dx, dz, w, d, h] of [[0, -4, 6, 0.6, 3], [0, 4, 6, 0.6, 2.2], [-3, 0, 0.6, 8, 3.6], [3, 1.5, 0.6, 5, 1.4]]) P(G_BOX, '#9a948a', x + dx, y + h / 2, z + dz, 0, w, h, d); P(G_BOX, '#9a948a', x - 3, y + 4.4, z, 0, 0.6, 1.6, 3); }
+    if (I.id === 'hermit') { const [x, z, y] = top(); P(G_BOX, '#8a7a5a', x, y + 1.2, z, 0.4, 3.4, 2.4, 3); P(G_CONE, '#7f6a3f', x, y + 3.1, z, 0.4 + Math.PI / 4, 3, 1.6, 3); P(G_BOX, '#2a1f16', x + 1.71, y + 0.9, z, 0.4, 0.05, 1.6, 0.9); }
+    if (I.id === 'thornrock') for (let k = 0; k < 12; k++) { const a = rr() * 6.28, d = rr() * 0.5, x = I.x + Math.cos(a) * I.rx * d, z = I.z + Math.sin(a) * I.rz * d; P(G_ROCK, '#3a3836', x, groundH(x, z) + 3, z, rr() * 6, 4 + rr() * 5, 5 + rr() * 9, 4 + rr() * 5, rr(), rr()); }
+    if (I.id === 'greyholm') { const [x, z, y] = top(); for (let k = 0; k < 9; k++) { const a = k / 9 * 6.28, sx = x + Math.cos(a) * 7, sz = z + Math.sin(a) * 7; P(G_BOX, '#8b877c', sx, groundH(sx, sz) + 1.4, sz, a, 0.8, 2.8 + (k % 3) * 0.4, 1.2); }
+      for (let k = 0; k < 7; k++) { const a = rr() * 6.28, sx = I.x + Math.cos(a) * I.rx * 1.08, sz = I.z + Math.sin(a) * I.rz * 1.08, sy = Math.max(SEA_Y + 0.2, groundH(sx, sz)); P(G_SPH, k % 2 ? '#5a5a58' : '#6c6a66', sx, sy + 0.3, sz, a, 0.5, 0.4, 1.1); } }
+    if (I.id === 'drowned') { for (let k = 0; k < 10; k++) { const x = I.x + (rr() - 0.5) * I.rx * 1.4, z = I.z + (rr() - 0.5) * I.rz * 1.4, y = Math.max(SEA_Y - 0.3, groundH(x, z)); if (k % 2) { P(G_BOX, '#4a3a2a', x, y + 1.6, z, 0, 0.3, 3.2, 0.3, (rr() - 0.5) * 0.4); P(G_BOX, '#4a3a2a', x + 0.5, y + 2.6, z, 0, 0.12, 1.4, 0.12, 0, 0.8); } else P(G_BOX, '#7a766c', x, y + 0.4, z, rr() * 3, 2.5 + rr() * 2, 1 + rr(), 0.6); } }
+    return finish(I.id, parts);
+  }
+  // a wreck: a hull on her side, half drowned, her masts broken
+  function wreck(W) {
+    const C = Sim.SHIP_CLASSES.cog, K = SHIP_LOOK.cog, f = M4(W.x, SEA_Y - 0.9, W.z, W.hdg, 0.12, 0.55), parts = [{ geo: shipHullGeo(C, K), color: '#3a3026', m: f, smooth: true, kind: 3 }];
+    const loc = (x, y, z, sx, sy, sz, rx, rz) => f.clone().multiply(M4(x, y, z, 0, rx, rz, sx, sy, sz));
+    parts.push({ geo: G_CYL, color: '#2f2a24', m: loc(0, 4, 1, 0.3, 8, 0.3) }, { geo: G_CYL, color: '#2f2a24', m: loc(0, 3, -5, 0.25, 5, 0.25, 0.4) }, { geo: G_BOX, color: '#2f2a24', m: loc(0, 7, 1.3, 5, 0.15, 0.15, 0, 0.3) });
+    const g = new THREE.Group(); g.add(new THREE.Mesh(mergeColored(parts), SHIP_MAT)); g.visible = false; scene.add(g); return g;
+  }
+  for (const I of Sim.ISLES) {
+    const g = I.kind === 'reef' ? reef(I) : I.kind === 'port' ? port(I) : I.kind === 'cove' ? cove(I) : isle(I);
+    all.push({ id: I.of || I.id, I, g, far: I.kind === 'reef' ? null : silhouette(I), x: I.x, z: I.z, r: Math.max(I.rx, I.rz) });
+  }
+  for (const W of Sim.WRECKS) all.push({ id: W.id, W, g: wreck(W), far: null, x: W.x, z: W.z, r: 20 });
+  return { all, FOAM_MAT };
+})();
+/* the living sea: flotsam to pick up, fish breaking the surface on the grounds, birds over them, and now and then a whale */
+const SEA_LIFE = (function () {
+  const R0 = new THREE.Euler(), mk = (parts) => new THREE.Mesh(mergeColored(parts), vc);
+  const P = (geo, c, x, y, z, sx, sy, sz, rx, ry, rz) => ({ geo, color: c, m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(R0.set(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx, sy, sz)) });
+  const FL = { barrel: [P(G_BARREL, '#6b4a2e', 0, 0, 0, 1, 1, 1, Math.PI / 2)], crate: [P(G_BOX, '#8a6a44', 0, 0.1, 0, 1, 0.8, 1, 0.1, 0.4)], chest: [P(G_BOX, '#5b4029', 0, 0.1, 0, 1.2, 0.7, 0.8), P(G_BOX, '#c9962b', 0, 0.48, 0, 1.24, 0.1, 0.84)], spar: [P(G_CYL, '#5b4029', 0, 0, 0, 0.2, 6, 0.2, Math.PI / 2, 0.3), P(G_BOX, '#7a5634', 0.4, 0.15, 0.6, 0.5, 0.4, 0.5)] };
+  const pool = []; for (let i = 0; i < 6; i++) { const g = new THREE.Group(); scene.add(g); g.visible = false; pool.push({ g, kind: null }); }
+  const glint = new THREE.MeshBasicMaterial({ color: '#fff6dc', transparent: true, opacity: 0.8, depthWrite: false });
+  // a whale: a long dark back, a fluke, and a spout of spray
+  const whale = new THREE.Group(); { const body = mk([P(G_HEMI, '#2a3238', 0, 0, 0, 2.6, 2.2, 9), P(G_HEMI, '#3a444c', 0, -0.2, 6.5, 1.6, 1.4, 3.5), P(G_BOX, '#2a3238', 0, 0.2, -10.5, 5.5, 0.25, 1.6)]); whale.add(body); }
+  const spout = new THREE.Mesh(new THREE.ConeGeometry(0.9, 5, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#e9eef0', transparent: true, opacity: 0.6, depthWrite: false })); spout.position.set(0, 3, 4); whale.add(spout); whale.visible = false; scene.add(whale);
+  const W = { on: false, t: 0, x: 0, z: 0, hdg: 0, next: 30 };
+  // fish leaping and birds wheeling over the grounds you are near
+  const fishGeo = new THREE.ConeGeometry(0.18, 0.8, 5); fishGeo.rotateX(Math.PI / 2);
+  const fishes = new THREE.InstancedMesh(fishGeo, new THREE.MeshLambertMaterial({ color: '#c9d4d8' }), 14); fishes.visible = false; fishes.frustumCulled = false; scene.add(fishes);
+  const birdGeo = new THREE.BufferGeometry(); birdGeo.setAttribute('position', new THREE.Float32BufferAttribute([-1, 0.25, 0, 0, 0, 0.2, 0, 0, -0.2, 1, 0.25, 0, 0, 0, 0.2, 0, 0, -0.2], 3));
+  const birds = new THREE.InstancedMesh(birdGeo, new THREE.MeshBasicMaterial({ color: '#f1efe8', side: THREE.DoubleSide }), 16); birds.visible = false; birds.frustumCulled = false; scene.add(birds);
+  const M = new THREE.Matrix4(), Qn = new THREE.Quaternion(), V = new THREE.Vector3(), S1 = new THREE.Vector3(1, 1, 1);
+  let flT = 0, flList = [];
+  return {
+    update(dt, t, fx, fz, active) {
+      // flotsam: re-read where it drifts twice a second; it bobs between
+      flT -= dt; if (flT <= 0) { flT = 0.5; flList = active ? Sim.flotsamNow(G).filter(f => Math.hypot(f.x - fx, f.z - fz) < 600) : []; }
+      pool.forEach((p, i) => { const f = flList[i]; if (!f) { p.g.visible = false; return; } if (p.kind !== f.kind) { p.g.clear(); p.g.add(mk(FL[f.kind])); const gl = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), glint); gl.position.y = 1.2; gl.userData.glint = true; p.g.add(gl); p.kind = f.kind; }
+        p.g.visible = true; p.g.position.set(f.x, SEA_Y + 0.1 + Math.sin(t * 1.3 + i) * 0.12, f.z); p.g.rotation.set(Math.sin(t * 0.9 + i) * 0.15, t * 0.1 + i, Math.cos(t * 1.1 + i) * 0.12); p.g.children[1].lookAt(camera.position); p.g.children[1].material.opacity = 0.35 + 0.45 * Math.max(0, Math.sin(t * 3 + i * 2)); });
+      // the grounds: fish and birds over the nearest one you are close to
+      const F = active ? Sim.FISHING.find(g => Math.hypot(g.x - fx, g.z - fz) < g.r + 260) : null;
+      fishes.visible = birds.visible = !!F;
+      if (F) {
+        for (let i = 0; i < 14; i++) { const ph = (t * 0.6 + i * 0.37) % 2.4, k = ph / 1.2, a = i * 2.39, d = 8 + (i * 37 % 60), cx = F.x + Math.cos(a) * d + Math.cos(t * 0.05) * 20, cz = F.z + Math.sin(a) * d;
+          if (k > 1) { M.makeScale(0.0001, 0.0001, 0.0001); M.setPosition(cx, SEA_Y - 2, cz); } else { V.set(cx + Math.cos(a) * k * 3, SEA_Y - 0.2 + Math.sin(k * Math.PI) * 1.6, cz + Math.sin(a) * k * 3); Qn.setFromEuler(R0.set(-Math.cos(k * Math.PI) * 1.1, Math.PI / 2 - a, 0)); M.compose(V, Qn, S1); }
+          fishes.setMatrixAt(i, M); }
+        fishes.instanceMatrix.needsUpdate = true;
+        for (let i = 0; i < 16; i++) { const a = t * (0.25 + (i % 4) * 0.05) + i * 0.8, r = 25 + (i * 13 % 50); V.set(F.x + Math.cos(a) * r, SEA_Y + 9 + (i % 5) * 2 + Math.sin(t * 2 + i) * 0.6, F.z + Math.sin(a) * r); Qn.setFromEuler(R0.set(0, -a, Math.sin(t * 9 + i) * 0.25)); M.compose(V, Qn, S1.set(1.2, 1 + Math.sin(t * 9 + i) * 0.5, 1.2)); birds.setMatrixAt(i, M); S1.set(1, 1, 1); }
+        birds.instanceMatrix.needsUpdate = true;
+      }
+      // a whale surfaces now and then in deep water near you, blows, and goes down again
+      if (!W.on) { W.next -= dt; if (active && W.next <= 0) { W.next = 50 + Math.random() * 80; const a = Math.random() * 6.28, d = 70 + Math.random() * 80, x = fx + Math.cos(a) * d, z = fz + Math.sin(a) * d; if (Sim.seaDepth(x, z) >= Sim.SEA_FLOOR - 0.01 && Sim.seaDepth(x + 30, z + 30) >= Sim.SEA_FLOOR - 0.01) Object.assign(W, { on: true, t: 0, x, z, hdg: Math.random() * 6.28 }); } whale.visible = false; }
+      else { W.t += dt; const k = W.t / 12; if (k >= 1 || !active) { W.on = false; whale.visible = false; } else { whale.visible = true; W.x += Math.sin(W.hdg) * dt * 2.4; W.z += Math.cos(W.hdg) * dt * 2.4; whale.position.set(W.x, SEA_Y - 2.4 + Math.sin(k * Math.PI) * 2.6, W.z); whale.rotation.set(-Math.cos(k * Math.PI) * 0.18, W.hdg, 0); const sp = k > 0.3 && k < 0.55 ? Math.sin((k - 0.3) / 0.25 * Math.PI) : 0; spout.visible = sp > 0.02; spout.scale.set(0.5 + sp, sp * 1.4 + 0.01, 0.5 + sp); spout.material.opacity = 0.65 * sp; } }
+    }
+  };
+})();
+function seaWorld(dt, t) {
+  const onMap = UI.overlay === 'map', fx = focus.x, fz = focus.z, CH = G && G.seaChart ? G.seaChart.found : {};
+  SEA_ISLES.FOAM_MAT.opacity = 0.42 + 0.22 * Math.sin(t * 1.7) * (calm() ? 0 : 1);
+  for (const o of SEA_ISLES.all) {
+    const d = Math.hypot(o.x - fx, o.z - fz) - o.r, known = !!CH[o.id];
+    if (onMap) { o.g.visible = known && mapCam.dist < 1800; if (o.far) o.far.visible = known; continue; }
+    o.g.visible = d < 1100; if (o.far) o.far.visible = d > 120 && d < 1500;
+  }
+  const active = !!(G && UI.mode === 'play' && !onMap && fx > 1250 && fx < 8560);
+  SEA_LIFE.update(dt, t, fx, fz, active);
+  // the sea's own mood, in the water itself: heavier and darker in a storm, glassy in a calm
+  const W = G && active ? Sim.seaWeather(G) : null, want = !W ? 0 : W.storm ? 1 : W.calm ? -0.6 : 0;
+  GFX.storm.value += (want - GFX.storm.value) * Math.min(1, dt * 0.4);
+}
+/* ----- the sea chart: what you have found, on parchment ----- */
+const SeaChart = (function () {
+  const X0 = 1000, X1 = 8800, Z0 = Sim.SEA.band.z0 + 150, Z1 = Sim.SEA.band.z1 - 150;
+  function draw() {
+    const cv = $('chartCv'), r = cv.parentElement.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.max(200, r.width), H = Math.max(200, r.height);
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const tall = H > W * 1.1, LW = tall ? H : W, LH = tall ? W : H, S = Math.min(LW / (X1 - X0), LH / (Z1 - Z0)) * 0.96, ox = (LW - (X1 - X0) * S) / 2, oz = (LH - (Z1 - Z0) * S) / 2, CH = Sim.setupSeaChart(G).found, cx = cv.getContext('2d');
+    // on a tall screen the chart is turned a quarter: west at the top, north to the left; the writing stays upright
+    const pt = (x, z) => tall ? [oz + (z - Z0) * S, ox + (x - X0) * S] : [ox + (x - X0) * S, oz + (z - Z0) * S], px = x => pt(x, Z0)[0], pz = z => pt(X0, z)[1];
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx.fillStyle = '#ead9b0'; cx.fillRect(0, 0, W, H);
+    const path = pts => { cx.beginPath(); pts.forEach(([x, z], i) => { const [a, b] = pt(x, z); i ? cx.lineTo(a, b) : cx.moveTo(a, b); }); cx.closePath(); };
+    const coast = (f, toX) => { const pts = [[toX, Z0]]; for (let z = Z0; z <= Z1; z += 20) pts.push([f(z), z]); pts.push([toX, Z1]); path(pts); cx.fillStyle = '#c9b88a'; cx.fill(); cx.lineWidth = 1.5; cx.strokeStyle = '#6b5a3a'; cx.stroke(); };
+    coast(z => Sim.ALD_COAST(z), X0); coast(z => Sim.VSHORE(z), X1);
+    const fs = Math.round(10 + Math.min(W, H) / 70);
+    cx.font = 'italic 600 ' + (fs + 3) + 'px Georgia, serif'; cx.fillStyle = '#6b5a3a'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    { const a = pt(1420, Z1 - 500), b = pt(8380, Z1 - 500); cx.fillText('ALDERWYN', a[0], a[1]); cx.fillText('VALDORIA', b[0], b[1]); }
+    { const c = pt((X0 + X1) / 2, Z0 + 400); cx.font = 'italic 400 ' + (fs + 6) + 'px Georgia, serif'; cx.fillStyle = 'rgba(107,90,58,.4)'; cx.save(); cx.translate(c[0], c[1]); if (tall) cx.rotate(Math.PI / 2); cx.fillText('The Sundering Sea', 0, 0); cx.restore(); }
+    // north
+    { const c = pt(X1 - 500, Z0 + 260), dir = tall ? [-1, 0] : [0, -1]; cx.strokeStyle = '#6b5a3a'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(c[0] - dir[0] * 14, c[1] - dir[1] * 14); cx.lineTo(c[0] + dir[0] * 14, c[1] + dir[1] * 14); cx.stroke(); cx.font = '700 ' + fs + 'px Georgia, serif'; cx.fillStyle = '#8e2b22'; cx.fillText('N', c[0] + dir[0] * 24, c[1] + dir[1] * 24); }
+    const poly = (ring, fill, stroke, dash) => { path(ring); if (fill) { cx.fillStyle = fill; cx.fill(); } cx.setLineDash(dash || []); cx.lineWidth = 1.4; cx.strokeStyle = stroke; cx.stroke(); cx.setLineDash([]); };
+    const label = (t, x, z, dy, bold) => { const [a, b] = pt(x, z); cx.font = (bold ? '700 ' : 'italic 400 ') + fs + 'px Georgia, serif'; cx.textAlign = 'center'; cx.lineWidth = 3; cx.strokeStyle = 'rgba(234,217,176,.9)'; cx.strokeText(t, a, b + dy); cx.fillStyle = '#3a2a1c'; cx.fillText(t, a, b + dy); };
+    const dot = (x, z, r, c) => { const [a, b] = pt(x, z); cx.fillStyle = c; cx.beginPath(); cx.arc(a, b, r, 0, 6.3); cx.fill(); };
+    // Stormrest and the mainland ports, always known
+    poly(isleOutline({ x: Sim.ISLE.x, z: Sim.ISLE.z, rx: 46, rz: 36, ang: 0, seed: 0 }, 1.1), '#a9b07a', '#6b5a3a');
+    [['Eastwatch', 'eastwatch'], ['Dawnport', 'dawnport'], ['Stormrest', 'stormrest']].forEach(([n, k]) => { const P = Sim.PORTS[k]; dot(P.x, P.z, 4, '#8e2b22'); label(n, k === 'eastwatch' ? P.x + (tall ? 0 : 260) : k === 'dawnport' ? P.x - (tall ? 0 : 260) : P.x, P.z, tall ? (k === 'eastwatch' ? 16 : k === 'dawnport' ? -16 : 16) : 16, true); });
+    // what you have found
+    let found = 0;
+    for (const I of Sim.ISLES) { const id = I.of || I.id; if (!CH[id]) continue; found += I.of ? 0 : 1;
+      if (I.kind === 'reef') poly(ISLE_OUTLINE[I.id], 'rgba(95,150,140,.25)', '#4f7a72', [3, 3]); else poly(ISLE_OUTLINE[I.id], I.kind === 'port' ? '#b5ba86' : '#a9b07a', '#6b5a3a');
+      if (I.name) label(I.name, I.x + (tall && I.kind !== 'reef' ? Math.max(I.rx, I.rz) * 1.3 : 0), I.z + (!tall && I.kind !== 'reef' ? Math.max(I.rx, I.rz) * 1.3 : 0), I.kind === 'reef' ? 0 : 10, I.kind === 'port' || I.kind === 'cove');
+      if (I.kind === 'port' || I.kind === 'cove') { const P = Sim.PORTS[I.id]; dot(P.x, P.z, 3.5, '#8e2b22'); } }
+    for (const Wk of Sim.WRECKS) { if (!CH[Wk.id]) continue; found++; const [x, z] = pt(Wk.x, Wk.z), done = G.seaChart.wrecks[Wk.id]; cx.strokeStyle = done ? '#8a7a5a' : '#2a1f16'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(x - 5, z - 5); cx.lineTo(x + 5, z + 5); cx.moveTo(x + 5, z - 5); cx.lineTo(x - 5, z + 5); cx.stroke(); label(done ? 'wreck (searched)' : 'wreck', Wk.x, Wk.z, 16); }
+    for (const F of Sim.FISHING) { if (!CH[F.id]) continue; found++; cx.setLineDash([2, 4]); cx.strokeStyle = '#2f5d7a'; cx.lineWidth = 1.4; cx.beginPath(); { const [a, b] = pt(F.x, F.z); cx.arc(a, b, F.r * S, 0, 6.3); } cx.stroke(); cx.setLineDash([]); label('≈ ' + F.name, F.x, F.z, 4); }
+    // you
+    const q = G.ship && Sim.shipPose(G.ship), me = q || G.player;
+    if (me) { const [x, z] = pt(me.x, me.z), h = q ? q.hdg : 0; cx.save(); cx.translate(x, z); cx.rotate(tall ? h + Math.PI / 2 : Math.PI - h); cx.beginPath(); cx.moveTo(0, -9); cx.lineTo(6, 7); cx.lineTo(0, 4); cx.lineTo(-6, 7); cx.closePath(); cx.fillStyle = '#c9962b'; cx.fill(); cx.lineWidth = 2; cx.strokeStyle = '#2a1f16'; cx.stroke(); cx.restore(); }
+    const total = Sim.SEA_PLACES.length + Sim.WRECKS.length + Sim.FISHING.length;
+    $('chartNote').textContent = found + ' of ' + total + ' places charted. Sail within sight of land, breakers or wreckage to add them; fog and the dark shorten how far you see.';
+  }
+  function open() { if (!G) return; UI.overlay = 'chart'; ['hud', 'sticks', 'panel', 'helm'].forEach(id => $(id).hidden = true); $('chart').hidden = false; requestAnimationFrame(draw); }
+  function close() { $('chart').hidden = true; UI.overlay = null; ['hud', 'sticks'].forEach(id => $(id).hidden = false); Helm.sync(true); renderCard(true); }
+  window.addEventListener('resize', () => { if (UI.overlay === 'chart') draw(); });
+  return { open, close, draw };
+})();
 /* Weather you can see: spring and autumn rain, a rare summer storm, a morning mist now and then. It is drawn from the date, so it never touches the sim or a save,
    and it changes the light, the haze and the sky as well as showing falling rain. */
 const WX = { rain: 0, mist: 0, now: 0 };
@@ -3998,7 +4395,8 @@ function weatherFor(s, h) {
   const se = Sim.seasonOf(s), d = s.day | 0, r = ((d * 2654435761 >>> 0) % 1000) / 1000, r2 = (((d + 91) * 2246822519 >>> 0) % 1000) / 1000;
   let rain = 0; if ((se === 'spring' || se === 'autumn') && r < 0.26) rain = r < 0.07 ? 1 : 0.6; else if (se === 'summer' && r < 0.07) rain = 1;
   if (rain) { const from = 6 + r2 * 8, len = 5 + r2 * 9; rain *= Math.max(0, Math.min(1, (h - from + 1) / 1.5, (from + len - h + 1) / 1.5)); }
-  const mist = se !== 'winter' && r2 > 0.82 ? Math.max(0, 1 - Math.max(0, h - 7) / 3) * (h < 11 ? 1 : 0) : 0;
+  let mist = se !== 'winter' && r2 > 0.82 ? Math.max(0, 1 - Math.max(0, h - 7) / 3) * (h < 11 ? 1 : 0) : 0;
+  { const p = s.player; if (p && p.x > Sim.ALD_COAST(p.z) + 30 && p.x < Sim.VSHORE(p.z) - 30) { const W = Sim.seaWeather(s); if (W.storm) rain = 1; if (W.fog) mist = Math.max(mist, 1); } }   // out at sea, the sea's own weather
   return { rain, mist };
 }
 // a FOR SALE board by the door of every house you could buy
@@ -4060,7 +4458,7 @@ function syncLight(h) {
     if (LK.top) GFX.skyTop.value.lerp(holC.set(LK.top), LK.topAmt * k);
     if (LK.cloud != null && HOL.season !== 'winter') skyMat.uniforms.uCloud.value = LK.cloud;
     GFX.sunCol.value.copy(sun.color).multiplyScalar(0.25 + 0.75 * k); }
-  if (MY_SHIP.seaK > 0.01) { scene.fog.near *= 1 + 0.9 * MY_SHIP.seaK; scene.fog.far *= 1 + 1.1 * MY_SHIP.seaK; }   // out on open water you can see further
+  if (MY_SHIP.seaK > 0.01) { const fogK = 1 - Math.max(WX.mist, WX.rain * 0.5); scene.fog.near *= 1 + 1.5 * MY_SHIP.seaK * fogK; scene.fog.far *= 1 + 2 * MY_SHIP.seaK * fogK; }   // out on open water you can see further
 }
 
 /* ----- camera and input: twin thumbsticks ----- */
@@ -4069,8 +4467,8 @@ const cam = { yaw: 0, pitch: 0.3, dist: 7 };
 // the view: low behind your shoulder (the default), or the old high view
 const lowView = () => !meta.settings || meta.settings.view !== 'high';
 const aboardNow = () => !!(G && UI.mode === 'play' && G.player.aboard && G.ship);
-const camLim = () => { if (aboardNow()) { const n = Sim.shipClass(G.ship).len; return lowView() ? { p0: 0.08, p1: 0.95, d0: n * 0.6 + 4, d1: n * 3 + 26 } : { p0: 0.3, p1: 1.3, d0: n + 8, d1: n * 3 + 46 }; } return lowView() ? { p0: 0.06, p1: 0.85, d0: 3.5, d1: 16 } : { p0: 0.3, p1: 1.3, d0: 8, d1: 46 }; };
-function camFit() { const L = camLim(); if (cam.dist > L.d1 || cam.dist < L.d0 || cam.pitch > L.p1 || cam.pitch < L.p0) { if (aboardNow()) { const n = Sim.shipClass(G.ship).len; cam.dist = lowView() ? n * 1.7 + 12 : n * 1.8 + 18; cam.pitch = lowView() ? 0.4 : 0.7; } else if (lowView()) { cam.dist = 7; cam.pitch = 0.3; } else { cam.dist = 20; cam.pitch = 0.78; } } }
+const camLim = () => { if (aboardNow() && MY_SHIP.cut) return { p0: 0.95, p1: 1.35, d0: 5, d1: 18 }; if (aboardNow()) { const n = Sim.shipClass(G.ship).len; return lowView() ? { p0: 0.08, p1: 0.95, d0: n * 0.6 + 4, d1: n * 3 + 26 } : { p0: 0.3, p1: 1.3, d0: n + 8, d1: n * 3 + 46 }; } return lowView() ? { p0: 0.06, p1: 0.85, d0: 3.5, d1: 16 } : { p0: 0.3, p1: 1.3, d0: 8, d1: 46 }; };
+function camFit() { const L = camLim(); if (cam.dist > L.d1 || cam.dist < L.d0 || cam.pitch > L.p1 || cam.pitch < L.p0) { if (aboardNow() && MY_SHIP.cut) { cam.dist = 8 + Sim.shipClass(G.ship).len * 0.15; cam.pitch = 1.1; } else if (aboardNow()) { const n = Sim.shipClass(G.ship).len; cam.dist = G.player.deck ? 9 + n * 0.3 : lowView() ? n * 1.7 + 12 : n * 1.8 + 18; cam.pitch = lowView() ? 0.4 : 0.7; } else if (lowView()) { cam.dist = 7; cam.pitch = 0.3; } else { cam.dist = 20; cam.pitch = 0.78; } } }
 const angD = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 const mapCam = { x: 0, z: -4, dist: 110 }, MAP_C = { x: 0, z: 0 };
 function resize() {
@@ -4094,7 +4492,7 @@ function syncCamera(s, dt, t) {
   cam.yaw -= keyTurn() * 1.8 * dt * (meta.settings.lookX === 'inverted' ? -1 : 1);
   camFit(); const L = camLim();
   cam.pitch = clamp(cam.pitch + keyTilt() * 0.9 * dt, L.p0, L.p1);
-  const asea = aboardNow() && MY_SHIP.me, fx = asea ? MY_SHIP.x : s.player.x, fz = asea ? MY_SHIP.z : s.player.z, fk = Math.min(1, dt * (asea ? 16 : 8));
+  const asea = aboardNow() && MY_SHIP.me, walkDeck = asea && s.player.deck, fx = walkDeck ? playerMesh.position.x : asea ? MY_SHIP.x : s.player.x, fz = walkDeck ? playerMesh.position.z : asea ? MY_SHIP.z : s.player.z, fk = Math.min(1, dt * (asea ? 16 : 8));
   focus.x += (fx - focus.x) * fk; focus.z += (fz - focus.z) * fk;
   const pitch = cam.pitch;
   let d = cam.dist;
@@ -4104,9 +4502,9 @@ function syncCamera(s, dt, t) {
     if (p.moving && UI.walking && fwd > 0.3 && performance.now() - (UI.lastLook || 0) > 1500 && !FIGHT.on) cam.yaw += angD(cam.yaw, p.face + Math.PI) * Math.min(1, dt * 1.4);
     // a wall between you and the camera: the camera comes in closer so you are never lost behind it
     const hx = Math.sin(cam.yaw), hz = Math.cos(cam.yaw), hd = Math.cos(pitch) * d;
-    if (solidCache) for (let r = 0.6; r < hd; r += 0.3) { const x = focus.x + hx * r, z = focus.z + hz * r; if (solidCache.some(o => !o.c && o.hx > 0.9 && o.hz > 0.9 && Math.abs(x - o.x) < o.hx && Math.abs(z - o.z) < o.hz)) { d = Math.max(1.8, (r - 0.4) / Math.cos(pitch)); break; } }
+    if (solidCache && !asea) for (let r = 0.6; r < hd; r += 0.3) { const x = focus.x + hx * r, z = focus.z + hz * r; if (solidCache.some(o => !o.c && o.hx > 0.9 && o.hz > 0.9 && Math.abs(x - o.x) < o.hx && Math.abs(z - o.z) < o.hz)) { d = Math.max(1.8, (r - 0.4) / Math.cos(pitch)); break; } }
     UI.camD = UI.camD == null ? d : UI.camD + (d - UI.camD) * Math.min(1, dt * (d < UI.camD ? 14 : 3)); d = UI.camD;
-    const gy = asea ? SEA_Y + SHIP_LOOK[MY_SHIP.cls].helm[1] * 0.55 : standH(s.player.x, s.player.z); UI.camGy = UI.camGy == null ? gy : UI.camGy + (gy - UI.camGy) * Math.min(1, dt * 6);
+    const gy = walkDeck ? playerMesh.position.y : asea ? SEA_Y + SHIP_LOOK[MY_SHIP.cls].helm[1] * 0.55 : standH(s.player.x, s.player.z); UI.camGy = UI.camGy == null ? gy : UI.camGy + (gy - UI.camGy) * Math.min(1, dt * 6);
     const cx = focus.x + Math.sin(cam.yaw) * Math.cos(pitch) * d, cz = focus.z + Math.cos(cam.yaw) * Math.cos(pitch) * d;
     camera.position.set(cx, Math.max(UI.camGy + Math.sin(pitch) * d + 1.2, groundH(cx, cz) + 0.9), cz);   // never under the hillside
     camera.lookAt(focus.x, UI.camGy + 1.4, focus.z);
@@ -4390,7 +4788,8 @@ function walkPlayer(s, dt) {
   const n = Math.max(1, Math.ceil(speed / 0.15));
   // you have right of way: villagers step aside as you walk (the simulation moves them out of your path)
   p.pushing = true;
-  for (let i = 0; i < n; i++) { p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache); }
+  for (let i = 0; i < n; i++) { const bx = p.x, bz = p.z; p.x += vx * speed / n; p.z += vz * speed / n; collide(p, solidCache);
+    if (p.x > 1300 && p.x < 8560 && Sim.isleRel(p.x, p.z) != null && groundH(p.x, p.z) < SEA_Y + 0.25) { p.x = bx; p.z = bz; break; } }   // an island's shore is as far as you can walk
   s.rec.walked += Math.hypot(p.x - ox, p.z - oz);
   p.face = Math.atan2(vx, vz); p.moving = true; UI.walking = true;
   UI.loc = null;
@@ -4400,7 +4799,7 @@ function walkPlayer(s, dt) {
 const UI = { person: null, mode: 'title', overlay: null, sel: null, loc: null, tab: 'ledger', speed: 1, confirm: null, exportText: '', importMsg: '', titleView: 'main', pauseView: 'main', ci: '', cr: '', hireWage: {}, newName: 'Wren', newSlot: null, mapMsg: '' };
 const calm = () => meta.settings.motion === 'reduced' || matchMedia('(prefers-reduced-motion: reduce)').matches;
 const B_ = (label, c, cls, dis) => `<button type="button" class="btn ${cls || ''}" data-c='${esc(JSON.stringify(c))}' ${dis ? 'disabled' : ''}>${label}</button>`;
-const SHIP_ACTS = new Set(['board', 'ashore', 'castOff', 'moor', 'buyShip', 'sellShip']);
+const SHIP_ACTS = new Set(['board', 'ashore', 'castOff', 'moor', 'buyShip', 'sellShip', 'castNets', 'searchWreck', 'chestPut', 'chestTake']);
 function act(c) {
   if (c[0] === 'goto' && !$('scroll').hidden) $('scroll').hidden = true;
   if (c[0] === 'page') { openBook(c[1]); return; }
@@ -4422,11 +4821,13 @@ function act(c) {
     G.look = Object.assign({}, G.look || {}, { body: Sim.you(G).sex === 'f' ? 'f' : 'm', hair: c[0] === 'beginAgain' ? (Sim.you(G).sex === 'f' ? 'long' : 'short') : hm, hairColor: Math.max(0, LOOKS.hairColor.indexOf(pl.hairColor)) });
     rebuildPlayer(G.look); UI.sel = null; UI.loc = null; focus.set(G.player.x, 0, G.player.z); UI.confirm = null; closeOverlay();
   }
+  if (['board', 'ashore', 'castOff', 'buyShip'].includes(c[0])) UI.chestOpen = false;
   if (c[0] === 'board' && r.ok) { UI.loc = null; UI.openLoc = null; UI.sel = null; boardCam(); focus.set(G.player.x, 0, G.player.z); Helm.hint(1, 'You are aboard. Cast off when you are ready.'); }
   if (c[0] === 'castOff' && r.ok && !r.taken) { boardCam(); Helm.hint(2, 'Cast off. Slide the sail up to get under way, and steer with the move stick. The 2\u00d7, 4\u00d7 and 8\u00d7 buttons shorten a long crossing.'); }
   if ((c[0] === 'ashore' || c[0] === 'moor' || c[0] === 'castOff') && r.ok && (c[0] === 'ashore' || r.taken || r.impounded)) { UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); UI.camD = null; UI.camGy = null; }
   if (c[0] === 'buyShip' && r.ok) toast('She is yours, and lies at the quay. Step aboard there to sail her.', 'info', true);
   if (c[0] === 'sellShip' && r.ok) toast('The shipwrights take her off your hands.', 'info', true);
+  if ((c[0] === 'castNets' || c[0] === 'searchWreck') && r.ok && r.mins) { let m = r.mins; while (m > 0) { const st = Math.min(30, m); Sim.advance(G, st); m -= st; } }
   if (SHIP_ACTS.has(c[0])) Helm.sync(true);
   if (c[0] === 'sail' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   if (c[0] === 'coach' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
@@ -5500,7 +5901,7 @@ function hud(s) {
   const gt = g ? `<em>Next:</em> ${esc(Sim.stepText(s, g.text))}` : '<em>Chapter Two complete.</em> The lord knows your name. More in the next chapter.';
   if (UI.last_goal !== gt) { UI.last_goal = gt; $('goal').innerHTML = gt; }   // compare with what we drew, not the browser's copy of it
   const h = Sim.hourOf(s);
-  $('night').hidden = !(h >= 21 || h < 5.5) || !!UI.overlay;
+  $('night').hidden = !(h >= 21 || h < 5.5) || !!UI.overlay || Sim.rate(s) < 5;   // only while the night is actually rushing by (not at the helm under way)
   $('toasts').style.top = Math.round($('hud').getBoundingClientRect().bottom + 6) + 'px';
 
 }
@@ -5879,7 +6280,7 @@ function personDetail(s, pr) {
     <div class="acts">${pr.status === 'here' ? B_('Find them', ['ui', 'findPerson', pr.id]) : ''}${Sim.youJudge(s) && pr.status === 'here' && !pr.kid && !pr.held && (!pr.town || pr.town === 'hearthmoor') ? (UI.confirm === 'hold' + pr.id ? B_('Yes, have them held', ['jArrestOnWord', pr.id], 'warn') + B_('No', ['ui', 'confirm', null], 'alt') : B_('Have the watch hold them&hellip;', ['ui', 'confirm', 'hold' + pr.id], 'alt')) : ''}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
-const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch', valdor: 'Valdor' };
+const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch', valdor: 'Valdor', saltholm: 'Saltholm', merrow: 'Merrow', gullhaven: 'Gullhaven' };
 const townHere = () => { const t = Sim.townAt(G.player.x, G.player.z); return t && TOWN_NAMES[t] && (t === 'hearthmoor' || Math.hypot(G.player.x - TOWNS[t].x, G.player.z - TOWNS[t].z) < TOWNS[t].r + 70) ? t : 'hearthmoor'; };
 function townPick(s) {
   const t = UI.ptown || townHere();
@@ -6288,10 +6689,11 @@ function landCard(s, walking) {
 // the passage office: ships across the Sundering Sea, by day, and not in a winter storm
 function portCard(s, id, walking) {
   const P = Sim.PORTS[id], h = Sim.hourOf(s), open = h >= 7 && h < 17, rough = Sim.seaRough(s), horse = s.player.horse ? 10 : 0;
+  if (P.isle) return isleQuayCard(s, id, walking);
   const title = id === 'eastwatch' ? 'The Passage Office' : id === 'stormrest' ? 'The Stormrest Inn' : 'Dawnport Quay';
   const sub = id === 'eastwatch' ? 'Ships for the crossing to Valdoria: across the Sundering Sea by way of Stormrest Isle, to Dawnport. Anyone who can pay may go.' : id === 'stormrest' ? 'A lighthouse, a harbour wall and an inn on a bare rock halfway across the Sundering Sea. Ships call here both ways.' : 'Valdoria’s great harbour. Ships sail from here for Stormrest Isle and Eastwatch in Alderwyn.';
   const W = s.valdoria && s.valdoria.war, warShut = k => W && !((id === 'dawnport' && k === 'eastwatch' && s.day <= W.leaveBy) || (id === 'stormrest' && k === 'eastwatch') || (id === 'eastwatch' && k === 'stormrest'));
-  const acts = Object.keys(Sim.PORTS).filter(k => k !== id).map(k => { const f = Sim.passageFare(id, k) + horse, via = (id === 'eastwatch' && k === 'dawnport') || (id === 'dawnport' && k === 'eastwatch'), mins = Math.round(Sim.seaDist(id, k) / Sim.SAIL_MPM) + (via ? 25 : 0);
+  const acts = Object.keys(Sim.PORTS).filter(k => k !== id && Sim.passageFare(id, k) > 0).map(k => { const f = Sim.passageFare(id, k) + horse, via = (id === 'eastwatch' && k === 'dawnport') || (id === 'dawnport' && k === 'eastwatch'), mins = Math.round(Sim.seaDist(id, k) / Sim.SAIL_MPM) + (via ? 25 : 0);
     return B_(`Sail to ${esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, '').replace('Stormrest', 'Stormrest Isle'))} · ${f}c<small>about ${mins} min${via ? ', calling at Stormrest' : ''}</small>`, ['sail', k], '', !open || rough || s.coins < f || warShut(k)); });
   const note = W ? 'The crowns are at war. ' + (id === 'dawnport' && s.day <= W.leaveBy ? 'The last ships for Alderwyn leave until day ' + W.leaveBy + '.' : 'No passage ships sail between Alderwyn and Valdoria until the peace.') : rough ? 'A storm is up on the Sundering Sea. No ship sails today.' : !open ? 'Ships sail between seven in the morning and five in the afternoon.' : (Sim.calendar(s).season === 'winter' ? 'In winter, about one day in five is too rough to sail.' : '');
   const fc = []; for (let d = 1; d <= 3; d++) if (Sim.seaRough(s, s.day + d)) fc.push(d === 1 ? 'tomorrow' : 'in ' + d + ' days');
@@ -6299,6 +6701,11 @@ function portCard(s, id, walking) {
   return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${heldBy}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<p><b>Passage on a merchant ship</b></p><div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}${shipPanel(s, id)}`;
 }
 // your own ship: the hold, the port's market for sea cargo, and the way aboard
+function isleQuayCard(s, id, walking) {
+  const I = Sim.ISLE_BY[id], cove = id === 'cove', S = s.ship, here = S && S.port === id;
+  const sub = cove ? 'A beach of black sand inside the crescent, a few tents, a fire, and people who ask no questions. They buy and sell any cargo, and no customs man has ever found the place.' : esc(I.blurb) + ' The Free Isles keep no customs house: cargo is landed here without duty.';
+  return `<h2>${cove ? 'Smugglers\u2019 Cove' : esc(I.name) + ' Quay'}</h2><div class="sub">${sub}</div>${walking}${!here && !S ? '<p class="why">No passage ships call here. Only your own ship can bring you, and take you on.</p>' : ''}${shipPanel(s, id)}`;
+}
 function shipPanel(s, id) {
   const S = s.ship, market = Sim.SEA_PORTS.includes(id), V = s.valdoria;
   if (!S) return `<p><b>A ship of your own</b></p><p class="why">The shipwrights of Eastwatch and Dawnport build four kinds: a skiff, a cutter, a merchant cog and a great galleon, from ${Sim.SHIP_CLASSES.skiff.price}c to ${Sim.SHIP_CLASSES.galleon.price}c. Buy one at a shipyard, step aboard at the quay, and sail her yourself. Salt and wine are cheap in Dawnport and dear in Eastwatch; wool and iron the other way round.</p>${id === 'eastwatch' ? `<div class="acts">${B_('The Shipyard', ['goto', 'ewyard'], 'alt')}</div>` : id === 'dawnport' ? `<div class="acts">${B_('Dawnport Shipwrights', ['goto', 'db:d_yard'], 'alt')}</div>` : ''}`;
@@ -6309,11 +6716,12 @@ function shipPanel(s, id) {
   if (Sim.atWar(s)) h += `<p class="why"><b>The crowns are at war.</b> Valdorian galleys take about ${Math.round(Sim.WAR.capture * 100)} Alderwyn ships in a hundred on the crossing to or from Dawnport${V && V.warrant ? '. The Queen\u2019s warrant lets you land at Dawnport, though only quietly' : ', and any that reach Dawnport are impounded until the peace'}. Stormrest is neutral water.</p>`;
   if (market) {
     h += `<table class="trades"><thead><tr><th>Cargo</th><th>Buy 10</th><th>Sell 10</th><th></th></tr></thead><tbody>${Object.keys(Sim.SEA_GOODS).map(g => { const buy10 = Sim.seaLoad(s, id, g, 10, -1), sell10 = Sim.seaLoad(s, id, g, 10, 1), tax = Sim.landingTax(s, id, g), have = S.hold[g] || 0, made = Sim.SEA_GOODS[g].made === id;
-      return `<tr><td>${g.charAt(0).toUpperCase() + g.slice(1)}${made ? ' <small>made here</small>' : ''}</td><td class="num">${buy10}c</td><td class="num">${sell10}c${tax ? ' <small>less ' + Math.round(tax * 100) + '% duty</small>' : ''}</td><td><div class="acts">${B_('Buy 10', ['cargoBuy', g, 10], 'alt', room < 10 || s.coins < buy10)}${have ? B_('Sell ' + have, ['cargoSell', g, have], 'alt', id === 'dawnport' && !made && V && V.embargo) : ''}${have && tax ? B_('Land it quietly<small>about ' + Math.round(Sim.smuggleRisk(s, id) * 100) + '% risk</small>', ['cargoSell', g, have, true], 'warn') : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
+      return `<tr><td>${esc(Sim.SEA_GOODS[g].name.charAt(0).toUpperCase() + Sim.SEA_GOODS[g].name.slice(1))}${made ? ' <small>made here</small>' : g === 'fish' ? ' <small>the catch</small>' : ''}</td><td class="num">${buy10}c</td><td class="num">${sell10}c${tax ? ' <small>less ' + Math.round(tax * 100) + '% duty</small>' : ''}</td><td><div class="acts">${B_('Buy 10', ['cargoBuy', g, 10], 'alt', room < 10 || s.coins < buy10)}${have ? B_('Sell ' + have, ['cargoSell', g, have], 'alt', id === 'dawnport' && !made && V && V.embargo) : ''}${have && tax ? B_('Land it quietly<small>about ' + Math.round(Sim.smuggleRisk(s, id) * 100) + '% risk</small>', ['cargoSell', g, have, true], 'warn') : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
     if (id === 'dawnport' && V && V.embargo) h += `<p class="why">Dawnport is closed to Alderwyn\u2019s goods until day ${V.embargo}.</p>`;
-    h += `<p class="why">Prices move as you buy and sell, and recover over the following days. ${id === 'dawnport' ? 'Alderwyn goods sold here pay the Queen\u2019s duty' + (V && V.charter ? ', halved by your charter.' : '; a merchant\u2019s charter from the Consul halves it.') : 'Valdorian goods sold here pay Alderwyn\u2019s tariff to the crown.'} Landing cargo quietly skips the duty, if the customs men are not waiting: they take the cargo and fine you 30c. The risk is lower at night (9pm to 5am) and much lower with a clerk paid to look away.</p>`;
+    if (Sim.ISLE_PORTS.includes(id)) h += `<p class="why">Prices move as you buy and sell, and recover over the following days. Each island sells what it makes cheaply; ${id === 'cove' ? 'the cove buys and sells everything at middling prices, and asks nothing about where it came from.' : 'fresh fish fetches the same everywhere.'}</p>`;
+    else h += `<p class="why">Prices move as you buy and sell, and recover over the following days. ${id === 'dawnport' ? 'Alderwyn goods sold here pay the Queen\u2019s duty' + (V && V.charter ? ', halved by your charter.' : '; a merchant\u2019s charter from the Consul halves it.') : 'Valdorian goods sold here pay Alderwyn\u2019s tariff to the crown.'} Landing cargo quietly skips the duty, if the customs men are not waiting: they take the cargo and fine you 30c. The risk is lower at night (9pm to 5am) and much lower with a clerk paid to look away.</p>`;
     const ct = s.customsContact && s.customsContact.port === id && s.day < s.customsContact.until;
-    h += ct ? `<p class="why">A customs clerk here looks the other way for you until day ${s.customsContact.until}.</p>` : `<div class="acts">${B_('Pay a customs clerk to look away · 40c<small>ten days; he may be caught and name you</small>', ['customsContact'], 'warn', s.coins < 40)}</div>`;
+    if (!Sim.ISLE_PORTS.includes(id)) h += ct ? `<p class="why">A customs clerk here looks the other way for you until day ${s.customsContact.until}.</p>` : `<div class="acts">${B_('Pay a customs clerk to look away · 40c<small>ten days; he may be caught and name you</small>', ['customsContact'], 'warn', s.coins < 40)}</div>`;
   }
   h += `<div class="acts">${B_('Step aboard ' + esc(S.name) + '<small>take the helm and sail her yourself</small>', ['board'])}</div><p class="why">Aboard: cast off, set the sail with the slider, and steer with the move stick. ${rough ? 'A storm is up: put to sea today and you may lose a third of the cargo.' : 'The wind helps or hinders, but she always makes way.'}</p>`;
   return h;
@@ -6486,11 +6894,11 @@ function alcazarCard(s, walking) {
 }
 function oakHallCard(s, walking, id) {
   id = id || 'oakbridge';
-  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'dawnport' ? 'The Harbour Plaza, Dawnport' : id === 'goldmeadow' ? 'The Green, Goldmeadow' : id === 'thornwick' ? 'The Timber Yard, Thornwick' : id === 'stonewatch' ? 'The Parade Ground, Stonewatch' : id === 'valdor' ? 'The Plaza de la Reina, Valdor' : id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : 'Oakbridge Town Hall';
+  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'dawnport' ? 'The Harbour Plaza, Dawnport' : id === 'goldmeadow' ? 'The Green, Goldmeadow' : id === 'thornwick' ? 'The Timber Yard, Thornwick' : id === 'stonewatch' ? 'The Parade Ground, Stonewatch' : id === 'valdor' ? 'The Plaza de la Reina, Valdor' : id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : Sim.ISLE_TOWNS[id] ? 'The harbour square, ' + TOWN_NAMES[id] : 'Oakbridge Town Hall';
   if (!T) return `<h2>${HN}</h2>${walking}`;
   const m = s.people[T.mayor], who = id => s.people[id] ? esc(s.people[id].name) : '';
   const mTrade = m && m.job && s.biz[m.job.biz] ? Sim.tradeName(s.biz[m.job.biz].trade).toLowerCase() : 'merchant';
-  const intro = id === 'ironcrest' ? 'The heart of the mining town. The reeve and council of mine-masters set the market fee, keep the gate and the mine road, and help families when a seam fails.' : id === 'eastwatch' ? 'The harbourmaster and the council of merchants run Eastwatch: the market and harbour dues, the walls and the quays, and relief for the families of drowned men.' : id === 'crownmere' ? 'The Lord Mayor and the masters of the great guilds govern the capital under the king: the market fees, the city watch, the walls and streets, and bread for the poor.' : id === 'greenhaven' ? 'The reeve and council run Greenhaven for the townsfolk: they set the market fee, keep the bridge, the lanes and the common, and help hungry families from the town chest. The Ashcombes of the Hall have a seat, but no more than that.' : id === 'dawnport' ? 'The Consul governs Dawnport for the Queen, with a council of shipowners and vintners: the harbour dues, the market fee, the harbour guard and the quays.' : id === 'goldmeadow' ? 'The reeve and the farmers\u2019 council run Goldmeadow: the market fee, the horse fair, the granary, and help for families after a bad harvest.' : id === 'thornwick' ? 'The warden and the council of timber masters run Thornwick: the market fee, the forest road, and help for families when the felling is slow.' : id === 'stonewatch' ? 'The Castellan holds Stonewatch for the Queen. The townsfolk\u2019s council sets the market fee and keeps the streets; the fortress and its garrison answer to the crown.' : id === 'valdor' ? 'The Corregidor governs the royal capital for the Queen, with a council of guild masters: the market fee, the city watch, the streets and the plaza, and bread for the poor of the parishes.' : 'The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.';
+  const intro = Sim.ISLE_TOWNS[id] ? 'The ' + esc(TT.toLowerCase()) + ' and a council of the leading families run ' + TOWN_NAMES[id] + ' for itself. The Free Isles answer to neither crown: no lord, no customs house, no king\u2019s law, only the island\u2019s own. ' + esc(Sim.ISLE_BY[id].blurb) : id === 'ironcrest' ? 'The heart of the mining town. The reeve and council of mine-masters set the market fee, keep the gate and the mine road, and help families when a seam fails.' : id === 'eastwatch' ? 'The harbourmaster and the council of merchants run Eastwatch: the market and harbour dues, the walls and the quays, and relief for the families of drowned men.' : id === 'crownmere' ? 'The Lord Mayor and the masters of the great guilds govern the capital under the king: the market fees, the city watch, the walls and streets, and bread for the poor.' : id === 'greenhaven' ? 'The reeve and council run Greenhaven for the townsfolk: they set the market fee, keep the bridge, the lanes and the common, and help hungry families from the town chest. The Ashcombes of the Hall have a seat, but no more than that.' : id === 'dawnport' ? 'The Consul governs Dawnport for the Queen, with a council of shipowners and vintners: the harbour dues, the market fee, the harbour guard and the quays.' : id === 'goldmeadow' ? 'The reeve and the farmers\u2019 council run Goldmeadow: the market fee, the horse fair, the granary, and help for families after a bad harvest.' : id === 'thornwick' ? 'The warden and the council of timber masters run Thornwick: the market fee, the forest road, and help for families when the felling is slow.' : id === 'stonewatch' ? 'The Castellan holds Stonewatch for the Queen. The townsfolk\u2019s council sets the market fee and keeps the streets; the fortress and its garrison answer to the crown.' : id === 'valdor' ? 'The Corregidor governs the royal capital for the Queen, with a council of guild masters: the market fee, the city watch, the streets and the plaza, and bread for the poor of the parishes.' : 'The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.';
   return `<h2>${HN}</h2><div class="sub">${intro}</div>${walking}
   <dl class="kv"><dt>${TT}</dt><dd>${m ? esc(m.name) + ' (' + esc(mTrade) + ')' : 'none'}</dd><dt>Approval</dt><dd>${Math.round(T.approval)}%</dd><dt>Town chest</dt><dd>${Math.round(T.chest)}c</dd><dt>Market fee</dt><dd>${esc(Sim.FEES[T.fee].name)}</dd><dt>Council</dt><dd>${T.council.map(who).filter(Boolean).join(', ') || 'empty'}</dd><dt>Next vote</dt><dd>day ${T.nextVote}</dd></dl>
   ${progressBar(T.approval / 100)}
@@ -7425,7 +7833,7 @@ function pinPos(k) {
 }
 const pinV = new THREE.Vector3();
 function buildPins() {
-  if (LM.townPins) { $('pins').innerHTML = Object.keys(TOWNS).map(id => `<button type="button" class="pin town" data-k="town:${id}" data-c='${esc(JSON.stringify(['ui', 'mapFly', id]))}'><span>${esc(TOWN_NAMES[id])}</span></button>`).join('') + `<button type="button" class="pin you" data-k="you" tabindex="-1"><span>${esc(G.name)}</span></button>` + (UI.mapPid && G.people[UI.mapPid] ? `<button type="button" class="pin who" data-k="p:${UI.mapPid}" tabindex="-1"><span>${esc(G.people[UI.mapPid].name)}</span></button>` : ''); return; }
+  if (LM.townPins) { $('pins').innerHTML = Object.keys(TOWNS).filter(id => !Sim.ISLE_BY[id] || (G.seaChart && G.seaChart.found[id])).map(id => `<button type="button" class="pin town" data-k="town:${id}" data-c='${esc(JSON.stringify(['ui', 'mapFly', id]))}'><span>${esc(TOWN_NAMES[id])}</span></button>`).join('') + `<button type="button" class="pin you" data-k="you" tabindex="-1"><span>${esc(G.name)}</span></button>` + (UI.mapPid && G.people[UI.mapPid] ? `<button type="button" class="pin who" data-k="p:${UI.mapPid}" tabindex="-1"><span>${esc(G.people[UI.mapPid].name)}</span></button>` : ''); return; }
   const keys = Object.keys(L).filter(k => (!L[k].sign || housePin(k)) && !(L[k].bank && !Sim.bankIn(G, L[k].bank)) && Math.hypot(L[k].x - MAP_C.x, L[k].z - MAP_C.z) < (MAP_C.r || 150)).concat(['you']).concat(UI.mapPid && G.people[UI.mapPid] ? ['p:' + UI.mapPid] : []);
   $('pins').innerHTML = keys.map(k => `<button type="button" class="pin ${pinKind(k)} ${UI.mapSel === k ? 'sel' : ''}" data-k="${esc(k)}" ${k === 'you' ? 'tabindex="-1"' : `data-c='${esc(JSON.stringify(['ui', 'mapSel', k]))}'`}><span>${esc(pinLabel(k))}</span></button>`).join('');
 }
@@ -8143,6 +8551,13 @@ function uiCmd(k, v) {
   if (k === 'pause') { openPause(); return; }
   if (k === 'map') { openMap(); return; }
   if (k === 'sleep') { sleepTill(); return; }
+  if (k === 'chart') { UI.chestOpen = false; SeaChart.open(); return; }
+  if (k === 'leaveHelm' && G && G.player.aboard) { const S3 = shipModel(G.ship.cls || 'cog'), [lv, q] = helmLevel(S3); G.player.deck = { lv, x: q[1] + 0.7, z: q[2] + 0.9, face: 0 }; UI.camD = null; Helm.sync(true); Helm.hint(4, 'Walk her decks with the move stick. Ladders and hatches take you up and below. She holds her course while you are away from the helm.'); return; }
+  if (k === 'takeHelm') { Sim.cmd(G, 'deck', null); UI.chestOpen = false; UI.camD = null; Helm.sync(true); return; }
+  if (k === 'deckGo') { const d = G.player.deck, S3 = SHIPS3D[MY_SHIP.cls], q = d && S3 && S3.P.levels[d.lv].portals[v]; if (q) { d.lv = q[2]; d.x = q[3]; d.z = q[4]; UI.camD = null; UI.camGy = null; } Helm.sync(true); return; }
+  if (k === 'chest') { UI.chestOpen = !UI.chestOpen; Helm.sync(true); return; }
+  if (k === 'sleepAboard') { if (!Sim.restAboard(G)) { toast('Not while she is under way. Moor her, or furl the sail and let her lie still, and not in a storm.', 'info', true); return; } sleepTill(); Helm.sync(true); return; }
+  if (k === 'chartClose') { SeaChart.close(); return; }
   if (k === 'mapSel') { UI.mapSel = v; renderMapCard(); return; }
   if (k === 'enter') { const d = insideOf(v); if (d) Interior.enter(d); return; }
   if (k === 'leave') { Interior.leave(); return; }
@@ -8363,6 +8778,12 @@ const Mini = (function () {
       else if (it.k === 'ell') { ctx.beginPath(); ctx.ellipse(it.x, it.z, it.rx, it.rz, 0, 0, Math.PI * 2); ctx.fill(); }
       else { ctx.save(); ctx.translate(it.x, it.z); ctx.rotate(-it.face); ctx.fillRect(-it.w / 2, -it.d / 2, it.w, it.d); ctx.restore(); }
     }
+    // the islands, reefs, wrecks and fishing grounds you have found
+    if (G && G.seaChart && px > 1200 && px < 8600) { const CH = G.seaChart.found;
+      for (const I of Sim.ISLES) { if (!CH[I.of || I.id] || Math.abs(I.x - px) > R * 1.5 + I.rx * 1.3 || Math.abs(I.z - pz) > R * 1.5 + I.rz * 1.3) continue; const ring = ISLE_OUTLINE[I.id]; ctx.beginPath(); ring.forEach(([x, z], i) => i ? ctx.lineTo(x, z) : ctx.moveTo(x, z)); ctx.closePath();
+        if (I.kind === 'reef') { ctx.fillStyle = 'rgba(160,220,210,.5)'; ctx.fill(); } else { ctx.fillStyle = COL.pasture; ctx.fill(); } }
+      for (const F of Sim.FISHING) if (CH[F.id]) { ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2.5 / S; ctx.setLineDash([4 / S, 6 / S]); ctx.beginPath(); ctx.arc(F.x, F.z, F.r, 0, 6.3); ctx.stroke(); ctx.setLineDash([]); }
+      for (const Wk of Sim.WRECKS) if (CH[Wk.id]) { ctx.strokeStyle = '#2a1d12'; ctx.lineWidth = 3 / S; const k = 7 / S; ctx.beginPath(); ctx.moveTo(Wk.x - k, Wk.z - k); ctx.lineTo(Wk.x + k, Wk.z + k); ctx.moveTo(Wk.x + k, Wk.z - k); ctx.lineTo(Wk.x - k, Wk.z + k); ctx.stroke(); } }
     // your home and your businesses, marked in gold
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const dot = (x, z, c, r) => { const sx = N / 2 + (x - px) * S, sz = N / 2 + (z - pz) * S; if (Math.hypot(sx - N / 2, sz - N / 2) > N / 2 - 6) return; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx, sz, r, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#2a1d12'; ctx.stroke(); };
@@ -8395,12 +8816,12 @@ const Mini = (function () {
       const el = $('minimap'), show = UI.mode === 'play' && !UI.overlay && !UI.inside && G && meta.settings.minimap !== 'off';
       if (el.hidden === show) el.hidden = !show;
       if (!show) return;
-      acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (p.aboard && G.ship && !G.ship.port) return 520; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85, ironcrest: 65, eastwatch: 80 }[t] || 60; })();
+      acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (p.aboard && G.ship && !G.ship.port) return 520; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85, ironcrest: 65, eastwatch: 80, saltholm: 70, merrow: 70, gullhaven: 70 }[t] || 60; })();
       if (acc < 0.1 && !UI.waypoint && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
       if (acc < 0.1) return;
       acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
       draw(p.x, p.z, cam.yaw, R, p.aboard && G.ship && Sim.shipPose(G.ship) ? Sim.shipPose(G.ship).hdg : null);
-      const t = townHere(), inTown = R !== 120 && R !== 520, nm = inTown ? TOWN_NAMES[t] : Math.hypot(p.x - Sim.ISLE.x, p.z - Sim.ISLE.z) < 70 ? 'Stormrest Isle' : p.x > Sim.ALD_COAST(p.z) + 10 && p.x < Sim.VSHORE(p.z) - 10 ? 'The Sundering Sea' : p.x >= Sim.VSHORE(p.z) - 10 ? 'Valdoria' : 'On the road';
+      const t = townHere(), inTown = R !== 120 && R !== 520, nm = inTown ? TOWN_NAMES[t] : Math.hypot(p.x - Sim.ISLE.x, p.z - Sim.ISLE.z) < 70 ? 'Stormrest Isle' : (() => { const CH = G.seaChart && G.seaChart.found, I = Sim.SEA_PLACES.find(I => I.kind !== 'reef' && CH && CH[I.id] && Math.hypot(p.x - I.x, p.z - I.z) < Math.max(I.rx, I.rz) * 1.3); return I ? I.name : null; })() || (p.x > Sim.ALD_COAST(p.z) + 10 && p.x < Sim.VSHORE(p.z) - 10 ? 'The Sundering Sea' : p.x >= Sim.VSHORE(p.z) - 10 ? 'Valdoria' : 'On the road');
       if (nm !== lt) { $('miniName').textContent = nm; lt = nm; }
     }
   };
@@ -8852,13 +9273,13 @@ function frameBody(now) {
   const t = now / 1000;
   if (UI.mode === 'play' && G && G.pendingDeath && UI.overlay !== 'book') { openBook('family'); }
   const onMap = UI.overlay === 'map';
-  if (UI.mode === 'play' && (!UI.overlay || onMap) && !document.hidden && !UI.dialog.length && !(G && G.pendingDeath)) { if (!onMap) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { if (G.player.aboard) sailHelm(G); else walkPlayer(G, dt); SignKit.step(G, t); } } const s0 = performance.now(), gm = dt * Sim.rate(G) * (onMap ? 1 : UI.speed) * PACE[meta.settings.pace]; if (G.player.aboard && !onMap && !UI.inside) Sim.sailStep(G, gm, G.player.helm || 0); Sim.advance(G, gm); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
+  if (UI.mode === 'play' && (!UI.overlay || onMap) && !document.hidden && !UI.dialog.length && !(G && G.pendingDeath)) { if (!onMap) { stepMini(dt); if (UI.inside) Interior.step(dt, t); else { if (G.player.aboard) { if (G.player.deck) deckWalk(G, dt); else sailHelm(G); } else walkPlayer(G, dt); SignKit.step(G, t); } } const s0 = performance.now(), gm = dt * Sim.rate(G) * (onMap ? 1 : UI.speed) * PACE[meta.settings.pace]; if (G.player.aboard && !onMap && !UI.inside) Sim.sailStep(G, gm, G.player.helm || 0); Sim.advance(G, gm); if (bench) bench.sim(performance.now() - s0); drainEvents(); }
   if (UI.mode === 'play' && G && !G.pendingDeath) { checkScene(); stepDuel(dt); }
   if (UI.mode === 'play' && G && FIGHT.on) stepFight(dt, t);
   if (HOL.flames.length) stepHoliday(dt, now / 1000);
   if (G) { const mapEye = onMap && UI.mode === 'play' && mapCam.dist < 460; if (!(onMap && LM.far)) updateTiles(UI.mode === 'title' ? 0 : mapEye ? mapCam.x : G.player.x, UI.mode === 'title' ? 0 : mapEye ? mapCam.z : G.player.z, tiles.size < 9 ? 25 : 1); }
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t); if (!UI.inside) syncWild(G, t, dt); if (!FIGHT.on) stepShots(dt);
-  syncMyShip(G && UI.mode !== 'title' ? G : null, dt, t); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); syncHeraldry(G); }
+  syncMyShip(G && UI.mode !== 'title' ? G : null, dt, t); if (G && UI.mode !== 'title') seaWorld(dt, t); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); syncHeraldry(G); }
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
   { const w = weatherFor(G, UI.mode === 'title' ? 18 : Sim.hourOf(G)); WX.rain += (w.rain - WX.rain) * Math.min(1, dt * 0.6); WX.mist += (w.mist - WX.mist) * Math.min(1, dt * 0.6); stepRain(dt, G); syncHouseSigns(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
@@ -8988,6 +9409,8 @@ const Snd = (function () {
     winter: { C: CHORDS, P: [['Dm', 'Am', 'Dm', 'C'], ['Dm', 'F', 'Am', 'Dm']], S: SCALE, beat: 0.82, pat: [0, 2, 3, 2], lead: 'bell', drone: [38] },
     festive: { C: { G: [43, 55, 59, 62], C: [48, 55, 60, 64], D: [50, 57, 62, 66], F: [53, 57, 60, 65], Em: [52, 55, 59, 64] }, P: [['G', 'C', 'G', 'D'], ['G', 'F', 'C', 'G'], ['C', 'G', 'D', 'G'], ['G', 'Em', 'C', 'D']], S: [67, 69, 71, 72, 74, 76, 77, 79, 81], beat: 0.5, pat: [0, 2, 1, 2, 0, 2, 1, 3], lead: 'rec', drum: 'tabor', drone: [43, 50] },
     valdoria: { C: { Am: [45, 52, 57, 60], G: [43, 50, 55, 59], F: [41, 48, 53, 57], E: [40, 52, 56, 59], Dm: [50, 53, 57, 62] }, P: [['Am', 'G', 'F', 'E'], ['Am', 'G', 'F', 'E'], ['Dm', 'Am', 'F', 'E'], ['E', 'F', 'E', 'Am']], S: [64, 65, 68, 69, 71, 72, 74, 76, 77], beat: 0.6, pat: ['s', 1, 2, 's', 3, 2, 's', 1], lead: 'rec', drum: 'clap', drone: [40] },
+    // at sea: a shanty in D minor, rolling in threes like a ship on a swell
+    sea: { C: { Dm: [50, 57, 62, 65], C: [48, 55, 60, 64], F: [53, 57, 60, 65], Am: [45, 52, 57, 60], Bb: [46, 53, 58, 62] }, P: [['Dm', 'C', 'Dm', 'Am'], ['Dm', 'Bb', 'C', 'Dm'], ['F', 'C', 'Dm', 'Am'], ['Dm', 'Bb', 'F', 'C']], S: [62, 64, 65, 67, 69, 70, 72, 74, 77], beat: 0.62, pat: [0, 2, 3, 1, 2, 3], lead: 'rec', drum: 'deep', drone: [38, 45] },
     tense: { C: { Am: [45, 52, 57, 60], Dm: [50, 53, 57, 62], E: [40, 47, 52, 56], F: [41, 48, 53, 57] }, P: [['Am', 'Am', 'Dm', 'E'], ['Am', 'F', 'Am', 'E'], ['Dm', 'Am', 'E', 'Am']], S: [57, 59, 60, 62, 64, 65, 68, 69], beat: 0.9, pat: [0, 3], lead: null, drum: 'deep', drone: [33, 40] }
   };
   let prog = PROG[0], mel = 4;
@@ -8995,6 +9418,7 @@ const Snd = (function () {
     if (UI.mode !== 'play' || !G) return 'base';
     try {
       if (FIGHT.on) return 'tense';
+      if (G.player.aboard && G.ship && !G.ship.port) { const W = Sim.seaWeather(G); if (W.storm) return 'tense'; const hr0 = Sim.hourOf(G); return hr0 >= 20.5 || hr0 < 6 || W.fog ? 'night' : 'sea'; }
       const t = Sim.townAt(G.player.x, G.player.z), hr = Sim.hourOf(G), night = hr >= 20.5 || hr < 6;
       const hp = t && G.haps && G.haps.list.find(x => x.town === t && x.phase === 'on');
       if (hp && Sim.HAPS[hp.kind].bad) return 'tense';
@@ -9060,7 +9484,7 @@ const Snd = (function () {
     }
   }
   // the world around you: rain, crowds, the sea, animals, the smith's hammer and the church bells, louder the closer they are
-  const COAST = ['eastwatch', 'dawnport'], CHURCH = ['chapel', 'oakchurch', 'ghchurch', 'vdcathedral'], SMITH = /smith|armour/;
+  const COAST = ['eastwatch', 'dawnport', 'saltholm', 'merrow', 'gullhaven'], CHURCH = ['chapel', 'oakchurch', 'ghchurch', 'vdcathedral'], SMITH = /smith|armour/;
   let smithT = 0, smiths = null, smithDay = -1;
   const near = (x, z, R) => { const d = Math.hypot(x - focus.x, z - focus.z); return d >= R ? 0 : 1 - d / R; };
   function animal(kind, t, g) {
@@ -9074,12 +9498,20 @@ const Snd = (function () {
     // rain: as heavy as the weather, and muffled indoors
     rainL.g.gain.setTargetAtTime(play || UI.inside ? WX.rain * (UI.inside ? 0.12 : 0.22) : 0, t, 0.8);
     // the sea, breathing in and out at the ports
-    const sea = play && G && G.player.aboard ? 0.1 + 0.05 * Math.sin(t * 0.7) + 0.08 * MY_SHIP.frac : play && town && COAST.includes(town) ? 0.08 + 0.05 * Math.sin(t * 0.7) : 0; seaL.g.gain.setTargetAtTime(sea, t, 1.2);
+    const stormy = play && G && G.player.aboard && G.ship && !G.ship.port && Sim.seaWeather(G).storm, sea = play && G && G.player.aboard ? (stormy ? 0.2 : 0.1) + 0.05 * Math.sin(t * 0.7) + 0.08 * MY_SHIP.frac : play && town && COAST.includes(town) ? 0.08 + 0.05 * Math.sin(t * 0.7) : 0; seaL.g.gain.setTargetAtTime(sea, t, 1.2);
     // a crowd: as loud as the people around you, louder on a holiday or at a fair
     let n = 0; if (play && !night) for (const g of agentMeshes.values()) { if (g.visible && Math.abs(g.position.x - focus.x) < 22 && Math.abs(g.position.z - focus.z) < 22) n++; }
     const fest = play && town && ((Sim.holidayOn(G.day, Sim.kingdomOf(town))) || (G.haps && G.haps.list.some(x => x.town === town && x.phase === 'on' && (x.kind === 'fair' || x.kind === 'players'))));
     crowdL.g.gain.setTargetAtTime(Math.min(0.11, n * 0.006) * (fest ? 1.6 : 1), t, 1); crowdL.fl.frequency.setTargetAtTime(480 + Math.random() * 160, t, 0.5);
     if (!play) return;
+    // aboard: her timbers creak, the rigging hums in the wind, spray comes off the bow, and gulls cry near land
+    if (G.player.aboard && G.ship) { const W = Sim.windAt(G), v = 0.5 + 0.5 * MY_SHIP.frac;
+      windGain.gain.setTargetAtTime((stormy ? 0.16 : 0.05 + 0.05 * W.str) , t, 1.2); windFilter.frequency.setTargetAtTime(stormy ? 900 : 500 + 300 * W.str, t, 1.5);
+      if (Math.random() < 0.35 * v + (stormy ? 0.3 : 0)) { const o = ctx.createOscillator(), bp = ctx.createBiquadFilter(), gn = ctx.createGain(), s0 = t + Math.random() * 0.8, f = 70 + Math.random() * 60; o.type = 'sawtooth'; o.frequency.setValueAtTime(f, s0); o.frequency.linearRampToValueAtTime(f * (0.7 + Math.random() * 0.2), s0 + 0.5); bp.type = 'bandpass'; bp.frequency.value = 340 + Math.random() * 200; bp.Q.value = 6; gn.gain.setValueAtTime(0, s0); gn.gain.linearRampToValueAtTime(0.05, s0 + 0.12); gn.gain.exponentialRampToValueAtTime(0.0005, s0 + 0.6); o.connect(bp); bp.connect(gn); gn.connect(amb); o.start(s0); o.stop(s0 + 0.65); }
+      if (MY_SHIP.frac > 0.15 && Math.random() < MY_SHIP.frac) noise(t + Math.random() * 0.5, 0.5 + MY_SHIP.frac * 0.4, 'highpass', 1400, 0.7, 0.05 * MY_SHIP.frac + (stormy ? 0.05 : 0), 600, amb);
+      const land = !G.ship.port && (Sim.ISLES.some(I => I.kind !== 'reef' && Math.hypot(I.x - focus.x, I.z - focus.z) < Math.max(I.rx, I.rz) + 260) || Math.hypot(focus.x - Sim.ISLE.x, focus.z - Sim.ISLE.z) < 300 || focus.x < Sim.ALD_COAST(focus.z) + 300 || focus.x > Sim.VSHORE(focus.z) - 300);
+      if ((land || G.ship.port || Sim.fishingHere(G)) && !night && Math.random() < 0.25) for (let k = 0; k < 2 + (Math.random() * 2 | 0); k++) { const o = ctx.createOscillator(), gn = ctx.createGain(), s0 = t + k * 0.28 + Math.random() * 0.4, f = 1100 + Math.random() * 300; o.type = 'triangle'; o.frequency.setValueAtTime(f, s0); o.frequency.linearRampToValueAtTime(f * 1.45, s0 + 0.09); o.frequency.exponentialRampToValueAtTime(f * 0.7, s0 + 0.3); gn.gain.setValueAtTime(0, s0); gn.gain.linearRampToValueAtTime(0.03, s0 + 0.03); gn.gain.exponentialRampToValueAtTime(0.0005, s0 + 0.32); o.connect(gn); gn.connect(amb); o.start(s0); o.stop(s0 + 0.34); }
+      return; }
     // animals in their pastures and yards
     const S = window.SNDSPOT; if (S) for (const sp of S.list) { const v = near(sp.x, sp.z, 45); if (!v) continue;
       if (sp.kind === 'hen' && hr >= 5.2 && hr < 7 && Math.random() < 0.05) animal('rooster', t + Math.random() * 0.4, v);
@@ -9232,6 +9664,16 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.98', date: '13 November', title: 'The Sea Road, II: decks and the open sea', items: [
+    'Walk your ship. Tap Leave the helm and walk her decks while she sails: she carries you with her and holds her course until you take the helm again. Ladders climb to the quarterdeck and forecastle; hatches lead below.',
+    'Every class has its own decks. The cutter has a cramped cabin, a hold and a forepeak; the cog a great cabin and a forecastle, a hold with a galley and a passenger\u2019s bunk; the galleon a great cabin, a poop deck, a lower deck of passenger cabins, galley and hammocks, and a deep hold. When you go below, the decks above and the near side of the hull lift away so you can see in.',
+    'Your cargo is stacked in the hold, a bale, barrel or crate for each load. Sleep aboard in your bunk when she is moored or lying still; keep things in the sea chest in your cabin; look at your chart on the chart table.',
+    'The sea has places in it now: three island ports with their own people, markets and goods (Saltholm\u2019s salt fish, Merrow\u2019s amber, Gullhaven\u2019s dye), a smugglers\u2019 cove that buys anything and asks nothing, wild isles, reefs that only shallow boats can cross, four wrecks to search, and fishing grounds to cast your nets on. The Free Isles keep no customs house.',
+    'Your sea chart fills in as you sight each place. Fog and the dark shorten how far you can see. The small chart in the corner shows what you have found.',
+    'Weather at sea: fair, a flat calm that leaves her drifting, morning fogs, and storms (winter\u2019s, and now and then a summer squall) that throw her about and drive her downwind. In a storm, hands can be hurt and cargo washed overboard; after long at sea, fever can go round. Hurt crew make her slower to handle until they mend in port.',
+    'Drifting barrels, crates and sea chests float by; sail over them and the crew haul them aboard. Whales surface in deep water, fish leap and birds wheel over the fishing grounds, and the sea sounds like the sea: timbers creaking, rigging humming, spray off the bow and gulls near land, with a shanty of its own.',
+    'Ships cost about ten times what they did: a skiff 1,200c, a cutter 4,500c, a cog 9,000c and a great galleon 30,000c. Older saves gain the islands when loaded.'
+  ] },
   { v: '0.97', date: '13 November', title: 'The Sea Road, I: your first ship under sail', items: [
     'You can sail your own ship. Step aboard at the quay, cast off, and take her anywhere on the Sundering Sea. The move stick is the helm; a sail slider (furl, reef, half, full) sets her speed. On a keyboard, A and D steer and W and S set the sail.',
     'Four ships are for sale at the shipyards of Eastwatch and Dawnport: a skiff (1,200c), a cutter (4,500c), a merchant cog (9,000c) and a great galleon (30,000c). Each handles differently in size, speed, turning and hold. You keep one at a time; the shipwrights take the old one for 60% of what she cost you.',
