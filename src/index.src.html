@@ -817,6 +817,9 @@ details.fold > div { padding: 0 13px 10px; } details.fold p { margin: 4px 0; }
 .hchest { pointer-events: auto; max-height: 46vh; overflow-y: auto; width: min(92vw, 420px); background: rgba(239,224,189,.97); color: #2a1f16; border-radius: 10px; padding: 8px 10px; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
 .hchest > b { display: block; font: 400 16px var(--f-display); margin: 4px 0; } .hchest p { margin: 2px 0 6px; font-size: 13px; color: #5e4a38; }
 .chrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(42,31,22,.12); font-size: 14px; } .chrow .btn { min-height: 34px; padding: 4px 12px; }
+.hinfo.enc { background: rgba(110,30,22,.85); } .hinfo.enc b { color: #ffd9a0; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(42,31,22,.3); margin: 2px; vertical-align: middle; } .swatch.on { border-color: #2a1f16; box-shadow: 0 0 0 2px #e9d9a8; }
+input.txt { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(42,31,22,.3); background: #fbf3df; min-width: 0; flex: 1; }
 .hbtns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .hbtns .btn { min-height: 46px; box-shadow: 0 3px 10px rgba(0,0,0,.45); }
 @media (max-height: 520px) {
@@ -1355,19 +1358,20 @@ function groundH(x, z) {
     const dg = segDist(x, z, GREEN); if (dg < 8) h -= (1 - dg / 8) * 2.4;            // the river Green
   }
   if (x > 860 && x < 1400) { const sy0 = worldH(1060, -300) - 1.3, c0 = Sim.ALD_COAST(z) - 14; if (x < c0 && h < sy0 + 0.45) h = sy0 + 0.45 + (h - sy0 - 0.45) * 0.15 * Math.max(0, (x - 860) / (c0 - 860) - 1); }
-  if (x > 980) { const sx = Sim.ALD_COAST(z), inTown = Math.abs(z - -300) < 135 && x < 1137, edge = inTown ? 1137 : sx; if (x > edge - 10) { const sy = worldH(1060, -300) - 1.3; h = Math.min(h, h * (1 - smooth01((x - edge + 10) / 14)) + (sy - 3.5) * smooth01((x - edge + 10) / 14)); } }
+  if (x > 980) { const sx = Sim.ALD_COAST(z), qx = Sim.aldQuay(z), inTown = qx != null && x < qx, edge = inTown ? qx : sx; if (x > edge - 10) { const sy = worldH(1060, -300) - 1.3; h = Math.min(h, h * (1 - smooth01((x - edge + 10) / 14)) + (sy - 3.5) * smooth01((x - edge + 10) / 14)); } }
   // across the Sundering Sea: Stormrest Isle halfway, and the low sandstone coast of Valdoria beyond
   if (x > 1300) {
     const sy = worldH(1060, -300) - 1.3, floor = sy - 3.5;
     const di = Math.hypot(x - Sim.ISLE.x, (z - Sim.ISLE.z) * 1.3);
     if (di < 70) { const isle = sy + 1.8 + 3.2 * smooth01((40 - di) / 30) + 0.4 * Math.sin(x * 0.2) * Math.cos(z * 0.17); h = Math.max(h, floor * (1 - smooth01((70 - di) / 26)) + isle * smooth01((70 - di) / 26)); }
     { const ir = Sim.isleRel(x, z); if (ir != null) h = Math.max(h, sy + ir); }   // the islands, reefs and coves of Stage II, read from the sim
-    const vs = Sim.VSHORE(z), inPort = Math.abs(z + 300) < 96;
-    const edgeV = inPort ? 8659 : vs;
+    const vs = Sim.VSHORE(z), vq = Sim.valQuay(z);
+    const edgeV = vq != null ? vq : vs;
     if (x > edgeV - 16) {
       const dD = Math.hypot(x - Sim.DP.C.x, z - Sim.DP.C.z);
       let land = valLand(x, z, sy);
       if (dD < 150) { const f = smooth01((dD - 100) / 50); land = land * f + (sy + 2.4 + (x > 8820 ? 3.2 * Math.exp(-((x - 8834) ** 2 + (z + 300) ** 2) / 700) : 0)) * (1 - f); }
+      { const dK = Math.hypot(x - Sim.CK.C.x, z - Sim.CK.C.z); if (dK < 160) { const f = smooth01((dK - 110) / 50); land = land * f + (sy + 2.4) * (1 - f); } }   // Castamar on level ground
       // Valdoria's inland towns sit on level ground, as Alderwyn's do
       for (const id of ['goldmeadow', 'thornwick', 'stonewatch', 'valdor']) { const T = TOWNS[id], d = Math.hypot(x - T.x, z - T.z) / T.r; if (d < 1.9) { const base = valLand(T.x, T.z, sy), f = smooth01((d - 1.1) / 0.8); land = land * f + base * (1 - f); } }
       const k = smooth01((x - edgeV + 16) / 14); h = floor * (1 - k) + land * k;
@@ -1434,6 +1438,7 @@ function drapeDisc(x, z, r, lift, kind) {
   return g;
 }
 function standH(x, z) {
+  if (G && G.fight && G.player && G.player.aboard && MY_SHIP.me) { const dh = deckHeightAt(x, z); if (dh != null) return dh; }   // a boarding fight: everyone stands on her deck
   const g = groundH(x, z), O = Sim.OAK;
   { const d = deckAt(x, z); if (d != null) return Math.max(g, d); }
   if (z < -434 && z > -538 && Math.abs(x - 440) < 30) { const rx = O.riverX(z); if (x > rx - 11.2 && x < rx - 6) return Math.max(g, OAK_Y + 0.13); }
@@ -2748,7 +2753,7 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
 (function buildRoadsEast() {
   const M4 = (x, y, z, ry) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry || 0, 0)), new THREE.Vector3(1, 1, 1));
   const parts = [];
-  for (const key of ['iron', 'coast']) {
+  for (const key of ['iron', 'coast', 'wren']) {
     const R = Sim.ROADS[key];
     // where the road meets the river Alder, a timber bridge on stone piers
     let cross = null;
@@ -2760,7 +2765,7 @@ function realmBanner(f, x, y, z, ry, tall) { const h = tall || 2.2; BANNER_SPOTS
   scene.add(new THREE.Mesh(mergeColored(parts), vc));
   // the sea, east of Eastwatch, out to the edge of the world
   // the sea runs from coast to coast, following each bay and headland, and on north and south past the edges of the map
-  { const pos = [], idx = [], west = z => (Math.abs(z + 300) < 135 ? 1137 : Sim.ALD_COAST(z)) - 9, east = z => (Math.abs(z + 300) < 96 ? 8659 : Sim.VSHORE(z)) + 14, cols = 24;
+  { const pos = [], idx = [], west = z => (Sim.aldQuay(z) != null ? Sim.aldQuay(z) : Sim.ALD_COAST(z)) - 9, east = z => (Sim.valQuay(z) != null ? Sim.valQuay(z) : Sim.VSHORE(z)) + 14, cols = 24;
     let r = 0; for (let z = SEA_SPAN.z0; z <= SEA_SPAN.z1; z += z > -700 && z < 100 ? 4 : 12, r++) { const a = west(z), b = east(z); for (let c = 0; c <= cols; c++) pos.push(a + (b - a) * c / cols, SEA_Y, z); }
     for (let i = 0; i < r - 1; i++) for (let c = 0; c < cols; c++) { const k = i * (cols + 1) + c; idx.push(k, k + cols + 1, k + 1, k + 1, k + cols + 1, k + cols + 2); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
@@ -2942,7 +2947,7 @@ const VAL_TREES = [];
   const SAND = '#d9c3a0', SAND2 = '#c4ab84', RED = '#a84a2c', RED2 = '#b8603c', STONE = '#a7a091', STONE2 = '#8f897c', dirt = '#a8916c';
   const at = (x, z, ry) => fr(x, z, ry), rr = tileRand(97, 23);
   // the roads, of beaten earth
-  scene.add(new THREE.Mesh(mergeColored(['vgold', 'vthorn', 'vstone', 'vqueen'].map(k => ({ geo: ribbon(Sim.ROADS[k], i => 3.6 + 0.3 * Math.sin(i * 0.9), (x, z) => groundH(x, z) + 0.09, 2), color: dirt }))), vc));
+  scene.add(new THREE.Mesh(mergeColored(['vgold', 'vthorn', 'vstone', 'vqueen', 'vcast'].map(k => ({ geo: ribbon(Sim.ROADS[k], i => 3.6 + 0.3 * Math.sin(i * 0.9), (x, z) => groundH(x, z) + 0.09, 2), color: dirt }))), vc));
   const town = (O, seed, o) => {
     O.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: o.street, m: new THREE.Matrix4() }));
     O.plazas.forEach(q => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: o.plaza, kind: 4, smooth: true }));
@@ -4054,6 +4059,7 @@ function syncMyShip(s, dt, t) {
   for (const id in S3.lv) S3.lv[id].visible = below > 0 && S3.P.levels[id].below >= below;
   { let near = -1; if (below) { const dx = camera.position.x - g.position.x, dz = camera.position.z - g.position.z; near = Math.cos(M0.hdg) * dx - Math.sin(M0.hdg) * dz < 0 ? 0 : 1; } S3.hull[0].visible = near !== 0; S3.hull[1].visible = near !== 1; }
   syncCargo(S3, S.hold);
+  { const fc = flagCols(s); S3.flag.children[0].material.color.set(fc[0]); S3.flag.children[1].material.color.set(fc[1]); }
   // you: carried with her, at the helm or wherever you have walked on her decks
   if (aboard) { g.updateMatrixWorld(); if (d && L) SHIP_V.set(d.x, levelY(C, S3.K, L, d.z), d.z); else SHIP_V.set(S3.K.helm[0], S3.K.helm[1], S3.K.helm[2]); SHIP_V.applyMatrix4(g.matrixWorld); playerMesh.position.copy(SHIP_V); playerMesh.rotation.y = M0.hdg + (d ? d.face || 0 : 0); horseMesh.visible = false;
     if (M0.lastHdg != null && atSea) cam.yaw += angD(M0.lastHdg, M0.hdg);   // the view turns with the ship, so astern stays astern
@@ -4116,9 +4122,26 @@ const Helm = (function () {
     const row = (it, verb, cmd) => `<div class="chrow"><span>${esc(Sim.ITEMS[it.id] ? Sim.ITEMS[it.id].name : it.id)}${it.n > 1 ? ' \u00d7' + it.n : ''}</span>${B_(verb, [cmd, it.u], 'alt')}</div>`;
     return `<div class="hchest"><b>Your sea chest</b>${box.length ? box.map(it => row(it, 'Take', 'chestTake')).join('') : '<p>Empty.</p>'}<b>What you carry</b>${mine.length ? mine.slice(0, 30).map(it => row(it, 'Stow', 'chestPut')).join('') : '<p>Nothing to stow. What you wear stays on you.</p>'}<div class="hbtns">${B_('Close the chest', ['ui', 'chest'], 'alt')}</div></div>`;
   }
+  function encounterHTML(s) {
+    const E = s.encounter, N = E && Sim.npcById(s, E.id); if (!N) return null;
+    const S = s.ship, K = Sim.NPC_KIND[N.kind], q = Sim.shipPose(S), d = Math.round(Math.hypot(N.x - q.x, N.z - q.z)), cv = Sim.cargoValue(s, S), mine = Sim.shipStrength(s, S, true), atHelm = !s.player.deck;
+    const odds = mine > N.str * 1.3 ? 'You look the stronger.' : mine > N.str * 0.8 ? 'It could go either way.' : 'They look the stronger.';
+    const nearPort = Object.keys(Sim.BERTHS).some(k => (!Sim.ISLE_BY[k] || (s.seaChart && s.seaChart.found[k])) && Math.hypot(Sim.BERTHS[k].x - q.x, Sim.BERTHS[k].z - q.z) < 900);
+    const head = `<div class="hinfo enc"><b>${esc(K.name.charAt(0).toUpperCase() + K.name.slice(1))}</b> · ${d} m off${E.stage === 'fleeing' ? ' · you are running' : ''}</div>`, b = [];
+    if (E.stage === 'boarding') { b.push(B_('Fight them on deck<small>' + odds + '</small>', ['encFight'], 'warn')); b.push(N.kind === 'navy' ? B_('Strike your colours<small>they take the ship</small>', ['encSurrender'], 'alt') : B_('Yield<small>they take a share of cargo and coin</small>', ['encLost'], 'alt')); return head + `<div class="hnote">They are alongside and coming over the rail.</div><div class="hbtns">${b.join('')}</div>`; }
+    if (N.kind === 'smuggler') return head + `<div class="hnote">They offer a cheap load, no papers. A customs search would find it.</div><div class="hbtns">${B_('Buy a cheap load', ['encTrade'], 'alt')}${B_('Mark them for the customs<small>a reward at a harbour office</small>', ['encReport'], 'alt')}${B_('Sail on', ['encIgnore'], 'alt')}</div>`;
+    if (N.kind === 'patrol') return head + `<div class="hnote">${Sim.contraband(S) ? 'You carry goods with no duty paid on them.' : 'Your hold is clean.'}</div><div class="hbtns">${B_('Heave to and be searched', ['encComply'])}${Sim.hasLetter(s, N.kingdom) ? B_('Show your letter', ['encLetter']) : ''}${B_('Offer a bribe', ['encPay'], 'alt')}${atHelm ? B_('Run for it<small>they will remember</small>', ['encFlee'], 'warn') : ''}</div>`;
+    if (!atHelm) b.push(B_('Back to the helm', ['ui', 'takeHelm']));
+    if (E.stage !== 'fleeing' && atHelm) { b.push(B_('Flee<small>crowd on sail</small>', ['encFlee'], 'alt')); if (nearPort) b.push(B_('Run for port', ['encFlee', true], 'alt')); }
+    b.push(B_('Fight them off<small>' + odds + '</small>', ['encFight'], 'warn'));
+    if (N.kind === 'pirate') { b.push(B_('Pay them<small>about ' + Math.max(60, Math.round(cv * 0.15 + s.coins * 0.05)) + 'c</small>', ['encPay'], 'alt')); if (mine > N.str) b.push(B_('Board them', ['encBoard'], 'warn')); }
+    if (N.kind === 'navy') b.push(B_('Strike your colours', ['encSurrender'], 'alt'));
+    return head + `<div class="hnote">${E.stage === 'fleeing' ? 'Keep her running: get 700 m clear, or reach a harbour. If they catch you, they board.' : N.kind === 'navy' ? 'Valdorian galleys: fast, and full of marines.' : 'Choose quickly: they will be alongside soon.'}</div><div class="hbtns">${b.join('')}</div>`;
+  }
   function actsHTML(s) {
+    { const eh = s.encounter && encounterHTML(s); if (eh) return eh; }
     const S = s.ship, C = Sim.shipClass(S), used = Object.values(S.hold).reduce((a, b) => a + b, 0), WX = Sim.seaWeather(s), rough = Sim.seaRough(s) || (WX.storm && !S.port), p = s.player;
-    const crew = C.hands ? ` · crew ${C.hands - (S.hurt || 0)}/${C.hands}${S.hurt ? ' fit' : ''}` : '';
+    const crew = C.hands ? ` · crew ${Sim.fitCount(s, S)}/${C.hands} · morale ${Sim.morale(s, S)} · stores ${S.prov || 0} d` : '';
     if (p.deck) {
       if (UI.chestOpen) return chestHTML(s);
       const S3 = SHIPS3D[MY_SHIP.cls], L = S3 && S3.P.levels[p.deck.lv], nr = deckNear(s), b = [];
@@ -4340,6 +4363,160 @@ function seaWorld(dt, t) {
   const W = G && active ? Sim.seaWeather(G) : null, want = !W ? 0 : W.storm ? 1 : W.calm ? -0.6 : 0;
   GFX.storm.value += (want - GFX.storm.value) * Math.min(1, dt * 0.4);
 }
+/* ================= the Sea Road, Stage III: other ships on the water =================
+   Your other ships (moored, or sailing their captains' routes) and the strangers around you: pirates, smugglers, patrols,
+   the Valdorian navy and your hired escort. Each is a copy of the class's model sharing its geometry, with its own sails and colours. */
+const flagCols = s => { const T = Sim.HERALDRY.tinctures, F = (s && s.merchant && s.merchant.flag) || { field: 'gold', second: 'red' }; return [T[F.field] || MY_COLOURS[0], T[F.second] || MY_COLOURS[1]]; };
+const DARK_SAIL = surface(new THREE.MeshLambertMaterial({ color: '#4a4440', side: THREE.DoubleSide }));
+const OTHER_SHIPS = (function () {
+  const pool = [];   // { key, g, S3like, used }
+  function make(cls, cols, dark) {
+    const S3 = shipModel(cls), g = new THREE.Group(); g.rotation.order = 'YXZ';
+    [S3.hull[0], S3.hull[1], S3.main, S3.rig].concat(S3.roofs.filter(Boolean)).forEach(m => { const me = new THREE.Mesh(m.geometry, SHIP_MAT); g.add(me); });
+    const spos = new Float32Array(S3.spos.length), sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(spos, 3)); sg.setIndex(S3.sails.geometry.index);
+    const sails = new THREE.Mesh(sg, dark ? DARK_SAIL : SAIL_MAT); sails.frustumCulled = false; g.add(sails);
+    const look = { K: S3.K, spos, per: S3.per, N1: S3.N1, N2: S3.N2, sails, reef: 1 }; shapeSails(look, 1, 0.8, 0.4, 0.004, 0);
+    const tall = S3.K.masts.reduce((a, b) => b.h > a.h ? b : a), fw = 0.8 + tall.h * 0.07, flag = new THREE.Group(), m1 = new THREE.MeshLambertMaterial({ color: cols[0], side: THREE.DoubleSide }), m2 = new THREE.MeshLambertMaterial({ color: cols[1], side: THREE.DoubleSide });
+    const f1 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), m1), f2 = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.34), m2); [f1, f2].forEach((f, i) => { f.scale.set(fw, fw * 0.6, 1); f.rotation.y = Math.PI / 2; f.position.set(i * 0.012, 0, fw / 2); flag.add(f); }); flag.position.set(0, tall.h - fw * 0.36, tall.z); g.add(flag);
+    g.visible = false; scene.add(g);
+    return { g, look, flag, m1, m2, C: S3.C, reef: 1 };
+  }
+  function get(i, cls, cols, dark) { const key = cls + (dark ? ':d' : ''); let o = pool[i]; if (!o || o.key !== key) { if (o) { scene.remove(o.g); } o = make(cls, cols, dark); o.key = key; pool[i] = o; } o.m1.color.set(cols[0]); o.m2.color.set(cols[1]); return o; }
+  const list = [];
+  function sync(s, dt, t) {
+    list.length = 0;
+    if (s && UI.mode !== 'title') {
+      const mine = flagCols(s), slot = {};
+      if (s.ship && s.ship.port) slot[s.ship.port] = 1;
+      for (const S of s.fleet || []) {
+        if (S.port) { const B = Sim.BERTHS[S.port], k = (slot[S.port] = (slot[S.port] || 0) + 1), side = k % 2 ? -1 : 1, along = Math.ceil(k / 2) * (Sim.shipClass(S).len + 8) * side;   // several of your ships in one port lie along the quay
+          list.push({ cls: S.cls || 'cog', cols: mine, x: B.x + Math.sin(B.hdg) * along, z: B.z + Math.cos(B.hdg) * along, hdg: B.hdg, frac: 0, set: 0 }); }
+        else if (S.sea) list.push({ cls: S.cls || 'cog', cols: mine, x: S.sea.x, z: S.sea.z, hdg: S.sea.hdg, frac: S.sea.spd / 15, set: 1 });
+      }
+      for (const N of s.seaNpc || []) { const K = Sim.NPC_KIND[N.kind]; list.push({ cls: N.cls, cols: N.colors || K.colors || ['#888', '#444'], x: N.x, z: N.z, hdg: N.hdg, frac: N.spd / 15, set: 1, dark: N.kind === 'pirate' }); }
+    }
+    let used = 0;
+    for (const it of list) {
+      if (Math.hypot(it.x - focus.x, it.z - focus.z) > (UI.overlay === 'map' ? 4000 : 1000)) continue;
+      const o = get(used++, it.cls, it.cols, it.dark), g = o.g, amp = calm() ? 0.15 : Math.sqrt(10 / o.C.len), ph = it.x * 0.02 + it.z * 0.017;
+      o.x = o.x == null || Math.hypot(o.x - it.x, o.z - it.z) > 60 ? it.x : o.x + (it.x - o.x) * Math.min(1, dt * 4); o.z = o.z == null || Math.hypot(o.x - it.x, o.z - it.z) > 60 ? it.z : o.z + (it.z - o.z) * Math.min(1, dt * 4);
+      o.h = o.h == null ? it.hdg : o.h + angD(o.h, it.hdg) * Math.min(1, dt * 3);
+      g.visible = true; g.position.set(o.x, SEA_Y + Math.sin(t * 1.1 + ph) * 0.1 * amp, o.z); g.rotation.y = o.h; g.rotation.x = Math.sin(t * 0.9 + ph) * 0.02 * amp; g.rotation.z = Math.sin(t * 0.7 + ph) * 0.03 * amp - it.set * 0.04;
+      o.flag.rotation.y = Math.sin(t * 5 + ph) * 0.2 + 0.8;
+      if (o.reef !== it.set) { o.reef = it.set; shapeSails(o.look, Math.max(0.035, it.set), 0.8, 0.5, 0.004, 0); }
+    }
+    for (let i = used; i < pool.length; i++) if (pool[i]) pool[i].g.visible = false;
+  }
+  return { sync, list };
+})();
+// a boarding fight is fought on your own deck: everyone stays aboard, and stands on her planks
+function deckClamp(o) {
+  const S3 = MY_SHIP.cls && SHIPS3D[MY_SHIP.cls]; if (!S3 || !o) return;
+  const c = Math.cos(MY_SHIP.hdg), sn = Math.sin(MY_SHIP.hdg), dx = o.x - MY_SHIP.x, dz = o.z - MY_SHIP.z;
+  let lx = c * dx - sn * dz, lz = sn * dx + c * dz; const C = S3.C, K = S3.K;
+  lz = clamp(lz, -C.len * 0.42, C.len * 0.42); const hw = Math.max(0.3, hullHalfAt(C, K, lz, mainDeckY(C, K, lz) + 0.6) - 0.45); lx = clamp(lx, -hw, hw);
+  o.x = MY_SHIP.x + c * lx + sn * lz; o.z = MY_SHIP.z - sn * lx + c * lz;
+}
+function deckHeightAt(x, z) {
+  const S3 = MY_SHIP.cls && SHIPS3D[MY_SHIP.cls]; if (!S3) return null;
+  const c = Math.cos(MY_SHIP.hdg), sn = Math.sin(MY_SHIP.hdg), dx = x - MY_SHIP.x, dz = z - MY_SHIP.z, lz = sn * dx + c * dz;
+  if (Math.abs(lz) > S3.C.len / 2 + 2) return null; return S3.g.position.y + mainDeckY(S3.C, S3.K, clamp(lz, -S3.C.len / 2, S3.C.len / 2)) + 0.02;
+}
+function seaFight(spec) {
+  const S3 = SHIPS3D[MY_SHIP.cls]; if (S3) { Sim.cmd(G, 'deck', { lv: 'main', x: 0, z: S3.C.len * 0.08 }); }
+  UI.chestOpen = false; spec.face = MY_SHIP.hdg;
+  beginFight(spec, res => { act([res === 'won' ? 'encWon' : 'encLost']); if (G.player.aboard) Sim.cmd(G, 'deck', null); Helm.sync(true); });
+}
+/* ----- in port: your ships lying here, the crew you can sign on, stores, and the harbour office ----- */
+function crewHireHTML(s, S, port) {
+  const town = Sim.TOWNS[port] ? port : null; if (!town) return '<p class="why">No one here signs on as crew. Find hands in a town.</p>';
+  const C = Sim.shipClass(S), cs = Sim.crewOf(s, S), sail = Sim.sailors(s, S).length, guards = cs.filter(c => c.post === 'guard').length, isFleet = S !== s.ship;
+  const posts = ['hand'].concat(['mate', 'bosun', 'cook'].filter(k => !Sim.crewPost(s, S, k))).concat(isFleet && !Sim.crewPost(s, S, 'captain') ? ['captain'] : []).concat(guards < Sim.GUARD_ROOM[S.cls] ? ['guard'] : []);
+  const cands = Sim.crewCandidates(s, town, 'hand');
+  if (!cands.length) return '<p class="why">No one in ' + esc(TOWN_NAMES[town] || town) + ' is looking for a berth today.</p>';
+  return `<p class="why">${sail} of ${C.hands} hands aboard${guards ? ', and ' + guards + ' guard' + (guards > 1 ? 's' : '') : ''}. Townsfolk looking for a berth:</p>` + cands.slice(0, 6).map(c => { const q = s.people[c.pid];
+    return `<div class="staffrow"><span><b>${esc(c.name)}</b> · ${c.age}, skill ${c.skill}<br><small>${esc(Sim.occupation(s, q))}</small></span><span class="acts">${posts.filter(k => !(k === 'hand' && sail >= C.hands + 2)).map(k => B_(Sim.CREW_POSTS[k].name + ' · ' + Sim.crewAsk(k, q, Sim.fameAt(s, port)) + 'c<small>a day</small>', ['hireCrew', S.id, c.pid, k], 'alt')).join('')}</span></div>`; }).join('');
+}
+function shipsHereHTML(s, port) {
+  const here = Sim.allShips(s).filter(S => S.port === port); if (!here.length) return '';
+  return here.map(S => { const C = Sim.shipClass(S), fit = Sim.fitCount(s, S), mor = Sim.morale(s, S), mine = S === s.ship, cap = Sim.crewPost(s, S, 'captain'), open = UI.hireFor === S.id;
+    let h = `<div class="box"><h5>${esc(S.name)} · ${esc(C.name)}${mine ? ' · you command her' : cap ? ' · Captain ' + esc(cap.p.name) : ''}</h5><p class="why">Crew ${fit}/${C.hands} fit${C.hands ? ', morale ' + mor : ''} · stores for ${S.prov || 0} days · hull ${S.hull == null ? 100 : Math.round(S.hull)}%${S.orders ? ' · ' + (S.orders.mode === 'move' ? 'ordered to ' + esc(Sim.PORTS[S.orders.route[0]].name) : 'trading her route') : ''}</p><div class="acts">`;
+    if (!mine) h += B_('Take command of her', ['command', S.id], 'alt');
+    if ((S.prov || 0) < 10) h += B_('Stores to 10 days · ' + (10 - (S.prov || 0)) * Math.max(1, (S.crew || []).length) + 'c', ['buyProv', S.id, 10], 'alt');
+    h += B_(open ? 'Close the crew list' : 'Sign on crew', ['ui', 'hireFor', open ? null : S.id], 'alt') + B_('Fleet book', ['page', 'fleet'], 'alt') + '</div>';
+    if (open) h += crewHireHTML(s, S, port);
+    return h + '</div>'; }).join('');
+}
+function harbourOfficeHTML(s, port) {
+  if (!['eastwatch', 'dawnport', 'wrenmouth', 'castamar'].includes(port)) return '';
+  const K = Sim.kingdomOf(port), let0 = s.letters && s.letters[K] > s.day, cost = Math.round(Sim.LETTER_PRICE[K] * (1.2 - (K === 'valdoria' ? ((s.valdoria && s.valdoria.standing) || 0) : ((s.realm && s.realm.favour) || 0)) / 150)), claim = (s.bounty || 0) + (s.report || 0) * 80;
+  return `<p><b>The harbour office</b></p><div class="acts">${B_('Hire an armed escort · ' + Sim.ESCORT_DAY + 'c a day<small>' + (s.escort && s.escort.until > s.day ? 'sailing with you until day ' + s.escort.until + '; 5 more days · ' + 5 * Sim.ESCORT_DAY + 'c' : 'five days · ' + 5 * Sim.ESCORT_DAY + 'c; pirates think twice') + '</small>', ['hireEscort', 5], 'alt', s.coins < 5 * Sim.ESCORT_DAY)}${let0 ? '' : B_('A letter of safe passage · ' + cost + 'c<small>' + (K === 'alderwyn' ? 'Alderwyn’s' : 'Valdoria’s') + ' patrols will not search you, for 60 days</small>', ['buyLetter', K], 'alt', s.coins < cost || (Sim.atWar(s) && K === 'valdoria'))}${claim ? B_('Claim your bounty · ' + claim + 'c', ['claimBounty']) : ''}</div>${let0 ? `<p class="why">Your letter of safe passage from ${K === 'alderwyn' ? 'Alderwyn' : 'Valdoria'} is good until day ${s.letters[K]}.</p>` : ''}${newsHTML(s, port)}`;
+}
+function newsHTML(s, port) {
+  const N = (s.seaNews || []).filter(n => n.until > s.day); if (!N.length) return '';
+  return `<p><b>Harbour news</b></p><ul class="notes">${N.map(n => `<li>${esc(n.text)} <small>(${n.mult > 1 ? 'dear' : 'cheap'} until about day ${n.until})</small></li>`).join('')}</ul>`;
+}
+function harbourCard(s, id, walking) {
+  return `<h2>${esc(Sim.PORTS[id].name)}</h2><div class="sub">${id === 'wrenmouth' ? 'Alderwyn’s tin port: a long quay under the down, smelters’ smoke, and ropewalks. The coast road runs north to Eastwatch.' : 'A white port among the olive groves of Valdoria’s north coast. Oil casks stand in rows on the quay. The road climbs south to Stonewatch.'} No passage ships call here; your own ship can.</div>${walking}${shipPanel(s, id)}${harbourOfficeHTML(s, id)}`;
+}
+// the Merchant Exchange: policies on your ships and their cargo
+function exchangeHTML(s) {
+  const ships = Sim.allShips(s); if (!ships.length) return '<p class="why">Buy a ship, and the Exchange will insure her and her cargo against pirates, storms and the fortunes of war.</p>';
+  return `<p><b>Insurance</b></p><p class="why">Thirty days’ cover pays four parts in five of what is lost to pirates, storms or capture. Not what customs seize.</p><div class="acts">${ships.map(S => B_('Insure ' + esc(S.name) + ' · ' + Sim.insurePremium(S) + 'c<small>' + (S.insured && S.insured.until > s.day ? 'covered until day ' + S.insured.until + '; 30 more days' : 'thirty days') + '</small>', ['insure', S.id], 'alt', s.coins < Sim.insurePremium(S))).join('')}</div>`;
+}
+/* ----- the Fleet page: your house, your flag, your ships, their crews, logs and ledgers ----- */
+function pageFleet(s) {
+  const M = Sim.setupMerchant(s), T = Sim.HERALDRY.tinctures, ports = Sim.SEA_PORTS.filter(k => !Sim.ISLE_BY[k] || (s.seaChart && s.seaChart.found[k]));
+  const top = Math.max(0, ...Sim.SEA_PORTS.map(k => Sim.fameAt(s, k)));
+  let h = `<h3>Your fleet</h3><p class="lead">${esc(M.house || (s.name + '’s ships'))}: ${esc(Sim.fameWord(top))}.</p>`;
+  h += `<div class="box"><h5>Your house and flag</h5><div class="acts"><input id="houseName" class="txt" maxlength="30" placeholder="Name your merchant house" value="${esc(M.house || '')}">${B_('Name it', ['ui', 'nameHouse'], 'alt')}</div>
+    <p class="why">Your flag flies from every ship you own. ${['field', 'second'].map(k => `${k === 'field' ? 'Colour' : 'Stripe'}: ${Object.keys(T).map(c => `<button type="button" class="swatch${M.flag[k] === c ? ' on' : ''}" style="background:${T[c]}" aria-label="${c}" data-c='${esc(JSON.stringify(['setFlag', k === 'field' ? c : M.flag.field, k === 'second' ? c : M.flag.second, M.flag.charge]))}'></button>`).join('')}`).join('<br>')}</p>
+    <p class="why">Known in each port: ${ports.map(k => `${esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, ''))} ${Math.round(Sim.fameAt(s, k))}`).join(' · ')}. A known name buys a little cheaper, sells a little dearer, and hires more easily.</p>
+    <p class="why">${s.escort && s.escort.until > s.day ? 'An armed escort sails with you until day ' + s.escort.until + '. ' : ''}${s.letters && s.letters.alderwyn > s.day ? 'Letter of safe passage from Alderwyn until day ' + s.letters.alderwyn + '. ' : ''}${s.letters && s.letters.valdoria > s.day ? 'Letter of safe passage from Valdoria until day ' + s.letters.valdoria + '. ' : ''}${s.pirateToken > s.day ? 'The cove’s black ribbon keeps pirates off your ships until day ' + s.pirateToken + '. ' : ''}${(s.bounty || 0) + (s.report || 0) * 80 ? 'Bounty to claim at a harbour office: ' + ((s.bounty || 0) + (s.report || 0) * 80) + 'c.' : ''}</p></div>`;
+  const ships = Sim.allShips(s);
+  if (!ships.length) return h + '<p class="why">You own no ships. The shipyards of Eastwatch and Dawnport build them.</p>' + newsHTML(s);
+  for (const S of ships) {
+    const C = Sim.shipClass(S), mine = S === s.ship, cap = Sim.crewPost(s, S, 'captain'), where = S.impounded ? 'impounded at Dawnport' : S.port ? 'moored at ' + Sim.PORTS[S.port].name : S.sea && S.sea.to ? 'at sea, bound for ' + Sim.PORTS[S.sea.to].name.replace(/ (Quay|Harbour)$/, '') : 'at sea', used = Object.values(S.hold).reduce((a, b) => a + b, 0);
+    h += `<div class="box" id="fl_${S.id}"><h5>${esc(S.name)} · ${esc(C.name)}${mine ? ' · you command her' : ''}</h5>
+      <p class="why">${esc(where)}. Hold ${used}/${S.cap}${used ? ': ' + Object.keys(S.hold).filter(g => S.hold[g]).map(g => S.hold[g] + ' ' + esc(Sim.SEA_GOODS[g].name)).join(', ') : ''}. Crew ${Sim.fitCount(s, S)}/${C.hands} fit, morale ${Sim.morale(s, S)}, stores ${S.prov || 0} days, hull ${S.hull == null ? 100 : Math.round(S.hull)}%.${S.insured && S.insured.until > s.day ? ' Insured until day ' + S.insured.until + '.' : ''}${Object.keys(S.refits || {}).length ? ' Refits: ' + Object.keys(S.refits).map(k => Sim.REFITS[k].name.toLowerCase()).join(', ') + '.' : ''}</p>`;
+    if (!mine) {
+      const sel = (UI.route && UI.route[S.id]) || [];
+      h += `<p class="why">${cap ? 'Captain ' + esc(cap.p.name) + (S.orders ? (S.orders.mode === 'move' ? ', ordered to ' + esc(Sim.PORTS[S.orders.route[0]].name) : ', trading between ' + S.orders.route.map(k => esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, ''))).join(', ')) : ', waiting for orders') + '.' : 'No captain: she cannot sail without one. Make one of her crew captain, or sign one on at her quay.'}</p>`;
+      if (cap) h += `<p class="why">Route: ${sel.length ? sel.map(k => esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, ''))).join(' → ') : 'tap ports in order'}</p><div class="acts">${ports.map(k => B_(esc(Sim.PORTS[k].name.replace(/ (Quay|Harbour)$/, '')), ['ui', 'routeAdd', S.id, k], sel.includes(k) ? '' : 'alt')).join('')}</div><div class="acts">${B_('Trade this route', ['orders', S.id, sel, 'trade'], '', sel.length < 2)}${B_('Sail to ' + (sel[0] ? esc(Sim.PORTS[sel[0]].name.replace(/ (Quay|Harbour)$/, '')) : 'a port') + ' and wait', ['orders', S.id, sel.slice(0, 1), 'move'], 'alt', !sel.length)}${B_('Clear', ['ui', 'routeClear', S.id], 'alt')}${S.orders ? B_('Hold in port', ['orders', S.id, [], 'trade'], 'alt') : ''}</div>`;
+    }
+    const cs = Sim.crewOf(s, S);
+    if (cs.length) h += `<table class="acct"><tbody>${cs.map(c => `<tr><td>${esc(c.p.name)}<br><small>${esc(Sim.CREW_POSTS[c.post].name)} · ${c.wage}c a day · mood ${Math.round(c.p.mood || 50)}${c.p.hurtUntil > s.day ? ' · hurt' : ''}</small></td><td><div class="acts">${c.post !== 'guard' ? ['mate', 'bosun', 'cook'].concat(!mine ? ['captain'] : []).filter(k => k !== c.post).map(k => B_(Sim.CREW_POSTS[k].name, ['setPost', S.id, c.pid, k], 'alt')).join('') : ''}${S.port ? B_('Pay off', ['dismissCrew', S.id, c.pid], 'warn') : ''}</div></td></tr>`).join('')}</tbody></table>`;
+    if (S.voyages && S.voyages.length) h += `<p><b>Voyages</b></p><table class="acct"><tbody>${S.voyages.slice(0, 6).map(v => `<tr><td>Day ${v.day}: ${esc(Sim.PORTS[v.from].name.replace(/ (Quay|Harbour)$/, ''))} → ${esc(Sim.PORTS[v.to].name.replace(/ (Quay|Harbour)$/, ''))}, ${v.days} d<br><small>bought ${v.bought}c, sold ${v.sold}c, costs ${v.costs}c${v.events.length ? '; ' + esc(v.events.join('; ')) : ''}</small></td><td>${money(v.profit)}</td></tr>`).join('')}</tbody></table>`;
+    if (S.log && S.log.length) h += `<p><b>Ship’s log</b></p><ul class="notes">${S.log.slice(0, 8).map(e => `<li>Day ${e.day}, ${String(Math.floor(e.t / 60)).padStart(2, '0')}:${String(e.t % 60).padStart(2, '0')}: ${esc(e.text)}</li>`).join('')}</ul>`;
+    h += '</div>';
+  }
+  return h + newsHTML(s);
+}
+/* ----- Wrenmouth and Castamar: two mainland ports, drawn as every town is ----- */
+(function buildNewPorts() {
+  const looks = {
+    wrenmouth: { O: Sim.WR, Q: Sim.Q_WREN, street: '#8a8274', plaza: '#9a9282', sign: { tavern: '#a8322a', smithy: '#4a4744', weaver: '#4f6b3a', bakery: '#c48a3f', cooper: '#6b4a2e' }, house: { stone: '#8b877c', stone2: '#7a766c', slate: '#3f4a5a', tile: '#3f4a5a', roofs: ['#3f4a5a', '#5a5a52', '#7a3f2b'], walls: ['#d8d4c8', '#c9b48a', '#e0dccf', '#b9a47a'] }, banner: ALDERWYN },
+    castamar: { O: Sim.CK, Q: Sim.Q_CAST, street: '#b8a882', plaza: '#c9b892', sign: { tavern: '#a8322a', cooper: '#6b4a2e', bakery: '#c48a3f', butcher: '#8e2b22', chandler: '#e8d36a' }, house: { stone: '#d9c3a0', stone2: '#c4ab84', slate: '#a84a2c', tile: '#a84a2c', roofs: ['#a84a2c', '#b8603c', '#9a7a3a'], walls: ['#f2ead6', '#ecdcbc', '#f4ecdc', '#e6d4b0'] }, banner: VALDORIA }
+  };
+  const at = (x, z, ry) => fr(x, z, ry), rr = tileRand(503, 71);
+  for (const id in looks) {
+    const L = looks[id], O = L.O, Q = L.Q, A = (u, v) => Q.at(u, v), ry = Q.qa;
+    O.streets.forEach(st => PARTS.solid.push({ geo: ribbon(st.pts, st.w, (x, z) => groundH(x, z) + 0.1, 1), color: L.street, m: new THREE.Matrix4() }));
+    O.plazas.forEach(q => PARTS.solid.push({ geo: drapeDisc(q.x, q.z, q.r1 + 1, 0.06), color: L.plaza, kind: 4, smooth: true }));
+    O.houses.forEach((h, i) => townHouse(at(h.x, h.z, h.face), h, i + (id === 'wrenmouth' ? 1200 : 1300), L.house));
+    O.biz.forEach((b, i) => tradeHouse(at(b.x, b.z, b.face), b.trade, i + 1250, Object.assign({}, L.house, { sign: L.sign[b.trade] || '#a8322a' })));
+    // the quay wall the length of the harbour, bollards, and boats along it
+    { const [x, z] = A(0.8, 0), y = groundH(...A(-4, 0)); box(new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry, 0)), new THREE.Vector3(1, 1, 1)), L.house.stone2, 0, (y - SEA_Y) / 2 - 0.5, 0, 162, y - SEA_Y + 1.2, 1.6); }
+    for (let v = -72; v <= 72; v += 9) { const [x, z] = A(0.3, v); part(fr(x, z, 0), G_CYL, '#3a3128', 0, 0.45, 0, 0, 0, 0, 0.22, 0.6, 0.22); }
+    for (const v of [-60, -44, 30, 52, 66]) { const [x, z] = A(4, v), f = new THREE.Matrix4().compose(new THREE.Vector3(x, SEA_Y + 0.05, z), new THREE.Quaternion().setFromEuler(RX.set(0, ry + Math.PI / 2, 0)), new THREE.Vector3(1, 1, 1)); part(f, G_HEMI, '#6b4a2e', 0, 0.2, 0, 0, Math.PI, 0, 0.8, 0.6, 2.4); box(f, '#7a5634', 0, 0.22, 0, 1.2, 0.06, 4); }
+    { const [x, z] = A(-10, -8), f = at(x, z, ry + Math.PI); (id === 'wrenmouth' ? realmBanner : valBanner)(f, 0, 0, 0, 0, 3); }
+    // what the town lives by
+    if (id === 'wrenmouth') { const [tx, tz] = O.tin; for (let k = 0; k < 3; k++) { const f = at(tx + k * 9 - 9, tz); box(f, '#7a766c', 0, 2, 0, 5, 4, 4); part(f, G_CYL, '#5a5650', 1.4, 6, 0, 0, 0, 0, 0.7, 6, 0.7); } for (let k = 0; k < 8; k++) part(at(tx + (rr() - 0.5) * 30, tz + 10 + rr() * 8), GEO.sack, '#6c675a', 0, 0.3, 0, 0, 0, 0, 2, 0.8, 2); }
+    else { const [gx, gz] = O.grove; for (let r0 = 0; r0 < 4; r0++) for (let c0 = 0; c0 < 6; c0++) { const x = gx + c0 * 7 - 18, z = gz + r0 * 7 - 10; if (Sim.TOWNS.castamar && Math.hypot(x - O.C.x, z - O.C.z) < 58) continue; const f = at(x, z, rr() * 6); box(f, '#5b4029', 0, 0.9, 0, 0.35, 1.8, 0.35); part(f, GEO.sack, '#7d8c5a', 0, 2.3, 0, 0, 0, 0, 3, 2, 3); }
+      const [px, pz] = A(-60, 30); for (let k = 0; k < 10; k++) part(at(px + (k % 5) * 1.2, pz + Math.floor(k / 5) * 1.2), G_BARREL, '#6b4a2e', 0, 0.35, 0); }
+    flushBuild();
+  }
+})();
 /* ----- the sea chart: what you have found, on parchment ----- */
 const SeaChart = (function () {
   const X0 = 1000, X1 = 8800, Z0 = Sim.SEA.band.z0 + 150, Z1 = Sim.SEA.band.z1 - 150;
@@ -4609,6 +4786,13 @@ const EW_SOLIDS = (function () {
   for (let z = -440; z < 400; z += 2) { const x = z > -435 && z < -165 ? 1137.5 : 1140 + 16 * Math.sin(z / 95) + 6 * Math.sin(z / 31) + 1; if (Math.abs(z + 350) < 2.5 || Math.abs(z + 300) < 2.5 || Math.abs(z + 250) < 2.5) continue; C(x, z, 1.4); }
   return out;
 })();
+const PORT_SOLIDS = (function () {
+  const out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
+  for (const O of [Sim.SH, Sim.MR, Sim.GU, Sim.WR, Sim.CK]) { O.houses.forEach(h => C(h.x, h.z, h.tall ? 3.3 : 2.8)); O.biz.forEach(b => C(b.x - Math.sin(b.face) * 0.3, b.z - Math.cos(b.face) * 0.3, 3.5)); }
+  for (let z = 420; z < 860; z += 2) { const q = Sim.aldQuay(z); C(q != null ? q + 0.5 : Sim.ALD_COAST(z) + 1, z, 1.4); }
+  for (let z = -1700; z < -1200; z += 2) { const q = Sim.valQuay(z); C(q != null ? q - 0.5 : Sim.VSHORE(z) - 1, z, 1.4); }
+  return out;
+})();
 const STAGE_SOLIDS = Object.values(Sim.STAGE).flatMap(st => { const ux = Math.cos(st.face), uz = -Math.sin(st.face), vx = Math.sin(st.face), vz = Math.cos(st.face), P = (u, v, r) => ({ c: 1, x: st.x + ux * u + vx * v, z: st.z + uz * u + vz * v, r }); return [P(-5, -2, 2.3), P(-3, -2, 2.3), P(3, 0.5, 1.6), P(3, -0.8, 1.4)]; });
 const DP_SOLIDS = (function () {
   const O = Sim.DP, out = [], C = (x, z, r) => out.push({ c: 1, x, z, r });
@@ -4636,6 +4820,7 @@ function solidsNow(s) {
   if (Math.hypot(s.player.x - TOWNS.crownmere.x, s.player.z - TOWNS.crownmere.z) < TOWNS.crownmere.r + 40) { const px = s.player.x, pz = s.player.z; out.push(...CM_SOLIDS.filter(o => Math.abs(o.x - px) < 60 && Math.abs(o.z - pz) < 60), ...CM_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 }))); }
   if (Math.hypot(s.player.x - TOWNS.ironcrest.x, s.player.z - TOWNS.ironcrest.z) < TOWNS.ironcrest.r + 60) out.push(...IC_SOLIDS, ...IC_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   if (Math.hypot(s.player.x - TOWNS.eastwatch.x, s.player.z - TOWNS.eastwatch.z) < TOWNS.eastwatch.r + 120) { const px = s.player.x, pz = s.player.z; out.push(...EW_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70)); }
+  { const px = s.player.x, pz = s.player.z; if ((px > 900 && px < 1300 && pz > 300) || (px > 1300 && px < 8800)) out.push(...PORT_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70)); }
   if (s.player.x > 1300) { const px = s.player.x, pz = s.player.z; out.push(...DP_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...ISLE_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...DP_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.5 })), ...VAL_SOLIDS.filter(o => Math.abs(o.x - px) < 70 && Math.abs(o.z - pz) < 70), ...VAL_TREES.filter(([x, z]) => Math.abs(x - px) < 60 && Math.abs(z - pz) < 60).map(([x, z]) => ({ c: 1, x, z, r: 0.6 }))); }
   if (Math.hypot(s.player.x - TOWNS.oakbridge.x, s.player.z - TOWNS.oakbridge.z) < TOWNS.oakbridge.r + 40) out.push(...OAK_SOLIDS, ...OAK_TREES.map(([x, z]) => ({ c: 1, x, z, r: 0.5 })));
   s.shops.forEach(x => { const p = Sim.PLOTS[x.plot], d = p.dir || 1; shopBoxes(x.tier).forEach(b => out.push({ x: p.x + b.x * d, z: p.z + b.z * d, hx: b.hx, hz: b.hz })); });
@@ -4822,13 +5007,15 @@ function act(c) {
     rebuildPlayer(G.look); UI.sel = null; UI.loc = null; focus.set(G.player.x, 0, G.player.z); UI.confirm = null; closeOverlay();
   }
   if (['board', 'ashore', 'castOff', 'buyShip'].includes(c[0])) UI.chestOpen = false;
+  if ((c[0] === 'encFight' || c[0] === 'encBoard') && r.ok && r.fight) setTimeout(() => seaFight(r.fight), 60);
+  if (c[0] === 'encSurrender' && r.ok) { UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); UI.camD = null; UI.camGy = null; }
   if (c[0] === 'board' && r.ok) { UI.loc = null; UI.openLoc = null; UI.sel = null; boardCam(); focus.set(G.player.x, 0, G.player.z); Helm.hint(1, 'You are aboard. Cast off when you are ready.'); }
   if (c[0] === 'castOff' && r.ok && !r.taken) { boardCam(); Helm.hint(2, 'Cast off. Slide the sail up to get under way, and steer with the move stick. The 2\u00d7, 4\u00d7 and 8\u00d7 buttons shorten a long crossing.'); }
   if ((c[0] === 'ashore' || c[0] === 'moor' || c[0] === 'castOff') && r.ok && (c[0] === 'ashore' || r.taken || r.impounded)) { UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); UI.camD = null; UI.camGy = null; }
   if (c[0] === 'buyShip' && r.ok) toast('She is yours, and lies at the quay. Step aboard there to sail her.', 'info', true);
   if (c[0] === 'sellShip' && r.ok) toast('The shipwrights take her off your hands.', 'info', true);
   if ((c[0] === 'castNets' || c[0] === 'searchWreck') && r.ok && r.mins) { let m = r.mins; while (m > 0) { const st = Math.min(30, m); Sim.advance(G, st); m -= st; } }
-  if (SHIP_ACTS.has(c[0])) Helm.sync(true);
+  if (SHIP_ACTS.has(c[0]) || /^enc[A-Z]/.test(c[0])) Helm.sync(true);
   if (c[0] === 'sail' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   if (c[0] === 'coach' && r.ok) { Sim.advance(G, r.mins); UI.loc = null; UI.sel = null; focus.set(G.player.x, 0, G.player.z); }
   drainEvents();
@@ -4997,7 +5184,7 @@ function cardHTML(s) {
   if (here === 'ruin') return `<h2>Old Barrow Keep</h2><div class="sub">A tower that guarded this road long before the Varrows held Hearthmoor. Its stones have been carted off for barns and walls. Nobody lives here now.</div>${walking}`;
   if (here === 'oakgate') return `<h2>Oakbridge Gate</h2><div class="sub">The south gate of Oakbridge, the market city where the south road meets the coast road. The gates stand open from dawn to dusk; the watch keeps the toll.</div>${walking}<div class="acts">${B_('The market square', ['goto', 'oaksq'], 'alt')}${B_('The town hall', ['goto', 'oakhall'], 'alt')}</div>`;
   if (Lh && Lh.sign) return houseSignCard(s, Lh, walking);
-  if (Lh && Lh.town && Lh.biz) return oakBizCard(s, Lh, walking) + (Sim.SHIPYARDS[here] ? shipyardPanel(s, Sim.SHIPYARDS[here]) : '');
+  if (Lh && Lh.town && Lh.biz) return oakBizCard(s, Lh, walking) + (Sim.SHIPYARDS[here] ? shipyardPanel(s, Sim.SHIPYARDS[here]) : '') + (Sim.EXCHANGES[here] ? exchangeHTML(s) : '');
   if (here === 'ewyard') return `<h2>The Shipyard</h2><div class="sub">A hull on the slip with her ribs showing, timber stacked to season, and the shipwrights of Eastwatch at work. Every ship on the Sundering Sea began in a yard like this.</div>${walking}${shipyardPanel(s, 'eastwatch')}`;
   if (here === 'oakhall') return oakHallCard(s, walking);
   if (here === 'cmhall') return oakHallCard(s, walking, 'crownmere');
@@ -5333,6 +5520,7 @@ function stepFight(dt, t) {
   if (keys.has('ShiftLeft') || keys.has('ShiftRight')) FIGHT.inp.block = true; else if (FIGHT.keyBlock) FIGHT.inp.block = false;
   FIGHT.keyBlock = keys.has('ShiftLeft') || keys.has('ShiftRight');
   Sim.fightStep(G, dt, FIGHT.inp); FIGHT.inp.strike = null; FIGHT.inp.dodge = null;
+  if (G.player.aboard && MY_SHIP.me && G.fight) { deckClamp(G.player); G.fight.foes.forEach(deckClamp); G.fight.allies.forEach(deckClamp); }
   const pl = G.player, near = Fi.foes.filter(f => !f.down).sort((a, b) => Math.hypot(a.x - pl.x, a.z - pl.z) - Math.hypot(b.x - pl.x, b.z - pl.z))[0];
   if (near && !Fi.over) pl.face = Math.atan2(near.x - pl.x, near.z - pl.z);   // you keep your eyes on the nearest enemy
   FIGHT.lastHits = Fi.hits.slice();
@@ -5911,7 +6099,7 @@ function hud(s) {
 const SECTIONS = [
   ['today', 'Today', [['tasks', 'Tasks'], ['news', 'News'], ['goals', 'Goals'], ['calendar', 'Calendar'], ['guide', 'Guide']]],
   ['money', 'Money', [['purse', 'Purse'], ['bank', 'Bank'], ['ledger', 'Ledger'], ['jobs', 'Work']]],
-  ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property']]],
+  ['business', 'Business', [['shops', 'Shops'], ['staff', 'Staff'], ['requests', 'Requests'], ['property', 'Property'], ['fleet', 'Fleet']]],
   ['people', 'People', [['people', 'Townsfolk'], ['notables', 'Of note'], ['rival', 'Rival'], ['family', 'Family']]],
   ['you', 'You', [['skills', 'Skills'], ['gear', 'Gear'], ['renown', 'Your name']]],
   ['power', 'Power', [['office', 'Your office'], ['court', 'Court'], ['run', 'Run for office'], ['elections', 'Elections'], ['village', 'Village'], ['realm', 'Realm'], ['justice', 'Justice']]]
@@ -5948,7 +6136,7 @@ function renderBook(turn) {
   const c0 = Sim.calendar(G);
   $('bkhead').innerHTML = `<nav class="subtabs" aria-label="${esc(sec[1])}">${sec[2].map(([k, n]) => `<button type="button" aria-pressed="${UI.tab === k}" data-c='${JSON.stringify(['ui', 'tab', k])}'>${n}</button>`).join('')}</nav><span class="bkstat num" title="Time stands still while the book is open"><b>${money(G.coins)}</b><small>${c0.dom} ${c0.monthName} \u00b7 paused</small></span><button type="button" class="close" data-c='["ui","close"]' aria-label="Close the book">&times;</button>`;
   const subs = '';
-  pg.innerHTML = subs + ({ skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, bank: pageBank, court: pageCourt, purse: pagePurse, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, news: pageNews, guide: pageGuide, tasks: pageTasks }[UI.tab])(G);
+  pg.innerHTML = subs + ({ fleet: pageFleet, skills: pageSkills, gear: pageGear, office: pageOffice, run: pageRun, requests: pageRequests, elections: pageElections, manage: pageManage, justice: pageJustice, ledger: pageLedger, shops: pageShops, staff: pageStaff, bank: pageBank, court: pageCourt, purse: pagePurse, rival: pageRival, notables: pageNotables, people: pagePeople, renown: pageRenown, calendar: pageCalendar, family: pageFamily, tree: pageTree, property: pageProperty, jobs: pageJobs, village: pageVillage, realm: pageRealm, goals: pageGoals, news: pageNews, guide: pageGuide, tasks: pageTasks }[UI.tab])(G);
   keepPlace(pg, y); turnPage(pg, turn);
 }
 const money = n => (n < 0 ? '−' : '') + Math.abs(n) + 'c';
@@ -6280,7 +6468,7 @@ function personDetail(s, pr) {
     <div class="acts">${pr.status === 'here' ? B_('Find them', ['ui', 'findPerson', pr.id]) : ''}${Sim.youJudge(s) && pr.status === 'here' && !pr.kid && !pr.held && (!pr.town || pr.town === 'hearthmoor') ? (UI.confirm === 'hold' + pr.id ? B_('Yes, have them held', ['jArrestOnWord', pr.id], 'warn') + B_('No', ['ui', 'confirm', null], 'alt') : B_('Have the watch hold them&hellip;', ['ui', 'confirm', 'hold' + pr.id], 'alt')) : ''}${B_('Family tree', ['ui', 'tree', pr.id], 'alt')}</div>
     <h5>Their story</h5><ul class="plog">${pr.log.map(l => `<li>Day ${l.day}: ${esc(l.text)}</li>`).join('') || '<li>Nothing of note yet.</li>'}</ul></div>`;
 }
-const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch', valdor: 'Valdor', saltholm: 'Saltholm', merrow: 'Merrow', gullhaven: 'Gullhaven' };
+const TOWN_NAMES = { hearthmoor: 'Hearthmoor', oakbridge: 'Oakbridge', greenhaven: 'Greenhaven', crownmere: 'Crownmere', ironcrest: 'Ironcrest', eastwatch: 'Eastwatch', dawnport: 'Dawnport', goldmeadow: 'Goldmeadow', thornwick: 'Thornwick', stonewatch: 'Stonewatch', valdor: 'Valdor', saltholm: 'Saltholm', merrow: 'Merrow', gullhaven: 'Gullhaven', wrenmouth: 'Wrenmouth', castamar: 'Castamar' };
 const townHere = () => { const t = Sim.townAt(G.player.x, G.player.z); return t && TOWN_NAMES[t] && (t === 'hearthmoor' || Math.hypot(G.player.x - TOWNS[t].x, G.player.z - TOWNS[t].z) < TOWNS[t].r + 70) ? t : 'hearthmoor'; };
 function townPick(s) {
   const t = UI.ptown || townHere();
@@ -6690,6 +6878,7 @@ function landCard(s, walking) {
 function portCard(s, id, walking) {
   const P = Sim.PORTS[id], h = Sim.hourOf(s), open = h >= 7 && h < 17, rough = Sim.seaRough(s), horse = s.player.horse ? 10 : 0;
   if (P.isle) return isleQuayCard(s, id, walking);
+  if (P.harbour) return harbourCard(s, id, walking);
   const title = id === 'eastwatch' ? 'The Passage Office' : id === 'stormrest' ? 'The Stormrest Inn' : 'Dawnport Quay';
   const sub = id === 'eastwatch' ? 'Ships for the crossing to Valdoria: across the Sundering Sea by way of Stormrest Isle, to Dawnport. Anyone who can pay may go.' : id === 'stormrest' ? 'A lighthouse, a harbour wall and an inn on a bare rock halfway across the Sundering Sea. Ships call here both ways.' : 'Valdoria’s great harbour. Ships sail from here for Stormrest Isle and Eastwatch in Alderwyn.';
   const W = s.valdoria && s.valdoria.war, warShut = k => W && !((id === 'dawnport' && k === 'eastwatch' && s.day <= W.leaveBy) || (id === 'stormrest' && k === 'eastwatch') || (id === 'eastwatch' && k === 'stormrest'));
@@ -6698,15 +6887,16 @@ function portCard(s, id, walking) {
   const note = W ? 'The crowns are at war. ' + (id === 'dawnport' && s.day <= W.leaveBy ? 'The last ships for Alderwyn leave until day ' + W.leaveBy + '.' : 'No passage ships sail between Alderwyn and Valdoria until the peace.') : rough ? 'A storm is up on the Sundering Sea. No ship sails today.' : !open ? 'Ships sail between seven in the morning and five in the afternoon.' : (Sim.calendar(s).season === 'winter' ? 'In winter, about one day in five is too rough to sail.' : '');
   const fc = []; for (let d = 1; d <= 3; d++) if (Sim.seaRough(s, s.day + d)) fc.push(d === 1 ? 'tomorrow' : 'in ' + d + ' days');
   const SR = id === 'stormrest' ? Sim.setupStormrest(s) : null, heldBy = SR ? `<dl class="kv"><dt>Held by</dt><dd>${SR.holder ? (SR.holder === 'alderwyn' ? 'Alderwyn' : 'Valdoria') + ', since day ' + SR.since : 'no crown: a free harbour that both crowns claim'}</dd>${SR.holder ? `<dt>The islanders</dt><dd>${SR.mood >= 60 ? 'content' : SR.mood >= 35 ? 'sullen' : 'close to revolt'} (${Math.round(SR.mood)})</dd><dt>Harbour dues</dt><dd>${SR.dues === 'heavy' ? 'heavy, 25c a day' : 'light, 10c a day'}${SR.holder === 'alderwyn' ? ' to the treasury' : ''}</dd>` : ''}</dl>${SR.holder === 'alderwyn' && Sim.isRuler(s) ? `<div class="acts">${B_(SR.dues === 'heavy' ? 'Lighten the dues' : 'Raise the dues', ['stormDues', SR.dues === 'heavy' ? 'light' : 'heavy'], 'alt')}${B_('Build a harbour wall · 300c<small>from the treasury; wins the islanders round</small>', ['stormWorks'], 'alt', s.day - SR.lastWorks < 20 || s.realm.treasury < 300)}</div><p class="why">Heavy dues fill the treasury and sour the islanders; if their mood falls too low they throw the garrison out, and Stormrest is free again.</p>` : ''}` : '';
-  return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${heldBy}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<p><b>Passage on a merchant ship</b></p><div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}${shipPanel(s, id)}`;
+  return `<h2>${title}</h2><div class="sub">${sub}</div>${walking}${heldBy}${note ? `<div class="why">${note}</div>` : ''}${fc.length ? `<div class="why">The harbourmaster expects rough water ${fc.join(' and ')}.</div>` : ''}<p><b>Passage on a merchant ship</b></p><div class="acts">${acts.join('')}</div>${horse ? '<p class="why">Your horse sails with you, for 10c more.</p>' : ''}${shipPanel(s, id)}${harbourOfficeHTML(s, id)}`;
 }
 // your own ship: the hold, the port's market for sea cargo, and the way aboard
 function isleQuayCard(s, id, walking) {
   const I = Sim.ISLE_BY[id], cove = id === 'cove', S = s.ship, here = S && S.port === id;
   const sub = cove ? 'A beach of black sand inside the crescent, a few tents, a fire, and people who ask no questions. They buy and sell any cargo, and no customs man has ever found the place.' : esc(I.blurb) + ' The Free Isles keep no customs house: cargo is landed here without duty.';
-  return `<h2>${cove ? 'Smugglers\u2019 Cove' : esc(I.name) + ' Quay'}</h2><div class="sub">${sub}</div>${walking}${!here && !S ? '<p class="why">No passage ships call here. Only your own ship can bring you, and take you on.</p>' : ''}${shipPanel(s, id)}`;
+  return `<h2>${cove ? 'Smugglers\u2019 Cove' : esc(I.name) + ' Quay'}</h2><div class="sub">${sub}</div>${walking}${!here && !S ? '<p class="why">No passage ships call here. Only your own ship can bring you, and take you on.</p>' : ''}${shipPanel(s, id)}${cove ? `<p><b>The brotherhood of the sea</b></p><div class="acts">${s.pirateToken > s.day ? '<p class="why">Your black ribbon is good until day ' + s.pirateToken + '.</p>' : B_('A black ribbon for your masthead · ' + Sim.TOKEN_PRICE + 'c<small>pirates leave your ships alone for 30 days</small>', ['buyToken'], 'alt', s.coins < Sim.TOKEN_PRICE)}</div>` : newsHTML(s, id)}`;
 }
-function shipPanel(s, id) {
+function shipPanel(s, id) { return shipsHereHTML(s, id) + shipPanel0(s, id); }
+function shipPanel0(s, id) {
   const S = s.ship, market = Sim.SEA_PORTS.includes(id), V = s.valdoria;
   if (!S) return `<p><b>A ship of your own</b></p><p class="why">The shipwrights of Eastwatch and Dawnport build four kinds: a skiff, a cutter, a merchant cog and a great galleon, from ${Sim.SHIP_CLASSES.skiff.price}c to ${Sim.SHIP_CLASSES.galleon.price}c. Buy one at a shipyard, step aboard at the quay, and sail her yourself. Salt and wine are cheap in Dawnport and dear in Eastwatch; wool and iron the other way round.</p>${id === 'eastwatch' ? `<div class="acts">${B_('The Shipyard', ['goto', 'ewyard'], 'alt')}</div>` : id === 'dawnport' ? `<div class="acts">${B_('Dawnport Shipwrights', ['goto', 'db:d_yard'], 'alt')}</div>` : ''}`;
   if (S.impounded) return `<p class="why">Your ship, ${esc(S.name)}, is impounded at Dawnport with her cargo until there is peace between the crowns.</p>`;
@@ -6726,14 +6916,17 @@ function shipPanel(s, id) {
   h += `<div class="acts">${B_('Step aboard ' + esc(S.name) + '<small>take the helm and sail her yourself</small>', ['board'])}</div><p class="why">Aboard: cast off, set the sail with the slider, and steer with the move stick. ${rough ? 'A storm is up: put to sea today and you may lose a third of the cargo.' : 'The wind helps or hinders, but she always makes way.'}</p>`;
   return h;
 }
-// a shipyard: the four classes for sale, and what the shipwrights will give for the ship you have
+// a shipyard: the four classes for sale, and what the shipwrights can do for your ships lying here
 function shipyardPanel(s, port) {
-  const S = s.ship, here = !!(S && S.port === port && !S.impounded), cargo = !!(S && Object.values(S.hold).some(n => n > 0)), credit = here && !cargo ? Sim.shipWorth(S) : 0;
+  const all = Sim.allShips(s), full = all.length >= Sim.MAX_SHIPS;
   const pace = C => C.mpm >= 15 ? 'fast' : C.mpm >= 13.5 ? 'quick' : C.mpm >= 12 ? 'steady' : 'slow', turn = C => C.turn >= 1 ? 'turns on the spot' : C.turn >= 0.7 ? 'handy' : C.turn >= 0.45 ? 'steady on the helm' : 'slow to turn';
-  let h = `<p><b>Ships for sale</b></p><table class="trades"><thead><tr><th>Ship</th><th>Hold</th><th></th></tr></thead><tbody>${Sim.SHIP_ORDER.map(k => { const C = Sim.SHIP_CLASSES[k], mine = S && S.cls === k, cost = C.price - credit;
-    return `<tr><td>${C.name.charAt(0).toUpperCase() + C.name.slice(1)}<br><small>${esc(C.blurb)} ${pace(C).charAt(0).toUpperCase() + pace(C).slice(1)}, ${turn(C)}; ${C.upkeep}c a day${C.crew ? ', ' + C.crew + 'c a voyage' : ''}.</small></td><td class="num">${C.hold}</td><td><div class="acts">${mine ? '<small>yours</small>' : B_((S ? 'Trade up' : 'Buy') + ' · ' + cost + 'c', ['buyShip', k], 'alt', (S && (!here || cargo)) || s.coins + credit < C.price)}</div></td></tr>`; }).join('')}</tbody></table>`;
-  if (S) h += `<p class="why">You own ${esc(S.name)}, a ${esc(Sim.shipClass(S).name)}${S.impounded ? ', impounded at Dawnport' : S.port ? ', moored at ' + esc(Sim.PORTS[S.port].name) : ''}. ${here ? (cargo ? 'Sell the cargo in her hold and the shipwrights will take her in part exchange.' : 'The shipwrights will take her for ' + credit + 'c against any ship here.') : 'Bring her to this port to trade her in: you keep one ship at a time.'}</p>${here && !cargo ? `<div class="acts">${B_('Sell ' + esc(S.name) + ' · ' + credit + 'c', ['sellShip'], 'warn')}</div>` : ''}`;
-  else h += `<p class="why">A new ship is launched at once and lies at ${esc(Sim.PORTS[port].name)}. Step aboard there to sail her. Upkeep is paid each night; the crew take their voyage money when you tie up in another port.</p>`;
+  let h = `<p><b>Ships for sale</b></p><table class="trades"><thead><tr><th>Ship</th><th>Hold</th><th></th></tr></thead><tbody>${Sim.SHIP_ORDER.map(k => { const C = Sim.SHIP_CLASSES[k];
+    return `<tr><td>${C.name.charAt(0).toUpperCase() + C.name.slice(1)}<br><small>${esc(C.blurb)} ${pace(C).charAt(0).toUpperCase() + pace(C).slice(1)}, ${turn(C)}; ${C.hands ? C.hands + ' hands; ' : 'you sail her alone; '}${C.upkeep}c a day in harbour dues.</small></td><td class="num">${C.hold}</td><td><div class="acts">${B_('Buy · ' + C.price + 'c', ['buyShip', k], 'alt', full || s.coins < C.price)}</div></td></tr>`; }).join('')}</tbody></table>`;
+  h += `<p class="why">${all.length ? 'A new ship joins your fleet, crewed from the town; give her a captain and orders in the Fleet book, or take command of her yourself.' : 'A new ship is launched at once, crewed from the town, and lies at ' + esc(Sim.PORTS[port].name) + '. Step aboard there to sail her.'} You may own ${Sim.MAX_SHIPS} ships at most.</p>`;
+  for (const S of all.filter(x => x.port === port)) {
+    const C = Sim.shipClass(S), cargo = Object.values(S.hold).some(n => n > 0), dmg = 100 - (S.hull == null ? 100 : S.hull), rc = Math.round(dmg * (S.cost || C.price) / 400);
+    h += `<div class="box"><h5>${esc(S.name)} · ${esc(C.name)}</h5><div class="acts"><input id="rn_${S.id}" class="txt" maxlength="24" placeholder="A new name" value="">${B_('Rename · 10c', ['ui', 'renameShip', S.id], 'alt')}</div><div class="acts">${Object.keys(Sim.REFITS).map(k => S.refits && S.refits[k] ? '' : B_(Sim.REFITS[k].name + ' · ' + Math.round((S.cost || C.price) * Sim.REFITS[k].k) + 'c<small>' + Sim.REFITS[k].say + '</small>', ['refit', S.id, k], 'alt', s.coins < Math.round((S.cost || C.price) * Sim.REFITS[k].k))).join('')}${dmg > 0 ? B_('Repair her hull · ' + rc + 'c<small>' + Math.round(S.hull) + '% sound</small>', ['repair', S.id], '', s.coins < rc) : ''}${B_('Sell her · ' + Sim.shipWorth(S) + 'c', ['sellShip', S.id], 'warn', cargo || (S === s.ship && s.player.aboard))}</div>${cargo ? '<p class="why">Sell her cargo before you sell her.</p>' : ''}</div>`;
+  }
   return h;
 }
 function stageCard(s, id, walking) {
@@ -6894,11 +7087,11 @@ function alcazarCard(s, walking) {
 }
 function oakHallCard(s, walking, id) {
   id = id || 'oakbridge';
-  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'dawnport' ? 'The Harbour Plaza, Dawnport' : id === 'goldmeadow' ? 'The Green, Goldmeadow' : id === 'thornwick' ? 'The Timber Yard, Thornwick' : id === 'stonewatch' ? 'The Parade Ground, Stonewatch' : id === 'valdor' ? 'The Plaza de la Reina, Valdor' : id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : Sim.ISLE_TOWNS[id] ? 'The harbour square, ' + TOWN_NAMES[id] : 'Oakbridge Town Hall';
+  const T = s.towns && s.towns[id], TT = (T && T.title) || 'Mayor', HN = id === 'dawnport' ? 'The Harbour Plaza, Dawnport' : id === 'goldmeadow' ? 'The Green, Goldmeadow' : id === 'thornwick' ? 'The Timber Yard, Thornwick' : id === 'stonewatch' ? 'The Parade Ground, Stonewatch' : id === 'valdor' ? 'The Plaza de la Reina, Valdor' : id === 'greenhaven' ? 'Greenhaven Moot Hall' : id === 'crownmere' ? 'The Guildhall of Crownmere' : id === 'ironcrest' ? 'Ironcrest Square' : id === 'eastwatch' ? 'Harbour Square' : Sim.ISLE_TOWNS[id] || Sim.NEW_PORT_TOWNS[id] ? 'The harbour square, ' + TOWN_NAMES[id] : 'Oakbridge Town Hall';
   if (!T) return `<h2>${HN}</h2>${walking}`;
   const m = s.people[T.mayor], who = id => s.people[id] ? esc(s.people[id].name) : '';
   const mTrade = m && m.job && s.biz[m.job.biz] ? Sim.tradeName(s.biz[m.job.biz].trade).toLowerCase() : 'merchant';
-  const intro = Sim.ISLE_TOWNS[id] ? 'The ' + esc(TT.toLowerCase()) + ' and a council of the leading families run ' + TOWN_NAMES[id] + ' for itself. The Free Isles answer to neither crown: no lord, no customs house, no king\u2019s law, only the island\u2019s own. ' + esc(Sim.ISLE_BY[id].blurb) : id === 'ironcrest' ? 'The heart of the mining town. The reeve and council of mine-masters set the market fee, keep the gate and the mine road, and help families when a seam fails.' : id === 'eastwatch' ? 'The harbourmaster and the council of merchants run Eastwatch: the market and harbour dues, the walls and the quays, and relief for the families of drowned men.' : id === 'crownmere' ? 'The Lord Mayor and the masters of the great guilds govern the capital under the king: the market fees, the city watch, the walls and streets, and bread for the poor.' : id === 'greenhaven' ? 'The reeve and council run Greenhaven for the townsfolk: they set the market fee, keep the bridge, the lanes and the common, and help hungry families from the town chest. The Ashcombes of the Hall have a seat, but no more than that.' : id === 'dawnport' ? 'The Consul governs Dawnport for the Queen, with a council of shipowners and vintners: the harbour dues, the market fee, the harbour guard and the quays.' : id === 'goldmeadow' ? 'The reeve and the farmers\u2019 council run Goldmeadow: the market fee, the horse fair, the granary, and help for families after a bad harvest.' : id === 'thornwick' ? 'The warden and the council of timber masters run Thornwick: the market fee, the forest road, and help for families when the felling is slow.' : id === 'stonewatch' ? 'The Castellan holds Stonewatch for the Queen. The townsfolk\u2019s council sets the market fee and keeps the streets; the fortress and its garrison answer to the crown.' : id === 'valdor' ? 'The Corregidor governs the royal capital for the Queen, with a council of guild masters: the market fee, the city watch, the streets and the plaza, and bread for the poor of the parishes.' : 'The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.';
+  const intro = id === 'wrenmouth' ? 'A crown port: the king\u2019s portreeve and a council of tin-masters and shipowners keep the quay, the market and the coast road.' : id === 'castamar' ? 'The Queen\u2019s alcalde and a council of oil merchants govern Castamar: the quay, the presses\u2019 dues and the road to Stonewatch.' : Sim.ISLE_TOWNS[id] ? 'The ' + esc(TT.toLowerCase()) + ' and a council of the leading families run ' + TOWN_NAMES[id] + ' for itself. The Free Isles answer to neither crown: no lord, no customs house, no king\u2019s law, only the island\u2019s own. ' + esc(Sim.ISLE_BY[id].blurb) : id === 'ironcrest' ? 'The heart of the mining town. The reeve and council of mine-masters set the market fee, keep the gate and the mine road, and help families when a seam fails.' : id === 'eastwatch' ? 'The harbourmaster and the council of merchants run Eastwatch: the market and harbour dues, the walls and the quays, and relief for the families of drowned men.' : id === 'crownmere' ? 'The Lord Mayor and the masters of the great guilds govern the capital under the king: the market fees, the city watch, the walls and streets, and bread for the poor.' : id === 'greenhaven' ? 'The reeve and council run Greenhaven for the townsfolk: they set the market fee, keep the bridge, the lanes and the common, and help hungry families from the town chest. The Ashcombes of the Hall have a seat, but no more than that.' : id === 'dawnport' ? 'The Consul governs Dawnport for the Queen, with a council of shipowners and vintners: the harbour dues, the market fee, the harbour guard and the quays.' : id === 'goldmeadow' ? 'The reeve and the farmers\u2019 council run Goldmeadow: the market fee, the horse fair, the granary, and help for families after a bad harvest.' : id === 'thornwick' ? 'The warden and the council of timber masters run Thornwick: the market fee, the forest road, and help for families when the felling is slow.' : id === 'stonewatch' ? 'The Castellan holds Stonewatch for the Queen. The townsfolk\u2019s council sets the market fee and keeps the streets; the fortress and its garrison answer to the crown.' : id === 'valdor' ? 'The Corregidor governs the royal capital for the Queen, with a council of guild masters: the market fee, the city watch, the streets and the plaza, and bread for the poor of the parishes.' : 'The mayor and council run Oakbridge: they set the market fee, pay the watch and the bridge, and help the poor from the town chest.';
   return `<h2>${HN}</h2><div class="sub">${intro}</div>${walking}
   <dl class="kv"><dt>${TT}</dt><dd>${m ? esc(m.name) + ' (' + esc(mTrade) + ')' : 'none'}</dd><dt>Approval</dt><dd>${Math.round(T.approval)}%</dd><dt>Town chest</dt><dd>${Math.round(T.chest)}c</dd><dt>Market fee</dt><dd>${esc(Sim.FEES[T.fee].name)}</dd><dt>Council</dt><dd>${T.council.map(who).filter(Boolean).join(', ') || 'empty'}</dd><dt>Next vote</dt><dd>day ${T.nextVote}</dd></dl>
   ${progressBar(T.approval / 100)}
@@ -8552,6 +8745,11 @@ function uiCmd(k, v) {
   if (k === 'map') { openMap(); return; }
   if (k === 'sleep') { sleepTill(); return; }
   if (k === 'chart') { UI.chestOpen = false; SeaChart.open(); return; }
+  if (k === 'hireFor') { UI.hireFor = v; renderCard(true); return; }
+  if (k === 'routeAdd') { UI.route = UI.route || {}; const r = UI.route[v] = UI.route[v] || []; const w = arguments[2]; const i = r.indexOf(w); if (i >= 0) r.splice(i, 1); else if (r.length < 6) r.push(w); renderBook(false); return; }
+  if (k === 'routeClear') { UI.route = UI.route || {}; UI.route[v] = []; renderBook(false); return; }
+  if (k === 'nameHouse') { const el = $('houseName'); act(['nameHouse', el ? el.value : '']); renderBook(false); return; }
+  if (k === 'renameShip') { const el = $('rn_' + v); act(['rename', v, el ? el.value : '']); return; }
   if (k === 'leaveHelm' && G && G.player.aboard) { const S3 = shipModel(G.ship.cls || 'cog'), [lv, q] = helmLevel(S3); G.player.deck = { lv, x: q[1] + 0.7, z: q[2] + 0.9, face: 0 }; UI.camD = null; Helm.sync(true); Helm.hint(4, 'Walk her decks with the move stick. Ladders and hatches take you up and below. She holds her course while you are away from the helm.'); return; }
   if (k === 'takeHelm') { Sim.cmd(G, 'deck', null); UI.chestOpen = false; UI.camD = null; Helm.sync(true); return; }
   if (k === 'deckGo') { const d = G.player.deck, S3 = SHIPS3D[MY_SHIP.cls], q = d && S3 && S3.P.levels[d.lv].portals[v]; if (q) { d.lv = q[2]; d.x = q[3]; d.z = q[4]; UI.camD = null; UI.camGy = null; } Helm.sync(true); return; }
@@ -8746,12 +8944,13 @@ const Mini = (function () {
   for (let z = -1500; z < 1000; z += 20) rect(1, Sim.ALD_COAST(z) + 210, z, 420, 22, 0, COL.water);
   rect(1, 1300, -300, 320, 270, 0, COL.water);
   // the Sundering Sea out to Valdoria's shore, Stormrest Isle in the middle, and Dawnport
-  for (let z = Sim.SEA.band.z0; z < Sim.SEA.band.z1; z += 20) { const a = z >= -1500 && z < 1000 ? Sim.ALD_COAST(z) : Sim.ALD_COAST(z) - 7, b = Math.abs(z + 300) < 92 ? 8659 : Sim.VSHORE(z); rect(1, (a + b) / 2, z, b - a, 22, 0, COL.water); }
+  for (let z = Sim.SEA.band.z0; z < Sim.SEA.band.z1; z += 20) { const a = z >= -1500 && z < 1000 ? Sim.ALD_COAST(z) : Sim.ALD_COAST(z) - 7, b = Sim.valQuay(z) != null ? Sim.valQuay(z) : Sim.VSHORE(z); rect(1, (a + b) / 2, z, b - a, 22, 0, COL.water); }
   circ(2, Sim.ISLE.x, Sim.ISLE.z, 48, '#8fa25e'); rect(4, Sim.ISLE.x - 12, Sim.ISLE.z, 7, 10, Math.PI / 2, COL.house);
   ['vgold', 'vthorn', 'vstone'].forEach(k => line(2, Sim.ROADS[k], 4, COL.road));
   for (const O of [Sim.GM, Sim.TW, Sim.SW]) { O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); }
   line(5, Sim.SW.wall, 2, COL.wall); rect(4, Sim.SW.keep.x, Sim.SW.keep.z, 16, 14, 0, COL.big);
   { const O = Sim.DP; O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); rect(4, O.palace.x, O.palace.z, 14, 26, 0, COL.big); rect(4, O.customs.x, O.customs.z, 9, 20, 0, COL.big); [-350, -300, -250].forEach(z => line(3, [[8657, z], [8622, z]], 3, COL.road)); }
+  for (const O of [Sim.WR, Sim.CK, Sim.SH, Sim.MR, Sim.GU]) { O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street)); O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house)); }
   for (const O of [Sim.IC, Sim.EW]) {
     O.plazas.forEach(q => circ(3, q.x, q.z, q.r1, COL.plaza)); O.streets.forEach(st => line(2, st.pts, st.w, COL.street));
     O.houses.forEach(h => rect(4, h.x, h.z, h.tall ? 6.4 : 5.4, h.tall ? 5.2 : 4.4, h.face, COL.house)); O.biz.forEach(b => rect(4, b.x, b.z, 7.4, 6, b.face, COL.house));
@@ -8816,7 +9015,7 @@ const Mini = (function () {
       const el = $('minimap'), show = UI.mode === 'play' && !UI.overlay && !UI.inside && G && meta.settings.minimap !== 'off';
       if (el.hidden === show) el.hidden = !show;
       if (!show) return;
-      acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (p.aboard && G.ship && !G.ship.port) return 520; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85, ironcrest: 65, eastwatch: 80, saltholm: 70, merrow: 70, gullhaven: 70 }[t] || 60; })();
+      acc += dt; const p = G.player, R = (() => { const t = townHere(), near = t === 'hearthmoor' ? Math.hypot(p.x, p.z) < 110 : Math.hypot(p.x - TOWNS[t].x, p.z - TOWNS[t].z) < TOWNS[t].r + 40; if (p.aboard && G.ship && !G.ship.port) return 520; if (!near) return 120; return { hearthmoor: 55, greenhaven: 60, oakbridge: 70, crownmere: 85, ironcrest: 65, eastwatch: 80, saltholm: 70, merrow: 70, gullhaven: 70, wrenmouth: 80, castamar: 80 }[t] || 60; })();
       if (acc < 0.1 && !UI.waypoint && Math.abs(p.x - lx) + Math.abs(p.z - lz) < 0.25 && Math.abs(cam.yaw - ly) < 0.02 && R === lr) return;
       if (acc < 0.1) return;
       acc = 0; lx = p.x; lz = p.z; ly = cam.yaw; lr = R;
@@ -9279,7 +9478,7 @@ function frameBody(now) {
   if (HOL.flames.length) stepHoliday(dt, now / 1000);
   if (G) { const mapEye = onMap && UI.mode === 'play' && mapCam.dist < 460; if (!(onMap && LM.far)) updateTiles(UI.mode === 'title' ? 0 : mapEye ? mapCam.x : G.player.x, UI.mode === 'title' ? 0 : mapEye ? mapCam.z : G.player.z, tiles.size < 9 ? 25 : 1); }
   syncChars(G, t); syncShops(G, t, dt); syncVillage(G); syncAnimals(dt, t); if (!UI.inside) syncWild(G, t, dt); if (!FIGHT.on) stepShots(dt);
-  syncMyShip(G && UI.mode !== 'title' ? G : null, dt, t); if (G && UI.mode !== 'title') seaWorld(dt, t); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); syncHeraldry(G); }
+  syncMyShip(G && UI.mode !== 'title' ? G : null, dt, t); if (G && UI.mode !== 'title') seaWorld(dt, t); OTHER_SHIPS.sync(G && UI.mode !== 'title' ? G : null, dt, t); syncStormFlag(G && UI.mode !== 'title' ? G : null); if (G && UI.mode !== 'title') { syncStatues(G); syncHoliday(G); syncHeraldry(G); }
   { const se = G && UI.mode !== 'title' ? Sim.seasonOf(G) : 'spring'; if (se !== UI.seasonShown) { UI.seasonShown = se; applySeason(se); } stepSnow(dt); }
   { const w = weatherFor(G, UI.mode === 'title' ? 18 : Sim.hourOf(G)); WX.rain += (w.rain - WX.rain) * Math.min(1, dt * 0.6); WX.mist += (w.mist - WX.mist) * Math.min(1, dt * 0.6); stepRain(dt, G); syncHouseSigns(dt); }
   syncLight(UI.mode === 'title' ? 18.4 : UI.overlay === 'map' ? clamp(Sim.hourOf(G), 9, 16.5) : Sim.hourOf(G));
@@ -9664,6 +9863,15 @@ function stepMini(dt) {
 /* ----- patch notes and the update check ----- */
 const BUILD = '/*BUILD*/';
 const NOTES = [
+  { v: '0.99', date: '13 November', title: 'The Sea Road, III: merchants and dangers', items: [
+    'Every sailor is someone from the towns. Sign on hands, a mate, a bosun, a cook and guards at the quay; each has a name, a skill, a wage and a mood. Pay them each night, keep the stores full, and they stay; let morale sink and they desert in port. A short-handed ship sails badly, and will not sail at all with too few.',
+    'Own a fleet of up to six ships. A new ship joins your fleet crewed from the town. Make one of her crew captain, give her a route in the new Fleet book (Business), and she trades it on her own, really sailing across the sea: you can meet her out there. Take command of any ship lying where you are.',
+    'Two new ports: Wrenmouth, a tin port on the coast road south of Eastwatch, and Castamar, an olive-oil port on Valdoria\u2019s north coast, on a road from Stonewatch. Both are real towns with their own people, coaches and goods.',
+    'Prices move with the weather, with war, and with harbour news: gluts and shortages come and go, and the harbour offices post them. Your merchant name grows in each port you trade at and spreads to the others; a known name buys cheaper, sells dearer and hires more easily.',
+    'Every ship keeps a log and a voyage ledger: where she went, what she bought and sold, what it cost and what befell her. Rename and refit ships at the shipyards: copper sheathing, a deeper hold, stout timbers; and repair her hull.',
+    'Trouble on the water: pirates, smugglers, customs patrols in each kingdom\u2019s waters and, in war, the Valdorian navy blockading Dawnport. When one comes for you, choose: flee, run for port, fight them off, pay, or board them. If you are boarded, you fight on your own deck with your guards and mate beside you. Losing costs cargo and coin, never the game.',
+    'Insure ships and cargo at the Merchant Exchange in Eastwatch and the Counting House in Dawnport. Hire an armed escort at a harbour office, buy a letter of safe passage from either crown, or a black ribbon from the cove that keeps pirates away. Claim bounties for pirates you beat and smugglers you report. Design your own flag: it flies from every ship you own.'
+  ] },
   { v: '0.98', date: '13 November', title: 'The Sea Road, II: decks and the open sea', items: [
     'Walk your ship. Tap Leave the helm and walk her decks while she sails: she carries you with her and holds her course until you take the helm again. Ladders climb to the quarterdeck and forecastle; hatches lead below.',
     'Every class has its own decks. The cutter has a cramped cabin, a hold and a forepeak; the cog a great cabin and a forecastle, a hold with a galley and a passenger\u2019s bunk; the galleon a great cabin, a poop deck, a lower deck of passenger cabins, galley and hammocks, and a deep hold. When you go below, the decks above and the near side of the hull lift away so you can see in.',
