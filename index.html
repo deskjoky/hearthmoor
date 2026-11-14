@@ -15822,7 +15822,7 @@ const FIG = {
   skull: ball(0.095, 0.92, 1.15, 1, 14, 10), jaw: ball(0.07, 0.9, 0.9, 0.95, 10, 7), neck: new THREE.CylinderGeometry(0.036, 0.042, 0.11, 8), nose: new THREE.ConeGeometry(0.016, 0.042, 6), ear: ball(0.02, 0.5, 1, 0.8, 6, 5), eye: ball(0.012, 1, 1, 0.5, 6, 5), bit: new THREE.BoxGeometry(1, 1, 1),
   hairCap: (function () { const g = new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, 0, 1.78); g.scale(0.97, 1.17, 1.05); g.rotateX(-0.36); g.translate(0, 0.012, -0.006); g.computeVertexNormals(); return g; })(),
   capHat: (function () { const g = new THREE.SphereGeometry(0.106, 12, 6, 0, Math.PI * 2, 0, 1.5); g.scale(0.96, 1.12, 1.04); g.translate(0, 0.02, -0.004); g.computeVertexNormals(); return g; })(),
-  cloak: (function () { const g = new THREE.LatheGeometry([[0.25, -0.62], [0.2, -0.3], [0.16, 0.0], [0.11, 0.07]].map(p => new THREE.Vector2(p[0], p[1])), 8, Math.PI * 0.5 + 0.35, Math.PI - 0.7); g.rotateY(Math.PI); g.scale(1, 1, 0.72); g.computeVertexNormals(); return g; })(),
+  cloak: (function () { const g = new THREE.LatheGeometry([[0.25, -0.62], [0.2, -0.3], [0.16, 0.0], [0.11, 0.07]].map(p => new THREE.Vector2(p[0], p[1])), 8, Math.PI * 0.5 + 0.35, Math.PI - 0.7); g.scale(1, 1, 0.72); /* the arc already sits on the back (-z): the old extra half-turn hung it on the chest */ g.computeVertexNormals(); return g; })(),
   pauldron: ball(0.066, 1, 0.8, 1, 8, 6), pack: ball(0.13, 1, 1.15, 0.75, 8, 6),
   brim: new THREE.CylinderGeometry(0.2, 0.21, 0.012, 14), strawTop: lathe([[0.1, 0], [0.09, 0.05], [0.04, 0.085], [0, 0.09]], 10), chef: lathe([[0.08, 0], [0.085, 0.09], [0.11, 0.13], [0.07, 0.17], [0, 0.175]], 10),
   hood: (function () { const g = new THREE.SphereGeometry(0.118, 12, 8, 0, Math.PI * 2, 0, 2.1); g.scale(1, 1.2, 1.12); g.rotateX(-0.5); g.translate(0, 0.0, -0.012); g.computeVertexNormals(); return g; })(),
@@ -22366,7 +22366,7 @@ function stepMini(dt) {
 }
 
 /* ----- patch notes and the update check ----- */
-const BUILD = '2026.11.14.0139';
+const BUILD = '2026.11.14.0151';
 const NOTES = [
   { v: '0.99', date: '13 November', title: 'The Sea Road, III: merchants and dangers', items: [
     'Every sailor is someone from the towns. Sign on hands, a mate, a bosun, a cook and guards at the quay; each has a name, a skill, a wage and a mood. Pay them each night, keep the stores full, and they stay; let morale sink and they desert in port. A short-handed ship sails badly, and will not sail at all with too few.',
